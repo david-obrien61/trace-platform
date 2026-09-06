@@ -31,7 +31,13 @@
  * working. Note what is NOT here: the bearer secrets live in `business_accounting_secrets`
  * and are read through readQBSecrets below, never off this row.
  */
-export const QBO_CONNECTION_COLUMNS = 'accounting_company_id, name, accounting_token_expires_at';
+// 🔴 `qbo_writes_enabled` ADDED 2026-09-06 SO `/api/qbo/status` CAN ANSWER THE QUESTION IT WAS
+// ALREADY BEING ASKED. The status payload reported `push_held` (the operator's env hold) and said
+// nothing about the OWNER's switch — the one `QboWriteSwitch.tsx` flips and `submit.ts:856` gates
+// the real push on. So "are writes off for this business?" could not be answered from the one
+// endpoint whose whole job is answering it without completing a real order, and a reader who saw
+// `push_held: false` would reasonably conclude writes were LIVE when the owner had them off.
+export const QBO_CONNECTION_COLUMNS = 'accounting_company_id, name, accounting_token_expires_at, qbo_writes_enabled';
 
 export interface QBSecrets {
   accounting_token: string | null;

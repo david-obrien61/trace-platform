@@ -66,6 +66,11 @@ function recorder(opts: {
    *  not produce the one state the leftover re-read exists to detect (§6 r19a — a double must be
    *  able to refuse what the real thing refuses). */
   refuseWrites?: boolean;
+  /** 🔴 THE OWNER'S SWITCH — `businesses.qbo_writes_enabled`. Defaults to FALSE (test mode), which
+   *  is LAWNS's live value. `undefined` here means the businesses row could not be read at all. */
+  writesEnabled?: boolean | undefined;
+  /** Simulates the businesses read FAILING, so the "we could not check" refusal is reachable. */
+  businessReadFails?: boolean;
 } = {}) {
   const calls: { table: string; verb: string; filters: [string, string, any][]; payload?: any }[] = [];
   const inventory: any[] = (opts.inventory ?? []).map(r => ({ ...r }));
@@ -74,7 +79,11 @@ function recorder(opts: {
   // §G/§H went red. The probes caught the harness, which is the direction that should be cheap:
   // a double that cannot tell two tables apart cannot prove a write touched only one of them.
   const customers: any[] = (opts.customers ?? []).map(r => ({ ...r }));
-  const store = (t: string) => (t === 'customers' ? customers : inventory);
+  // The tenant's own row. Present unless `businessReadFails`.
+  const businesses: any[] = opts.businessReadFails ? [] : [{
+    id: BIZ, qbo_writes_enabled: opts.writesEnabled === undefined ? false : opts.writesEnabled,
+  }];
+  const store = (t: string) => (t === 'customers' ? customers : t === 'businesses' ? businesses : inventory);
   const counts: Record<string, number> = { receipts: opts.receipts ?? 0, deliveries: opts.deliveries ?? 0 };
   const reads: Record<string, number> = { receipts: 0, deliveries: 0 };
 
@@ -92,6 +101,12 @@ function recorder(opts: {
       or(s: string)          { filters.push(['__or', 'or', s]); return b; },
       order() { return b; },
       limit() { return b; },
+      // 🔴 ADDED 2026-09-06 AND IT WENT RED FIRST. The gate now reads `businesses.qbo_writes_enabled`
+      // via `.maybeSingle()`, which this double did not implement, so the whole suite THREW. That is
+      // the double being NARROWER than the client — the harmless direction. The dangerous one is a
+      // double more FORGIVING than the real thing (tech-debt #138), which a silent catch-all would
+      // have been.
+      maybeSingle() { const r: any = result(); const rows = r.data ?? []; return Promise.resolve({ data: rows[0] ?? null, error: r.error }); },
       then(resolve: any) { return Promise.resolve(result()).then(resolve); },
     };
     function matches(row: any): boolean {
@@ -117,7 +132,7 @@ function recorder(opts: {
     }
     function result(): any {
       if (opts.failOn === verb) return { data: null, error: { message: `simulated ${verb} failure` }, count: null };
-      if (table !== 'business_inventory' && table !== 'customers') {
+      if (table !== 'business_inventory' && table !== 'customers' && table !== 'businesses') {
         reads[table] = (reads[table] ?? 0) + 1;
         const drift = (opts.driftAfter as any)?.[table];
         const n = (reads[table] > 1 && drift !== undefined) ? drift : (counts[table] ?? 0);
@@ -164,11 +179,14 @@ function recorder(opts: {
       };
     },
   };
-  return { db, calls, inventory, customers };
+  return { db, calls, inventory, customers, businesses };
 }
 
-const HELD = 'all';        // QBO_PUSH_HOLD=all → writes are HELD → the run is undoable
-const WRITES_ON = '';      // unset → no hold → writes are LIVE
+const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers every business.
+// ✏️ `WRITES_ON = ''` IS GONE, AND ITS NAME WAS THE BUG IN ONE WORD. An unset env var never meant
+// "writes are live" — it means the OPERATOR is not holding, which says nothing about whether the
+// OWNER has switched writes on. §F now drives both switches as a matrix instead of naming one of
+// them after the answer it does not have.
 
 // ── §A the row a create writes ───────────────────────────────────────────────
 {
@@ -291,32 +309,87 @@ async function sectionE() {
     ok(!written.has(forbidden), `§E no write to \`${forbidden}\``);
   }
   ok(!calls.some(c => c.verb === 'delete'), '§E 🔴 the COMMIT never deletes — deleting is the undo\'s job alone');
-  ok(calls.every(c => c.filters.some(([col]) => col === 'business_id') || c.verb === 'insert'),
-     '§E every read and update is business_id-scoped (AC-3)');
+  // 🔴 AC-3 IS "SCOPED TO ONE TENANT", NOT "USES A COLUMN CALLED business_id" — and the gate read
+  // made that distinction load-bearing. It selects the tenant's OWN row from `businesses`, whose
+  // primary key is `id`, so a probe matching the literal string `business_id` failed it. Widening
+  // to "`business_id` on every other table, `id` on `businesses`" keeps the assertion exact rather
+  // than turning it into "some filter is present", which would pass a query scoped to nothing.
+  ok(calls.every(c =>
+       c.verb === 'insert'
+       || (c.table === 'businesses'
+             ? c.filters.some(([col, op, v]) => col === 'id' && op === 'eq' && v === BIZ)
+             : c.filters.some(([col, op, v]) => col === 'business_id' && op === 'eq' && v === BIZ))),
+     '§E every read and update is scoped to THIS tenant (AC-3) — business_id everywhere, and `id` on `businesses` itself');
+  ok(calls.some(c => c.table === 'businesses'),
+     '§E 🔴 and the gate read HAPPENED — an assertion about a query that was never issued proves nothing');
 }
 
-// ── §F the undo refuses while writes are on ──────────────────────────────────
+// ── §F 🔴 TWO SWITCHES, AND THE FIRST DRAFT READ ONLY ONE ─────────────────────
 async function sectionF() {
-  const { db, calls } = recorder({ inventory: [{ id: 'made', business_id: BIZ, import_run_id: RUN, retired_at: null }] });
-  const rep = await undoItemImport(db as any, BIZ, RUN, WRITES_ON);
-  ok(rep.refused === true, '§F 🔴 the undo REFUSES when QuickBooks writes are ON');
-  ok(rep.ok === false, '§F a refusal is not an ok result');
-  ok(rep.inventoryDeleted === 0 && rep.unretired === 0, '§F and nothing was changed');
-  ok(calls.length === 0, '§F 🔴 NOT ONE QUERY WAS ISSUED — the refusal is FIRST and absolute, not a check after the fact');
-  ok((rep.error ?? '').includes('Nothing was changed'), '§F the sentence says what did NOT happen, which is the part that reassures');
+  // 🔴 THIS SECTION EXISTS BECAUSE DAVID ASKED WHICH SWITCH `undoable` READS, AND THE ANSWER WAS
+  // THE WRONG ONE. The first draft gated on `QBO_PUSH_HOLD` alone — the OPERATOR's env hold —
+  // while the OWNER's switch is `businesses.qbo_writes_enabled` (`20260902`, NOT NULL DEFAULT
+  // false), which is what `QboWriteSwitch.tsx` flips and `submit.ts:856` gates the real push on.
+  // At LAWNS today that is `false` with the env var unset, so the old gate computed
+  // `undoable: false` and REFUSED — in exactly the state the undo exists to serve.
+  //
+  // The matrix is the whole assertion. `pushPermitted` AND-s the two, so the undo is open whenever
+  // EITHER hold is active, and closed only when both are clear.
+  const lot = () => [{ id: 'made', business_id: BIZ, import_run_id: RUN, retired_at: null }];
+  const MATRIX: { env: string; writes: boolean; open: boolean; why: string }[] = [
+    { env: '',      writes: false, open: true,
+      why: "🔴 LAWNS TODAY — env UNSET, owner's switch OFF. The undo is OPEN, and the first draft closed it here." },
+    { env: 'all',   writes: false, open: true,
+      why: 'both holds active — open' },
+    { env: 'all',   writes: true,  open: true,
+      why: "🔴 owner went live but the OPERATOR still holds — nothing can reach their books, so the undo stays OPEN" },
+    { env: '',      writes: true,  open: false,
+      why: '🔴 THE ONLY CLOSED CELL — both clear, an invoice can have gone out, the undo is SHUT' },
+  ];
+  for (const m of MATRIX) {
+    const rec = recorder({ inventory: lot(), writesEnabled: m.writes, receipts: 111, deliveries: 31 });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, m.env);
+    ok(r.refused === !m.open,
+       `§F [env=${JSON.stringify(m.env)} writes_enabled=${m.writes}] undo ${m.open ? 'OPEN' : 'REFUSED'} — ${m.why}`);
+    ok(r.inventoryDeleted === (m.open ? 1 : 0), `§F …and it ${m.open ? 'deleted the row' : 'changed nothing'}`);
+  }
 
-  // …and it proceeds when the push is held.
-  const h = recorder({ inventory: [{ id: 'made', business_id: BIZ, import_run_id: RUN, retired_at: null }] });
-  const rh = await undoItemImport(h.db as any, BIZ, RUN, HELD);
-  ok(rh.refused === false && rh.ok, '§F 🔴 THE NEGATIVE CONTROL — with the push HELD the same call proceeds. The refusal is caused by the switch, not by the fixture.');
-  ok(rh.inventoryDeleted === 1, '§F and it deletes this run\'s row');
+  // The same matrix through the COMMIT's `undoable`, because a commit that reports the wrong
+  // answer sends someone into an import believing it is reversible when it is not.
+  for (const m of MATRIX) {
+    const rec = recorder({ inventory: [], writesEnabled: m.writes });
+    const r = await commitItemImport(rec.db as any, BIZ, [it('1', 'X', { description: 'Live Oak - 15 gallon' })], RUN, m.env);
+    ok(r.undoable === m.open, `§F commit reports undoable=${m.open} for [env=${JSON.stringify(m.env)} writes=${m.writes}]`);
+  }
 
-  // A per-business hold, not just 'all'.
-  const one = recorder({ inventory: [{ id: 'made', business_id: BIZ, import_run_id: RUN, retired_at: null }] });
-  ok((await undoItemImport(one.db as any, BIZ, RUN, BIZ)).refused === false, '§F a hold naming THIS business permits the undo');
-  const other = recorder({ inventory: [] });
+  // 🔴 A FAILED READ CLOSES THE UNDO, AND SAYS SO IN DIFFERENT WORDS.
+  const blind = recorder({ inventory: lot(), businessReadFails: true });
+  const rb = await undoItemImport(blind.db as any, BIZ, RUN, '');
+  ok(rb.refused === true, '§F 🔴 if we could not READ the switch, the undo REFUSES — deleting rows that might sit behind an invoice is the unrecoverable direction');
+  ok(rb.inventoryDeleted === 0, '§F and nothing was changed');
+  ok(/could not read/i.test(rb.error ?? ''), '§F 🔴 and the sentence says WE COULD NOT CHECK, not "you are live" — a person who cannot tell those apart acts on the wrong one');
+  ok(!/switched on/i.test(rb.error ?? ''), '§F it does not claim the business is live');
+
+  // The live refusal says the other thing.
+  const liveRec = recorder({ inventory: lot(), writesEnabled: true });
+  const rl = await undoItemImport(liveRec.db as any, BIZ, RUN, '');
+  ok(/switched on/i.test(rl.error ?? '') && /Nothing was changed/i.test(rl.error ?? ''),
+     '§F the LIVE refusal names the state and says what did not happen');
+  ok(!/could not read/i.test(rl.error ?? ''), '§F 🔴 and the two refusals are NOT the same sentence');
+
+  // 🔴 A REFUSAL ISSUES THE GATE READ AND NOTHING ELSE. It cannot be "first and absolute" any more
+  // — the gate has to ask the database — so the assertion is now the one that matters: NO WRITE,
+  // and no read of anything but the tenant's own row.
+  ok(liveRec.calls.every(c => c.verb === 'select'), '§F 🔴 a refused undo issues ONLY reads — not one delete, not one update');
+  ok(liveRec.calls.every(c => c.table === 'businesses'), '§F and the only table it touched was `businesses`, to ask the question');
+  ok(liveRec.calls.length === 1, '§F exactly one query — it asks once and stops');
+
+  // A per-business env hold still works, on top of the owner's switch.
+  const one = recorder({ inventory: lot(), writesEnabled: true });
+  ok((await undoItemImport(one.db as any, BIZ, RUN, BIZ)).refused === false, '§F an env hold naming THIS business re-opens the undo even though the owner is live');
+  const other = recorder({ inventory: lot(), writesEnabled: true });
   ok((await undoItemImport(other.db as any, BIZ, RUN, 'some-other-business-id')).refused === true,
-     '§F 🔴 a hold naming a DIFFERENT business does NOT permit this one\'s undo');
+     '§F 🔴 an env hold naming a DIFFERENT business does NOT open this one\'s undo');
 }
 
 // ── §G the undo un-retires by RUN ID, never by timestamp ────────────────────

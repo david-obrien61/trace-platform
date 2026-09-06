@@ -102,10 +102,38 @@ owner-gated (R-80) **and** require the verb permission — it is an AND, not an 
 > single-valued). **No `api/` function was minted** — 12/12 held; these are branches on the router
 > that already exists. **No new permission string.**
 
-> 🔴 **BEFORE CARD 5, SET THE HOLD, OR THE UNDO IS CLOSED AND YOU CANNOT WIPE.**
-> `QBO_PUSH_HOLD` must be set in Vercel to `all` or to `ed2e5933-45dc-4b9b-a331-ddfd125e7a74`.
-> Confirm it from `/api/qbo/status` (`push_held: true`) — **reading it there is the check; trusting
-> that the env var propagated is not.** This is the same switch that already protects their books.
+> ✅ **GATE 1 — CLOSED 2026-09-06, AND IT NEEDED A CODE FIX, NOT AN ENV VAR.**
+>
+> **This gate originally said: set `QBO_PUSH_HOLD` in Vercel and confirm `push_held: true`.
+> THAT WAS WRONG, and David found it by asking which switch `undoable` reads.**
+>
+> There are **TWO** switches and they belong to different people:
+> - **`QBO_PUSH_HOLD`** (env) — the OPERATOR's deploy-wide hold. David's.
+> - **`businesses.qbo_writes_enabled`** (`20260902…:65`, NOT NULL DEFAULT false) — **the OWNER's own
+>   decision.** It is what the Test Mode switch flips, what the TEST MODE banner reads, and what
+>   `api/orders/submit.ts:856` gates the real checkout push on. **LAWNS = `false` today.**
+>
+> 🔴 **The first build read only the env var.** At LAWNS — owner's switch OFF, env unset — it
+> computed `undoable: false` and **the undo refused in exactly the state it exists to serve.** The
+> gate is now `!pushPermitted({ writesEnabled, platformHeld })`, the predicate that already existed
+> in `business-logic/testMode.ts` and whose own header says *"Either one saying no means no."*
+>
+> **WHAT TO DO NOW: nothing. Set no env var.** LAWNS is in test mode, so the undo is open.
+>
+> **CHECK IT LIKE THIS —** `/api/qbo/status` now reports all three:
+> ```
+> push_held:        false   ← the operator's env hold (unset, and that is fine)
+> writes_enabled:   false   ← the OWNER's switch. THIS is the one that matters.
+> writes_permitted: false   ← the two, AND-ed once. false = nothing reaches their books
+> ```
+> 🔴 **`writes_permitted: false` IS GATE 1.** It is the same predicate the undo uses, read from the
+> same deployment, so if it says false the undo is open. **Read it; do not assume it.**
+> ⚠️ **`push_held` alone is NOT the check and never was** — it was the only field this endpoint
+> reported before today, which is why the question could not be answered from it.
+>
+> ⚠️ **AND IF THE STATUS READ FAILS, THE UNDO REFUSES** — with a sentence saying *we could not
+> check*, deliberately worded differently from *you are live*. A person who cannot tell those two
+> apart acts on the wrong one.
 
 ---
 
@@ -227,8 +255,11 @@ const out = await r.json(); console.log(out.runId, out.created, out.retired, out
 1. `created` is **647**.
 2. `retired` is **447**.
 3. `committed` is `true`.
-4. 🔴 `undoable` is **`true`**. If it is `false` the push hold is not set — **the import has
-   landed and you cannot wipe it.** Fix the env var before going further.
+4. 🔴 `undoable` is **`true`**. If it is `false`, **STOP — the import has landed and you cannot
+   wipe it.** Check `/api/qbo/status` → `writes_permitted` must be **`false`**. ✏️ *Do NOT reach for
+   the env var: `undoable` reads BOTH switches now, and at LAWNS the owner's `qbo_writes_enabled`
+   is what holds it open. A `false` here means either the Test Mode switch got flipped on, or the
+   status read failed — and those are different problems.*
 
 **PASS:** 647 created, 447 retired, `undoable: true`, and you have the run id written down.
 **FAIL:** `stoppedAt` is `'create'` (nothing was retired — the old catalogue is intact, run the
@@ -363,9 +394,12 @@ rows were not deleted and CARD 10 lied.
 
 ## CARD 12 — 🔴 THE UNDO REFUSES WHEN WRITES ARE ON
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
-🔴 **Run a fresh import first (CARD 6) so there is something to refuse to delete.** Then remove
-`ed2e5933-…` from `QBO_PUSH_HOLD` in Vercel (or clear it), redeploy, confirm `/api/qbo/status`
-reports `push_held: false`, and call the undo with the run id.
+🔴 **Run a fresh import first (CARD 6) so there is something to refuse to delete.** Then **flip the
+owner's Test Mode switch OFF** (`qbo_writes_enabled = true`) — that is the real go-live control and
+the one to test — confirm `/api/qbo/status` reports **`writes_permitted: true`**, and call the undo
+with the run id.
+✏️ *Corrected 2026-09-06. This card previously told you to clear an env var, which tested the
+OPERATOR's hold and left the OWNER's switch — the one Lauren actually flips — unproven.*
 
 1. HTTP **409**, not 500 and not 200.
 2. `refused` is `true`.
@@ -376,7 +410,8 @@ reports `push_held: false`, and call the undo with the run id.
 🔴 **This is the whole safety model in one control.** The switch that turns QuickBooks writes on is
 the switch that closes the undo — one control, not two, and it is the hold that already protects
 their books rather than a second mechanism that could disagree with it.
-⚠️ **RESTORE THE HOLD AFTERWARDS** and confirm it from `/api/qbo/status` before doing anything else.
+⚠️ **PUT TEST MODE BACK ON AFTERWARDS** (`qbo_writes_enabled = false`) and confirm
+`/api/qbo/status` reports **`writes_permitted: false`** before doing anything else.
 **FAIL:** the undo proceeds. That is the one outcome that can destroy something real.
 
 ---
@@ -573,10 +608,6 @@ delete the customer undo would) but it is **misreported**. Keep the two run ids 
 undo route, prove that each undo touches only its own run. Until then a green check here would
 assert a proof nobody performed.
 
-**What this card becomes the day the merge lands:** import customers, undo, and confirm the run's
-customers are gone while every hand-made customer and every previous run's customer survives.
-Until then a green check here would assert a proof nobody performed.
-
 ---
 
 ## CARD 23 — 🔴 THE CLOSING SEQUENCE: wipe, reload clean, writes on
@@ -590,9 +621,10 @@ This is the sequence you actually perform on the day, after Lauren has finished 
    run id down. **This is the catalogue that becomes permanent.**
 3. **LOOK BEFORE YOU LATCH.** Re-run CARD 9 (647 rows), CARD 2's collision list, and spot-check the
    sizes on CARD 3's numbers. **This is the last moment the undo is open.**
-4. **WRITES ON.** Remove LAWNS from `QBO_PUSH_HOLD` in Vercel, redeploy, and confirm
-   `/api/qbo/status` reports **`push_held: false`** — read it there, do not trust that the env var
-   propagated.
+4. **WRITES ON.** Flip the owner's **Test Mode switch OFF** (`qbo_writes_enabled = true`) and
+   confirm `/api/qbo/status` reports **`writes_permitted: true`** — read it there, do not assume it.
+   ✏️ *Corrected 2026-09-06: this step named the env var. It is a switch in the product, per
+   business, and it is Lauren's to flip — not a Vercel redeploy.*
 5. **CONFIRM THE UNDO IS NOW CLOSED.** Call the undo with the run id from step 2.
    **EXPECT HTTP 409, `refused: true`, and the catalogue untouched.**
 
@@ -603,5 +635,5 @@ first time it must say no. If it proceeds, the switch is not wired to the door a
 mis-click deletes rows behind invoices you have already sent.
 ⚠️ **If you need to change the catalogue after this point, it is a normal edit or a new import —
 not an undo.** That is the trade you are making at step 4, deliberately.
-**FAIL:** step 5 returns 200 — **stop, and re-set `QBO_PUSH_HOLD` immediately.** Or step 2's re-run
+**FAIL:** step 5 returns 200 — **stop, and put Test Mode back on immediately** (`qbo_writes_enabled = false`). Or step 2's re-run
 creates ~1,294 rows, which means step 1's wipe did not land and CARD 10 lied.

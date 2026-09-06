@@ -20,6 +20,7 @@
  *   POST /api/qbo/items/undo         → _route=items-undo      (DELETES this run's rows, un-retires what it hid)
  *   GET  /api/qbo/customers/preview  → _route=customers-preview (READ-ONLY — plans the customer import, writes nothing)
  *   POST /api/qbo/customers/ingest   → _route=customers-ingest  (WRITES `customers` ONLY — creates, and reconciles tax exemption)
+ *   POST /api/qbo/customers/undo     → _route=customers-undo    (DELETES this run's customers; RESTRICT-aware, reports what it could not remove)
  */
 
 import crypto from 'crypto';
@@ -38,9 +39,10 @@ import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
+import { pushPermitted } from '../../../shared/src/business-logic/testMode';
 import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
 import { adaptCustomers } from '../../../shared/src/quickbooks/qboCustomerAdapter';
-import { previewCustomerImport, commitCustomerImport } from '../../../shared/src/quickbooks/customerImportWriter';
+import { previewCustomerImport, commitCustomerImport, undoCustomerImport } from '../../../shared/src/quickbooks/customerImportWriter';
 import { randomUUID } from 'crypto';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -362,7 +364,15 @@ async function handleStatus(req: any, res: any) {
     // runs in the SAME deployment as the push and reads the SAME variable through the SAME
     // predicate, so if this says held, the push holds. Read it; do not assume it.
     const pushHeld = isPushHeld(process.env[QBO_PUSH_HOLD_ENV], businessId);
-    console.log('[TRACE:QBO] status', { businessId, connected: true, needsReconnect, pushHeld });
+    // 🔴 THE SECOND SWITCH, REPORTED 2026-09-06. `push_held` alone could not answer "are writes
+    // off for this business" — it is the OPERATOR's env hold, while `qbo_writes_enabled` is the
+    // OWNER's own decision and is what `submit.ts:856` actually gates the push on. Reporting only
+    // the first meant `push_held: false` read as "you are live" for a business whose owner had
+    // writes switched off. `writes_permitted` is the ANSWER, computed through the one shared
+    // predicate so this endpoint and the push cannot disagree about it.
+    const writesEnabled = (data as { qbo_writes_enabled?: boolean }).qbo_writes_enabled ?? null;
+    const permitted = pushPermitted({ writesEnabled, platformHeld: pushHeld });
+    console.log('[TRACE:QBO] status', { businessId, connected: true, needsReconnect, pushHeld, writesEnabled, permitted });
 
     return res.json({
       connected: true,
@@ -370,6 +380,10 @@ async function handleStatus(req: any, res: any) {
       companyName: data.name,
       needsReconnect,
       push_held: pushHeld,
+      writes_enabled: writesEnabled,
+      // 🔴 THE ONE AN OPERATOR SHOULD READ. false = nothing can reach their books = the catalogue
+      // import's undo is OPEN. It is not a third switch; it is the two above, AND-ed once.
+      writes_permitted: permitted,
     });
   } catch {
     return res.json({ connected: false });
@@ -1073,6 +1087,38 @@ async function handleCustomersIngest(req: any, res: any) {
   }
 }
 
+async function handleCustomersUndo(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  const runId = (req.query.run_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  // A blank run id must NEVER be treated as "undo everything". It is a bad request.
+  if (!runId) return res.status(400).json({ error: 'run_id required — an undo names exactly one import run' });
+  const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'CUSTIMPORT', res))) return;
+  // 🔴 GATED ON `customers:create` + `customers:update`, NOT ON A DELETE VERB, AND THAT IS
+  // DELIBERATE. `customers:delete` is one of the FIVE UNMINTABLE DELETES (permissionManifest R2 /
+  // A3: it "must be UNFINDABLE by grep in this file"). David answered R2's FK-cascade condition on
+  // 2026-09-06 — `orders_customer_id_fkey` is ON DELETE RESTRICT — and ruled that the undo may be
+  // wired; he did NOT rule that a general customer-delete capability should exist, and minting one
+  // here would assert a protection boundary nobody decided on. The authority that created these
+  // rows is the authority that un-creates them, and the OWNER gate above is the real protection
+  // (R-80). This endpoint can only ever remove rows carrying its own run id.
+  if (!(await callerCan(auth, businessId, 'customers:create'))
+      || !(await callerCan(auth, businessId, 'customers:update'))) {
+    console.log('[TRACE:CUSTIMPORT] undo REFUSED — caller lacks customers:create + customers:update', { businessId });
+    return res.status(403).json({ error: 'Not authorized to undo a customer import for this business', code: 'FORBIDDEN' });
+  }
+  try {
+    const report = await undoCustomerImport(supabase(), businessId, runId, process.env[QBO_PUSH_HOLD_ENV]);
+    // 200 when everything that COULD go went — including a partial undo blocked only by real
+    // orders, which is a success. 409 for the wholesale refusal (writes are on).
+    return res.status(report.ok ? 200 : 409).json(report);
+  } catch (e: any) {
+    console.log('[TRACE:CUSTIMPORT] undo failed', { businessId, runId, message: e?.message });
+    return res.status(500).json({ error: `The undo failed: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -1093,6 +1139,7 @@ export default async function handler(req: any, res: any) {
     case 'items-undo':         return handleItemsUndo(req, res);
     case 'customers-preview':  return handleCustomersPreview(req, res);
     case 'customers-ingest':   return handleCustomersIngest(req, res);
+    case 'customers-undo':     return handleCustomersUndo(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }

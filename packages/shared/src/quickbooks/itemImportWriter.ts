@@ -66,12 +66,42 @@
 // 🔴 THE UNDO REFUSES WHILE QUICKBOOKS WRITES ARE ON. A REFUSAL, NOT A WARNING.
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // The whole promise — import, look, wipe, reload — rests on nothing having left the building.
-// While the push is HELD, everything the import made is disposable, INCLUDING an order Lauren
-// rings up against an imported item: nothing is hers yet, no invoice went out, no stock moved.
-// The moment writes go on, an invoice can have been sent against an imported item, and deleting
-// that item's row would orphan a document in a real company's books. So the switch that turns
-// writes on is the switch that CLOSES the undo — one control, not two, and it is the existing
-// `QBO_PUSH_HOLD` (`./pushHold`) rather than a second mechanism that could disagree with it.
+// While no invoice can be pushed, everything the import made is disposable, INCLUDING an order
+// Lauren rings up against an imported item: nothing is hers yet, no invoice went out, no stock
+// moved. The moment writes go on, an invoice can have been sent against an imported item, and
+// deleting that item's row would orphan a document in a real company's books.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 CORRECTED 2026-09-06 — THERE ARE **TWO** SWITCHES AND THE FIRST DRAFT GATED ON THE WRONG
+//    ONE. R-95 AS FILED SAID "one control, not two". THAT SENTENCE WAS FALSE WHEN IT WAS WRITTEN.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// Found by David asking which switch `undoable` reads — not by any check we own.
+//
+//   · `QBO_PUSH_HOLD` (env) is the OPERATOR's hold — David's, over a tenant whose invoice line
+//     mapping he has not yet watched land. Deploy-wide, invisible to the customer.
+//   · `businesses.qbo_writes_enabled` (column, `20260902_business_qbo_writes_switch.sql:65`,
+//     NOT NULL DEFAULT false) is the **OWNER's own decision about her own books**. It is what
+//     `QboWriteSwitch.tsx` flips, what the TEST MODE banner reads, and what
+//     `api/orders/submit.ts:856` gates the actual checkout push on.
+//
+// The first draft read ONLY the env var — so at LAWNS today (`qbo_writes_enabled = false`,
+// `QBO_PUSH_HOLD` unset) it computed `undoable: false` and the undo REFUSED, **in exactly the
+// state the undo exists to serve.** The gate was not merely incomplete; it was inverted in
+// practice, and it would have made the operator set a deploy-wide env var to duplicate a switch
+// the product already gives the owner.
+//
+// 🔴 AND THE SHARED PREDICATE ALREADY EXISTED: `pushPermitted({ writesEnabled, platformHeld })`
+// in `../business-logic/testMode`, whose own header says *"TWO SWITCHES, AND-ED, BECAUSE THEY
+// BELONG TO DIFFERENT PEOPLE… Either one saying no means no."* Not using it was a §6 r8 miss —
+// the operation existed in exactly one place and this file wrote a second, narrower one.
+//
+// So: **the undo is open precisely when a push is NOT permitted** — `!pushPermitted(...)`. Either
+// hold being active means nothing left the building, which is the only thing that matters here.
+//
+// ⚠️ NAMED AND NOT SOLVED: this reads CURRENT state, not history. A business that was live, sent
+// invoices, and was then switched back to test mode re-opens the undo over rows that may sit
+// behind real documents. That is a HISTORY question — it wants "has this business ever pushed",
+// which nothing records today — and it is tech-debt #198, not a thing to guess at here.
 //
 // ⚠️ IT REFUSES BY NAME, THE SHAPE `seed-uppot-harness.mjs` USES — the tenant is checked and the
 // run stops before it writes, rather than warning and proceeding.
@@ -91,6 +121,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { adaptQboItems, type AdaptedItem, type AdaptedItemList } from './qboItemAdapter';
 import { isPushHeld } from './pushHold';
+import { pushPermitted } from '../business-logic/testMode';
 import { unitColumnsFor } from '../inventory/unitOfMeasure';
 import { STOCK_LINE_IDENTITY_COLUMNS } from '../inventory/stockLineResolver';
 import type { QboItemRow } from './itemList';
@@ -206,6 +237,35 @@ async function countLive(db: DbLike, businessId: string): Promise<number> {
  * file stayed off `receipts`, which is the single most important claim this file makes about
  * itself. Two literal functions keep the scanner able to answer.
  */
+/**
+ * Is the undo open for this business RIGHT NOW?
+ *
+ * 🔴 BOTH SWITCHES, THROUGH THE ONE SHARED PREDICATE. `pushPermitted` is AND-ed over the
+ * operator's env hold and the owner's own `qbo_writes_enabled`; the undo is open exactly when a
+ * push is NOT permitted, because either hold being active means nothing left the building.
+ *
+ * ⚠️ A FAILED READ MEANS THE UNDO IS CLOSED, AND THAT IS THE SAFE DIRECTION. `isTestMode` already
+ * treats `undefined` as test mode — the right default for *may I push* — but this is the mirror
+ * question, and the safe default flips with it: if we could not read whether writes are on, we
+ * must not delete rows that might sit behind a real invoice. So a read failure is reported and
+ * the undo refuses, rather than being read as "test mode, go ahead".
+ */
+async function undoIsOpen(
+  db: DbLike, businessId: string, pushHoldRaw: string | undefined,
+): Promise<{ open: boolean; writesEnabled: boolean | null; readFailed: boolean }> {
+  const platformHeld = isPushHeld(pushHoldRaw, businessId);
+  const { data, error } = await db.from('businesses')
+    .select('qbo_writes_enabled').eq('id', businessId).maybeSingle();
+  if (error || !data) {
+    console.log('[TRACE:QBITEMS] could not read qbo_writes_enabled — undo treated as CLOSED', {
+      businessId, message: (error as { message?: string } | null)?.message ?? 'no row',
+    });
+    return { open: false, writesEnabled: null, readFailed: true };
+  }
+  const writesEnabled = (data as { qbo_writes_enabled?: boolean }).qbo_writes_enabled ?? null;
+  return { open: !pushPermitted({ writesEnabled, platformHeld }), writesEnabled, readFailed: false };
+}
+
 async function countReceipts(db: DbLike, businessId: string): Promise<number> {
   const { count, error } = await db.from('receipts')
     .select('id', { count: 'exact', head: true }).eq('business_id', businessId);
@@ -265,7 +325,8 @@ export async function commitItemImport(
   db: DbLike, businessId: string, qboItems: QboItemRow[], runId: string, pushHoldRaw: string | undefined,
 ): Promise<ImportRunReport> {
   const plan = await previewItemImport(db, businessId, qboItems);
-  const undoable = isPushHeld(pushHoldRaw, businessId);
+  // BOTH switches, through the one shared predicate — see `undoIsOpen` and the header.
+  const undoable = (await undoIsOpen(db, businessId, pushHoldRaw)).open;
   const base: ImportRunReport = {
     ...plan, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,
   };
@@ -342,10 +403,16 @@ export async function undoItemImport(
     leftovers: [], refused: false, error: null,
   };
 
-  if (!isPushHeld(pushHoldRaw, businessId)) {
-    console.log('[TRACE:QBITEMS] undo REFUSED — QuickBooks writes are on for this business', { businessId, runId });
-    return { ...empty, refused: true, error:
-      'QuickBooks writes are switched on for this business, so an imported product may already be on an invoice you have sent. Undo is closed. Nothing was changed.' };
+  const gate = await undoIsOpen(db, businessId, pushHoldRaw);
+  if (!gate.open) {
+    console.log('[TRACE:QBITEMS] undo REFUSED', {
+      businessId, runId, writesEnabled: gate.writesEnabled, readFailed: gate.readFailed,
+    });
+    return { ...empty, refused: true, error: gate.readFailed
+      // 🔴 THE TWO REFUSALS SAY DIFFERENT THINGS BECAUSE THEY ARE DIFFERENT FACTS, and a person
+      // who cannot tell "you are live" from "we could not check" will act on the wrong one.
+      ? 'We could not read whether QuickBooks writes are on for this business, so the undo refused rather than guessing. Nothing was changed. This is a failed read, NOT a statement that you are live.'
+      : 'QuickBooks writes are switched on for this business, so an imported product may already be on an invoice you have sent. Undo is closed. Nothing was changed.' };
   }
 
   try {
