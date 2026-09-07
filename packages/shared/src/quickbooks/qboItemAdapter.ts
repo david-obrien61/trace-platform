@@ -310,16 +310,25 @@ export function adaptQboItems(rows: QboItemRow[]): AdaptedItemList {
   const collisions: ItemCollision[] = [];
   for (const [shapeKey, members] of byShape) {
     if (members.length < 2) continue;
+    // The product, as a person would say it. Every member shares the name and the parsed size by
+    // construction, so the first member speaks for the group; the size text may differ between
+    // them, which is exactly what a same-parse/different-spelling collision IS.
+    const label = `${members[0].name}${members[0].size ? ` ${members[0].size}` : ''}`;
     const prices = new Set(members.map(m => (m.unitPrice === null ? 'null' : String(m.unitPrice))));
     const pricesDiffer = prices.size > 1;
     collisions.push({
       shapeKey,
       members,
       pricesDiffer,
+      // 🔴 THE PRODUCT IS NAMED IN THE SENTENCE, ADDED 2026-09-07. It previously said "under this
+      // name and size" without ever saying WHICH — so a reader scanning the collision list for a
+      // product they had just seen on the grid could not find it by searching the reasons, and
+      // would reasonably conclude it was not in the list. That is not a hypothetical: it is how a
+      // correct detector came to be reported as missing a pair.
       reason: pricesDiffer
         // The money is named because it is the reason this is urgent rather than untidy.
-        ? `QuickBooks lists ${members.length} separate products under this name and size, and they do not agree on price (${members.map(m => (m.unitPrice === null ? 'no price' : `$${m.unitPrice}`)).join(' vs ')}). Both are here so you can see them; neither was chosen for you.`
-        : `QuickBooks lists ${members.length} separate products under this name and size. Both are here so you can see them; neither was chosen for you.`,
+        ? `${label} — QuickBooks lists ${members.length} separate products under this name and size, and they do not agree on price (${members.map(m => (m.unitPrice === null ? 'no price' : `$${m.unitPrice}`)).join(' vs ')}). Both are here so you can see them; neither was chosen for you.`
+        : `${label} — QuickBooks lists ${members.length} separate products under this name and size. Both are here so you can see them; neither was chosen for you.`,
     });
   }
   // Biggest first, then by key, so two runs over one list report in the same order.

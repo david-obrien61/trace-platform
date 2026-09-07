@@ -189,14 +189,46 @@ should be re-derived rather than compared. `categories ≠ 38` means the folder 
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
 On the same response, read `adapted.collisions`.
 
-1. `adapted.counts.collidingItems` is **24** (twelve pairs).
-2. `adapted.counts.collisionsWithPriceDifference` is **7**.
-3. Find the entry whose members are Ids **753** and **75**. Its `reason` names **both prices**.
+1. `adapted.counts.collidingItems` is **22** (eleven pairs).
+2. `adapted.counts.collisionsWithPriceDifference` is **6**.
+3. `adapted.collisions.length` is **11**.
+4. Find the entry whose members are Ids **753** and **75**. Its `reason` names the **product** and
+   **both prices**.
+
+> ✏️ **CORRECTED 2026-09-07, AND THE STALE NUMBERS HERE CAUSED A FALSE ALARM.** This card said
+> **24** and **7**. The true figures are **22** and **6** — I measured 12 groups / 24 / 7 before
+> adding the trailing-parenthetical strip (which fixed `SRO300` and two Yaupon Hollies) and **never
+> re-measured**. David read 22/6 off a live run against a board asserting 24/7, found a real
+> colliding pair on the Inventory screen, and reasonably concluded the detector was under-counting.
+> **It was not. The board was.** R-26's shape — a written declaration nobody checked against
+> reality, steering a decision — in my own card. Tech-debt #204.
+
+**Here are all eleven, so nothing has to be inferred from a count** (re-measured 2026-09-07 against
+the complete 2026-09-04 capture, through the shipped adapter):
+
+| # | Product | Ids | Sizes as written | Prices |
+|---|---|---|---|---|
+| 1 | 💲 **Brodie Juniper** | 631 · 1128 | `45 gallon` · `45G` | **$1,400 vs $1,250** |
+| 2 | Chinese Pistache | 689 · 85 | `95 gallon` · `95 gallon` | $1,000 both |
+| 3 | Japanese Black Pine | 138 · 746 | `45 gallon` · `45 gallon` | $1,250 both |
+| 4 | 💲 **Lacey Oak** | 75 · 753 | `30 gallon` · `30 Gallon` | **$350 vs $900** |
+| 5 | 💲 **Lacey Oak** | 76 · 756 | `45 Gallon` · `45 Gallon` | **$375 vs $1,250** |
+| 6 | Mexican Buckeye | 110 · 111 | `10/15 gallon` both | $90 both |
+| 7 | Military Discount 5% | 8 · 9 | none | −$0.05 both |
+| 8 | 💲 **Natchez Crape Myrtle** | 859 · 150 | `30 gallon` both | **$900 vs $350** |
+| 9 | 💲 **Native Female Yaupon Holly** | 834 · 836 | `45 gallon` · `45 Gallon` | **$650 vs $0** |
+| 10 | 💲 **Skyward Holly** | 1087 · 1104 | `5 gallon` · `5G` | **$65 vs $60** |
+| 11 | Tree Replacement | 196 · 207 | none | $0 both |
+
+🔴 **ROWS 1 AND 10 ARE THE PROOF THAT THE PARSED SIZE IS WHAT GROUPS, NOT THE SIZE TEXT.**
+`45G` and `45 gallon` are different strings and the same shelf; the key is the unit projection
+(`container/45/gallon`), which is exactly what R-27 built it for. A detector keyed on the size
+STRING would report nine groups and miss both.
 
 **PASS:** `wouldCreate` (647) equals `adapted.counts.sellable` (647) — **every sellable item became
-a row**, and the twelve collisions are reported rather than resolved.
-🔴 **Read the sentence, do not just check the count.** For Lacey Oak 30 Gallon it must say
-**$900** and **$350** — a $550 gap on one product name. Before this build the create loop kept
+a row** — and all eleven collisions above are present.
+🔴 **Read the sentence, do not just check the count.** For Lacey Oak 30 Gallon it must name
+the product and say **$900** and **$350** — a $550 gap on one product name. Before this build the create loop kept
 whichever came first, which for Lacey Oak 45 Gallon meant keeping **$375** and dropping **$1,250**.
 There was no finding, no count, and nothing on screen.
 **FAIL:** `wouldCreate` is less than `sellable` (something was dropped), or the reason says only

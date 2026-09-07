@@ -178,6 +178,21 @@ const it = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow =
   ok(a.collisions[0].pricesDiffer === true, '§F 🔴 the price disagreement is the sharp part and it is flagged');
   ok(a.collisions[0].reason.includes('$900') && a.collisions[0].reason.includes('$350'),
      '§F 🔴 BOTH PRICES ARE IN THE SENTENCE — $550 apart, and an owner cannot act on "there is a collision"');
+  ok(a.collisions[0].reason.startsWith('Natchez Crape Myrtle'),
+     '§F 🔴 AND THE SENTENCE NAMES THE PRODUCT. Without it a reader who has just seen the pair on the grid cannot find it by searching the collision reasons, and concludes it is not in the list — which is how a correct detector got reported as missing a pair (2026-09-07)');
+
+  // 🔴 SAME NAME, SAME PARSED SIZE, DIFFERENT SIZE TEXT — the real Brodie Juniper pair. This is
+  // the case the unit projection exists to fold, and a detector keyed on the size STRING would
+  // miss it entirely. Verbatim from the 2026-09-04 capture.
+  const spellingPair = adaptQboItems([
+    it('631',  'BJ45',  { type: 'NonInventory', unitPrice: 1400, description: 'Brodie Juniper - 45 gallon' }),
+    it('1128', 'BuJ45', { type: 'Service',      unitPrice: 1250, description: 'Brodie Juniper - 45G' }),
+  ]);
+  ok(spellingPair.collisions.length === 1,
+     '§F 🔴 `45 gallon` and `45G` COLLIDE — different strings, one shelf, grouped on the parsed unit (R-27)');
+  ok(spellingPair.collisions[0].pricesDiffer === true, '§F …and the $150 gap is flagged');
+  ok(spellingPair.collisions[0].reason.startsWith('Brodie Juniper'), '§F …and the sentence names it');
+  ok(spellingPair.items.length === 2, '§F …and both still become rows');
   ok(a.counts.collidingItems === 2, '§F the count is ITEMS involved (2), not collisions (1)');
   ok(a.counts.collisionsWithPriceDifference === 1, '§F price-disagreeing collisions counted separately');
   ok(a.collisions[0].members.map(m => m.fullyQualifiedName).join('|') !== '|',
