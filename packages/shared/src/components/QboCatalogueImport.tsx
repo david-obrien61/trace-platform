@@ -52,25 +52,49 @@ interface AdaptedCounts {
   collidingItems: number; collisionsWithPriceDifference: number;
 }
 interface CountedRow { id: string; name: string; size: string | null; qty: number }
-/** The combined report. `customers` is #278's shape and `items` is this build's; neither is
- *  re-declared here — a second copy of a shape is the thing that drifts. */
-interface Report {
+/**
+ * 🔴 THE CUSTOMER SHAPES ARE IMPORTED, NOT GUESSED — AND THIS IS THE THIRD TIME THAT MATTERED.
+ *
+ * This panel first hand-declared `customers?: { created?: number; reconciled?: number }`, which was
+ * my guess at #278's shape. The PREVIEW returns **`toCreate` / `toReconcile`**; only the RUN
+ * returns `created` / `reconciled`. So the panel read `undefined ?? 0` and told David
+ * **"Customers: 0 new"** and **"Import 0 customers and 647 products"** against 1,946 records in
+ * QuickBooks and 30 held locally. The walk was running perfectly and the number was mine.
+ *
+ * Every optional field in a hand-written interface is a claim that TypeScript cannot check against
+ * the thing it describes, because the response is cast. That is the same defect as `source` (a
+ * column `business_inventory` never had) and as `ok` inherited from a preview onto a run — **the
+ * third instance in this build of a declaration that did not match its source.** Importing the real
+ * types makes the compiler the check, which is the only fix that does not rely on me being careful.
+ */
+import type { CustomerPlanReport, CustomerRunReport, CustomerUndoReport } from '../quickbooks/customerImportWriter';
+
+/** What the ITEMS half reports — this build's own shapes, kept local because they already are. */
+interface ItemPlan {
   ok?: boolean;
-  customers?: { ok?: boolean; created?: number; reconciled?: number; deleted?: number; error?: string } | null;
-  items?: Report | null;
-  stoppedAt?: 'customers' | 'items' | 'create' | 'retire' | null;
   adapted?: { counts: AdaptedCounts; collisions: Collision[] };
   wouldRetire?: number; wouldCreate?: number;
   countedRowsBeingRetired?: CountedRow[];
-  runId?: string; created?: number; retired?: number;
-  undoable?: boolean; committed?: boolean;
-  inventoryDeleted?: number; customersDeleted?: number; unretired?: number;
-  leftovers?: string[];
-  receiptsBefore?: number; receiptsAfter?: number;
-  deliveriesBefore?: number; deliveriesAfter?: number;
-  refused?: boolean;
-  error?: string; code?: string;
+  error?: string;
 }
+interface ItemRun extends ItemPlan {
+  runId?: string; created?: number; retired?: number;
+  stoppedAt?: 'create' | 'retire' | null; undoable?: boolean; committed?: boolean;
+}
+interface ItemUndo {
+  ok?: boolean; inventoryDeleted?: number; unretired?: number;
+  leftovers?: string[]; receiptsAfter?: number; deliveriesAfter?: number;
+  refused?: boolean; error?: string;
+}
+
+/** 🔴 ONE SHAPE PER STEP. A single `Report` covering plan, run and undo is what let a run-report
+ *  field be read off a plan report without the compiler minding. */
+interface PlanReport  { ok?: boolean; customers?: CustomerPlanReport | null; items?: ItemPlan | null; error?: string }
+interface RunReport   { ok?: boolean; runId?: string; stoppedAt?: 'customers' | 'items' | null;
+                        customers?: CustomerRunReport | null; items?: ItemRun | null;
+                        committed?: boolean; undoable?: boolean; error?: string }
+interface UndoReport  { ok?: boolean; refused?: boolean; runId?: string;
+                        customers?: CustomerUndoReport | null; items?: ItemUndo | null; error?: string }
 
 const money = (n: number | null) =>
   n === null || n === undefined ? 'no price' : `$${n.toLocaleString('en-US')}`;
@@ -78,9 +102,9 @@ const money = (n: number | null) =>
 export function QboCatalogueImport({ businessId }: { businessId: string | null }) {
   const { isOwner } = useBusinessContext();
   const [busy, setBusy]       = useState<null | 'preview' | 'import' | 'undo'>(null);
-  const [plan, setPlan]       = useState<Report | null>(null);
-  const [run, setRun]         = useState<Report | null>(null);
-  const [undone, setUndone]   = useState<Report | null>(null);
+  const [plan, setPlan]       = useState<PlanReport | null>(null);
+  const [run, setRun]         = useState<RunReport | null>(null);
+  const [undone, setUndone]   = useState<UndoReport | null>(null);
   const [failed, setFailed]   = useState<string | null>(null);
 
   // 🔴 THE RUN ID LIVES HERE AND NOWHERE ELSE SHE CAN SEE. Set by the import, consumed by the
@@ -147,11 +171,11 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
         method: step === 'preview' ? 'GET' : 'POST',
         headers: await authHeaders(),
       });
-      const body = (await res.json()) as Report;
+      const body = (await res.json()) as PlanReport & RunReport & UndoReport;
       console.log('[TRACE:QBITEMS] ui', { step, status: res.status, ok: body.ok, runId: body.runId ?? runId });
-      if (step === 'preview') setPlan(body);
-      if (step === 'import')  { setRun(body); if (body.ok) setPlan(p => p); }
-      if (step === 'undo')    { setUndone(body); if (body.ok) setRun(null); }
+      if (step === 'preview') setPlan(body as PlanReport);
+      if (step === 'import')  setRun(body as RunReport);
+      if (step === 'undo')    { setUndone(body as UndoReport); if (body.ok) setRun(null); }
       if (!res.ok && !body.error && !body.refused) setFailed(`The request failed (${res.status}).`);
     } catch (e) {
       // A dead zone is NOT an empty result — say which happened (D-9).
@@ -171,7 +195,7 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
   const counts = plan?.items?.adapted?.counts;
   const collisions = plan?.items?.adapted?.collisions ?? [];
   const money6 = collisions.filter(c => c.pricesDiffer);
-  const canImport = !!plan?.ok && !run?.committed && ((plan.items?.wouldCreate ?? 0) > 0 || (plan.customers?.created ?? 0) > 0);
+  const canImport = !!plan?.ok && !run?.committed && ((plan.items?.wouldCreate ?? 0) > 0 || (plan.customers?.toCreate ?? 0) > 0);
 
   return (
     <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
@@ -202,7 +226,7 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
                    border: 'none', borderRadius: 6, fontWeight: 700,
                    cursor: busy ? 'wait' : canImport ? 'pointer' : 'not-allowed' }}>
           {busy === 'import' ? 'Importing…'
-            : plan ? `Import ${plan.customers?.created ?? 0} customers and ${plan.items?.wouldCreate ?? 0} products` : 'Import'}
+            : plan ? `Import ${plan.customers?.toCreate ?? 0} customers and ${plan.items?.wouldCreate ?? 0} products` : 'Import'}
         </button>
         {/* 🔴 THE UNDO APPEARS ONLY ONCE A RUN EXISTS. Before that there is nothing to take back,
             and a permanently-visible undo invites a press that can only error. */}
@@ -256,8 +280,10 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
             Sizes: <strong>{counts.sized}</strong> read, <strong>{counts.notStated}</strong> with no
             size given, <strong>{counts.couldNotRead}</strong> we could not read.
             {plan?.customers && (
-              <><br />Customers: <strong style={{ color: GREEN }}>{plan.customers.created ?? 0}</strong> new
-              {typeof plan.customers.reconciled === 'number' && <>, <strong>{plan.customers.reconciled}</strong> already here and left alone</>}.</>
+              <><br />Customers: <strong style={{ color: GREEN }}>{plan.customers.toCreate}</strong> new,{' '}
+              <strong>{plan.customers.toReconcile}</strong> already here (their tax-exempt status is
+              refreshed, nothing else about them is touched). You hold{' '}
+              <strong>{plan.customers.existingCustomers}</strong> today.</>
             )}
           </p>
 
@@ -331,19 +357,29 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
               {/* 🔴 A STOPPED RUN, NAMED. `ok` is false here and says so on its own — a run that
                   wrote nothing must never read as a success (the defect this build shipped once). */}
               <strong style={{ color: RED, fontSize: '.9rem' }}>
+                {/* 🔴 TWO LEVELS, AND THE COMPILER CAUGHT ME CONFLATING THEM. The RUN stops at
+                    'customers' or 'items'; only the ITEMS half knows whether it stopped while
+                    creating or while hiding. Reading `run.stoppedAt === 'create'` was a comparison
+                    that could never be true — and it only surfaced because the real types are now
+                    imported instead of hand-declared. */}
                 {run.stoppedAt === 'customers'
                   ? 'Nothing was imported — it stopped on the customers.'
-                  : run.stoppedAt === 'items'
-                    ? 'Your customers were imported. Your product list was not.'
-                    : `Nothing was imported${run.stoppedAt ? ` — it stopped while ${run.stoppedAt === 'create' ? 'creating the new products' : 'hiding the old ones'}` : ''}.`}
+                  : 'Your customers were imported. Your product list was not.'}
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
                 {run.error ?? 'The import did not finish.'}
-                {run.stoppedAt === 'customers' && <> Your product list was not touched at all.</>}
-                {run.stoppedAt === 'items' && <> Both halves carry the same run, so <strong>one Undo removes everything this run made</strong> — the customers included.</>}
-                {run.stoppedAt === 'create' && <> Your current catalogue is untouched — nothing was hidden.</>}
-                {run.stoppedAt === 'retire' && (run.items?.created ?? 0) > 0 &&
-                  <> <strong>{run.items?.created} new rows did land</strong>, so your catalogue has both lists in it. Press Undo to remove them.</>}
+                {run.stoppedAt === 'customers' && <> Your product list was not touched at all, and there is nothing to undo.</>}
+                {run.stoppedAt === 'items' && (
+                  <>
+                    {run.items?.stoppedAt === 'create'
+                      ? <> Your current catalogue is untouched — nothing was hidden.</>
+                      : (run.items?.created ?? 0) > 0
+                        ? <> <strong>{run.items?.created} new rows did land</strong>, so your catalogue has both lists in it.</>
+                        : null}
+                    {' '}Both halves carry the same run, so <strong>one Undo removes everything this run
+                    made</strong> — the customers included.
+                  </>
+                )}
               </p>
             </>
           )}
