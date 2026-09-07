@@ -20,6 +20,7 @@ import { QboBooksReader } from '../components/QboBooksReader';
 import { QboWriteSwitch } from '../components/QboWriteSwitch';
 import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
 import { QboOrderIngest } from '../components/QboOrderIngest';
+import { QboCatalogueImport } from '../components/QboCatalogueImport';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -724,6 +725,7 @@ export function Settings({
               {/* BELOW the delivery ingest, and the order is the dependency: a stop must
                   exist before it can have a load. */}
               <QboOrderIngest businessId={businessId} />
+              <QboCatalogueImport businessId={businessId} />
             </div>
           ) : (
             <div>
