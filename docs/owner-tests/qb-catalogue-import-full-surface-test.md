@@ -31,7 +31,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 0 of 23 covered** (21 `owed` · 2 `needs-test`).
+**Board: 1 of 23 covered** (20 `owed` · 2 `needs-test`) — CARD 5 proven live 2026-09-07.
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
@@ -245,7 +245,13 @@ with a height remark and were refused outright when their size was plainly state
 ---
 
 ## CARD 5 — 🔴 PROVE THE UNDO ON TEST DAVE'S BEFORE LAWNS
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-07 (David, live, Test Dave's)
+> ✅ **COVERED — ALL EIGHT STEPS, run id `b020759d`.** Fingerprint identical before and after,
+> zero residue. **The undo is proven**, which is what CARD 6 was waiting on.
+> ✏️ *It failed first on STEP 3 under run id `435f52b5` — `source` is not a column on
+> `business_inventory` — and **the guard held**: create-before-retire meant a stopped run rather
+> than 130 hidden rows with nothing created. Both defects fixed in `5e16a89` (tech-debt #202, #203)
+> before the covering run. That ordering earned its place.*
 **TENANT:** Test Dave's Tree Nest · **ACTOR:** owner · **TIME:** about ten minutes.
 
 **What you are proving:** that an import can be taken back completely. One item in, one item out,
@@ -422,6 +428,35 @@ purpose of doing this here first.
 
 ## CARD 6 — the import runs on LAWNS and reports what it did
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+> 🔴 **STEP ZERO — TAKE A FINGERPRINT BASELINE. DAVID'S ADDITION, 2026-09-07, AND THE BOARD WAS
+> WRONG NOT TO ASK FOR IT.** CARD 10 verified the wipe by counting rows and eyeballing one variety.
+> That proves rows came back; it does not prove they came back *unchanged*.
+>
+> ```sql
+> SELECT count(*)                                       AS rows_total,
+>        count(*) FILTER (WHERE qty > 0)                AS counted,
+>        count(*) FILTER (WHERE retired_at IS NOT NULL) AS retired,
+>        md5(string_agg(id::text || ':' || coalesce(qty, -1)::text, ',' ORDER BY id)) AS fingerprint
+>   FROM public.business_inventory
+>  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
+> ```
+> **EXPECT: `447` · `2` · `0` · a hash. WRITE THE HASH DOWN — CARD 10 step 8 compares against it.**
+
+> ⚠️ **WHAT I WOULD WATCH ON THIS RUN, AND IT IS NOT PROVEN EITHER WAY: 647 ROWS GO IN ONE
+> `INSERT`.** CARD 5 proved the mechanism at **one** row. This writer does not batch —
+> `itemImportWriter.ts:382` is a single `.insert(rows).select('id')` — while the sibling customer
+> import chose **500** as its ceiling (`customerImportWriter.ts:85`, `CUSTOMER_INSERT_BATCH`) for a
+> 1,946-row load. **647 is above that number, and nobody has run this size.**
+>
+> 🔴 **IF IT FAILS, IT FAILS CLEANLY — BY DESIGN, NOT BY LUCK.** A single statement is atomic:
+> either all 647 land or none do. The run stops at `create`, **the retire never runs**, and your 447
+> are untouched — exactly what happened on CARD 5's first attempt. You would see `ok: false`,
+> `created: 0`, `stoppedAt: "create"` and a message. **Nothing to undo.**
+> ✏️ *A single statement is also SAFER than batching here: a batched failure leaves a partial
+> catalogue behind. If 647 does prove too large the fix is a batch — #278 has already proven that
+> shape at 500 — but I am not pre-emptively adding one against a problem that may not exist.*
+
 🔴 **Write the run id down before you do anything else. The undo needs it and nothing else
 recovers it except a query.**
 
@@ -540,8 +575,16 @@ console.log(await r.json());
 5. `receiptsBefore`/`receiptsAfter` are **111 / 111**; `deliveriesBefore`/`deliveriesAfter` are **31 / 31**.
 6. `ok` is `true`.
 7. Re-run CARD 9: `/inventory` shows **447** rows again, and Brodie Juniper is back.
+8. 🔴 **RE-RUN CARD 6'S FINGERPRINT QUERY. IT MUST RETURN THE SAME HASH YOU WROTE DOWN**, with
+   `447` · `2` · `0`.
+   **This is the strongest step on the card and it is David's addition, not mine.** Steps 1–7 prove
+   the rows came back; step 8 proves they came back **unchanged** — every id still paired with the
+   same quantity. A fingerprint that differs while the counts match means the undo restored rows
+   and lost a number, and counting cannot see that. It caught nothing on Test Dave's, which is
+   exactly the point: **a check that has only ever passed is still a check, provided it could have
+   failed.**
 
-**PASS:** all seven.
+**PASS:** all eight.
 🔴 **Step 4 is stronger than step 1 and it is the reason this card can be trusted.** Under RLS a
 **refused** delete returns no error and zero rows — indistinguishable, to the caller, from "there
 was nothing to delete". So the undo re-reads the tenant afterwards and counts what still carries
