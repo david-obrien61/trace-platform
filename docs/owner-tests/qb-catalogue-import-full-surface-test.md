@@ -45,7 +45,7 @@ owner-gated (R-80) **and** require the verb permission — it is an AND, not an 
 >
 > | | Card | What it proves |
 > |---|---|---|
-> | 1 | **CARD 5** | The whole loop — import, wipe, verify — on **Test Dave's FIRST**. R-97 permits a LAWNS rehearsal *because* the undo makes it restorable, and at that moment the undo has never met real data. |
+> | 1 | **CARD 5** | 🔴 **THE MECHANISM, on Test Dave's — 1 item in, 1 out, 130 rows restored with all 25 counts.** Not the scale: Test Dave's realm holds ONE item, and the original card conflated it with LAWNS's 647. Every moving part runs; LAWNS is then the scale test, with the undo already proven. |
 > | 2 | **CARD 10** | 🔴 **THE WIPE.** 647 deleted, 447 un-retired, `leftovers` **empty**, receipts 111/111 and deliveries 31/31 before and after. |
 > | 3 | **CARD 11** | 🔴 **THE RE-RUN.** Twice must not mean double — 647 again, not 1,294. |
 > | 4 | **CARD 15** | The unique index **actually refuses** a duplicate. This is what makes CARD 11 believable rather than lucky, and it can only run after an import. |
@@ -137,13 +137,36 @@ owner-gated (R-80) **and** require the verb permission — it is an AND, not an 
 
 ---
 
+> 🔴 **RUN THIS FIRST IN THE CONSOLE — EVERY CARD BELOW USES `T`.**
+>
+> ✏️ **CORRECTED 2026-09-07: the original snippet on this board called
+> `window.supabase.auth.getSession()` AND IT THROWS.** The client is module-scoped —
+> `packages/shared/src/supabase/client.ts` exports it and **nothing assigns it to `window`** —
+> so every card needing a token was unrunnable as written. David found it by getting a token out of
+> localStorage himself. The session lives under supabase-js's default key,
+> `sb-<project-ref>-auth-token`; this reads it without hardcoding the ref.
+>
+> ```js
+> const K = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+> if (!K) throw new Error('No Supabase session in localStorage — are you signed in on THIS origin?');
+> const T = 'Bearer ' + JSON.parse(localStorage.getItem(K)).access_token;
+> const LAWNS    = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
+> const TESTDAVE = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
+> ```
+>
+> ⚠️ **Run it on the SAME ORIGIN you are testing** (`cultivar-os.app`), signed in as the owner —
+> localStorage is per-origin, and a token from a different origin will 401 in a way that reads like
+> a permission bug.
+
+---
+
 ## CARD 1 — the preview reads the item list and writes nothing
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
 Signed in as the LAWNS owner, open the browser console on `cultivar-os.app` and run:
 
 ```js
 const r = await fetch('/api/qbo/items/preview?business_id=ed2e5933-45dc-4b9b-a331-ddfd125e7a74', {
-  headers: { Authorization: 'Bearer ' + (await window.supabase.auth.getSession()).data.session.access_token }
+  headers: { Authorization: T }
 });
 console.log(await r.json());
 ```
@@ -221,21 +244,86 @@ with a height remark and were refused outright when their size was plainly state
 
 ---
 
-## CARD 5 — the rehearsal happens on Test Dave's FIRST
+## CARD 5 — 🔴 THE MECHANISM, PROVEN ON TEST DAVE'S. NOT THE SCALE.
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
-🔴 **Do this one before CARD 6. R-97 permits a rehearsal on LAWNS *because the undo makes it
-restorable* — and the undo has never been run against real data at this point.**
 
-Run CARD 1's preview against `business_id=f7ec5d67-a9ef-4cb0-b807-438d67687d1b`, then the ingest
-(CARD 6's shape) and the undo (CARD 10's shape) against that tenant.
+> ✏️ **REWRITTEN 2026-09-07. THE ORIGINAL CARD WAS UNRUNNABLE AND IT WAS MY ERROR.**
+> It said the ingest on Test Dave's *"creates 647 and retires 130"* — **647 is LAWNS's realm and
+> 130 is Test Dave's `business_id`. Two realms, one card.** `/api/qbo/items/preview` reads the
+> tenant's OWN QuickBooks connection, and Test Dave's realm is `9341453505617600`, which holds
+> **exactly ONE item: Id `1`, "Services"** (verified against its own capture, `expected_total: 1`).
+> There is no capture-file argument available either: **the file door exists only in the browser and
+> only for the READ.** R-60's import half was never built, so preview/ingest have no file input.
+> **#180's shape** — a deferral to a surface that does not do what the sentence says.
+>
+> 🔴 **DAVID'S RULING, AND IT IS THE RIGHT ONE: prove the MECHANISM here, not the scale.**
+> One item exercises the run id, create-before-retire, the delete, the un-retire and the leftovers
+> re-read — every moving part. **LAWNS is then the scale test**, and R-97 permits it *because the
+> undo makes it restorable* — which by that point is proven rather than assumed. That is what the
+> original card's ordering was protecting, and this version actually protects it.
+>
+> ⚠️ **A capture-body door on preview/ingest is the right end state and is its own build. Not now.**
 
-1. Test Dave's has **130** inventory rows, so `wouldRetire` is 130, not 447.
-2. The ingest creates 647 and retires 130.
-3. The undo deletes 647 and un-retires 130.
-4. Re-query: Test Dave's is back to **130** rows, none retired.
+**Baseline first — read it, do not trust these numbers** (measured 2026-09-06):
 
-**PASS:** the tenant is byte-for-byte back where it started.
-**FAIL:** any residue at all. **STOP — do not run CARD 6 on LAWNS.**
+```sql
+SELECT count(*)                                AS rows_total,
+       count(*) FILTER (WHERE qty > 0)         AS counted,
+       count(*) FILTER (WHERE retired_at IS NOT NULL) AS retired
+  FROM public.business_inventory
+ WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
+```
+**EXPECT: 130 · 25 · 0.**
+
+🔴 **THE 25 ARE THE POINT OF USING THIS TENANT.** LAWNS has two counted rows; Test Dave's has
+**twenty-five**, seeded by `seed-uppot-harness.mjs`. R-94 retires them all, and the undo has to
+bring all twenty-five back with their quantities intact. That is a far stronger un-retire test than
+LAWNS can offer, and it is available here at no risk.
+
+**Then, in the console with `T` set:**
+
+```js
+const q = s => fetch(`/api/qbo/items/${s}`, { method: s === 'preview' ? 'GET' : 'POST', headers: { Authorization: T } }).then(r => r.json());
+const p5 = await q(`preview?business_id=${TESTDAVE}`);            console.log(p5.adapted.counts, p5.wouldRetire, p5.wouldCreate);
+const r5 = await q(`ingest?business_id=${TESTDAVE}`);             console.log(r5.runId, r5.created, r5.retired, r5.undoable);
+const u5 = await q(`undo?business_id=${TESTDAVE}&run_id=${r5.runId}`); console.log(u5);
+```
+
+1. **PREVIEW:** `readIn` **1** · `categories` **0** · `sellable` **1** · `wouldCreate` **1** ·
+   `wouldRetire` **130**.
+   ⚠️ *`readIn 1` is correct and is the whole correction — it is Test Dave's realm, not LAWNS's.*
+2. **INGEST:** `created` **1** · `retired` **130** · `undoable` **true** · `committed` true.
+   **Write the run id down.**
+3. **The created row** is named `Services` with **no size** and `sizeState: could_not_read` — item
+   Id 1 carries no `Description`. That is the honest three-state read doing its job, not a failure.
+   *(It is also, exactly, the item the twelve hardcoded `ItemRef: {value:'1'}` literals point at.)*
+4. **THE RETIRE WAS COMPLETE** — same query as CARD 7, this tenant, this run id:
+   ```sql
+   SELECT count(*) FROM public.business_inventory
+    WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+      AND retired_at IS NULL AND import_run_id IS DISTINCT FROM '<run id>';
+   ```
+   **EXPECT: 0.**
+5. **UNDO:** `inventoryDeleted` **1** · `unretired` **130** · `customersDeleted` **0** ·
+   **`leftovers []`** · `ok` **true**.
+6. **THE TENANT IS BACK** — re-run the baseline query. **EXPECT 130 · 25 · 0 again**, the same three
+   numbers you started with. **Step 6 is the card.** Steps 1–5 are how you got there.
+
+**PASS:** the baseline reads identically before and after, and `leftovers` was empty.
+**FAIL — and what each one means:**
+- `wouldCreate` is 647 → you called it against LAWNS. Check the `business_id`.
+- `retired` ≠ 130 → the retire did not reach every live row; **do not go on to CARD 6.**
+- `unretired` ≠ 130, or `counted` comes back below 25 → **the un-retire is incomplete and the undo
+  is not trustworthy at any scale.** This is the failure worth catching here rather than on LAWNS.
+- `leftovers` non-empty → a write was refused. The message names which of the three.
+
+⚠️ **WHAT THIS CARD CANNOT PROVE, STATED SO IT IS NOT ASSUMED: the `ON DELETE RESTRICT` path.**
+`20260905_production_planning.sql` is **not applied** — `production_plans` and
+`production_plan_lines` do not exist (probed 2026-09-06) — so the one FK that would REFUSE a delete
+cannot fire. Every other FK to `business_inventory` is `ON DELETE SET NULL`. When that migration
+lands, an imported lot held by an open plan line will refuse deletion, **and that refusal is the
+correct answer** — the undo surfaces it in `leftovers` rather than swallowing it. Until then this
+card proves the delete, not the refusal.
 
 ---
 
@@ -247,7 +335,7 @@ recovers it except a query.**
 ```js
 const r = await fetch('/api/qbo/items/ingest?business_id=ed2e5933-45dc-4b9b-a331-ddfd125e7a74', {
   method: 'POST',
-  headers: { Authorization: 'Bearer ' + (await window.supabase.auth.getSession()).data.session.access_token }
+  headers: { Authorization: T }
 });
 const out = await r.json(); console.log(out.runId, out.created, out.retired, out.undoable);
 ```
@@ -347,7 +435,7 @@ Expected today: **111** and **31**. Then:
 ```js
 const r = await fetch('/api/qbo/items/undo?business_id=ed2e5933-45dc-4b9b-a331-ddfd125e7a74&run_id=<the run id>', {
   method: 'POST',
-  headers: { Authorization: 'Bearer ' + (await window.supabase.auth.getSession()).data.session.access_token }
+  headers: { Authorization: T }
 });
 console.log(await r.json());
 ```

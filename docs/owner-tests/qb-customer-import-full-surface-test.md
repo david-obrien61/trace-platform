@@ -61,10 +61,18 @@ The **undo** carries the same gate, deliberately without a delete verb (see the 
 > exists. **No new permission string** — `customers:read` / `:create` / `:update` all pre-date this.
 >
 > **THE CALL, used by every card that says "run the preview" or "run the ingest":**
+> ✏️ **CORRECTED 2026-09-07 by ledger #277's session, at David's explicit instruction (*"Fix both boards"*) — normally this file's owner would.** The snippet called `window.supabase.auth.getSession()`, which THROWS: the client is module-scoped and nothing assigns it to `window`. Token block:
+>
+> ```js
+> const K = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+> if (!K) throw new Error('No Supabase session in localStorage — are you signed in on THIS origin?');
+> const T = 'Bearer ' + JSON.parse(localStorage.getItem(K)).access_token;
+> ```
+
 > ```js
 > const r = await fetch('/api/qbo/customers/preview?business_id=<tenant>', {   // or /ingest, /undo — both POST
 >   method: 'GET',                                                            // ingest: method: 'POST'
->   headers: { Authorization: 'Bearer ' + (await window.supabase.auth.getSession()).data.session.access_token }
+>   headers: { Authorization: T }
 > });
 > console.log(await r.json());
 > ```
