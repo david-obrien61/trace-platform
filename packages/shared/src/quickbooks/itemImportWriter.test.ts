@@ -271,7 +271,7 @@ const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers e
   for (const f of files) {
     const sql = readFileSync(join(ROOT_DIR, MIG, f), 'utf8');
     // CREATE TABLE … business_inventory ( … ) — take the identifier at the head of each line.
-    const create = sql.match(/CREATE\s+TABLE[^;]*?\bbusiness_inventory\s*\(([\s\S]*?)\n\s*\);/i);
+    const create = sql.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?business_inventory\s*\(([\s\S]*?)\n\s*\);/i);
     if (create) {
       sawCreate = true;
       for (const line of create[1].split('\n')) {
@@ -290,11 +290,53 @@ const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers e
   }
 
   ok(sawCreate, '§A2 the CREATE TABLE for business_inventory was found — a scan that matched nothing would pass everything');
+  // 🔴 THE ANCHOR IS THE TABLE NAME IMMEDIATELY AFTER `CREATE TABLE`, AND IT WAS NOT — AND THE
+  // SUBSET DIRECTION COULD NOT SEE THAT. The first version matched `CREATE TABLE[^;]*?business_inventory(`,
+  // which also matches a FOREIGN KEY: `CREATE TABLE inventory_counts ( … inventory_id uuid
+  // REFERENCES business_inventory(id) … )`. So the column set quietly absorbed OTHER tables'
+  // columns. A SUBSET check is blind to that — extra names in the allowed set never fail anything —
+  // and it surfaced only when the NOT NULL check ran the comparison the other way and demanded
+  // `counted_qty`, `delta` and `kind` from an inventory insert. **A cap can be wrong in the one
+  // direction its own assertion cannot look**, which is a reason to have the second direction
+  // beyond the bug it was added for.
+  ok(!cols.has('counted_qty') && !cols.has('delta') && !cols.has('kind') && !cols.has('item_label'),
+     '§A2 🔴 the column set is business_inventory\'s OWN — no FK-referenced table\'s columns leaked in');
   ok(cols.size > 25, `§A2 the corpus yields a plausible column set (${cols.size} columns)`);
   // Anchors: one original column, one added much later. If either is missing the parse is broken.
   ok(cols.has('sku') && cols.has('qty'), '§A2 original columns parsed');
   ok(cols.has('retired_at') && cols.has('import_run_id') && cols.has('qb_item_id'),
      '§A2 later ADD COLUMN migrations parsed — including this build\'s own three');
+
+  // 🔴 WIDENED 2026-09-07 (David: *"Widen it, or this recurs on the next required column"*).
+  // The subset check catches a column that does not EXIST. It does not catch one that exists, is
+  // NOT NULL, and is absent from the payload — which is how the customer import died on row 0
+  // against `customers.last_name`. Same class, opposite direction: too FEW columns rather than too
+  // many. So the corpus is parsed for NOT NULL as well, and every required column without a
+  // DEFAULT must be in the insert list.
+  //
+  // ⚠️ AND THE LIMIT IS STATED, BECAUSE THIS WIDENING WOULD **NOT** HAVE CAUGHT THE INSTANCE THAT
+  // PROMPTED IT. `customers` has NO `CREATE TABLE` anywhere in `supabase/migrations` (tech-debt
+  // #39 — it is live-only schema), so a repo-parsing cap is structurally blind to it and always
+  // was. This protects `business_inventory`, which the corpus does cover. The customers half needs
+  // the CATALOG, which is the schema-snapshot checker owed since ledger #159b.
+  const required = new Set<string>();
+  for (const f of files) {
+    const sql = readFileSync(join(ROOT_DIR, MIG, f), 'utf8');
+    const create = sql.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?business_inventory\s*\(([\s\S]*?)\n\s*\);/i);
+    if (create) {
+      for (const line of create[1].split('\n')) {
+        const m = line.match(/^\s*([a-z_][a-z0-9_]*)\s+[a-z][\s\S]*$/i);
+        if (!m || /^(constraint|primary|unique|foreign|check)$/i.test(m[1])) continue;
+        if (/\bNOT\s+NULL\b/i.test(line) && !/\bDEFAULT\b/i.test(line) && !/\bPRIMARY\s+KEY\b/i.test(line)) {
+          required.add(m[1].toLowerCase());
+        }
+      }
+    }
+  }
+  ok(required.size > 0, `§A2 the corpus yields NOT NULL columns to check (${[...required].join(', ')})`);
+  const missing = [...required].filter(c => !(ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).includes(c));
+  ok(missing.length === 0,
+     `§A2 🔴 EVERY NOT-NULL-WITHOUT-DEFAULT COLUMN IS IN THE INSERT LIST — a required column the writer omits fails on row 0, live (the customers.last_name shape). Missing: ${missing.join(', ') || '(none)'}`);
 
   const undeclared = (ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).filter(c => !cols.has(c));
   ok(undeclared.length === 0,
