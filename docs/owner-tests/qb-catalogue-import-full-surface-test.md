@@ -244,88 +244,181 @@ with a height remark and were refused outright when their size was plainly state
 
 ---
 
-## CARD 5 — 🔴 THE MECHANISM, PROVEN ON TEST DAVE'S. NOT THE SCALE.
+## CARD 5 — 🔴 PROVE THE UNDO ON TEST DAVE'S BEFORE LAWNS
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**TENANT:** Test Dave's Tree Nest · **ACTOR:** owner · **TIME:** about ten minutes.
 
-> ✏️ **REWRITTEN 2026-09-07. THE ORIGINAL CARD WAS UNRUNNABLE AND IT WAS MY ERROR.**
-> It said the ingest on Test Dave's *"creates 647 and retires 130"* — **647 is LAWNS's realm and
-> 130 is Test Dave's `business_id`. Two realms, one card.** `/api/qbo/items/preview` reads the
-> tenant's OWN QuickBooks connection, and Test Dave's realm is `9341453505617600`, which holds
-> **exactly ONE item: Id `1`, "Services"** (verified against its own capture, `expected_total: 1`).
-> There is no capture-file argument available either: **the file door exists only in the browser and
-> only for the READ.** R-60's import half was never built, so preview/ingest have no file input.
-> **#180's shape** — a deferral to a surface that does not do what the sentence says.
->
-> 🔴 **DAVID'S RULING, AND IT IS THE RIGHT ONE: prove the MECHANISM here, not the scale.**
-> One item exercises the run id, create-before-retire, the delete, the un-retire and the leftovers
-> re-read — every moving part. **LAWNS is then the scale test**, and R-97 permits it *because the
-> undo makes it restorable* — which by that point is proven rather than assumed. That is what the
-> original card's ordering was protecting, and this version actually protects it.
->
-> ⚠️ **A capture-body door on preview/ingest is the right end state and is its own build. Not now.**
+**What you are proving:** that an import can be taken back completely. One item in, one item out,
+130 rows restored with every quantity intact. **Nothing here touches LAWNS.**
 
-**Baseline first — read it, do not trust these numbers** (measured 2026-09-06):
+Eight steps. Run them in order. Each says what to run, what you must see, and what it means if you
+see something else.
+
+---
+
+### STEP 0 — get a token
+Sign in to `cultivar-os.app` as the owner. Open the browser console and paste this:
+
+```js
+const K = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+if (!K) throw new Error('Not signed in on this origin.');
+const T = 'Bearer ' + JSON.parse(localStorage.getItem(K)).access_token;
+const TD = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
+const call = (path) => fetch('/api/qbo/items/' + path, {
+  method: path.startsWith('preview') ? 'GET' : 'POST', headers: { Authorization: T },
+}).then(r => r.json());
+console.log('token ok');
+```
+
+**SEE:** `token ok`.
+**IF NOT:** you are signed out, or on the wrong origin. localStorage is per-origin — a token from
+anywhere else 401s in a way that reads like a permission bug.
+
+---
+
+### STEP 1 — take the baseline
+SQL editor. **This is the number you will compare against at the end, so read it now.**
 
 ```sql
-SELECT count(*)                                AS rows_total,
-       count(*) FILTER (WHERE qty > 0)         AS counted,
-       count(*) FILTER (WHERE retired_at IS NOT NULL) AS retired
+SELECT count(*)                                       AS rows_total,
+       count(*) FILTER (WHERE qty > 0)                AS counted,
+       count(*) FILTER (WHERE retired_at IS NOT NULL) AS retired,
+       md5(string_agg(id::text || ':' || coalesce(qty, -1)::text, ',' ORDER BY id)) AS fingerprint
   FROM public.business_inventory
  WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
 ```
-**EXPECT: 130 · 25 · 0.**
 
-🔴 **THE 25 ARE THE POINT OF USING THIS TENANT.** LAWNS has two counted rows; Test Dave's has
-**twenty-five**, seeded by `seed-uppot-harness.mjs`. R-94 retires them all, and the undo has to
-bring all twenty-five back with their quantities intact. That is a far stronger un-retire test than
-LAWNS can offer, and it is available here at no risk.
+**SEE:** `rows_total` **130** · `counted` **25** · `retired` **0** · a `fingerprint` hash.
+🔴 **WRITE THE FINGERPRINT DOWN.** It is every row id paired with its quantity, hashed. Counting 25
+counted rows proves 25 rows have *a* count; the fingerprint proves they have *the same* counts.
+That is the difference between the undo restoring rows and restoring rows correctly.
 
-**Then, in the console with `T` set:**
-
-```js
-const q = s => fetch(`/api/qbo/items/${s}`, { method: s === 'preview' ? 'GET' : 'POST', headers: { Authorization: T } }).then(r => r.json());
-const p5 = await q(`preview?business_id=${TESTDAVE}`);            console.log(p5.adapted.counts, p5.wouldRetire, p5.wouldCreate);
-const r5 = await q(`ingest?business_id=${TESTDAVE}`);             console.log(r5.runId, r5.created, r5.retired, r5.undoable);
-const u5 = await q(`undo?business_id=${TESTDAVE}&run_id=${r5.runId}`); console.log(u5);
-```
-
-1. **PREVIEW:** `readIn` **1** · `categories` **0** · `sellable` **1** · `wouldCreate` **1** ·
-   `wouldRetire` **130**.
-   ⚠️ *`readIn 1` is correct and is the whole correction — it is Test Dave's realm, not LAWNS's.*
-2. **INGEST:** `created` **1** · `retired` **130** · `undoable` **true** · `committed` true.
-   **Write the run id down.**
-3. **The created row** is named `Services` with **no size** and `sizeState: could_not_read` — item
-   Id 1 carries no `Description`. That is the honest three-state read doing its job, not a failure.
-   *(It is also, exactly, the item the twelve hardcoded `ItemRef: {value:'1'}` literals point at.)*
-4. **THE RETIRE WAS COMPLETE** — same query as CARD 7, this tenant, this run id:
-   ```sql
-   SELECT count(*) FROM public.business_inventory
-    WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
-      AND retired_at IS NULL AND import_run_id IS DISTINCT FROM '<run id>';
-   ```
-   **EXPECT: 0.**
-5. **UNDO:** `inventoryDeleted` **1** · `unretired` **130** · `customersDeleted` **0** ·
-   **`leftovers []`** · `ok` **true**.
-6. **THE TENANT IS BACK** — re-run the baseline query. **EXPECT 130 · 25 · 0 again**, the same three
-   numbers you started with. **Step 6 is the card.** Steps 1–5 are how you got there.
-
-**PASS:** the baseline reads identically before and after, and `leftovers` was empty.
-**FAIL — and what each one means:**
-- `wouldCreate` is 647 → you called it against LAWNS. Check the `business_id`.
-- `retired` ≠ 130 → the retire did not reach every live row; **do not go on to CARD 6.**
-- `unretired` ≠ 130, or `counted` comes back below 25 → **the un-retire is incomplete and the undo
-  is not trustworthy at any scale.** This is the failure worth catching here rather than on LAWNS.
-- `leftovers` non-empty → a write was refused. The message names which of the three.
-
-⚠️ **WHAT THIS CARD CANNOT PROVE, STATED SO IT IS NOT ASSUMED: the `ON DELETE RESTRICT` path.**
-`20260905_production_planning.sql` is **not applied** — `production_plans` and
-`production_plan_lines` do not exist (probed 2026-09-06) — so the one FK that would REFUSE a delete
-cannot fire. Every other FK to `business_inventory` is `ON DELETE SET NULL`. When that migration
-lands, an imported lot held by an open plan line will refuse deletion, **and that refusal is the
-correct answer** — the undo surfaces it in `leftovers` rather than swallowing it. Until then this
-card proves the delete, not the refusal.
+**IF `retired` IS NOT 0:** a previous run left rows hidden. Stop and find out which before importing
+anything on top of it.
 
 ---
+
+### STEP 2 — preview (this writes nothing)
+```js
+const p5 = await call('preview?business_id=' + TD);
+console.log(p5.adapted.counts, 'wouldRetire', p5.wouldRetire, 'wouldCreate', p5.wouldCreate);
+```
+
+**SEE:** `readIn` **1** · `categories` **0** · `sellable` **1** · `wouldCreate` **1** ·
+`wouldRetire` **130**.
+
+⚠️ **`readIn: 1` IS CORRECT.** Test Dave's QuickBooks company holds exactly one item. You are
+reading *its* books, not LAWNS's.
+
+**IF `wouldCreate` IS 647:** you called it against LAWNS. Check the id in the URL and stop.
+
+---
+
+### STEP 3 — run the import
+```js
+const r5 = await call('ingest?business_id=' + TD);
+console.log('RUN ID →', r5.runId, '| created', r5.created, '| retired', r5.retired, '| undoable', r5.undoable);
+```
+
+**SEE:** `created` **1** · `retired` **130** · `undoable` **true**.
+🔴 **WRITE THE RUN ID DOWN.** Step 6 needs it and nothing else recovers it.
+
+**IF `undoable` IS false:** stop. The import has landed and the undo will refuse. Check
+`/api/qbo/status` → `writes_permitted` must be **false**.
+**IF `retired` IS NOT 130:** the retire did not reach every row. Do not continue to CARD 6.
+
+---
+
+### STEP 4 — confirm the retire was complete
+SQL editor, pasting your run id in:
+
+```sql
+SELECT count(*) FROM public.business_inventory
+ WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+   AND retired_at IS NULL
+   AND import_run_id IS DISTINCT FROM '<RUN ID>';
+```
+
+**SEE: 0.**
+This says: nothing is still visible except what this run made. It stays true however many rows
+existed, which is why it is worded this way rather than as "130".
+
+---
+
+### STEP 5 — look at the row it created
+```js
+console.log(p5.adapted.items[0]);
+```
+
+**SEE:** name `Services` · size **null** · `sizeState` **`could_not_read`**.
+
+⚠️ **THAT IS CORRECT, NOT A FAILURE.** That item carries no description, so there was nothing to
+read a size from — and the honest answer is "could not read", not a blank.
+🔴 **IF IT COMES BACK WITH A SIZE, THAT IS THE DEFECT** — nothing in the source could have supplied
+one, so it was invented.
+
+---
+
+### STEP 6 — take it back
+```js
+const u5 = await call('undo?business_id=' + TD + '&run_id=' + r5.runId);
+console.log(u5);
+```
+
+**SEE:** `inventoryDeleted` **1** · `unretired` **130** · `customersDeleted` **0** ·
+`leftovers` **[]** · `ok` **true**.
+
+**IF `leftovers` IS NOT EMPTY:** a write was refused. The message names which one. This is the undo
+catching itself rather than reporting a clean wipe it did not perform.
+**IF `customersDeleted` IS NOT 0:** stop and look. Nothing here should touch a customer.
+
+---
+
+### STEP 7 — 🔴 THE CARD. Is the tenant actually back?
+Re-run **the exact query from STEP 1**.
+
+**SEE:** `130` · `25` · `0` · **and the SAME FINGERPRINT you wrote down.**
+
+**PASS:** all four match. The import was completely reversible.
+**FAIL:**
+- **Fingerprint differs, counts match** → the rows came back but a quantity did not. 🔴 **This is
+  the failure this card exists to catch, and counting alone would have missed it.**
+- `retired` is not 0 → the un-retire is incomplete. **The undo is not trustworthy at any scale —
+  do not run CARD 6.**
+- `rows_total` is 131 → the created row was not deleted.
+
+---
+
+### STEP 8 — leave it clean
+```sql
+SELECT count(*) FROM public.business_inventory
+ WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+   AND (import_run_id IS NOT NULL OR retired_by_run_id IS NOT NULL);
+```
+**SEE: 0.** No trace of the run remains on the tenant.
+
+---
+
+**WHEN ALL EIGHT PASS:** the undo is proven and CARD 6 on LAWNS is safe to run. That is the whole
+purpose of doing this here first.
+
+---
+
+> ⚠️ **TWO NOTES, NEITHER OF WHICH YOU NEED TO ACT ON.**
+>
+> **① Why this card is one item and not 647.** It previously said the ingest here *"creates 647 and
+> retires 130"* — 647 is LAWNS's QuickBooks company, 130 is Test Dave's inventory. Two companies,
+> one sentence, and it was my error. `/api/qbo/items/preview` always reads the tenant's own
+> QuickBooks connection, and Test Dave's holds one item. There is no file to load instead: the
+> capture-file door exists only in the browser and only for the READ (R-60's import half was never
+> built). **So this card proves the mechanism; LAWNS proves the scale** — which is the right order
+> anyway, because by then the undo is proven rather than assumed. Tech-debt #201.
+>
+> **② What this card cannot prove: the RESTRICT path.** `20260905_production_planning.sql` is not
+> applied, so `production_plan_lines` does not exist and the one foreign key that would REFUSE a
+> delete cannot fire. Every other reference to `business_inventory` is `ON DELETE SET NULL`. When
+> that migration lands, an imported lot held by an open plan will refuse deletion — and that refusal
+> is the correct answer; the undo surfaces it in `leftovers` rather than swallowing it.
 
 ## CARD 6 — the import runs on LAWNS and reports what it did
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
