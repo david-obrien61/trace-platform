@@ -1156,7 +1156,11 @@ async function handleCreate(req: any, res: any) {
             smsOptIn:  true,
           },
           data: {
-            customerName:  `${customer.first_name} ${customer.last_name}`.trim(),
+            // 🔴 GUARDED 2026-09-07. `customers.last_name` is now NULLABLE — a company has no family
+            // name and NULL is the true value (David's ruling; 20260907_customers_last_name_nullable).
+            // This was the ONE unguarded interpolation of 76 references: it would have rendered
+            // "Bob null" on the order. Every other reader already used `?? ''`.
+            customerName:  `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim(),
             plantName:     plantLabel,
             container:     firstPlant?.current_container,
             invoiceNumber,

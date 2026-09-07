@@ -156,9 +156,30 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
   ok(classifyCustomer('Twins Landscaping LLC', 'Twins Landscaping LLC', null) === 'organization',
     'a company with no personal name is an organization');
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // ✏️ REWRITTEN 2026-09-07 BY LEDGER #277's SESSION UNDER DAVID'S RULING. NOT MY FILE — flagged
+  //    in full so this session sees exactly what moved and why (R-62). It went RED on the change,
+  //    which is the check doing its job; the assertion is corrected, never weakened.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // **WAS:** *"an organization carries its display name in first_name — matching the three
+  // organization rows already live at LAWNS — and NO last name"* (`first_name === 'Tree Amigos LLC'`).
+  //
+  // 🔴 THE REASONING WAS SOUND AND ITS PREMISE WAS OVERRULED. David, 2026-09-07: *"FOR AN
+  // ORGANIZATION: customer_type = 'organization', organization_name = the name, display_name = the
+  // name, first_name = NULL, last_name = NULL."* Those three LAWNS rows carry the company name in
+  // `first_name` with `organization_name` and `display_name` both NULL — **he has ruled them
+  // WRONG**, and is leaving them only because two are vendor-invoice residue with a cleanup owed.
+  // Matching them would have baked the defect into 1,934 more rows.
+  //
+  // 🔴 AND THE IMPORT IS THE FIRST THING TO FILL `organization_name` AND `display_name` CORRECTLY.
+  // Those columns exist and, before this, nothing on the platform used them.
   const org = adaptCustomer(person({ Id: '7', DisplayName: 'Tree Amigos LLC', CompanyName: 'Tree Amigos LLC', GivenName: 'Tree', FamilyName: 'Amigos LLC' }))!;
-  ok(org.customer_type === 'organization' && org.first_name === 'Tree Amigos LLC' && org.last_name === null,
-    '🔴 an organization carries its display name in first_name — matching the three organization rows already live at LAWNS — and NO last name');
+  ok(org.customer_type === 'organization', '🔴 an organization is typed as one');
+  ok(org.first_name === null,
+    '🔴 …and carries NO first_name — a company has no given name, and putting the display name there is what the three legacy LAWNS rows do wrong');
+  ok(org.last_name === null, '…and no last name');
+  ok(org.organization_name === 'Tree Amigos LLC' && org.display_name === 'Tree Amigos LLC',
+    '🔴 …and the name lands in organization_name AND display_name — the columns built for it, which nothing filled before this import');
   ok(org.organization_name === 'Tree Amigos LLC', 'the company name is kept rather than discarded');
 
   const p = adaptCustomer(person({ CompanyName: 'Time and Space' }))!;

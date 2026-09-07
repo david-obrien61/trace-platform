@@ -75,7 +75,7 @@ export interface AdaptedCustomer {
   qb_customer_id: string;
   display_name: string;
   customer_type: 'person' | 'organization';
-  first_name: string;
+  first_name: string | null;
   last_name: string | null;
   organization_name: string | null;
   email: string | null;
@@ -234,11 +234,27 @@ export function adaptCustomer(raw: Record<string, unknown>): AdaptedCustomer | n
     qb_customer_id: id,
     display_name: displayName,
     customer_type: type,
-    // 🔴 `first_name` CARRIES THE DISPLAY NAME FOR AN ORGANIZATION, matching the three
-    // organization rows already in LAWNS (all three have `first_name` set and
-    // `organization_name` NULL). A company has no given name, and leaving the column empty
-    // would blank the field every existing surface reads to label a customer.
-    first_name: type === 'organization' ? displayName : (givenName ?? displayName),
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // ✏️ CHANGED 2026-09-07 BY LEDGER #277's SESSION, UNDER DAVID'S EXPLICIT RULING. NOT MY FILE —
+    //    flagged here in full so this session sees exactly what moved and why (R-62).
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 DAVID, 2026-09-07: *"FOR AN ORGANIZATION: customer_type = 'organization', organization_name
+    //    = the name, display_name = the name, first_name = NULL, last_name = NULL."*
+    //
+    // ⚠️ THE PRIOR COMMENT HERE — preserved because its reasoning was sound and only its PREMISE
+    //    was overruled — said `first_name` carries the display name for an organization *"matching
+    //    the three organization rows already in LAWNS (all three have `first_name` set and
+    //    `organization_name` NULL)"*. **David has now ruled those three rows WRONG**: they carry the
+    //    company name in `first_name` with `organization_name` and `display_name` both NULL, and he
+    //    is leaving them alone only because two are vendor-invoice residue with a separate cleanup
+    //    owed. Matching them would have baked the defect into 1,934 more rows.
+    //
+    // 🔴 THE REST OF THIS ADAPTER WAS ALREADY CORRECT AND IS UNTOUCHED — `display_name`,
+    //    `customer_type`, `organization_name`, and `last_name: null` for an organization or for a
+    //    person with no FamilyName. **It was the SCHEMA that was wrong**: `customers.last_name` was
+    //    NOT NULL and refused the honest value, which is what killed the import on row 0.
+    //    `20260907_customers_last_name_nullable.sql` fixes that.
+    first_name: type === 'organization' ? null : (givenName ?? displayName),
     last_name: type === 'organization' ? null : str(raw.FamilyName),
     organization_name: companyName,
     email: str(email?.Address),
