@@ -6,8 +6,17 @@
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 
-**Capability:** discounts / pricing config · **Ledger:** #279
-**Board: 0 of 22 covered** (21 `owed` · 1 `needs-test`).
+**Capability:** discounts / pricing config · **Ledger:** #279, corrected by **#280**
+**Board: 0 of 25 covered** (24 `owed` · 1 `needs-test`).
+
+> 🔴 **EVERY CARD BELOW WAS WRITTEN AGAINST `2f94fbb`, WHICH RENDERED DOLLARS AS PERCENTAGES.**
+> David owner-proved it 2026-09-07 15:53 and the screen read *"Military Discount · used on 9
+> invoice lines, but at 6 different rates — 0% on 3, 2500% on 1, 3250% on 1, 6000% on 1, 9000% on
+> 1, 18250% on 1."* **18250% is $182.50.** The rate was divided by `Qty`, which is 1 on every one
+> of those lines, so every "percent" was the dollar amount ×100. **"0 we're sure about" was an
+> artifact of the arithmetic**, and CD10%/CD15% were absent from the screen entirely because they
+> have never been used as item lines. **Do not re-run this board against `2f94fbb`.** CARDS 4, 6
+> and 23–25 are new or rewritten; the rest hold.
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. `/discounts` is gated
 `pricing_recipe:update`; nothing here mints or asserts any other permission.
@@ -35,6 +44,7 @@ control's home. The story's settled half is honoured exactly — **[[D-55]]** pe
 >
 > | | Card | What it proves |
 > |---|---|---|
+> | 0 | **CARD 23** | 🔴 **NO NUMBER ON THE SCREEN EXCEEDS 100%.** Ten seconds, and it is the whole of the 2026-09-07 defect. Do this before anything else. |
 > | 1 | **CARD 4** | The evidence is REAL — the percents, counts and dates on screen come from her invoices, and you can check one against QuickBooks. |
 > | 2 | **CARD 12** | 🔴 **THE TAX RATE SURVIVES THE WRITE.** Read `taxRate` before and after in SQL. If it moves, stop. |
 > | 3 | **CARD 15** | A tagged customer is charged the discount **on the trees and not on the delivery** — the whole rule, at the till. |
@@ -65,31 +75,49 @@ Same, on LAWNS. This is the real capture: ~1,480 invoices.
 **PASS:** it completes and shows sections. **FAIL:** an incomplete read renders anyway — the screen
 must REFUSE with *"the invoice read came back incomplete — N of M"* rather than show short counts.
 
-### CARD 4 — 🔴 THE EVIDENCE IS CHECKABLE
+### CARD 4 — 🔴 THE EVIDENCE IS CHECKABLE, AND IT NOW COMES FROM THREE PLACES
 `STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
-Read the **WE FOUND THESE AND WE'RE SURE** rows. Each says: used on **N invoice lines** at a clean
-**X%** every time, last used **a date**, and (where the item matched) *"your books hold it as item
-`<id>`, '<description>', published at X%"*.
-**PASS:** pick ONE row, open QuickBooks, find that item id, and confirm the published rate. Then
-confirm the "last used" date against a recent invoice carrying it.
-🔴 **THE POINT OF THIS CARD: nothing on this screen is typed into our code.** Every number was
-measured from your books. If a count looks wrong, the finding is real and I want to know.
+Read the **WE FOUND THESE AND WE'RE SURE** rows. Each carries up to three evidence lines, and the
+chips say which is which:
+- **YOUR PRODUCT LIST** — *"your books hold this as item 3, 'Contractor Discount, 10%', set up at
+  10% off"*. **This is where the suggested percent comes from.** It is read, not worked out.
+- **INVOICES** — *"a 10% discount was recorded on 14 invoices for 13 customers, $3,293.25 in
+  total, last on 15 August 2026"*. QuickBooks recorded that rate itself.
+- **WORKED OUT** (blue chip) — only where the discount was used as a product line. It spells the
+  arithmetic out: *"$250 off $3,400 of other charges = 7.35%"*.
+
+**EXPECT, on LAWNS:** six rows — Military Discount 5%, Military Discount 5 5%, FD10 10%, Customer
+Discount 10%, **CD10% 10%, CD15% 15%**.
+**PASS:** pick ONE row, open QuickBooks, find that item id, confirm the published rate. Then check
+one WORKED OUT line's arithmetic yourself.
+🔴 **CD10% AND CD15% ARE THE TWO THAT WERE MISSING BEFORE — they have no invoice item lines at all,
+and they must still appear.** If either is absent, the screen is still building rows from the wrong
+population.
 **FAIL:** any number you cannot trace to your own books.
 
-### CARD 5 — two sources, and the screen says when they agree
+### CARD 5 — 🔴 THE SCREEN ADMITS WHAT IT CANNOT TELL YOU
 `STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
-**PASS:** a row whose QuickBooks item publishes `−0.10` and whose invoices did 10% says
-*"— which agrees with what the invoices did"*. A row where they do NOT agree says only what each
-one says, and claims no agreement. **FAIL:** an agreement claimed where one side has no number.
+Read the INVOICES line on **CD10%**, **FD10** and **Customer Discount**.
+**PASS:** each shows the same 14 invoices at 10% — **and each carries an amber warning naming the
+other two**: *"2 other products (Customer Discount, FD10) are also set up at 10%, and QuickBooks
+does not record which one a discount came from — so these may not all be this one."*
+**Then read CD15%: it has NO such warning**, because nothing else is set up at 15%.
+🔴 **WHY THIS CARD EXISTS:** a QuickBooks discount line carries a rate and **no name** — all 67 of
+yours point at one account, *Discounts given*. Attributing those 14 lines to CD10% specifically
+would be a number we made up. **FAIL:** the warning is missing on a shared rate, or present on
+CD15%.
 
 ### CARD 6 — what we REFUSED, and why
 `STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
 Look at **WE FOUND THESE AND WE CAN'T TELL YOU THE PERCENT**.
-**PASS:** each row names its reason in plain words — *"used on N lines, but at 3 different rates —
-10% on 8, 15% on 2, 20% on 1"*, or *"not one of them records what the percentage was taken from"* —
-and carries **no percent at all**, with an empty box for you to type one.
-🔴 **FAIL: a refused row showing a number.** A rate we could not measure must never appear as a
-suggestion, however plausible.
+**EXPECT, on LAWNS: exactly one row — `MD10`** — saying its item has **no discount percent recorded
+on it** *"even though its description mentions one"*. That is a real disagreement inside your books:
+`MD10` is priced at **$0** while its description reads *"Military Discount  -10%"*. We will not pick
+between them for you. The 10% worked out from its two invoice lines is shown as evidence, and you
+can accept it by typing it.
+**PASS:** the row carries **no suggested percent**, an empty box, and a reason in plain words.
+🔴 **FAIL: a refused row showing a suggested number.** A rate we could not stand behind must never
+appear as a suggestion, however plausible.
 
 ### CARD 7 — your spreadsheet's tiers, and why they are missing
 `STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
@@ -225,3 +253,46 @@ out on more than the whole invoice.
 🔴 **WHY THIS CHANGED:** the old rule scored the INTENT as a defect and then offered to "fix" it,
 which would have meant discounting your own labour.
 **FAIL:** the old sentence, or a question asking you to fix tree-only discounting.
+
+---
+
+## PART FOUR — THE 2026-09-07 CORRECTION. RUN CARD 23 FIRST.
+
+### CARD 23 — 🔴 NO NUMBER ON THE SCREEN EXCEEDS 100%
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+Read every percent on the whole page — the sure rows, the refused rows, the rates-nothing-names
+section, the price column on the right.
+**PASS:** the largest number on the page is **15%**. Nothing reads 2500%, 3250%, 18250% or anything
+else above 100.
+🔴 **THIS IS THE WHOLE DEFECT IN ONE LOOK, AND IT TAKES TEN SECONDS.** On `2f94fbb` every one of
+those numbers was a dollar amount with a percent sign on it — `18250%` was $182.50. If you see any
+number above 100 here, stop and tell me; the arithmetic is wrong again and nothing else on this
+board is worth running.
+**FAIL:** any percent above 100, anywhere on the page.
+
+### CARD 24 — RATES YOUR BOOKS USED THAT NOTHING NAMES
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+Find the section **YOUR INVOICES USED THESE RATES AND NOTHING NAMES THEM**.
+**EXPECT, on LAWNS: three rows.**
+
+| Rate | Times | Total | Customers |
+|---|---|---|---|
+| **20%** | 4 | **$15,173.00** | 3 |
+| 25% | 1 | $650.00 | 1 |
+| 50% | 1 | $250.00 | 1 |
+
+🔴 **THE 20% ROW IS THE LARGEST MONEY ON THE PAGE AND NO SURFACE HAS EVER SHOWN IT TO YOU.**
+$15,173 given away at a rate no product in your list is set up for. It is not seeded and no name is
+invented for it — if it is a real programme, you name it.
+**PASS:** all three rows, with those amounts. **FAIL:** the section is absent, or a rate that IS
+named (5%, 10%, 15%) appears in it.
+
+### CARD 25 — FIXED-DOLLAR DISCOUNTS ARE MONEY, NOT PERCENTAGES
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+Below that section.
+**EXPECT, on LAWNS:** *"6 discounts were given as a flat amount rather than a percentage,
+$1,162.03 in total."*
+**PASS:** it says exactly that, and explains *"the invoice does not say what they were a percentage
+of — turning one into a percent would be a guess."*
+🔴 **FAIL: any of those six rendered as a percent.** $461.96 is not 46196%, and that conversion is
+the same mistake that produced the defect this part of the board exists for.

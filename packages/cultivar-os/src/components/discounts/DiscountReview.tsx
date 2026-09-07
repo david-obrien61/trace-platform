@@ -38,7 +38,7 @@ import { supabase } from '../../lib/supabase';
 import { authHeaders } from '@trace/shared/auth/authHeaders';
 import {
   readPricingConfig, mergePricingConfig,
-  buildDiscountReview, buildAcceptancePatch, REVIEW_REFUSALS,
+  buildDiscountReview, buildAcceptancePatch, isDiscountItem, REVIEW_REFUSALS, PERCENT_CEILING,
   type DiscountReview as Review, type EvidencedDiscount, type DiscountItemFact, type AcceptedTier,
 } from '@trace/shared/business-logic';
 import type { InvoiceBreakdown } from '@trace/shared/quickbooks/invoiceList';
@@ -126,10 +126,13 @@ export function DiscountReview({ businessId, onWritten }: { businessId: string |
           `${money0(inv.expected_total ?? 0)}. Every count below would be short, so nothing is shown.`);
       }
 
-      const discountNames = new Set((inv.breakdown?.discounts.byName ?? []).map(r => r.itemName.trim().toLowerCase()));
+      // 🔴 THE ITEMS ARE THE AXIS, NOT THE INVOICE TALLY — the correction of 2026-09-07. The first
+      // version kept only items that ALSO appeared in the invoice tally, so `CD10%` and `CD15%` —
+      // real products that have simply never been used as item LINES — never reached the screen.
+      // Two of the three discounts David ruled to seed were missing, and nothing said so.
       const items: DiscountItemFact[] = (itm.items ?? [])
-        .filter(i => discountNames.has((i.name ?? '').trim().toLowerCase()))
-        .map(i => ({ id: i.id, name: i.name, description: i.description, unitPrice: i.unitPrice }));
+        .map(i => ({ id: i.id, name: i.name, description: i.description, unitPrice: i.unitPrice }))
+        .filter(isDiscountItem);
 
       const { data } = await readPricingConfig(supabase, businessId);
       const cfg = (data?.config && typeof data.config === 'object') ? (data.config as Record<string, unknown>) : null;
@@ -148,7 +151,9 @@ export function DiscountReview({ businessId, onWritten }: { businessId: string |
       setReadNote(inv.queried_at ? `Read on ${dateWords(inv.queried_at.slice(0, 10))}.` : null);
       setPhase('ready');
       console.log('[TRACE:config] discount review built', {
-        businessId, sure: built.sure.length, needsHer: built.needsHer.length,
+        businessId, discountItems: items.length, sure: built.sure.length, needsHer: built.needsHer.length,
+        statedRates: (inv.breakdown?.discounts.byRate ?? []).map(r => `${r.pct}%×${r.lines}`),
+        unnamedRates: built.unnamedRates.map(r => `${r.pct}%`), fixedDollarLines: built.fixedDollar?.lines ?? 0,
         alreadyConfigured: built.alreadyConfigured.length, plumbingMissing: built.plumbingMissing.length,
         configRowPresent: built.configRowPresent, taxRatePresent: built.taxRatePresent,
       });
@@ -284,7 +289,8 @@ export function DiscountReview({ businessId, onWritten }: { businessId: string |
         <>
           <SectionHead n={review.sure.length} title="WE FOUND THESE AND WE'RE SURE" />
           <p style={lead}>
-            You gave each of these at the same percent every single time. Add them as they are.
+            These are the discounts set up in your own product list, at the percent each one is
+            recorded at. Add them as they are.
           </p>
           {review.sure.map(r => (
             <Row key={r.tierName} r={r} state={rows[r.tierName]} editing={!!editing[r.tierName]}
@@ -299,14 +305,52 @@ export function DiscountReview({ businessId, onWritten }: { businessId: string |
         <>
           <SectionHead n={review.needsHer.length} title="WE FOUND THESE AND WE CAN'T TELL YOU THE PERCENT" />
           <p style={lead}>
-            You have used these, but not at one steady rate — so we would be guessing. Set your own
-            percent to add one, or leave it out.
+            These exist in your product list, but we could not read a percent we would stand behind.
+            Set your own to add one, or leave it out.
           </p>
           {review.needsHer.map(r => (
             <Row key={r.tierName} r={r} state={rows[r.tierName]} editing
               onEdit={() => undefined} onChange={patch => setRow(r.tierName, patch)} tone="unsure" />
           ))}
         </>
+      )}
+
+      {/* ── RATES NOTHING NAMES. On LAWNS this is the biggest money on the page. ─────────── */}
+      {review.unnamedRates.length > 0 && (
+        <>
+          <SectionHead n={review.unnamedRates.length} title="YOUR INVOICES USED THESE RATES AND NOTHING NAMES THEM" />
+          <p style={lead}>
+            QuickBooks recorded these discounts, but no product in your list is set up at that
+            percent — so we have no name to give them and will not invent one. Add a discount type
+            yourself if one of these is a real programme.
+          </p>
+          {review.unnamedRates.map(r => (
+            <div key={r.pct} style={{ ...row, borderLeft: `3px solid ${AMBER}`, background: '#fffbeb' }}>
+              <div>
+                <div style={nm}>{r.pct}% — no name in your product list</div>
+                <div style={ev}>
+                  <Chip label="INVOICES" tone="books" />
+                  Given <b>{r.lines} {r.lines === 1 ? 'time' : 'times'}</b> to{' '}
+                  <b>{r.customers} {r.customers === 1 ? 'customer' : 'customers'}</b>,{' '}
+                  <b>${money0(r.amountTotal)}</b> in total, between <b>{dateWords(r.first)}</b> and{' '}
+                  <b>{dateWords(r.last)}</b>.
+                </div>
+              </div>
+              <div style={priceCell}><span style={{ fontSize: '1.0625rem', fontWeight: 700, color: DARK }}>{r.pct}%</span></div>
+              <div />
+            </div>
+          ))}
+        </>
+      )}
+
+      {review.fixedDollar && review.fixedDollar.lines > 0 && (
+        <p style={{ ...lead, marginTop: 12 }}>
+          <Chip label="INVOICES" tone="books" />
+          <b>{review.fixedDollar.lines} {review.fixedDollar.lines === 1 ? 'discount was' : 'discounts were'}</b>{' '}
+          given as a flat amount rather than a percentage, <b>${money0(review.fixedDollar.amountTotal)}</b> in
+          total. We show those as money, because the invoice does not say what they were a
+          percentage <i>of</i> — turning one into a percent would be a guess.
+        </p>
       )}
 
       {/* ── NOT SUGGESTING ───────────────────────────────────────────────────────────────── */}
@@ -396,53 +440,114 @@ function Row({ r, state, editing, onEdit, onChange, tone }: {
 }) {
   if (!state) return null;
   const border = tone === 'sure' ? GREEN : AMBER;
+  const typed = Number(state.pct);
+  const typedOk = state.pct.trim() !== '' && Number.isFinite(typed) && typed >= 0 && typed <= PERCENT_CEILING;
   return (
     <div style={{ ...row, borderLeft: `3px solid ${border}`, background: tone === 'sure' ? '#fff' : '#fffbeb' }}>
       <div>
-        <div style={nm}>{state.tierName}{state.typeName ? <span style={{ color: GRAY, fontWeight: 400 }}> · under {state.typeName}</span> : null}</div>
-        <div style={ev}>
-          <Chip label="INVOICES" tone="books" />
-          {r.item && <Chip label="YOUR PRODUCT LIST" tone="books" />}
-          {r.refusal === REVIEW_REFUSALS.ratesDisagree ? (
-            <>Used on <b>{r.lines} invoice {r.lines === 1 ? 'line' : 'lines'}</b>, but at{' '}
-              <b>{r.rates.length} different rates</b> — {r.rates.map(x => `${x.pct}% on ${x.lines}`).join(', ')}.
-              We will not pick one for you.</>
-          ) : r.refusal === REVIEW_REFUSALS.noMeasurableRate ? (
-            <>Used on <b>{r.lines} invoice {r.lines === 1 ? 'line' : 'lines'}</b>, but not one of them
-              records what the percentage was taken from, so the rate cannot be worked out.</>
-          ) : (
-            <>Used on <b>{r.lines} invoice {r.lines === 1 ? 'line' : 'lines'}</b> at a clean{' '}
-              <b>{r.percent}%</b> every time. Last used <b>{dateWords(r.mostRecent)}</b>.</>
-          )}
-          {r.item && (
-            <> Your books hold it as item <b>{r.item.id}</b>
-              {r.item.description ? <>, “{r.item.description}”</> : null}
-              {r.itemPercent !== null ? <>, published at <b>{r.itemPercent}%</b>{r.sourcesAgree ? ' — which agrees with what the invoices did' : ''}</> : null}.</>
-          )}
+        <div style={nm}>
+          {state.tierName}
+          {state.typeName ? <span style={{ color: GRAY, fontWeight: 400 }}> · under {state.typeName}</span> : null}
         </div>
+
+        {/* ① THE PRICE CARD — the rate, and the only source that carries a name. */}
+        <div style={ev}>
+          <Chip label="YOUR PRODUCT LIST" tone="books" />
+          Your books hold this as item <b>{r.item.id}</b>
+          {r.item.description ? <>, “{r.item.description}”</> : null}
+          {r.percent !== null
+            ? <>, set up at <b>{r.percent}% off</b>.</>
+            : r.refusal === REVIEW_REFUSALS.noPublishedRate
+              ? <>, with <b>no discount percent recorded on it</b>
+                  {/discount/i.test(r.item.description ?? '') && /\d/.test(r.item.description ?? '')
+                    ? <> — even though its description mentions one. Those two disagree, and we will not pick between them for you.</>
+                    : <>.</>}
+                </>
+              : <>.</>}
+        </div>
+
+        {/* ② THE NATIVE LINES — the rate QuickBooks recorded. Corroboration, never attribution. */}
+        {r.percent !== null && (
+          <div style={ev}>
+            <Chip label="INVOICES" tone="books" />
+            {r.grantedLines > 0 ? (
+              <>A <b>{r.percent}%</b> discount was recorded on <b>{r.grantedLines} invoice{r.grantedLines === 1 ? '' : 's'}</b>{' '}
+                for <b>{r.grantedCustomers} customer{r.grantedCustomers === 1 ? '' : 's'}</b>,{' '}
+                <b>${money0(r.grantedAmount)}</b> in total, last on <b>{dateWords(r.grantedLast)}</b>.
+                {r.sharesRateWith.length > 0 && (
+                  <span style={{ color: AMBER }}>
+                    {' '}⚠️ {r.sharesRateWith.length === 1 ? 'One other product' : `${r.sharesRateWith.length} other products`}{' '}
+                    ({r.sharesRateWith.join(', ')}) {r.sharesRateWith.length === 1 ? 'is' : 'are'} also set up at {r.percent}%,
+                    and QuickBooks does not record which one a discount came from — so these may not all be this one.
+                  </span>
+                )}
+              </>
+            ) : (
+              <>No invoice records a discount at exactly this percent. That does not make it wrong —
+                it may simply not have been used yet.</>
+            )}
+          </div>
+        )}
+
+        {/* ③ THE ITEM LINES — derived, with the working shown. */}
+        {r.itemLines > 0 && (
+          <div style={ev}>
+            <Chip label="WORKED OUT" tone="derived" />
+            Used as a line on <b>{r.itemLines} invoice{r.itemLines === 1 ? '' : 's'}</b>
+            {r.zeroLines > 0 && <>, <b>{r.zeroLines}</b> of them at $0</>}
+            {r.derived.length > 0 ? (
+              <>. Working back from what was taken off:{' '}
+                <b>{r.derived.map(x => `${x.pct}% on ${x.lines}`).join(', ')}</b>.
+                {r.derivedBelow > 0 && r.refusal === null && (
+                  <span> Some read lower than {r.percent}% because the discount came off the trees and
+                    not off the delivery or placement on that invoice — which is how it is meant to work.</span>
+                )}
+                {r.derivedAbove > 0 && (
+                  <span style={{ color: AMBER }}> ⚠️ {r.derivedAbove} of them gave MORE than {r.percent}%,
+                    so we are not suggesting a percent for this one.</span>
+                )}
+              </>
+            ) : <>, and none of them records enough to work out a percent.</>}
+            {r.workings.filter(w => w.derivedPct !== null).slice(0, 2).map((w, i) => (
+              <span key={i} style={{ display: 'block', color: '#9ca3af', fontSize: '0.75rem', marginTop: 2 }}>
+                e.g. invoice {w.docNumber ?? '—'} on {dateWords(w.txnDate)}: ${money0(Math.abs(w.amount))} off
+                {' '}${money0(w.base as number)} of other charges = {w.derivedPct}%
+              </span>
+            ))}
+          </div>
+        )}
+
         {(editing || tone === 'unsure') && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
             <Field label="Discount type" value={state.typeName} onChange={v => onChange({ typeName: v })} w={160} />
             <Field label="Tier name (must match the customer tag)" value={state.tierName} onChange={v => onChange({ tierName: v })} w={220} />
             <Field label="Percent off" value={state.pct} onChange={v => onChange({ pct: v })} w={90} />
+            {state.pct.trim() !== '' && !typedOk && (
+              <p style={{ ...errStyle, flexBasis: '100%', margin: '2px 0 0' }}>
+                Enter a number between 0 and {PERCENT_CEILING}.
+              </p>
+            )}
           </div>
         )}
       </div>
+
       <div style={priceCell}>
-        {state.pct.trim() === '' || !Number.isFinite(Number(state.pct))
+        {/* 🔴 NOTHING RENDERS WITH A PERCENT SIGN UNLESS IT IS A RATIO IN RANGE. The defect this
+            screen was corrected for printed $182.50 as "18250%", so the ceiling is enforced at the
+            point of rendering as well as at the write. */}
+        {!typedOk
           ? <span style={{ color: AMBER, fontWeight: 700, fontSize: '0.8125rem' }}>you set it</span>
-          : <><span style={{ fontSize: '1.0625rem', fontWeight: 700, color: DARK }}>{Number(state.pct)}%</span>
+          : <><span style={{ fontSize: '1.0625rem', fontWeight: 700, color: DARK }}>{typed}%</span>
               <small style={{ display: 'block', fontSize: '0.72rem', color: GRAY }}>off the tree price</small></>}
       </div>
+
       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'flex-start' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.8125rem', color: DARK, cursor: 'pointer' }}>
-          <input type="checkbox" checked={state.include} onChange={e => onChange({ include: e.target.checked })}
-            style={{ width: 17, height: 17 }} />
+          <input type="checkbox" checked={state.include} disabled={!typedOk}
+            onChange={e => onChange({ include: e.target.checked })} style={{ width: 17, height: 17 }} />
           Add
         </label>
-        {tone === 'sure' && (
-          <button onClick={onEdit} style={btn}>{editing ? 'Done' : 'Edit'}</button>
-        )}
+        {tone === 'sure' && <button onClick={onEdit} style={btn}>{editing ? 'Done' : 'Edit'}</button>}
       </div>
     </div>
   );
@@ -465,12 +570,21 @@ function SectionHead({ n, title }: { n: number; title: string }) {
   );
 }
 
-function Chip({ label, tone }: { label: string; tone: 'books' | 'stated' }) {
+/**
+ * The provenance chip. THREE tones, because there are three kinds of claim on this screen and
+ * they are not equally strong: `books` is a fact QuickBooks recorded, `derived` is arithmetic we
+ * did, and `stated` is something the owner told us. A reader must be able to tell them apart at a
+ * glance — that distinction is the whole point of showing evidence at all.
+ */
+function Chip({ label, tone }: { label: string; tone: 'books' | 'stated' | 'derived' }) {
+  const c = tone === 'books' ? { fg: GREEN, bg: '#EAF3DE' }
+          : tone === 'derived' ? { fg: '#3730a3', bg: '#eef2ff' }
+          : { fg: AMBER, bg: '#fdf6e3' };
   return (
     <span style={{
       display: 'inline-block', fontSize: '0.625rem', padding: '1px 6px', marginRight: 5, verticalAlign: 1,
-      border: `1px solid ${tone === 'books' ? GREEN : AMBER}`, color: tone === 'books' ? GREEN : AMBER,
-      background: tone === 'books' ? '#EAF3DE' : '#fdf6e3', borderRadius: 3, fontWeight: 700, letterSpacing: '0.03em',
+      border: `1px solid ${c.fg}`, color: c.fg, background: c.bg,
+      borderRadius: 3, fontWeight: 700, letterSpacing: '0.03em',
     }}>{label}</span>
   );
 }

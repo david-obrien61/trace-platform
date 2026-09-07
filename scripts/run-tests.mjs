@@ -55,8 +55,15 @@ for (const file of files) {
   try {
     // Bundle to CJS on stdout, pipe straight into node. Externals are runtime deps the
     // pure-function tests never actually call into.
+    // 🔴 `set -o pipefail` IS LOAD-BEARING, NOT HYGIENE — ADDED 2026-09-07 AFTER THIS RUNNER
+    // REPORTED ✅ ON A FILE THAT WOULD NOT COMPILE. Without it, bash returns only the LAST
+    // command's status: esbuild writes its error to STDERR and nothing to stdout, so `node` reads
+    // an EMPTY program, exits 0, and the pipeline succeeds. The file was printed as passing with
+    // `(no summary line)` beside it. This file's own header promises the opposite — *"a test that
+    // cannot build is not a test that passes"* — so the intent was right and the pipeline defeated
+    // it. [[R-33]] in the runner that certifies every other check.
     out = execSync(
-      `"${ESBUILD}" "${file}" --bundle --platform=node --format=cjs --log-level=error ` +
+      `set -o pipefail; "${ESBUILD}" "${file}" --bundle --platform=node --format=cjs --log-level=error ` +
       `--external:@supabase/supabase-js --external:@anthropic-ai/sdk | node`,
       { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: '/bin/bash' }
     );
@@ -71,6 +78,16 @@ for (const file of files) {
   const m = out.match(/(\d+) passed,\s*(\d+) failed/) || out.match(/(\d+) passed\s*\/\s*(\d+) failed/);
   const counts = m ? `${m[1]} passed, ${m[2]} failed` : 'no summary line';
   if (m) totalAssertions += Number(m[1]) + Number(m[2]);
+
+  // 🔴 NO SUMMARY LINE IS A FAILURE, NOT A FOOTNOTE (2026-09-07). A file that printed no summary
+  // either died before reaching it or asserted nothing at all — and a suite with zero assertions
+  // cannot disagree with anything, which is the one thing a test must be able to do. It used to
+  // render as `✅ … (no summary line)`, which is a green tick over a file that proved nothing.
+  if (ok && !m) {
+    ok = false;
+    out += '\n[runner] The file exited cleanly but printed no "N passed, N failed" summary — it ' +
+           'either crashed before the summary or contains no assertions. Either way it proves nothing.';
+  }
 
   if (ok) {
     console.log(`  ✅ ${rel}  (${counts})`);

@@ -40,10 +40,29 @@ function sale(name: string, id: string, qty: number | null, amount: number) {
     SalesItemLineDetail: { ItemRef: { value: id, name }, ...(qty === null ? {} : { Qty: qty }) },
   };
 }
-function discount(name: string, id: string, base: number | null, amount: number) {
+/**
+ * A discount taken as a service ITEM line.
+ *
+ * ✏️ CORRECTED 2026-09-07. This helper's third argument used to be called `base` and was written
+ * into **`Qty`** — encoding a claim from a comment in `invoiceList.ts` that a discount line's Qty
+ * is the dollar base. **MEASURED against LAWNS's export: `Qty` is 1 on all 21 such lines.** So the
+ * fixtures agreed with the code because both believed the same false thing, and 83 green
+ * assertions sat over a screen rendering `$182.50` as `18250%`. The base is now where it really
+ * lives — on the OTHER lines of the invoice — and `qty` defaults to what her books actually hold.
+ */
+function discount(name: string, id: string, qty: number | null, amount: number) {
   return {
     Amount: amount, DetailType: 'SalesItemLineDetail',
-    SalesItemLineDetail: { ItemRef: { value: id, name }, ...(base === null ? {} : { Qty: base }) },
+    SalesItemLineDetail: { ItemRef: { value: id, name }, ...(qty === null ? {} : { Qty: qty }) },
+  };
+}
+/** A NATIVE QuickBooks discount line — the rate is STATED and the amount is POSITIVE. */
+function nativeDiscount(amount: number, pct: number | null) {
+  return {
+    Amount: amount, DetailType: 'DiscountLineDetail',
+    DiscountLineDetail: pct === null
+      ? { PercentBased: false, DiscountAccountRef: { value: '92', name: 'Discounts given' } }
+      : { PercentBased: true, DiscountPercent: pct, DiscountAccountRef: { value: '92', name: 'Discounts given' } },
   };
 }
 function subTotal(amount: number) {
@@ -253,52 +272,102 @@ function invoice(o: {
     'a bundle line is ALSO a sold line: it carries a real quantity (how many trees got the work), so it stays in the item tally as well');
 }
 
-// ══ §F THE DISCOUNTS — WHAT WAS THE BASE MEASURED AGAINST? ══════════════════
+// ══ §F THE DISCOUNTS — TWO POPULATIONS, AND ONLY ONE OF THEM STATES ITS RATE ═══════════════
 {
-  // A: the base equals the WHOLE invoice — placement was inside the discounted base.
-  // B: the base is short by exactly the placement line — placement was NOT discounted.
+  // 🔴 THE 100× PROBE. $120 off an invoice carrying $1,200 of other lines is 10%. The shipped
+  // version divided by `Qty` — which is 1 — and printed 12000%. Nothing else in this § matters
+  // as much as this one assertion.
   const s = summariseInvoices(parseInvoiceList(body([
     invoice({ id: 'A', doc: '2001', lines: [
       sale('Shumard Oak', '19', 2, 900), sale('Placement Service', '27', 2, 300),
-      subTotal(1200), discount('CD10%', '90', 1200, -120),
+      subTotal(1200), discount('CD10%', '90', 1, -120),
     ] }),
     invoice({ id: 'B', doc: '2002', lines: [
       sale('Shumard Oak', '19', 2, 900), sale('Placement Service', '27', 2, 300),
-      discount('CD10%', '90', 900, -90),
+      discount('CD10%', '90', 1, -90),
     ] }),
   ])).invoices);
 
   const cd = s.discounts.byName.find(d => d.itemName === 'CD10%');
   ok(cd !== undefined && cd.lines === 2, 'both CD10% lines are tallied under one name');
-  ok(cd?.withBase === 2 && cd?.baseTotal === 2100, 'and their bases add up');
-  ok(cd?.verdicts.equalsSubtotal === 1,
-    '🔴 INVOICE A: the base equals the invoice subtotal — everything, placement included, was inside the discounted base');
-  ok(cd?.verdicts.belowSubtotal === 1,
-    '🔴 INVOICE B: the base is BELOW the subtotal — something on that invoice was excluded from the discount');
-  ok(cd?.excludedFromBase[0]?.itemName === 'Placement Service',
-    '🔴 AND IT NAMES WHAT WAS EXCLUDED. This is the whole question — whether placement is discounted, answered from THEIR history instead of by us picking a default');
-  ok(cd?.examples.length === 2 && cd?.examples[0].docNumber === '2001',
-    'and concrete invoices are shown so the counts above are checkable rather than asserted');
-  ok(cd?.examples[1].gap === 300, 'the example carries the gap in dollars');
+  ok(cd?.percents.some(p => p.pct === 10),
+    '🔴 INVOICE A: $120 off $1,200 of other lines is 10%. NOT 12000% — the derived rate is a RATIO');
+  ok(cd?.percents.some(p => p.pct === 7.5),
+    '🔴 INVOICE B: $90 off the same $1,200 is 7.5% — the discount covered the trees and not the ' +
+    'placement, and the derived rate reads low BECAUSE it did. That is the tree-only case, visible ' +
+    'for real instead of inferred from a Qty that never held a base');
+  ok(cd?.withBase === 2 && cd?.baseTotal === 2400,
+    'both bases are the $1,200 of other charged lines — DOLLARS, where this field used to hold a count of Qty values');
+  ok(cd?.examples[0].base === 1200 && cd?.examples[0].amount === -120 && cd?.examples[0].derivedPct === 10,
+    'and the working travels with the row so the arithmetic is checkable');
 
-  // 🔴 THE SUBTOTAL LINE MUST NOT DOUBLE THE SUBTOTAL. Invoice A has one; A still agrees.
-  ok(cd?.verdicts.equalsSubtotal === 1 && cd?.examples[0].subtotal === 1200,
-    '🔴 Intuit\'s SubTotalLineDetail line carries the running total; counting it as a sale would double invoice A to 2400 and report the discount as covering half the invoice');
+  // 🔴 THE SUBTOTAL LINE MUST NOT DOUBLE THE BASE. Invoice A has one; the base is still 1200.
+  ok(cd?.examples[0].base === 1200,
+    "🔴 Intuit's SubTotalLineDetail carries the running total; counting it as a charge would double " +
+    'invoice A to $2,400 and halve the derived rate to 5%');
 
   // Money in cents — the float comparison that would report a mismatch on an invoice that agrees.
   const pennies = summariseInvoices(parseInvoiceList(body([
-    invoice({ id: 'C', lines: [sale('Oak', '19', 1, 450.10), sale('Elm', '21', 1, 225.05), discount('CD15%', '91', 675.15, -101.27)] }),
+    invoice({ id: 'C', lines: [sale('Oak', '19', 1, 450.10), sale('Elm', '21', 1, 225.05), discount('CD15%', '91', 1, -101.27)] }),
   ])).invoices);
-  ok(pennies.discounts.byName[0].verdicts.equalsSubtotal === 1,
-    '🔴 money is compared in CENTS: 450.10 + 225.05 is 675.1500000000001 in floating point, and a direct comparison reports a mismatch on an invoice that agrees to the penny');
+  ok(pennies.discounts.byName[0].examples[0].base === 675.15,
+    '🔴 the base is summed in CENTS: 450.10 + 225.05 is 675.1500000000001 in floating point, and a ' +
+    'dollar sum would put float dust into a number rendered as money');
 
   const noBase = summariseInvoices(parseInvoiceList(body([
-    invoice({ id: 'D', lines: [sale('Oak', '19', 1, 400), discount('MD10', '92', null, -40)] }),
+    invoice({ id: 'D', lines: [discount('MD10', '92', null, -40)] }),
   ])).invoices);
-  ok(noBase.discounts.byName[0].verdicts.noBase === 1,
-    'a discount line with no Qty is counted as HAVING NO BASE — never silently compared against zero, which would read as "discounted nothing"');
+  ok(noBase.discounts.byName[0].withBase === 0 && noBase.discounts.byName[0].percents.length === 0,
+    'a discount on an invoice with nothing else on it yields NO rate — never a division by zero, never 0%');
   ok(noBase.discounts.byName[0].examples[0].base === null, 'and the example says so rather than showing 0');
 
+  // A $0 discount line is COUNTED and yields no rate — a giveaway is not a discount.
+  const zero = summariseInvoices(parseInvoiceList(body([
+    invoice({ id: 'E', lines: [sale('Oak', '19', 1, 500), discount('MD10', '92', 1, 0)] }),
+  ])).invoices);
+  ok(zero.discounts.byName[0].zeroAmountLines === 1 && zero.discounts.byName[0].percents.length === 0,
+    'a $0 discount line is counted but rated at nothing — counting it as 0% would drag a clean rate into disagreement');
+}
+
+// ══ §F2 🔴 THE NATIVE DISCOUNT LINE — WHERE THESE BOOKS ACTUALLY DISCOUNT ═══════════════════
+{
+  // MEASURED on LAWNS: 67 native lines against 21 item lines. They have no `ItemRef`, so the old
+  // code saw them only as an unnamed count — and CD10%/CD15%, which exist ONLY here, were invisible.
+  const s = summariseInvoices(parseInvoiceList(body([
+    invoice({ id: 'A', date: '2025-01-11', customer: { value: 'c1', name: 'A' },
+      lines: [sale('Oak', '19', 1, 1000), nativeDiscount(100, 10)] }),
+    invoice({ id: 'B', date: '2026-08-15', customer: { value: 'c2', name: 'B' },
+      lines: [sale('Oak', '19', 1, 2000), nativeDiscount(200, 10)] }),
+    invoice({ id: 'C', date: '2026-02-06', customer: { value: 'c3', name: 'C' },
+      lines: [sale('Oak', '19', 1, 4000), nativeDiscount(600, 15)] }),
+    invoice({ id: 'D', date: '2026-04-25', customer: { value: 'c4', name: 'D' },
+      lines: [sale('Oak', '19', 1, 500), nativeDiscount(250, null)] }),
+  ])).invoices);
+
+  const ten = s.discounts.byRate.find(r => r.pct === 10);
+  ok(ten?.lines === 2 && ten?.amountTotal === 300, '🔴 the rate is READ, not derived — 10% twice, $300');
+  ok(ten?.customers === 2 && ten?.first === '2025-01-11' && ten?.last === '2026-08-15',
+    'with the customers it reached and the span it covers');
+  ok(s.discounts.byRate[0].pct === 15,
+    '🔴 ordered by MONEY — $600 at 15% leads $300 at 10%. On the real books the rarest rate is the biggest');
+  ok(s.discounts.fixedDollar.lines === 1 && s.discounts.fixedDollar.amountTotal === 250,
+    '🔴 a fixed-dollar discount is reported as MONEY and never converted — the line does not say what it was a percentage of');
+  ok(!s.discounts.byRate.some(r => r.pct === 0), 'and it is not smuggled in as a 0% rate');
+  ok(s.discounts.byName.length === 0, 'a native line carries no name, so it enters no named tally');
+  ok(!s.discounts.unnamedDiscountLines.some(u => /DiscountLineDetail/.test(u.itemName)),
+    '🔴 and it is no longer dumped into `unnamedDiscountLines` as a bare count — 67 of LAWNS\'s 88 ' +
+    'discount lines used to land there, unread');
+
+  // A native amount is POSITIVE on real books, so it was being ADDED to the derivation base.
+  const infl = summariseInvoices(parseInvoiceList(body([
+    invoice({ id: 'E', lines: [sale('Oak', '19', 1, 1000), nativeDiscount(100, 10), discount('FD10', '93', 1, -100)] }),
+  ])).invoices);
+  ok(infl.discounts.byName[0].percents[0].pct === 10,
+    '🔴 a POSITIVE native amount does not inflate the base — $100 off $1,000 is 10%, not 9.09%');
+}
+
+// ══ §F3 THE NAMED LIST CANNOT SILENTLY UNDER-COVER ═════════════════════════════════════════
+{
   // 🔴 THE NAMED LIST CANNOT SILENTLY UNDER-COVER.
   const unnamed = summariseInvoices(parseInvoiceList(body([
     invoice({ id: 'E', lines: [
@@ -307,12 +376,16 @@ function invoice(o: {
       { Amount: -10, DetailType: 'DiscountLineDetail', DiscountLineDetail: { PercentBased: false } },
     ] }),
   ])).invoices);
-  ok(unnamed.discounts.unnamedDiscountLines.length === 2,
+  ok(unnamed.discounts.unnamedDiscountLines.length === 1,
     '🔴 A DISCOUNT-SHAPED LINE THAT IS NOT ON DAVID\'S LIST IS REPORTED AS ITS OWN ROW. The seven names are a hand-kept list, and a hand-kept list that cannot report its own under-coverage is the R-19 defect');
   ok(unnamed.discounts.unnamedDiscountLines.some(u => u.itemName === 'Senior Discount'),
     'caught by name and by its negative amount');
-  ok(unnamed.discounts.unnamedDiscountLines.some(u => /DiscountLineDetail/.test(u.itemName)),
-    'and an unnamed DiscountLineDetail is caught by its line type');
+  // ✏️ 2026-09-07 — a native `DiscountLineDetail` is no longer an "unnamed" line. It is READ now:
+  // percent-based ones land in `byRate`, and this one, which states no percent, lands in
+  // `fixedDollar`. It used to be a bare count in the unnamed list, which is where all 67 of
+  // LAWNS's real discounts were sitting.
+  ok(unnamed.discounts.fixedDollar.lines === 1 && unnamed.discounts.fixedDollar.amountTotal === 10,
+    '🔴 the native line is READ as a fixed-dollar discount rather than counted as an unnamed one');
   ok(!unnamed.topItemsByQty.some(i => i.itemName === 'Senior Discount'),
     '🔴 and it is kept OUT of "what sold" — a negative line in the sales tally silently reduces a quantity');
   ok(unnamed.topItemsByQty.length === 1 && unnamed.totalQtySold === 1, 'only the oak sold');

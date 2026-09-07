@@ -57,9 +57,15 @@ export interface QboInvoiceLine {
    *
    * 🔴 IT IS NOT `amount / qty` AND THE DIFFERENCE IS THE WHOLE POINT. Deriving it would be
    * arithmetic over two numbers that are already on the record, and it would silently invent a
-   * price on every line where `qty` is null, zero, or a DOLLAR BASE rather than a count (which
-   * is what qty means on these books' discount lines — see `isNamedDiscount`). A derived
-   * per-unit price on a discount line is a number that describes nothing.
+   * price on every line where `qty` is null, zero, or not a count of anything.
+   *
+   * ✏️ **CORRECTED 2026-09-07 — THIS COMMENT SAID `qty` IS THE DOLLAR BASE ON A DISCOUNT LINE,
+   * AND IT IS NOT.** MEASURED against LAWNS's 1,481-invoice export: on all 21 discount ITEM
+   * lines `Qty` is **1** (or absent) — never a base. Reading it as one turned `|amount| ÷ qty`
+   * into `|amount| × 100`, and the review screen printed **$182.50 as "18250%"**. The sentence
+   * was in this file, was believed, and steered a build ([[R-26]] in our own corpus). The base
+   * for an item-line discount is not stated anywhere on the line; it is DERIVED from the other
+   * charged lines on the same invoice, and labelled as derived.
    *
    * ⚠️ NULL IS A REAL AND COMMON ANSWER. A `DescriptionOnly` line has no unit price, a
    * `SubTotalLineDetail` has none, and a goods line can omit it. Every reader below must treat
@@ -80,6 +86,15 @@ export interface QboInvoiceLine {
    * one, which is exactly why the money cannot be measured from the discount lines alone.
    */
   discountInDescription: boolean;
+  /**
+   * 🔴 `DiscountLineDetail.PercentBased` / `DiscountPercent` — THE RATE, STATED BY QUICKBOOKS.
+   * `null` on every other line type. When `percentBased` is true, `discountPercent` IS the rate
+   * and no arithmetic is involved; when it is false the discount was a FIXED DOLLAR AMOUNT and
+   * `discountPercent` is absent — that is a real, different fact and must never be converted
+   * into a percentage (MEASURED: 6 of LAWNS's 67).
+   */
+  percentBased: boolean | null;
+  discountPercent: number | null;
 }
 
 /** One invoice. 🔴 `customerId` and NO customer name — see the file header. */
@@ -238,6 +253,15 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
         // GroupLineDetail or any future block is read the same way instead of coming back
         // empty because the code guessed 'SalesItemLineDetail'.
         unitPrice: num(detail?.UnitPrice),
+        // 🔴 THE STATED RATE, READ FROM THE DETAIL BLOCK — added 2026-09-07 after the screen
+        // printed dollars with a percent sign. A `DiscountLineDetail` carries its OWN
+        // `DiscountPercent` and a `PercentBased` flag, so on that line there is nothing to derive
+        // and nothing to get wrong. MEASURED on LAWNS's 1,481-invoice export: **67 such lines,
+        // and they are where this business actually takes its discounts** — 5%×28, 10%×14,
+        // 15%×13, 20%×4, 25%×1, 50%×1, plus 6 that are fixed-dollar. Read by the same
+        // detail-block key as everything else above.
+        percentBased: typeof detail?.PercentBased === 'boolean' ? (detail.PercentBased as boolean) : null,
+        discountPercent: num(detail?.DiscountPercent),
         // Read, tested, discarded — the string never reaches the returned row. See the field.
         discountInDescription: mentionsDiscount(str(l?.Description)),
       };
@@ -323,22 +347,75 @@ export interface BundleItemTally {
 
 export interface DiscountExample {
   docNumber: string | null;
+  txnDate: string | null;
+  /** The discount's own amount, as money. */
+  amount: number;
+  /** 🔴 DERIVED, NEVER STATED — Σ of the other charged lines on that invoice. `null` when the
+   *  invoice had no other charged line, so nothing could be derived. */
   base: number | null;
-  subtotal: number;
-  gap: number | null;
+  /** `amount ÷ base`, or null when the base could not be derived or the amount was $0. */
+  derivedPct: number | null;
 }
 
+/**
+ * 🔴 A RATE QUICKBOOKS STATED ITSELF — the `DiscountLineDetail` population, added 2026-09-07.
+ *
+ * This is where these books actually take their discounts, and the old code could not see it:
+ * MEASURED on LAWNS, **67 native discount lines against 21 item lines**, and a native line
+ * carries `PercentBased` + `DiscountPercent`, so **there is no base to find and no arithmetic to
+ * get wrong.** It is the primary evidence for what a business discounts at.
+ *
+ * ⚠️ AND IT CARRIES NO NAME. A `DiscountLineDetail` has no `ItemRef` — all 67 of LAWNS's point at
+ * one account, `92 · Discounts given`. So the rate is exact and the PROGRAMME is unknown; a name
+ * can only come from the product list, and matching the two by rate is an inference this module
+ * does not make. It reports rates; the caller decides what to do about names.
+ */
+export interface DiscountRateTally {
+  /** The stated percent, e.g. 10. */
+  pct: number;
+  lines: number;
+  /** Money discounted at this rate, as a positive amount. */
+  amountTotal: number;
+  /** Distinct customers who received it. */
+  customers: number;
+  first: string | null;
+  last: string | null;
+}
+
+/**
+ * Discounts taken as a FIXED DOLLAR AMOUNT (`PercentBased: false`). Reported as dollars and
+ * NEVER converted into a percentage — the line does not say what it was a percentage OF, and
+ * inventing a base is the whole class of error this file was corrected for.
+ */
+export interface FixedDollarDiscounts {
+  lines: number;
+  amountTotal: number;
+  examples: { docNumber: string | null; txnDate: string | null; amount: number }[];
+}
+
+/**
+ * A discount taken as an ITEM LINE — a service item with a negative price, used like any other
+ * line. The SECOND population, and the smaller one (21 lines against 67 native ones on LAWNS) —
+ * but the only one that carries a NAME, which is why it is kept.
+ *
+ * 🔴 ITS RATE IS DERIVED AND THE DERIVATION IS A STATED ASSUMPTION, NOT A FACT. The line says
+ * what was taken off; it does not say what it was taken off OF. The base here is Σ of the other
+ * charged lines on that invoice — which is right when the discount covered the whole invoice and
+ * TOO LARGE when it covered only part of it (a discount on the trees but not the delivery reads
+ * low). Every consumer must present it as derived, with the working shown, and must never round
+ * a derived rate into a clean one.
+ */
 export interface DiscountNameTally {
   itemName: string;
   lines: number;
-  /** How many of those lines carried a readable Qty to use as the base. */
+  /** Lines carrying no money at all. A giveaway is not a discount, so they yield NO rate — but
+   *  they are counted, because "3 of these 9 were $0" is a fact about how the item is used. */
+  zeroAmountLines: number;
+  /** Lines where a base could be derived (the invoice had other charged lines). */
   withBase: number;
+  /** Σ of those DERIVED bases, in dollars. */
   baseTotal: number;
   amountTotal: number;
-  /** 🔴 THE ANSWER. What the base was measured against, counted four ways. */
-  verdicts: { equalsSubtotal: number; belowSubtotal: number; aboveSubtotal: number; noBase: number };
-  /** When the base was BELOW the invoice subtotal, the items whose amount accounts for the gap. */
-  excludedFromBase: { itemName: string; times: number }[];
   /** A handful of real invoices so the counts above are checkable rather than asserted. */
   examples: DiscountExample[];
   /**
@@ -359,7 +436,12 @@ export interface DiscountNameTally {
 }
 
 export interface DiscountBreakdown {
+  /** The ITEM-LINE population — named, rate DERIVED. */
   byName: DiscountNameTally[];
+  /** 🔴 The NATIVE population — rate STATED by QuickBooks, no name. The primary evidence. */
+  byRate: DiscountRateTally[];
+  /** Native discount lines that were a fixed dollar amount. Never converted to a percent. */
+  fixedDollar: FixedDollarDiscounts;
   /** 🔴 Discount-shaped lines NOT in the named list — proof the list did not under-cover. */
   unnamedDiscountLines: { itemName: string; lines: number }[];
 }
@@ -452,6 +534,9 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
   const itemTally = new Map<string, ItemQtyTally>();
   const bundleTally = new Map<string, BundleItemTally>();
   const discountTally = new Map<string, DiscountNameTally>();
+  const rateTally = new Map<number, { pct: number; lines: number; amountTotal: number; customers: Set<string>; first: string | null; last: string | null }>();
+  let fixedDollarLines = 0, fixedDollarTotal = 0;
+  const fixedDollarExamples: { docNumber: string | null; txnDate: string | null; amount: number }[] = [];
   const unnamedDiscounts = new Map<string, number>();
 
   for (const inv of invoices) {
@@ -474,12 +559,20 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
     // The subtotal a discount on THIS invoice would have been taken from, if it covered
     // everything. SubTotalLineDetail is excluded because Intuit emits it as a line carrying the
     // running total — counting it would double every invoice that has one.
-    let subtotalCents = 0;
+    // 🔴 `otherChargedCents` IS THE BASE EVERY DERIVED RATE ON THIS INVOICE USES, and it is
+    // computed ONCE per invoice rather than per discount line, so two discounts on one invoice
+    // cannot be derived against two different bases.
+    //
+    // ⚠️ IT EXCLUDES DISCOUNT LINES IN BOTH DIRECTIONS, AND THE SECOND ONE WAS A REAL DEFECT:
+    // an item-line discount is NEGATIVE and was already excluded by the `> 0` test, but a native
+    // `DiscountLineDetail` amount is **POSITIVE** (measured: 67 of 67 on LAWNS), so it was being
+    // ADDED to the subtotal — inflating the base a discount is compared against, by the discount.
+    let otherChargedCents = 0;
     for (const l of inv.lines) {
       if (isAnyDiscount(l)) continue;
       if ((l.detailType ?? '') === 'SubTotalLineDetail') continue;
       const c = cents(l.amount);
-      if (c !== null && c > 0) subtotalCents += c;
+      if (c !== null && c > 0) otherChargedCents += c;
     }
 
     for (const l of inv.lines) {
@@ -491,11 +584,38 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
 
       const nameKey = (l.itemName ?? '').trim().toLowerCase();
 
+      // ── ① THE NATIVE DISCOUNT LINE — the rate is STATED, so nothing is derived. ───────────
+      // MEASURED on LAWNS: 67 of these against 21 item lines. This is where the business
+      // actually discounts, and the old code could not see it — these lines have no `ItemRef`,
+      // so `isNamedDiscount` was false and they fell into `unnamedDiscountLines` as a count.
+      if ((l.detailType ?? '') === QBO_DETAIL_TYPE.discount) {
+        const amt = Math.abs(l.amount ?? 0);
+        if (l.percentBased === true && l.discountPercent !== null) {
+          const key = l.discountPercent;
+          const r = rateTally.get(key) ?? { pct: key, lines: 0, amountTotal: 0, customers: new Set<string>(), first: null as string | null, last: null as string | null };
+          r.lines++;
+          r.amountTotal += amt;
+          if (inv.customerId) r.customers.add(inv.customerId);
+          if (inv.txnDate && (r.first === null || inv.txnDate < r.first)) r.first = inv.txnDate;
+          if (inv.txnDate && (r.last === null || inv.txnDate > r.last)) r.last = inv.txnDate;
+          rateTally.set(key, r);
+        } else {
+          // 🔴 FIXED DOLLAR. It does not say what it was a percentage OF, so it is reported as
+          // money and never converted — inventing a base is the error this file was corrected for.
+          fixedDollarLines++;
+          fixedDollarTotal += amt;
+          if (fixedDollarExamples.length < DISCOUNT_EXAMPLE_LIMIT) {
+            fixedDollarExamples.push({ docNumber: inv.docNumber, txnDate: inv.txnDate, amount: amt });
+          }
+        }
+        continue;   // a discount line is not a sale and never enters the item tallies
+      }
+
+      // ── ② THE ITEM-LINE DISCOUNT — named, rate DERIVED from the other charged lines. ──────
       if (isNamedDiscount(l)) {
         const row = discountTally.get(nameKey) ?? {
-          itemName: l.itemName ?? '(unnamed)', lines: 0, withBase: 0, baseTotal: 0, amountTotal: 0,
-          verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0 },
-          excludedFromBase: [], examples: [], percents: [], mostRecent: null,
+          itemName: l.itemName ?? '(unnamed)', lines: 0, zeroAmountLines: 0, withBase: 0,
+          baseTotal: 0, amountTotal: 0, examples: [], percents: [], mostRecent: null,
         };
         row.lines++;
         if (l.amount !== null) row.amountTotal += l.amount;
@@ -507,49 +627,25 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
           row.mostRecent = inv.txnDate;
         }
 
-        // The RATE this line actually granted, tallied by value. Guarded on a POSITIVE base: a
-        // zero base would divide to Infinity and a negative one would report a negative rate, and
-        // both would render as a confident number on a screen (D-9).
-        if (l.qty !== null && l.qty > 0 && l.amount !== null) {
-          const pct = Math.round((Math.abs(l.amount) / l.qty) * 100 * 100) / 100;
-          const seen = row.percents.find(x => x.pct === pct);
-          if (seen) seen.lines++; else row.percents.push({ pct, lines: 1 });
-        }
-
-        const base = l.qty;
-        const baseCents = cents(base);
-        if (base === null || baseCents === null) {
-          row.verdicts.noBase++;
-        } else {
+        // 🔴 THE BASE IS `otherChargedCents`, NEVER `l.qty`. `Qty` is 1 on every one of these
+        // lines — measured, all 21 — and reading it as a base printed $182.50 as "18250%".
+        const amt = l.amount ?? 0;
+        const base = otherChargedCents > 0 ? otherChargedCents / 100 : null;
+        let derivedPct: number | null = null;
+        if (amt === 0) {
+          // A GIVEAWAY IS NOT A DISCOUNT (the same rule `sold-below-quickbooks-list` applies).
+          // It yields no rate; counting it as 0% would drag a clean 5% item into "rates disagree".
+          row.zeroAmountLines++;
+        } else if (base !== null) {
           row.withBase++;
           row.baseTotal += base;
-          if (baseCents === subtotalCents) row.verdicts.equalsSubtotal++;
-          else if (baseCents < subtotalCents) {
-            row.verdicts.belowSubtotal++;
-            // 🔴 WHAT WAS LEFT OUT. When the base is short of the invoice subtotal, a single
-            // line whose amount equals the gap names what the discount did NOT apply to — which
-            // is the actual question: is placement inside the discounted base or outside it?
-            const gapCents = subtotalCents - baseCents;
-            for (const other of inv.lines) {
-              if (other === l || isAnyDiscount(other)) continue;
-              if ((other.detailType ?? '') === 'SubTotalLineDetail') continue;
-              if (cents(other.amount) === gapCents) {
-                const label = other.itemName ?? `(${other.detailType ?? 'no DetailType'} line)`;
-                const hit = row.excludedFromBase.find(e => e.itemName === label);
-                if (hit) hit.times++; else row.excludedFromBase.push({ itemName: label, times: 1 });
-                break;
-              }
-            }
-          } else row.verdicts.aboveSubtotal++;
+          derivedPct = Math.round((Math.abs(amt) / base) * 100 * 100) / 100;
+          const seen = row.percents.find(x => x.pct === derivedPct);
+          if (seen) seen.lines++; else row.percents.push({ pct: derivedPct, lines: 1 });
         }
 
         if (row.examples.length < DISCOUNT_EXAMPLE_LIMIT) {
-          row.examples.push({
-            docNumber: inv.docNumber,
-            base,
-            subtotal: subtotalCents / 100,
-            gap: baseCents === null ? null : (subtotalCents - baseCents) / 100,
-          });
+          row.examples.push({ docNumber: inv.docNumber, txnDate: inv.txnDate, amount: amt, base, derivedPct });
         }
         discountTally.set(nameKey, row);
         continue;   // a discount line is not a sale and never enters the item tallies
@@ -595,9 +691,7 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
   const monthsAll = earliest && latest ? monthsBetween(earliest.slice(0, 7), latest.slice(0, 7)) : [];
   const byMonth: MonthTally[] = monthsAll.map(m => ({ month: m, invoices: monthCounts.get(m) ?? 0 }));
 
-  for (const row of discountTally.values()) {
-    row.excludedFromBase.sort((a, b) => b.times - a.times || a.itemName.localeCompare(b.itemName));
-  }
+
 
   return {
     invoices: invoices.length,
@@ -625,6 +719,12 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
       byName: [...discountTally.values()]
         .map(r => ({ ...r, percents: [...r.percents].sort((a, b) => b.lines - a.lines || a.pct - b.pct) }))
         .sort((a, b) => b.lines - a.lines || a.itemName.localeCompare(b.itemName)),
+      // Ordered by MONEY, not by count — 4 lines at 20% is $15,173 on these books and 28 at 5%
+      // is $2,906, so a count ordering would bury the largest thing on the page.
+      byRate: [...rateTally.values()]
+        .map(r => ({ pct: r.pct, lines: r.lines, amountTotal: Math.round(r.amountTotal * 100) / 100, customers: r.customers.size, first: r.first, last: r.last }))
+        .sort((a, b) => b.amountTotal - a.amountTotal || a.pct - b.pct),
+      fixedDollar: { lines: fixedDollarLines, amountTotal: Math.round(fixedDollarTotal * 100) / 100, examples: fixedDollarExamples },
       unnamedDiscountLines: [...unnamedDiscounts.entries()]
         .map(([itemName, lines]) => ({ itemName, lines }))
         .sort((a, b) => b.lines - a.lines || a.itemName.localeCompare(b.itemName)),

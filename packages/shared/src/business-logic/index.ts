@@ -180,9 +180,9 @@ export { seedPricingConfig } from './seedPricingConfig';
 
 // The REVIEW that fills that row for a business already past creation — where seedPricingConfig
 // cannot reach (ignoreDuplicates:true makes it a silent no-op on an existing tenant). Pure.
-export { buildDiscountReview, buildAcceptancePatch, suggestTypeName, REVIEW_REFUSALS } from './discountReview';
+export { buildDiscountReview, buildAcceptancePatch, suggestTypeName, itemPercentOf, isDiscountItem, REVIEW_REFUSALS, PERCENT_CEILING } from './discountReview';
 export type {
-  DiscountReview, EvidencedDiscount, StatedTier, DiscountItemFact,
+  DiscountReview, EvidencedDiscount, StatedTier, DiscountItemFact, UnnamedRate, DerivedRate,
   AcceptedTier, PatchResult, ReviewRefusal,
 } from './discountReview';
 

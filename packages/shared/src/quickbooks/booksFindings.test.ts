@@ -32,7 +32,8 @@ const item = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow
 });
 const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1,
               discountInDescription = false) =>
-  ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice, discountInDescription });
+  ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice, discountInDescription,
+     percentBased: null as boolean | null, discountPercent: null as number | null });
 const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[],
              o: Partial<QboInvoiceRow> = {}): QboInvoiceRow =>
   ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, balance: 0, dueDate: null,
@@ -298,12 +299,13 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const fs = evaluateBooks({
     customers: CUSTOMERS, items: [item('1', 'Tree', { unitPrice: 10 })],
     invoices: [inv('i1', '1', [line('1', 'Tree', 10, 10)])],
-    // ✏️ `noBase`, not `belowSubtotal` (2026-09-07). A base BELOW the subtotal is the tree-only
-    // rule working and no longer asks anything — see M-DISC. The verdict that still poses a real
-    // question is the one where the discount does not record what it was taken from.
-    discounts: { byName: [{ itemName: 'MD10', lines: 3, withBase: 0, baseTotal: 0, amountTotal: -10,
-      verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 3 },
-      excludedFromBase: [], examples: [], percents: [], mostRecent: null }], unnamedDiscountLines: [] } as never,
+    // ✏️ CORRECTED TWICE, 2026-09-06 then 2026-09-07. The first fixture used `belowSubtotal`, the
+    // second `noBase` — and BOTH were verdicts derived from a base that was never read (`Qty`,
+    // which is 1). The rule now fires on a RATE QuickBooks stated that no product names, so the
+    // fixture states one: 20%, with no 20% item in the list above.
+    discounts: { byName: [], unnamedDiscountLines: [],
+      byRate: [{ pct: 20, lines: 3, amountTotal: 900, customers: 2, first: '2025-11-09', last: '2026-03-13' }],
+      fixedDollar: { lines: 0, amountTotal: 0, examples: [] } } as never,
   });
   const asking = fs.filter(f => f.needsAnswer !== null);
   ok(asking.length === 2,
@@ -515,10 +517,14 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const fs = evaluateBooks({
     items: [item('1', 'Widget')], customers: CUSTOMERS,
     invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])],
-    discounts: { byName: [{ itemName: 'CD10%', lines: 4, withBase: 4, baseTotal: 100, amountTotal: 10,
-                            verdicts: { equalsSubtotal: 4, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0 },
-                            excludedFromBase: [], examples: [], percents: [{ pct: 10, lines: 4 }], mostRecent: '2026-08-19' }],
+    discounts: { byName: [{ itemName: 'CD10%', lines: 4, zeroAmountLines: 0, withBase: 4, baseTotal: 1000,
+                            amountTotal: -100, examples: [], percents: [{ pct: 10, lines: 4 }], mostRecent: '2026-08-19' }],
+                 // 10% is PUBLISHED by the item below, so nothing here is an unnamed rate — the
+                 // finding measures at zero, which is what M14 needs (measured, no money attached).
+                 byRate: [{ pct: 10, lines: 4, amountTotal: 100, customers: 4, first: '2026-01-01', last: '2026-08-19' }],
+                 fixedDollar: { lines: 0, amountTotal: 0, examples: [] },
                  unnamedDiscountLines: [] },
+    items: [item('1', 'Widget'), item('3', 'CD10%', { unitPrice: -0.1 })],
   });
   const word = fs.find(f => f.id === 'discount-in-wording');
   const broke = fs.find(f => f.id === 'discounts-that-do-not-work');
@@ -569,62 +575,78 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   ok(g?.value === 60, 'the gap is computed: 3x on a $60 cost base is $180, and $120 was taken');
 }
 
-// ══ M-DISC ✏️ THE REWORDED DISCOUNT RULE — tree-only is CORRECT, not broken ══════════════════
-// 🔴 THIS IS THE REGRESSION GUARD FOR A FINDING THAT SCORED THE INTENT AS A DEFECT. The rule used
-// to fire on `belowSubtotal` and tell an owner that "some customers got less off than the name
-// suggests" — which is exactly what a discount that comes off the trees and not off the delivery
-// looks like. Its `needsAnswer` then offered to "fix" it, i.e. to start discounting her labour.
+// ══ M-DISC ✏️ THE DISCOUNT RULE, REWRITTEN ON A BASE THAT IS ACTUALLY READ ═══════════════════
+// 🔴 THIS RULE HAS NOW BEEN WRONG TWICE, AND THE SECOND TIME IS THE INSTRUCTIVE ONE. It first
+// fired on `verdicts.belowSubtotal`; on 2026-09-06 that was reworded to fire on `noBase` instead,
+// on the reasoning that a base below the subtotal is tree-only discounting working correctly.
+// **Both versions rested on a base that was never read.** `Qty` on a discount line is 1 — measured,
+// all 21 of LAWNS's — so every verdict was a comparison of $1.00 against an invoice subtotal, and
+// `excludedFromBase` came back EMPTY on every row, which was the tell nobody read.
+//
+// The rule now measures something QuickBooks STATES: a discount rate used on invoices that no
+// item in the product list names. No base, no inference, nothing to get wrong.
 {
-  const tally = (itemName: string, v: Partial<{ equalsSubtotal: number; belowSubtotal: number; aboveSubtotal: number; noBase: number }>) => ({
-    itemName, lines: 10, withBase: 10, baseTotal: 1000, amountTotal: 100,
-    verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0, ...v },
-    excludedFromBase: [{ itemName: 'Tailgate delivery', times: 6 }],
-    examples: [], percents: [{ pct: 10, lines: 10 }], mostRecent: '2026-08-19',
-  });
-  const base = { items: [item('1', 'Widget')], customers: CUSTOMERS,
-                 invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])] };
-  const findingFor = (byName: ReturnType<typeof tally>[]) =>
-    evaluateBooks({ ...base, discounts: { byName, unnamedDiscountLines: [] } })
+  const base = { customers: CUSTOMERS, invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])] };
+  const rate = (pct: number, lines = 2, amountTotal = 500) =>
+    ({ pct, lines, amountTotal, customers: 2, first: '2025-11-09', last: '2026-03-13' });
+  const findingFor = (byRate: ReturnType<typeof rate>[], items: QboItemRow[], fixedLines = 0) =>
+    evaluateBooks({ ...base, items,
+      discounts: { byName: [], unnamedDiscountLines: [], byRate,
+        fixedDollar: { lines: fixedLines, amountTotal: fixedLines * 200, examples: [] } } as never })
       .find(f => f.id === 'discounts-that-do-not-work');
 
-  // ① THE CORRECTION ITSELF.
-  const treeOnly = findingFor([tally('CD10%', { belowSubtotal: 10 })]);
-  ok(treeOnly?.population.matched === 0,
-    '🔴 a discount taken on PART of the invoice is NOT flagged — that is the tree-only rule working');
-  // `?? null` at the wrapper (booksFindings.ts:828) normalises an absent question, so `null` is
-  // the shape a caller actually sees — asserting `undefined` would have tested the rule's return
-  // rather than the finding a screen renders.
-  ok(treeOnly?.needsAnswer === null,
-    '🔴 and it asks her NOTHING — the old rule offered to "fix" correct behaviour into discounting her own labour');
-  ok(/CORRECT/.test(treeOnly?.sentence ?? ''),
-    'the sentence says so out loud, so the next reader does not re-file it as a defect');
-  ok(/never off delivery/.test(treeOnly?.sentence ?? ''),
-    'and it names what the discount does not come off, which is the whole rule in one clause');
+  const CD10 = item('3', 'CD10%', { unitPrice: -0.1 });
+  const CD15 = item('4', 'CD15%', { unitPrice: -0.15 });
 
-  // ② WHAT STILL FIRES — the base nobody stated. This is the case the reword is FOR.
-  const unstated = findingFor([tally('MD10', { noBase: 10 })]);
-  ok(unstated?.population.matched === 1, 'an UNSTATED base still fires — the amount cannot be checked');
-  ok(/not record what the percentage was taken from/.test(unstated?.sentence ?? ''),
-    'and the sentence names the actual problem rather than the old one');
-  ok(unstated?.needsAnswer !== null, 'and this one DOES ask her, because there is something to decide');
+  // ① A NAMED RATE IS NOT A FINDING.
+  const named = findingFor([rate(10)], [CD10]);
+  ok(named?.population.matched === 0,
+    '🔴 a 10% discount is NOT flagged when an item publishes 10% — it has a name, and that is the whole test');
+  ok(named?.needsAnswer === null, 'and it asks her nothing');
+  ok(named?.value === null, 'and carries no money — "nothing to report" is not "$0 at stake"');
 
-  // ③ AND THE OTHER GENUINELY-WRONG SHAPE, kept deliberately rather than dropped with the reword.
-  const overRun = findingFor([tally('FD10', { aboveSubtotal: 10 })]);
-  ok(overRun?.population.matched === 1,
-    '🔴 a base ABOVE the whole invoice still fires — a percentage of more than everything is not tree-only, it is wrong');
-  ok(/MORE than the whole invoice/.test(overRun?.sentence ?? ''),
-    'and it is worded SEPARATELY from the unstated-base case, because the two need different answers');
+  // ② AN UNNAMED RATE IS. This is LAWNS's $15,173 at 20%.
+  const unnamed = findingFor([rate(20, 4, 15173)], [CD10, CD15]);
+  ok(unnamed?.population.matched === 1, '🔴 a 20% rate nothing publishes IS flagged');
+  ok(unnamed?.value === 15173, 'carrying the real money, not a count');
+  ok(/20%/.test(unnamed?.sentence ?? '') && /\$15,173/.test(unnamed?.sentence ?? ''),
+    'and the sentence names the rate and the amount, so she can act on it');
+  ok(unnamed?.needsAnswer !== null, 'this one DOES ask her, because there is something to decide');
 
-  // ④ THE NEGATIVE CONTROL. Without this the three above would pass on a rule that never fires.
-  const clean = findingFor([tally('CD15%', { equalsSubtotal: 10 })]);
-  ok(clean?.population.matched === 0 && clean?.measured === true,
-    'a discount taken on the whole invoice is measured and clean — the rule can still return zero');
-  const mixed = findingFor([tally('CD10%', { belowSubtotal: 10 }), tally('MD10', { noBase: 10 })]);
+  // ③ MIXED — the separation is real, not "any rate with an odd number".
+  const mixed = findingFor([rate(10), rate(20, 4, 15173)], [CD10]);
   ok(mixed?.population.matched === 1 && mixed?.population.of === 2,
-    '🔴 with one of each, exactly ONE is flagged out of two — the two verdicts are genuinely separated, ' +
-    'not merged into "any discount with an odd verdict"');
-  ok(/CORRECT/.test(mixed?.sentence ?? '') && /cannot be checked/.test(mixed?.sentence ?? ''),
-    'and the sentence carries both halves — what is wrong AND what is right');
+    '🔴 exactly ONE of two rates is flagged — the named one is excluded by NAME, not by size');
+  ok(!/10%/.test((mixed?.sentence ?? '').split('—')[0]),
+    'and the named rate does not appear in the list of unnamed ones');
+
+  // ④ FIXED-DOLLAR IS REPORTED AS MONEY AND NEVER AS A PERCENT.
+  const fixed = findingFor([rate(10)], [CD10], 6);
+  ok(/flat amount rather than a percentage/.test(fixed?.sentence ?? ''),
+    '🔴 fixed-dollar discounts are named as flat amounts');
+  ok(/does not say what they were a percentage of/.test(fixed?.sentence ?? ''),
+    'and the sentence says WHY they are not converted — the invoice does not state a base');
+  ok(!/%/.test((fixed?.sentence ?? '').split('flat amount')[1] ?? ''),
+    'and no percent sign follows them');
+
+  // ⑤ 🔴 THE 100× GUARD, AT THE RULE, WITH A FIXTURE THAT CAN ACTUALLY TELL THE TWO APART.
+  //    A −$25 flat item would read as "2500%" without the guard — but no invoice can grant 2500%,
+  //    so a 20% fixture passes either way and proves nothing (it survived a mutant, measured).
+  //    The one case where the guard CHANGES the answer is a flat item whose dollar amount, times
+  //    100, lands on a rate somebody really granted: a **$1** item and a **100%** discount. That is
+  //    a real pairing — a tree given away at 100% off, and a $1 line item.
+  const flat = findingFor([rate(100, 1, 650)], [item('9', 'Flat $1', { unitPrice: -1 })]);
+  ok(flat?.population.matched === 1,
+    '🔴 a −$1 FLAT item does NOT publish a 100% rate, so the 100%-off discount is still correctly ' +
+    'reported as unnamed. Without the `< 1` guard it would be "named" by a dollar amount');
+  ok(findingFor([rate(100, 1, 650)], [item('9', 'Half', { unitPrice: -0.5 })])?.population.matched === 1,
+    'and a genuine 50% item does not name a 100% rate either — the negative control on the same fixture');
+  ok(findingFor([rate(50, 1, 650)], [item('9', 'Half', { unitPrice: -0.5 })])?.population.matched === 0,
+    '…while a −0.5 item DOES name a 50% rate, so the guard is not simply refusing everything');
+
+  // ⑥ NEGATIVE CONTROL — the rule can return NOTHING AT ALL, not merely zero.
+  ok(findingFor([], [CD10]) === undefined || findingFor([], [CD10])?.measured === false,
+    'a business with no discount lines at all is not measured — absent is not the same as clean');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);

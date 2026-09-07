@@ -78,7 +78,20 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
-### 🔴 DISCOUNTS — WHAT WE FOUND, WHAT WE REFUSED, AND THE TAX RATE THAT SURVIVES (2026-09-07, ledger #279)
+### 🔴 DISCOUNTS — CORRECTED: THE PERCENTS WERE DOLLAR AMOUNTS (2026-09-07, ledger #280)
+
+- 🟡 **BUILDER-COMPLETE · 25 owner-test cards, 0 COVERED** · `verify` exit 0 ZERO NET-NEW · **82/82 files, 4581 assertions** · **46 mutants, 46 caught** · **NO MIGRATION · api/ 12/12 · no new permission string**. Board: [discount-config](docs/owner-tests/discount-config-full-surface-test.md).
+- 🔴 **`2f94fbb` RENDERED `$182.50` AS `18250%`.** The rate was divided by `Qty` — which is **1** on all 21 of LAWNS's discount item lines. A comment in `invoiceList.ts` declared `Qty` to be the dollar base, in two places, and **I quoted it as my justification while writing the code that depended on it** ([[R-26]], tech-debt **#211**). **"0 we're sure about" was an artifact of the arithmetic.**
+- 🔴 **MY 96 GREEN ASSERTIONS SHARED THE DEFECT'S PREMISE** — every fixture passed the base *as Qty*, so code and test agreed perfectly. **A fixture that encodes the assumption is not a test of it.** David's specification is now §A: **$50 off $500 reads 10%, explicitly not 5000%** — amount and rate differ by exactly 100×.
+- 🔴 **AND `CD10%`/`CD15%` WERE NOT ON THE SCREEN AT ALL** — two of the three tiers [[R-105]] ruled to seed, absent, because rows were built from the invoice tally and those items have never been used as item LINES. **The axis is now the PRODUCT LIST**, the only source that carries a name.
+- 🔴 **THE POPULATION WAS WRONG TOO: 67 native `DiscountLineDetail` lines against 21 item lines**, and the 67 were counted as "unnamed" while carrying `PercentBased`/`DiscountPercent` outright. Reading them turns up **$15,173 at 20%, $650 at 25%, $250 at 50% — rates NOTHING in her product list names**, the largest money on the page.
+- ⚠️ **A NATIVE LINE CARRIES NO NAME** (all 67 point at `92 · Discounts given`) **while three items publish 10% and two publish 5%** — so a rate corroborates and can never attribute. Every shared rate says so; CD15%, the one rate nothing else publishes, does not.
+- ✏️ **[[R-107]] MINTED · [[R-106]] SUPERSEDED WITHIN A DAY.** Yesterday's rewording was right about the outcome and wrong about the reason: no base was being read at all, `belowSubtotal` was "$1.00 < $3,650" on 19 of 21 lines, and `excludedFromBase` was empty on every row.
+- 🔴 **THE TEST RUNNER WAS REPORTING ✅ ON A FILE THAT WOULD NOT COMPILE** — `esbuild | node` returns the LAST status, and esbuild's error goes to stderr, so node ran an empty program. Fixed with `set -o pipefail`; **a missing summary is now a failure**; proven red-first (tech-debt **#210**, #186's family).
+- ⚠️ **DAVID'S NINE HAND-CHECKED ROWS AND THE WHOLE CENSUS REPRODUCE.** One difference stated, not adopted: **63 distinct customers across the 67 lines (57 percent-based), where his note says 61.**
+- 🔴 **RUN CARD 23 FIRST — ten seconds:** no percent on the page may exceed 100, and the largest should be **15%**.
+
+### ⚠️ DISCOUNTS — THE ORIGINAL BUILD (2026-09-07, ledger #279) — **its arithmetic was WRONG; see #280 above**
 
 - 🟡 **BUILDER-COMPLETE · 22 owner-test cards, 0 COVERED** (21 `owed` · 1 `needs-test`) · ✅ **NO MIGRATION** — every key is jsonb on `business_pricing_config`, which exists · **api/ 12/12, nothing minted** (rides `/api/qbo/invoices` + `/api/qbo/items`) · **no new permission string** · `verify` exit 0 ZERO NET-NEW · **82/82 files, 4554 assertions** · **33 mutants, 33 caught**. Surface: [`DiscountReview.tsx`](packages/cultivar-os/src/components/discounts/DiscountReview.tsx) on **`/discounts`**, above the editor. Logic: [`discountReview.ts`](packages/shared/src/business-logic/discountReview.ts). Board: [discount-config](docs/owner-tests/discount-config-full-surface-test.md).
 - 🔴 **NOT ONE NUMBER ON THE SCREEN IS TYPED INTO THE REPO.** The percent is measured `|amount| ÷ base` per invoice line; the counts, last-used dates and Intuit item ids come from the same read. `summariseInvoices` already had the tally and `DISCOUNT_ITEM_NAMES` already had all three names — so no tenant literal reached `shared`, and it works unedited for the next customer.

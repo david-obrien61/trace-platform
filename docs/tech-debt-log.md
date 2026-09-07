@@ -660,3 +660,68 @@ connection and a several-second round trip against a real company's accounting s
 review, or a shared "capture source" both screens read through, closes both halves at once.
 
 ---
+
+## #210 — 🟢 THE TEST RUNNER REPORTED ✅ ON A FILE THAT WOULD NOT COMPILE (NEW + FIXED 2026-09-07)
+
+**FOUND BY TRIPPING OVER IT, NOT BY LOOKING FOR IT** — a syntax error I had just written was
+reported as `✅ packages/shared/src/quickbooks/invoiceList.test.ts (no summary line)`, and the run
+ended *"All test files pass."*
+
+**THE MECHANISM.** `run-tests.mjs` executes `esbuild … | node` through bash. Bash returns the exit
+status of the **last** command in a pipeline. When esbuild fails it writes its diagnostics to
+**stderr** and **nothing to stdout** — so `node` receives an EMPTY program, runs it successfully,
+and exits 0. The pipeline succeeds; the runner records a pass.
+
+🔴 **THE FILE'S OWN HEADER PROMISED THE OPPOSITE** — *"A file is FAILING if it exits non-zero — that
+includes a bundle/compile error, which is itself a real failure (a test that cannot build is not a
+test that passes)."* The intent was right and the pipeline silently defeated it. **This is the check
+that certifies every other check**: `npm run verify` could go green with a test file that does not
+compile, and tech-debt **#186** (the runner reporting 72 of 74 files and still saying *All test
+files pass*) is the same family — the runner cannot tell a short run from a full one.
+
+**FIXED, RED-FIRST:**
+- `set -o pipefail` on the bash invocation, so the first non-zero status wins.
+- **`(no summary line)` is now a FAILURE, not a footnote.** A file that exits cleanly but prints no
+  `N passed, N failed` either died before the summary or asserts nothing at all — and a suite with
+  zero assertions cannot disagree with anything, which is the one thing a test must be able to do.
+  It used to render as a green tick over a file that proved nothing ([[R-33]]).
+
+**PROVEN BY BREAKING SOMETHING ON PURPOSE:** `sizeLabel.test.ts` was given a deliberate syntax error
+and went **❌ RED**; restored, it went **✅ GREEN (30 passed)**. A check nobody has watched refuse is
+a claim.
+
+⚠️ **#186 IS NOT CLOSED BY THIS.** Its defect is a DISCOVERED-FILE COUNT with nothing to compare it
+against; the fix there is a floor in `quality-baseline.json`. This entry closes the compile half only.
+
+---
+
+## #211 — 🔴 A DECLARATIVE COMMENT ABOUT SOMEONE ELSE'S DATA, BELIEVED AND BUILT ON (NEW 2026-09-07)
+
+`invoiceList.ts` carried, in two places, the sentence *"a discount line's `Qty` is the DOLLAR BASE
+the percentage was taken from, not a count of anything."*
+
+**MEASURED against LAWNS's 1,481-invoice export: `Qty` is 1 on all 21 discount item lines.** Never a
+base. The consequences, all shipped:
+- the review screen rendered **`$182.50` as `18250%`** — `|amount| ÷ 1 × 100`;
+- **"0 we're sure about"** was an artifact: the "rates" only disagreed because they were not rates;
+- `verdicts.belowSubtotal` reported **19 of 21 lines** as discounted on part of the invoice, which
+  fed a books finding told to an owner — it was comparing $1.00 to an invoice subtotal;
+- `excludedFromBase` was **empty on every row**, and that emptiness was the tell nobody read.
+
+🔴 **THE CLASS, NOT THE INSTANCE.** [[R-26]] — a written declaration nobody checked against reality,
+steering a decision — **inside our own corpus, and I quoted the comment as my justification while
+writing the code that depended on it.** The probes then encoded the same premise: every fixture
+passed the base *as Qty*, so code and test agreed perfectly and 96 assertions went green over the
+defect. **A fixture that shares the code's assumption is not a test of it.**
+
+**FIXED HERE:** both comments corrected in place with the measurement; the base is now derived from
+the other charged lines; fixtures put the base where it really lives; a 100×-difference probe exists
+(`discountReview.test.ts` §A) and mutant **T1** reproduces the exact defect and is caught.
+
+⚠️ **THE CLASS IS OPEN.** No cap can read prose. The sweep this wants is: **every comment in the
+corpus that asserts a fact about a customer's DATA** — a field's meaning, a value's range, a
+population's size — **checked against a capture.** Comments about our own code are verifiable by
+reading it; comments about someone else's system are not, and those are the ones that steer builds.
+Related: #61, #145, #180 — the same family, all about our own repo rather than a customer's books.
+
+---

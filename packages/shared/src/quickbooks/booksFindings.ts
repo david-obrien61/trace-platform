@@ -55,6 +55,7 @@
 //   naming what is missing, because a question we cannot answer is a finding, not a silence.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { QboInvoiceRow, DiscountBreakdown } from './invoiceList';
+import { itemPercentOf } from '../business-logic/discountReview';
 import type { QboItemRow } from './itemList';
 import type { CustomerBreakdown } from './customerList';
 import { QBO_DETAIL_TYPE } from './invoiceLineShapes';
@@ -377,58 +378,70 @@ export const BOOKS_RULES: Rule[] = [
     run: () => null,
   },
   {
-    id: 'discounts-that-do-not-work', tier: 'money', shape: 'written-never-read', needs: ['invoices'],
+    id: 'discounts-that-do-not-work', tier: 'money', shape: 'two-sources-disagree', needs: ['invoices', 'items'],
     quoted: '3 military, 2 broken',
-    remeasured: '3 military discount items CONFIRMED. The "broken" count was WRONG — see the rule below: a base BELOW the invoice subtotal is the INTENT, not a defect.',
+    remeasured: 'RETIRED AND REPLACED 2026-09-07 — BOTH the original rule and its 2026-09-06 rewording rested on a base that was never read. See below.',
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    // ✏️ CORRECTED 2026-09-07 (David). THIS RULE WAS SCORING THE INTENT AS A DEFECT.
+    // ✏️ REWRITTEN 2026-09-07, AND THIS SUPERSEDES YESTERDAY'S REWORDING OF THE SAME RULE.
     //
-    // It read: *"5 discount items did not take their percentage off the whole invoice — they were
-    // worked out on part of it, so some customers got less off than the name suggests."* That is
-    // `verdicts.belowSubtotal`, and **a base below the invoice subtotal is EXACTLY what a
-    // tree-only discount looks like.** A discount comes off the GOODS and never off delivery,
-    // placement, the trip charge or an add-on — the same rule this platform enforces at checkout
-    // (D-39, `tierPricing.ts`: the tier applies to `kind:'goods'` and services pass through at
-    // full price). So the old finding told an owner that the correct behaviour was broken, and
-    // its `needsAnswer` then offered to "fix" it — i.e. to start discounting her own labour.
+    // 🔴 THE ORIGINAL RULE FIRED ON `verdicts.belowSubtotal`, AND THAT VERDICT WAS AN ARTIFACT.
+    // It compared a discount line's `Qty` — believed to be the dollar base — against the invoice
+    // subtotal. MEASURED against LAWNS's 1,481-invoice export: **`Qty` is 1 on every one of the 21
+    // discount item lines.** So the comparison was "$1.00 is less than $3,650", which is trivially
+    // true, and the rule reported **19 of 21 lines as computed on part of the invoice**. Its
+    // companion field `excludedFromBase` — which was supposed to NAME the line accounting for the
+    // gap — was **empty on every row**, and that emptiness was the tell nobody read.
     //
-    // 🔴 THE TELL WAS ALREADY IN THE DATA AND THE RULE IGNORED IT. `excludedFromBase` names the
-    // line whose amount accounts for the gap — the delivery, the placement. A gap with a NAME on
-    // it is a deliberate exclusion, not a miscalculation.
+    // ⚠️ SO YESTERDAY'S CORRECTION WAS RIGHT ABOUT THE OUTCOME AND WRONG ABOUT THE REASON. It said
+    // *"a base below the subtotal is the tree-only rule working"*; in fact no base was being read
+    // at all. Not accusing an owner of a defect was the right call either way — but a rule kept on
+    // a false premise is a rule that will mislead again, so it is replaced rather than reworded.
     //
-    // WHAT STILL FIRES, and why the reword is not simply "drop it":
-    //   · `noBase`        — the discount does not record what it was taken from. THE finding: an
-    //                       amount nobody can check, which is the case the reword is FOR.
-    //   · `aboveSubtotal` — the base exceeded the whole invoice. That is not tree-only and it is
-    //                       not anything else either; a percentage of more than everything is
-    //                       wrong in any reading. Kept, worded separately, and NOT folded in with
-    //                       the unstated-base case, because the two need different answers.
-    // `belowSubtotal` is now counted and reported as CORRECT — visibly, so the next reader does
-    // not re-file it as a defect.
+    // 🔴 WHAT REPLACES IT IS MEASURED, NOT INFERRED. `DiscountLineDetail` carries `PercentBased`
+    // and `DiscountPercent`, so on 67 of LAWNS's 88 discount lines **the rate is stated and there
+    // is nothing to derive.** The finding is now: **a rate her books granted that no item in her
+    // product list names** — on LAWNS, 20% on 4 lines worth $15,173, 25% once and 50% once, none
+    // of them a named programme. That is a real question with a real number, and it needs no
+    // assumption about what a discount was taken off.
+    //
+    // ⚠️ FIXED-DOLLAR DISCOUNTS ARE REPORTED AS MONEY AND NEVER GIVEN A PERCENT (6 lines,
+    // $1,162.03) — the line does not say what it was a percentage of, and inventing a base is the
+    // whole class of error this rule was rewritten for.
     // ══════════════════════════════════════════════════════════════════════════════════════════
     run: (x) => {
       if (!x.discounts) return null;
-      // REUSES `summariseInvoices`' own DiscountBreakdown rather than re-deriving it (§6 r8).
-      const rows = x.discounts.byName;
-      const unstated = rows.filter(r => r.verdicts.noBase > 0);
-      const overRun  = rows.filter(r => r.verdicts.aboveSubtotal > 0);
-      const treeOnly = rows.filter(r => r.verdicts.belowSubtotal > 0 && r.verdicts.noBase === 0 && r.verdicts.aboveSubtotal === 0);
-      const flagged = [...new Set([...unstated, ...overRun])];
-      const clause = [
-        unstated.length ? `${plural(unstated.length, 'discount item does', 'discount items do')} not record what the percentage was taken from, so the amount cannot be checked` : '',
-        overRun.length ? `${plural(overRun.length, 'was', 'were')} worked out on MORE than the whole invoice, which cannot be right in any reading` : '',
-      ].filter(Boolean).join('; and ');
-      const treeClause = treeOnly.length
-        ? ` ${plural(treeOnly.length, 'discount item takes', 'discount items take')} their percentage off part of the invoice rather than all of it — that is CORRECT, and it is how a discount is meant to work: it comes off the trees and never off delivery, placement or a trip charge.`
-        : '';
+      const rates = x.discounts.byRate;
+      const fixed = x.discounts.fixedDollar;
+      if (rates.length === 0 && fixed.lines === 0) return null;
+
+      // 🔴 THE PUBLISHED RATE IS READ BY `itemPercentOf`, NOT BY A SECOND COPY OF ITS RULE.
+      // The first draft of this rule re-implemented it inline — negative fraction, `< 1` guard,
+      // ×100 — which is the same OPERATION in two places (§6 r8), and the copy that drifts is
+      // never the one you are looking at. That rule is exactly where the "18250%" family of
+      // errors lives, so it gets one home and one set of probes.
+      const published = (x.items ?? [])
+        .map(i => itemPercentOf({ id: i.id, name: i.name, description: i.description, unitPrice: i.unitPrice }))
+        .filter((p): p is number => p !== null);
+      const unnamed = rates.filter(r => !published.some(p => Math.abs(p - r.pct) < 0.005));
+      const unnamedMoney = unnamed.reduce((s, r) => s + r.amountTotal, 0);
+      const unnamedLines = unnamed.reduce((s, r) => s + r.lines, 0);
+
+      const list = unnamed
+        .sort((a, b) => b.amountTotal - a.amountTotal)
+        .map(r => `${r.pct}% (${plural(r.lines, 'time', 'times')}, ${money(r.amountTotal)})`)
+        .join(', ');
+      const fixedClause = fixed.lines === 0 ? ''
+        : ` ${plural(fixed.lines, 'discount was', 'discounts were')} given as a flat amount rather than a percentage, ${money(fixed.amountTotal)} in total — those are reported as money because the invoice does not say what they were a percentage of.`;
+
       return {
-        matched: flagged.length, of: rows.length, noun: 'discount items in use',
-        sentence: flagged.length === 0
-          ? `Every discount item in your books records what it was worked out from, and none was taken on more than the invoice was worth.${treeClause}`
-          : `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.${treeClause}`,
-        needsAnswer: flagged.length === 0 ? undefined : {
-          question: 'These discount items do not record what they were worked out from. Fix them, or stop using them?',
-          options: ['Fix them in QuickBooks', 'Retire them — stop offering these', 'Leave them as they are for now'],
+        matched: unnamed.length, of: rates.length, noun: 'discount rates used on invoices',
+        sentence: unnamed.length === 0
+          ? `Every discount rate on your invoices matches a product in your list, so each one has a name.${fixedClause}`
+          : `${plural(unnamedLines, 'discount was', 'discounts were')} given at ${list} — ${unnamed.length === 1 ? 'a rate' : 'rates'} that nothing in your product list names, ${money(unnamedMoney)} in total. Discounts at a named rate are not counted here.${fixedClause}`,
+        value: unnamed.length === 0 ? null : unnamedMoney,
+        needsAnswer: unnamed.length === 0 ? undefined : {
+          question: 'These discounts were given at rates none of your products name. Add them as discount types, or were they one-offs?',
+          options: ['Add them as discount types', 'They were one-offs — leave them', 'Leave them as they are for now'],
         },
       };
     },

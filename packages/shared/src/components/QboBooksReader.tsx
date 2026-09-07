@@ -1236,36 +1236,79 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 2px' }}>
             What each discount was calculated on
           </p>
+          {/* ✏️ REWRITTEN 2026-09-07. This block used to say "the base is the Qty carried on the
+              discount line", and print four verdict columns derived from it. MEASURED: `Qty` is 1
+              on every discount item line in these books, so the base was never read and every
+              verdict was an artifact of comparing $1.00 to an invoice subtotal. The two tables
+              below separate what QuickBooks STATES from what we DERIVE, and say which is which. */}
           <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px', lineHeight: 1.5 }}>
-            The <strong>base</strong> is the Qty carried on the discount line. Compared against the
-            invoice&apos;s own subtotal: <strong>equal</strong> means the discount covered everything on
-            that invoice, <strong>below</strong> means something was left out — and the last column
-            names what.
+            Discounts arrive two ways, and only one of them states its own rate.
+          </p>
+
+          <p style={{ fontSize: '0.75rem', color: DARK, margin: '10px 0 4px', fontWeight: 700 }}>
+            Rates QuickBooks recorded — stated, not worked out
+          </p>
+          {invBreak.discounts.byRate.length === 0 ? (
+            <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 10px' }}>None in this history.</p>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 10 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+                <thead><tr style={{ background: '#f9fafb' }}>
+                  {['Rate', 'Times used', 'Total', 'Customers', 'First', 'Last'].map(h => <th key={h} style={head}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {invBreak.discounts.byRate.map(r => (
+                    <tr key={r.pct} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td style={{ ...cell, fontWeight: 700 }}>{r.pct}%</td>
+                      <td style={cell}>{r.lines.toLocaleString()}</td>
+                      <td style={{ ...cell, fontWeight: 700 }}>${r.amountTotal.toLocaleString()}</td>
+                      <td style={cell}>{r.customers.toLocaleString()}</td>
+                      <td style={cell}>{r.first ?? '—'}</td>
+                      <td style={cell}>{r.last ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {invBreak.discounts.fixedDollar.lines > 0 && (
+            <p style={{ fontSize: '0.75rem', color: AMBER, margin: '0 0 10px', lineHeight: 1.5 }}>
+              {invBreak.discounts.fixedDollar.lines.toLocaleString()} more were given as a flat
+              amount rather than a percentage, ${invBreak.discounts.fixedDollar.amountTotal.toLocaleString()} in
+              total. Those are shown as money because the invoice does not say what they were a
+              percentage of.
+            </p>
+          )}
+
+          <p style={{ fontSize: '0.75rem', color: DARK, margin: '14px 0 4px', fontWeight: 700 }}>
+            Discounts taken as a product line — the rate is worked out, not stated
+          </p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px', lineHeight: 1.5 }}>
+            These carry a name but no rate, so the rate below is <strong>derived</strong>: what was
+            taken off, divided by the other charged lines on the same invoice. It reads low when
+            the discount covered only part of an invoice, which is normal.
           </p>
           {invBreak.discounts.byName.length === 0 ? (
             <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 10px' }}>
-              No discount lines in this history.
+              No named discount lines in this history.
             </p>
           ) : (
             <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 10 }}>
               <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
                 <thead><tr style={{ background: '#f9fafb' }}>
-                  {['Discount', 'Lines', 'Base = subtotal', 'Base below', 'Base above', 'No base', 'Excluded from the base'].map(h => <th key={h} style={head}>{h}</th>)}
+                  {['Discount', 'Lines', 'At $0', 'Rate could be worked out', 'Derived rates', 'Last used'].map(h => <th key={h} style={head}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {invBreak.discounts.byName.map(d => (
                     <tr key={d.itemName} style={{ borderTop: '1px solid #f3f4f6' }}>
                       <td style={cell}>{d.itemName}</td>
                       <td style={cell}>{d.lines.toLocaleString()}</td>
-                      <td style={{ ...cell, fontWeight: 700 }}>{d.verdicts.equalsSubtotal.toLocaleString()}</td>
-                      <td style={{ ...cell, fontWeight: 700, color: d.verdicts.belowSubtotal ? AMBER : DARK }}>{d.verdicts.belowSubtotal.toLocaleString()}</td>
-                      <td style={cell}>{d.verdicts.aboveSubtotal.toLocaleString()}</td>
-                      <td style={{ ...cell, color: d.verdicts.noBase ? AMBER : GRAY }}>{d.verdicts.noBase.toLocaleString()}</td>
-                      <td style={{ ...cell, color: d.excludedFromBase.length ? DARK : '#9ca3af' }}>
-                        {d.excludedFromBase.length === 0
-                          ? '—'
-                          : d.excludedFromBase.slice(0, 3).map(e => `${e.itemName} (${e.times})`).join(', ')}
+                      <td style={{ ...cell, color: d.zeroAmountLines ? AMBER : GRAY }}>{d.zeroAmountLines.toLocaleString()}</td>
+                      <td style={cell}>{d.withBase.toLocaleString()}</td>
+                      <td style={{ ...cell, fontWeight: 700 }}>
+                        {d.percents.length === 0 ? '—' : d.percents.map(x => `${x.pct}% (${x.lines})`).join(', ')}
                       </td>
+                      <td style={cell}>{d.mostRecent ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
