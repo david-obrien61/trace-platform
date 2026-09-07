@@ -31,7 +31,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 1 of 23 covered** (20 `owed` · 2 `needs-test`) — CARD 5 proven live 2026-09-07.
+**Board: 2 of 24 covered** (20 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
@@ -658,19 +658,59 @@ severity from ingest leaking.
 
 ---
 
-## CARD 14 — 🔴 the cross-tenant negative control
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
-As the **LAWNS** owner, call the ingest with **Test Dave's** business id
-(`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`).
+## CARD 14a — 🔴 cross-tenant READ is refused
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-07 (David, live)
+> ✅ **COVERED, INCIDENTALLY, AND THE EVIDENCE IS EXACT.** Signed in as
+> **`95c1b2e9`** — verified against the catalog as the OWNER of Test Dave's
+> (`f7ec5d67`) and **not a member of LAWNS in any role** — the **preview** against LAWNS returned
+> **403**. Cross-tenant read refusal is live.
+
+Signed in as the owner of one tenant, call **preview** with a **different** tenant's business id.
 
 1. **403.**
-2. Then query Test Dave's: its inventory row count is unchanged (130, or whatever CARD 5 left).
+2. Nothing is read: the response carries no counts, no items, no collision list.
 
-**PASS:** refused, and Test Dave's is untouched.
-🔴 **AC-3 is absolute — cross-vertical resolution returns no-access, never a wrong-tenant record.**
+**PASS:** refused.
+🔴 **THE GATE HERE IS MEMBERSHIP, NOT OWNERSHIP** — `handleItemsPreview` checks
+`callerCan(auth, businessId, 'inventory:read')`, and a caller with no membership row for that
+business fails it. **Expect `code: 'FORBIDDEN'`.** ⚠️ *If you ever see `OWNER_ONLY` from the
+preview, something has been re-ordered — that code belongs to the write path.*
+**FAIL:** a 200, or any response body carrying the other tenant's counts.
+
+---
+
+## CARD 14b — 🔴 cross-tenant WRITE is refused. **THIS IS THE ONE THAT MATTERS.**
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+> ⚠️ **CARD 14a DOES NOT COVER THIS, AND THE DIFFERENCE IS THE WHOLE POINT.** They are different
+> endpoints refused by different gates: the preview is stopped by **membership** (`callerCan` →
+> `FORBIDDEN`), the ingest by **ownership** (`refuseUnlessOwner` → `callerIsBusinessOwner` →
+> `OWNER_ONLY`). A read leaking is bad; **a write landing in the wrong tenant is unrecoverable in a
+> way a read never is.** The read door being shut says nothing about the write door.
+
+🔴 **YOU CAN RUN THIS FROM THE SEAT YOU ARE ALREADY IN — no account switch needed.** Still signed in
+as Test Dave's owner (`95c1b2e9`), call **ingest** against **LAWNS**:
+
+```js
+const bad = await fetch('/api/qbo/items/ingest?business_id=ed2e5933-45dc-4b9b-a331-ddfd125e7a74',
+  { method: 'POST', headers: { Authorization: T } });
+console.log(bad.status, await bad.json());
+```
+
+1. **403**, with **`code: 'OWNER_ONLY'`** — not `FORBIDDEN`, because the owner gate runs first.
+2. LAWNS is untouched: re-run CARD 6's fingerprint query and it is unchanged.
+3. No run id was minted — there is nothing to undo.
+
+**PASS:** 403 `OWNER_ONLY`, LAWNS fingerprint identical.
+🔴 **AC-3 is absolute — cross-tenant resolution returns no-access, never a wrong-tenant record.**
 This runs against the *live* endpoint rather than a probe because `callerIsBusinessOwner` compares
 `businesses.owner_id`, and the only way to know it is wired is to be refused by it.
-**FAIL:** a 200. Stop and do not run anything else.
+
+⚠️ **SAID PLAINLY BECAUSE IT IS A REAL COST, NOT A THEORETICAL ONE: if the guard is broken, this
+call runs a full import on LAWNS.** It is undoable — writes are held, so the undo is open — but you
+would be doing CARD 6 by accident, under a run id the response gives you. Take the fingerprint
+baseline first and you are covered either way.
+**FAIL:** a 200. Stop, note the run id, and undo it before anything else.
 
 ---
 
