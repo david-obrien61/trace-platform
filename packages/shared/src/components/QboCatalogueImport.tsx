@@ -52,13 +52,18 @@ interface AdaptedCounts {
   collidingItems: number; collisionsWithPriceDifference: number;
 }
 interface CountedRow { id: string; name: string; size: string | null; qty: number }
+/** The combined report. `customers` is #278's shape and `items` is this build's; neither is
+ *  re-declared here — a second copy of a shape is the thing that drifts. */
 interface Report {
   ok?: boolean;
+  customers?: { ok?: boolean; created?: number; reconciled?: number; deleted?: number; error?: string } | null;
+  items?: Report | null;
+  stoppedAt?: 'customers' | 'items' | 'create' | 'retire' | null;
   adapted?: { counts: AdaptedCounts; collisions: Collision[] };
   wouldRetire?: number; wouldCreate?: number;
   countedRowsBeingRetired?: CountedRow[];
   runId?: string; created?: number; retired?: number;
-  stoppedAt?: 'create' | 'retire' | null; undoable?: boolean; committed?: boolean;
+  undoable?: boolean; committed?: boolean;
   inventoryDeleted?: number; customersDeleted?: number; unretired?: number;
   leftovers?: string[];
   receiptsBefore?: number; receiptsAfter?: number;
@@ -130,11 +135,15 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
     if (step === 'import')  { setRun(null); setUndone(null); }
     if (step === 'undo')    { setUndone(null); }
     try {
+      // 🔴 `books/*`, NOT `items/*` — ONE run id over customers AND items (David, 2026-09-07).
+      // Two run ids would mean two undos in the right order, and the failure case is worse than the
+      // inconvenience: items wipe cleanly, customers hit a RESTRICT because she rang up an order,
+      // and she is left with half a catalogue and a full customer list.
       const path =
         step === 'preview' ? `preview?business_id=${businessId}`
         : step === 'import' ? `ingest?business_id=${businessId}`
         : `undo?business_id=${businessId}&run_id=${runId}`;
-      const res = await fetch(`/api/qbo/items/${path}`, {
+      const res = await fetch(`/api/qbo/books/${path}`, {
         method: step === 'preview' ? 'GET' : 'POST',
         headers: await authHeaders(),
       });
@@ -159,17 +168,18 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
   // scoped to nothing (the neighbouring panels take the same `string | null` from Settings).
   if (!isOwner || !businessId) return null;
 
-  const counts = plan?.adapted?.counts;
-  const collisions = plan?.adapted?.collisions ?? [];
+  const counts = plan?.items?.adapted?.counts;
+  const collisions = plan?.items?.adapted?.collisions ?? [];
   const money6 = collisions.filter(c => c.pricesDiffer);
-  const canImport = !!plan?.ok && !run?.committed && (plan.wouldCreate ?? 0) > 0;
+  const canImport = !!plan?.ok && !run?.committed && ((plan.items?.wouldCreate ?? 0) > 0 || (plan.customers?.created ?? 0) > 0);
 
   return (
     <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
-      <h4 style={{ margin: '0 0 .25rem', color: DARK, fontSize: '1rem' }}>Your product list from QuickBooks</h4>
+      <h4 style={{ margin: '0 0 .25rem', color: DARK, fontSize: '1rem' }}>Your customers and product list from QuickBooks</h4>
       <p style={{ margin: '0 0 .75rem', color: GRAY, fontSize: '.85rem', lineHeight: 1.5 }}>
-        Replaces the catalogue in Cultivar with the products in your QuickBooks company — names,
-        sizes and prices as they are entered there. Your old products are <strong>hidden, not
+        Brings your customers and your product list across from QuickBooks in one go — names, sizes
+        and prices as they are entered there. <strong>Customers first, then products</strong>, because an
+        order needs somebody to belong to. Your old products are <strong>hidden, not
         deleted</strong>. Nothing is written until you press Import, and while QuickBooks writes are
         switched off you can <strong>undo the whole thing</strong> and start again as many times as
         you like.
@@ -182,7 +192,7 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
           style={{ minHeight: 48, padding: '0 1.1rem', background: '#fff', color: GREEN,
                    border: `2px solid ${GREEN}`, borderRadius: 6, fontWeight: 700,
                    cursor: busy ? 'wait' : 'pointer' }}>
-          {busy === 'preview' ? 'Reading QuickBooks…' : 'Preview your product list'}
+          {busy === 'preview' ? 'Reading QuickBooks…' : 'Preview your books'}
         </button>
         <button
           onClick={() => void call('import')}
@@ -192,12 +202,15 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
                    border: 'none', borderRadius: 6, fontWeight: 700,
                    cursor: busy ? 'wait' : canImport ? 'pointer' : 'not-allowed' }}>
           {busy === 'import' ? 'Importing…'
-            : plan ? `Import ${plan.wouldCreate ?? 0} products` : 'Import'}
+            : plan ? `Import ${plan.customers?.created ?? 0} customers and ${plan.items?.wouldCreate ?? 0} products` : 'Import'}
         </button>
         {/* 🔴 THE UNDO APPEARS ONLY ONCE A RUN EXISTS. Before that there is nothing to take back,
             and a permanently-visible undo invites a press that can only error. */}
         {/* Shown for a run this page just made OR one recovered from the data after a refresh. */}
-        {runId && (run?.committed || (!run && recovered)) && (
+        {/* Offered after a COMMITTED run, after a run that stopped having written something, and
+            for a run recovered from the data after a refresh. A half-landed run is exactly when she
+            most needs it. */}
+        {runId && (run?.committed || run?.stoppedAt === 'items' || (!run && recovered)) && (
           <button
             onClick={() => void call('undo')}
             disabled={busy !== null}
@@ -238,23 +251,27 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
             Read <strong>{counts.readIn}</strong> items from QuickBooks.{' '}
             <strong>{counts.categories}</strong> are category folders, not products, and are skipped.{' '}
             That leaves <strong>{counts.sellable}</strong> products.<br />
-            This will <strong style={{ color: GREEN }}>create {plan.wouldCreate}</strong> and{' '}
-            <strong style={{ color: AMBER }}>hide {plan.wouldRetire}</strong> of your current rows.<br />
+            This will <strong style={{ color: GREEN }}>create {plan.items?.wouldCreate}</strong> and{' '}
+            <strong style={{ color: AMBER }}>hide {plan.items?.wouldRetire}</strong> of your current rows.<br />
             Sizes: <strong>{counts.sized}</strong> read, <strong>{counts.notStated}</strong> with no
             size given, <strong>{counts.couldNotRead}</strong> we could not read.
+            {plan?.customers && (
+              <><br />Customers: <strong style={{ color: GREEN }}>{plan.customers.created ?? 0}</strong> new
+              {typeof plan.customers.reconciled === 'number' && <>, <strong>{plan.customers.reconciled}</strong> already here and left alone</>}.</>
+            )}
           </p>
 
           {/* 🔴 THE COUNTED ROWS ABOUT TO BE HIDDEN — LISTED, NEVER SUMMARISED. A count is the one
               number nobody can recreate, so if one is about to disappear from the grid it is named
               here rather than left as a figure to go looking for. */}
-          {(plan.countedRowsBeingRetired?.length ?? 0) > 0 && (
+          {(plan.items?.countedRowsBeingRetired?.length ?? 0) > 0 && (
             <div style={{ marginBottom: '.9rem', padding: '.75rem', background: '#fffbeb',
                           border: `1px solid ${AMBER}`, borderRadius: 6 }}>
               <strong style={{ color: AMBER, fontSize: '.85rem' }}>
-                {plan.countedRowsBeingRetired!.length} row{plan.countedRowsBeingRetired!.length === 1 ? '' : 's'} you have counted will be hidden
+                {plan.items!.countedRowsBeingRetired!.length} row{plan.items!.countedRowsBeingRetired!.length === 1 ? '' : 's'} you have counted will be hidden
               </strong>
               <ul style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem', color: AMBER, fontSize: '.82rem' }}>
-                {plan.countedRowsBeingRetired!.map(r => (
+                {plan.items!.countedRowsBeingRetired!.map(r => (
                   <li key={r.id}>{r.name}{r.size ? ` · ${r.size}` : ''} — <strong>{r.qty}</strong> on hand</li>
                 ))}
               </ul>
@@ -299,7 +316,8 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
           {run.committed ? (
             <>
               <strong style={{ color: GREEN, fontSize: '.9rem' }}>
-                Imported. {run.created} products created, {run.retired} of your old rows hidden.
+                Imported. {run.customers?.created ?? 0} customers and {run.items?.created} products created,{' '}
+                {run.items?.retired} of your old rows hidden.
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
                 Have a look at your Inventory screen. If it is not what you wanted, press{' '}
@@ -313,13 +331,19 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
               {/* 🔴 A STOPPED RUN, NAMED. `ok` is false here and says so on its own — a run that
                   wrote nothing must never read as a success (the defect this build shipped once). */}
               <strong style={{ color: RED, fontSize: '.9rem' }}>
-                Nothing was imported{run.stoppedAt ? ` — it stopped while ${run.stoppedAt === 'create' ? 'creating the new products' : 'hiding the old ones'}` : ''}.
+                {run.stoppedAt === 'customers'
+                  ? 'Nothing was imported — it stopped on the customers.'
+                  : run.stoppedAt === 'items'
+                    ? 'Your customers were imported. Your product list was not.'
+                    : `Nothing was imported${run.stoppedAt ? ` — it stopped while ${run.stoppedAt === 'create' ? 'creating the new products' : 'hiding the old ones'}` : ''}.`}
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
                 {run.error ?? 'The import did not finish.'}
+                {run.stoppedAt === 'customers' && <> Your product list was not touched at all.</>}
+                {run.stoppedAt === 'items' && <> Both halves carry the same run, so <strong>one Undo removes everything this run made</strong> — the customers included.</>}
                 {run.stoppedAt === 'create' && <> Your current catalogue is untouched — nothing was hidden.</>}
-                {run.stoppedAt === 'retire' && (run.created ?? 0) > 0 &&
-                  <> <strong>{run.created} new rows did land</strong>, so your catalogue has both lists in it. Press Undo to remove them.</>}
+                {run.stoppedAt === 'retire' && (run.items?.created ?? 0) > 0 &&
+                  <> <strong>{run.items?.created} new rows did land</strong>, so your catalogue has both lists in it. Press Undo to remove them.</>}
               </p>
             </>
           )}
@@ -339,10 +363,11 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
           ) : undone.ok ? (
             <>
               <strong style={{ color: GREEN, fontSize: '.9rem' }}>
-                Undone. {undone.inventoryDeleted} imported products removed, {undone.unretired} of your own rows brought back.
+                Undone. {undone.items?.inventoryDeleted} imported products and {undone.customers?.deleted ?? 0} imported
+                customers removed, {undone.items?.unretired} of your own rows brought back.
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
-                Your receipts ({undone.receiptsAfter}) and deliveries ({undone.deliveriesAfter}) are
+                Your receipts ({undone.items?.receiptsAfter}) and deliveries ({undone.items?.deliveriesAfter}) are
                 exactly as they were — the undo cannot reach them. You can preview and import again.
               </p>
             </>
@@ -352,9 +377,9 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
                 {undone.error}
               </p>
-              {(undone.leftovers?.length ?? 0) > 0 && (
+              {(undone.items?.leftovers?.length ?? 0) > 0 && (
                 <ul style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem', color: RED, fontSize: '.82rem' }}>
-                  {undone.leftovers!.map(l => <li key={l}>{l}</li>)}
+                  {undone.items!.leftovers!.map(l => <li key={l}>{l}</li>)}
                 </ul>
               )}
             </>

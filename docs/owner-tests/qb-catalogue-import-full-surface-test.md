@@ -944,6 +944,24 @@ creates ~1,294 rows, which means step 1's wipe did not land and CARD 10 lied.
 
 # PART TWO — THE SURFACE (cards 24–33)
 
+> 🔴 **REVISED 2026-09-07 — THE BUTTON IS NOW ONE BUTTON OVER BOTH HALVES.** David:
+> *"I need ONE button over customers and items before Tuesday, not two loops."* The panel calls
+> `/api/qbo/books/*`, which mints **one run id**, runs **customers then items**, and undoes
+> **items then customers** against that same id. So every card below reads slightly differently
+> from the day it was written, and the differences are called out **in the card** rather than left
+> for you to notice:
+> · **CARD 25** now also reports the customer counts.
+> · **CARD 28**'s success line names customers AND products.
+> · **CARD 33** gains a fourth state — *stopped on the customers* — and its `items` state now says
+>   the customers DID land and one Undo removes both.
+> · **CARDS 24, 26, 27, 29, 30, 31, 32, 34 are unchanged in substance.**
+>
+> ⚠️ **AND THE RISK THAT IS NOT PROVEN EITHER WAY, STATED BEFORE YOU PRESS IT: two Intuit walks now
+> happen in ONE serverless invocation** — 1,946 customers and 685 items. Nothing has run that
+> combination. **If it times out, the answer is two buttons again, not a different algorithm** —
+> and it shows up on PREVIEW first, before anything is written, which is why Preview is the first
+> thing you press.
+
 > 🔴 **CARDS 1–23 PROVED THE MECHANISM THROUGH CONSOLE CALLS. THAT IS NOT THE PATH.**
 > David: *"I proved the endpoints via console calls — a work-around, not the path. The button
 > builds the request, holds the run id, renders the counts and decides when to offer the undo, and

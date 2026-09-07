@@ -18,6 +18,9 @@
  *   GET  /api/qbo/items/preview      → _route=items-preview   (READ-ONLY — plans the catalogue import, writes nothing)
  *   POST /api/qbo/items/ingest       → _route=items-ingest    (WRITES business_inventory ONLY — creates + retires)
  *   POST /api/qbo/items/undo         → _route=items-undo      (DELETES this run's rows, un-retires what it hid)
+ *   GET  /api/qbo/books/preview      → _route=books-preview   (READ-ONLY — plans BOTH halves, writes nothing)
+ *   POST /api/qbo/books/ingest       → _route=books-ingest    (customers THEN items, ONE run id)
+ *   POST /api/qbo/books/undo         → _route=books-undo      (items THEN customers, that one run id)
  *   GET  /api/qbo/customers/preview  → _route=customers-preview (READ-ONLY — plans the customer import, writes nothing)
  *   POST /api/qbo/customers/ingest   → _route=customers-ingest  (WRITES `customers` ONLY — creates, and reconciles tax exemption)
  *   POST /api/qbo/customers/undo     → _route=customers-undo    (DELETES this run's customers; RESTRICT-aware, reports what it could not remove)
@@ -1119,6 +1122,160 @@ async function handleCustomersUndo(req: any, res: any) {
   }
 }
 
+// ─── THE BOOKS: customers AND items, one run id, one undo ─────────────────────
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 ONE BUTTON, ONE RUN ID, BECAUSE THAT IS WHAT THE UNDO NEEDS (David, 2026-09-07).
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// *"Two run ids means Lauren undoes twice in the right order, and the failure case is worse than
+// the inconvenience: items wipe cleanly, customers hit a RESTRICT because she rang up an order, and
+// she is left with half a catalogue and a full customer list. Two mechanisms, one mental model, and
+// the mismatch is hers to sort out."*
+//
+// 🔴 THE RUN ID MUST BE MINTED HERE, WHICH IS WHY THIS IS A SERVER ROUTE AND NOT THE PANEL CALLING
+// TWO ENDPOINTS IN SEQUENCE. Both ingests deliberately refuse a client-supplied run id — *"a
+// client-supplied one would let a caller stamp this run with an EARLIER run's id, and anything
+// keyed on it would then act on two runs at once."* A browser cannot be the thing that decides
+// which run these rows belong to. So: one mint, both halves, one report.
+//
+// ⚠️ NOT ONE LINE OF `customerImportWriter.ts` IS EDITED (R-62 — one writer per file). Its
+// `commitCustomerImport(db, businessId, adaptation, runId)` already TAKES a run id rather than
+// minting one, and `undoCustomerImport` is exported. Both are consumed as functions. The
+// coordination David asked for is a contract (tech-debt #207), and this honours it from the outside.
+//
+// 🔴 ORDER: CUSTOMERS FIRST, ITEMS SECOND. David's reason — *"an order rung against an imported
+// item needs a customer to point at."* The failure asymmetry agrees: customers-with-no-catalogue is
+// re-runnable, while a catalogue whose orders cannot attach to anyone is not.
+//
+// 🔴 AND NO AUTO-ROLLBACK (his ruling). If items fail after customers landed, this STOPS, reports
+// exactly what landed under a run id the caller now holds, and leaves the undo to a press. An
+// automatic rollback that itself partly fails leaves a state nobody chose — and the customer half
+// genuinely can fail halfway, because a customer with an order cannot be deleted.
+//
+// ⚠️ TWO INTUIT WALKS IN ONE INVOCATION (1,946 customers + 685 items). That is the real risk here
+// and it is stated rather than discovered: if this times out, the split is two buttons again, not a
+// different algorithm. The PREVIEW walks both too, so a timeout shows up there first — before
+// anything is written.
+
+async function handleBooksPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  if (!(await callerCan(auth, businessId, 'customers:read')) || !(await callerCan(auth, businessId, 'inventory:read'))) {
+    console.log('[TRACE:QBBOOKS] preview REFUSED — caller lacks customers:read + inventory:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s books', code: 'FORBIDDEN' });
+  }
+  const cust = await walkCustomersForImport(req, res);
+  if (!cust) return;
+  const walked = await walkItems(req, res);
+  if (!walked) return;
+  try {
+    const customers = await previewCustomerImport(supabase(), businessId, adaptCustomers(cust.bodies));
+    const items     = await previewItemImport(supabase(), businessId, walked.items);
+    return res.status(200).json({
+      ok: customers.ok !== false && items.ok !== false,
+      customers, items, committed: false,
+      realm_id: walked.realmId, queried_at: walked.queriedAt,
+    });
+  } catch (e: any) {
+    console.log('[TRACE:QBBOOKS] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the import: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+async function handleBooksIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  // R-80 plus EVERY verb both halves need. An AND throughout — owner-ness is additional, never a
+  // bypass, and asking for fewer verbs than the run performs is a gate narrower than the write.
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBBOOKS', res))) return;
+  for (const verb of ['customers:create', 'customers:update', 'inventory:create']) {
+    if (!(await callerCan(auth, businessId, verb))) {
+      console.log('[TRACE:QBBOOKS] ingest REFUSED — caller lacks ' + verb, { businessId });
+      return res.status(403).json({ error: `Not authorized (${verb}) to import this business's books`, code: 'FORBIDDEN' });
+    }
+  }
+  const cust = await walkCustomersForImport(req, res);
+  if (!cust) return;
+  const walked = await walkItems(req, res);
+  if (!walked) return;
+
+  const runId = randomUUID();                       // ONE id, minted once, spanning both halves.
+  let customers: any = null;
+  try {
+    customers = await commitCustomerImport(supabase(), businessId, adaptCustomers(cust.bodies), runId);
+  } catch (e: any) {
+    // Nothing else ran. The catalogue is untouched and there is nothing to undo.
+    console.log('[TRACE:QBBOOKS] STOPPED in customers', { businessId, runId, message: e?.message });
+    return res.status(409).json({
+      ok: false, runId, stoppedAt: 'customers', customers: null, items: null,
+      error: `The customer half failed and nothing else was attempted: ${e?.message ?? 'unknown error'}. Your product list is untouched.`,
+    });
+  }
+
+  let items: any = null;
+  try {
+    items = await commitItemImport(supabase(), businessId, walked.items, runId, process.env[QBO_PUSH_HOLD_ENV]);
+  } catch (e: any) {
+    items = { ok: false, error: e?.message ?? 'unknown error', stoppedAt: 'create', created: 0, retired: 0 };
+  }
+
+  // 🔴 THE RUN IS OK ONLY IF BOTH HALVES ARE. A partial run reports what landed and hands back the
+  // run id — the undo is a press, never automatic.
+  const ok = customers?.ok !== false && items?.ok === true;
+  if (!ok) {
+    console.log('[TRACE:QBBOOKS] STOPPED after customers', { businessId, runId, created: items?.created });
+    return res.status(409).json({
+      ok: false, runId, stoppedAt: 'items', customers, items,
+      error: `Your customers were imported but the product list was not: ${items?.error ?? 'it stopped'}. Both halves carry the same run, so one Undo removes everything this run made.`,
+    });
+  }
+  console.log('[TRACE:QBBOOKS] ingest ok', { businessId, runId, customers: customers?.created, items: items?.created });
+  return res.status(200).json({
+    ok: true, runId, stoppedAt: null, customers, items, committed: true,
+    undoable: items?.undoable ?? false,
+    realm_id: walked.realmId, queried_at: walked.queriedAt,
+  });
+}
+
+// 🔴 BOTH UNDOS, ONE RUN ID, ITEMS FIRST. Each half's own undo runs against the shared id, so
+// `customerImportWriter`'s row-by-row FK retry is USED rather than reimplemented — a chunk refused
+// on a foreign key is retried per row there, so one undeletable customer does not take 1,925 others
+// down with it. That retry is #278's code and it stays #278's code.
+// ITEMS FIRST is the reverse of the import order: an order line points at inventory with ON DELETE
+// SET NULL and survives, while a customer with an order is the one that can genuinely refuse — so
+// the half that can refuse goes last, after everything that cannot has already gone.
+async function handleBooksUndo(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  const runId = (req.query.run_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!runId) return res.status(400).json({ error: 'run_id required — an undo names exactly one import run' });
+  const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBBOOKS', res))) return;
+  if (!(await callerCan(auth, businessId, 'inventory:create')) || !(await callerCan(auth, businessId, 'inventory:delete'))) {
+    console.log('[TRACE:QBBOOKS] undo REFUSED — caller lacks inventory:create + inventory:delete', { businessId });
+    return res.status(403).json({ error: 'Not authorized to remove imported records for this business', code: 'FORBIDDEN' });
+  }
+  try {
+    const hold = process.env[QBO_PUSH_HOLD_ENV];
+    const items = await undoItemImport(supabase(), businessId, runId, hold);
+    // A refusal on the first half stops the second — undoing customers while the catalogue stayed
+    // would be the split state this whole design exists to prevent.
+    if (items.refused) return res.status(409).json({ ok: false, refused: true, runId, items, customers: null, error: items.error });
+    const customers = await undoCustomerImport(supabase(), businessId, runId, hold);
+    const ok = items.ok && customers.ok !== false;
+    console.log('[TRACE:QBBOOKS] undo', { businessId, runId, ok, inventory: items.inventoryDeleted, customers: customers.deleted });
+    return res.status(ok ? 200 : 409).json({
+      ok, refused: false, runId, items, customers,
+      error: ok ? null : (items.error ?? customers.refusedBecause ?? 'The undo did not finish.'),
+    });
+  } catch (e: any) {
+    console.log('[TRACE:QBBOOKS] undo failed', { businessId, runId, message: e?.message });
+    return res.status(500).json({ error: `The undo failed: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -1137,6 +1294,9 @@ export default async function handler(req: any, res: any) {
     case 'items-preview':      return handleItemsPreview(req, res);
     case 'items-ingest':       return handleItemsIngest(req, res);
     case 'items-undo':         return handleItemsUndo(req, res);
+    case 'books-preview':      return handleBooksPreview(req, res);
+    case 'books-ingest':       return handleBooksIngest(req, res);
+    case 'books-undo':         return handleBooksUndo(req, res);
     case 'customers-preview':  return handleCustomersPreview(req, res);
     case 'customers-ingest':   return handleCustomersIngest(req, res);
     case 'customers-undo':     return handleCustomersUndo(req, res);
