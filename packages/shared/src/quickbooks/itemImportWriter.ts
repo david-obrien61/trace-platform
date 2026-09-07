@@ -126,8 +126,29 @@ import { unitColumnsFor } from '../inventory/unitOfMeasure';
 import { STOCK_LINE_IDENTITY_COLUMNS } from '../inventory/stockLineResolver';
 import type { QboItemRow } from './itemList';
 
-/** Stamped on every row this import creates, so a human reading the grid can see where it came
- *  from without knowing what a run id is. */
+/**
+ * 🔴 REMOVED 2026-09-07 — `source` IS NOT A COLUMN ON `business_inventory` AND MUST NOT BE WRITTEN.
+ *
+ * The first draft set `source: 'quickbooks-items'` on every created row, PostgREST rejected the
+ * insert with *"Could not find the 'source' column of 'business_inventory' in the schema cache"*,
+ * and the whole run stopped on its first statement. Found by David on CARD 5 STEP 3.
+ *
+ * ⚠️ WHERE THE MISTAKE CAME FROM, BECAUSE IT WILL BE MADE AGAIN: copied from
+ * `deliveryIngestWriter.ts:351`, which sets `deliveries.source = DELIVERY_INGEST_SOURCE`. That
+ * table HAS the column (`20260620_deliveries.sql:35`) and NEEDS it — four different doors create a
+ * delivery and none of them carries a run id, so `source` is the only discriminator there.
+ *
+ * 🔴 AND IT WOULD BE WRONG HERE EVEN IF THE COLUMN EXISTED. `business_inventory` already stores
+ * the same fact twice: `qb_item_id IS NOT NULL` says the row came from QuickBooks, and
+ * `import_run_id` says which run made it. `source: 'quickbooks-items'` is DERIVABLE from the first
+ * and adds nothing the second does not already carry — a third copy of one fact, and the copy is
+ * what drifts (STD-011). **No migration. The right fix was deleting the field.**
+ *
+ * The constant is kept, unused by the writer, ONLY so this note has somewhere to live and so a
+ * grep for `ITEM_IMPORT_SOURCE` lands here rather than on a stale call site.
+ * DO NOT re-introduce it into `ITEM_IMPORT_INSERT_COLUMNS`. `itemImportWriter.test.ts` §A asserts
+ * the declared list against the columns `business_inventory`'s own migrations create.
+ */
 export const ITEM_IMPORT_SOURCE = 'quickbooks-items';
 
 /** The sentence written into `retired_reason`. One place, so the report and the row agree. */
@@ -158,6 +179,19 @@ export interface ImportRunReport extends ImportPlanReport {
   runId: string;
   created: number;
   retired: number;
+  /**
+   * 🔴 `ok` ON A RUN REPORT MEANS THE RUN SUCCEEDED — NOT THAT THE PLAN DID.
+   *
+   * It is REDECLARED here rather than inherited from `ImportPlanReport`, because inheriting it was
+   * a live defect: a run that failed on its first insert returned `ok: true` beside
+   * `created: 0`, `stoppedAt: 'create'` and a populated `error`, since `ok` had been spread from
+   * the *preview*, which genuinely had succeeded. **A caller reading `ok` alone saw success on a
+   * run that wrote nothing** — the exact A8/R-12 defect this build spent a week guarding other
+   * people's writes against, in the code doing the guarding. Found by David on CARD 5 STEP 3.
+   *
+   * A stopped run and a completed run must be distinguishable by `ok` ALONE.
+   */
+  ok: boolean;
   /** Which phase stopped, when one did. Null on a clean run. */
   stoppedAt: 'create' | 'retire' | null;
   /** True only when the push is held — i.e. only when this run is undoable. */
@@ -186,7 +220,7 @@ export interface UndoReport {
  *  tsc, eslint and knip. */
 export const ITEM_IMPORT_INSERT_COLUMNS = [
   'business_id', 'name', 'size', 'description', 'sku', 'qty', 'status',
-  'sell_price', 'price_basis', 'qb_item_id', 'import_run_id', 'source',
+  'sell_price', 'price_basis', 'qb_item_id', 'import_run_id',
   'unit_kind', 'unit_value', 'unit_value_max', 'unit_name', 'unit_parsed_from',
 ] as const;
 
@@ -216,7 +250,8 @@ export function rowForItem(businessId: string, runId: string, item: AdaptedItem)
     price_basis: item.unitPrice === null ? null : 'quickbooks_item_price',
     qb_item_id: item.qboId,
     import_run_id: runId,
-    source: ITEM_IMPORT_SOURCE,
+    // 🔴 NO `source` — see ITEM_IMPORT_SOURCE's note. The column does not exist on this table, and
+    // `qb_item_id` + `import_run_id` already answer both questions it would have answered.
     ...unitColumnsFor(item.size),
   };
 }
@@ -327,8 +362,12 @@ export async function commitItemImport(
   const plan = await previewItemImport(db, businessId, qboItems);
   // BOTH switches, through the one shared predicate — see `undoIsOpen` and the header.
   const undoable = (await undoIsOpen(db, businessId, pushHoldRaw)).open;
+  // 🔴 `ok: false` OVERRIDES THE PLAN'S `ok`, AND THE ORDER OF THESE KEYS IS LOAD-BEARING.
+  // `...plan` carries the PREVIEW's `ok: true`; every early return below spreads `base`, so
+  // without this override a run that wrote nothing reported success. It is set true exactly once —
+  // on the committed path — and nowhere else.
   const base: ImportRunReport = {
-    ...plan, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,
+    ...plan, ok: false, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,
   };
   if (!plan.ok) return base;
 
@@ -386,7 +425,8 @@ export async function commitItemImport(
   }
 
   console.log('[TRACE:QBITEMS] commit ok', { businessId, runId, created, retired, undoable });
-  return { ...base, created, retired, stoppedAt: null, committed: true };  // wouldRetire rides on `base` for the comparison
+  // The ONLY place `ok: true` is set on a run report. `wouldRetire` rides on `base` for comparison.
+  return { ...base, ok: true, created, retired, stoppedAt: null, committed: true };
 }
 
 /**

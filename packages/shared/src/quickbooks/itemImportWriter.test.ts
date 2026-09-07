@@ -21,10 +21,17 @@
  */
 import {
   rowForItem, previewItemImport, commitItemImport, undoItemImport,
-  ITEM_IMPORT_SOURCE, RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS,
+  RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS,
 } from './itemImportWriter';
 import { adaptQboItems } from './qboItemAdapter';
 import type { QboItemRow } from './itemList';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// The suite is bundled to CJS and run from the repo root by `scripts/run-tests.mjs`, so cwd IS the
+// root. §A2 asserts the scan found a real CREATE TABLE, which is what makes a wrong root fail loudly
+// instead of reporting a clean sweep over nothing.
+const ROOT_DIR = process.cwd();
 
 let passed = 0, failed = 0;
 function ok(cond: boolean, msg: string): void {
@@ -196,7 +203,10 @@ const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers e
   ok(r.business_id === BIZ, '§A business_id is stamped (AC-3)');
   ok(r.qb_item_id === '859', '§A the Intuit Item.Id is the identity, not the SKU');
   ok(r.import_run_id === RUN, '§A the run id is on the row — that is what makes the undo exact');
-  ok(r.source === ITEM_IMPORT_SOURCE, '§A the row says where it came from in plain text');
+  // ✏️ REMOVED: `ok(r.source === ITEM_IMPORT_SOURCE, …)`. That probe asserted the defect — it
+  // required the writer to emit a column `business_inventory` does not have, so it was GREEN on
+  // code that could not insert a single row. A probe can be wrong in the same direction as the code
+  // it guards, and this one was.
   ok(r.name === 'Natchez Crape Myrtle', '§A 🔴 the NAME is the product, not the QuickBooks code "NZCM30"');
   ok(r.size === '30 gallon', '§A the size is the string QuickBooks wrote — faithful, never normalised (D-23)');
   ok(r.sell_price === 900, '§A the published price rides across');
@@ -219,6 +229,68 @@ const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers e
   ok(ITEM_IMPORT_INSERT_COLUMNS.every(c => c in r), '§A every DECLARED insert column is actually present on the row (#179 class)');
   ok(Object.keys(r).every(k => (ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).includes(k)),
      '§A 🔴 and the row carries NO column the declaration omits — the list is the source, both directions');
+  ok(!(ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).includes('source'),
+     "§A 🔴 `source` IS NOT WRITTEN — the column does not exist on business_inventory, and qb_item_id + import_run_id already say where a row came from and which run made it");
+  ok(!('source' in r), '§A and the row itself does not carry one');
+}
+
+// ── §A2 🔴 THE COLUMN SET, AGAINST THE MIGRATIONS THAT ACTUALLY CREATE IT ─────
+{
+  // 🔴 THIS PROBE EXISTS BECAUSE NOTHING CAUGHT `source`. `npm run verify` passed, 40 of 40
+  // mutants were caught, and the writer named a column the live table has never had — so the very
+  // first insert of the first real run failed with *"Could not find the 'source' column of
+  // 'business_inventory' in the schema cache"*. tsc cannot see it (the row is a
+  // `Record<string, unknown>`), eslint cannot, knip cannot, and every probe asserted the row
+  // against the DECLARATION rather than against the table. **#179's class from the other
+  // direction: a declarative list LONGER than its own table.**
+  //
+  // So the migration corpus is the source and the declaration is checked against it — the same
+  // shape `vendorEdit.test.ts` §A uses, and for the same reason.
+  //
+  // ⚠️ IT READS THE REPO, NOT THE CATALOG, AND SAYS SO. A column added through the dashboard would
+  // be invisible here (§6 r17's class). That is a known floor, not a claim of completeness — but
+  // every column this writer names IS in the corpus, so the floor is sufficient for this list.
+  const MIG = 'supabase/migrations';
+  const files = readdirSync(join(ROOT_DIR, MIG)).filter(f => f.endsWith('.sql')).sort();
+  const cols = new Set<string>();
+  let sawCreate = false;
+  for (const f of files) {
+    const sql = readFileSync(join(ROOT_DIR, MIG, f), 'utf8');
+    // CREATE TABLE … business_inventory ( … ) — take the identifier at the head of each line.
+    const create = sql.match(/CREATE\s+TABLE[^;]*?\bbusiness_inventory\s*\(([\s\S]*?)\n\s*\);/i);
+    if (create) {
+      sawCreate = true;
+      for (const line of create[1].split('\n')) {
+        const m = line.match(/^\s*([a-z_][a-z0-9_]*)\s+[a-z]/i);
+        if (m && !/^(constraint|primary|unique|foreign|check)$/i.test(m[1])) cols.add(m[1].toLowerCase());
+      }
+    }
+    // ALTER TABLE … business_inventory ADD COLUMN [IF NOT EXISTS] <name>
+    const alter = /ALTER\s+TABLE[^;]*?\bbusiness_inventory\b([\s\S]*?);/gi;
+    let a: RegExpExecArray | null;
+    while ((a = alter.exec(sql)) !== null) {
+      const add = /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][a-z0-9_]*)/gi;
+      let c: RegExpExecArray | null;
+      while ((c = add.exec(a[1])) !== null) cols.add(c[1].toLowerCase());
+    }
+  }
+
+  ok(sawCreate, '§A2 the CREATE TABLE for business_inventory was found — a scan that matched nothing would pass everything');
+  ok(cols.size > 25, `§A2 the corpus yields a plausible column set (${cols.size} columns)`);
+  // Anchors: one original column, one added much later. If either is missing the parse is broken.
+  ok(cols.has('sku') && cols.has('qty'), '§A2 original columns parsed');
+  ok(cols.has('retired_at') && cols.has('import_run_id') && cols.has('qb_item_id'),
+     '§A2 later ADD COLUMN migrations parsed — including this build\'s own three');
+
+  const undeclared = (ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).filter(c => !cols.has(c));
+  ok(undeclared.length === 0,
+     `§A2 🔴 EVERY COLUMN THIS WRITER INSERTS EXISTS IN business_inventory'S OWN MIGRATIONS. Not found: ${undeclared.join(', ') || '(none)'}`);
+
+  // 🔴 THE NEGATIVE CONTROL. Without it this probe passes on an empty column set, on a broken
+  // regex, and on the day somebody comments the assertion out — the check must be shown to refuse.
+  ok(!cols.has('source'),
+     "§A2 🔴 `source` IS GENUINELY ABSENT from the corpus — so the check above is refusing something real, not passing over a set that contains everything");
+  ok(!cols.has('definitely_not_a_column'), '§A2 and the set is not simply answering yes');
 }
 
 // ── §B NO LEDGER, NO RPC (R-93) ──────────────────────────────────────────────
@@ -296,6 +368,54 @@ async function sectionD() {
   ok(!rf.committed && rf.stoppedAt === 'retire', '§D a failing retire names itself');
   ok(rf.created === 1, '§D and the created count is reported, so the undo has a number to check against');
   ok(f.inventory.some(r => r.import_run_id === RUN), '§D 🔴 the half-landed rows carry the run id — which is why no transaction is needed');
+}
+
+// ── §D2 🔴 A STOPPED RUN IS DISTINGUISHABLE FROM A COMPLETED ONE BY `ok` ALONE ─
+async function sectionD2() {
+  // 🔴 DAVID'S REQUIREMENT, VERBATIM, AFTER CARD 5 STEP 3 RETURNED `ok: true` BESIDE `created: 0`
+  // AND A POPULATED `error`: *"a stopped run must be distinguishable from a completed one by `ok`
+  // alone."* The cause was `ok` being spread from the PREVIEW — which had genuinely succeeded —
+  // onto the RUN report. A caller reading `ok` saw success on a run that wrote nothing: the A8/R-12
+  // defect this whole build guards other people's writes against, in the code doing the guarding.
+  const item = [it('1', 'X', { description: 'Live Oak - 15 gallon' })];
+  const oldRow = () => [{ id: 'old1', business_id: BIZ, qty: 0, retired_at: null, import_run_id: null }];
+
+  // ① the real shape from CARD 5 STEP 3 — the insert is rejected outright
+  const rejected = recorder({ inventory: oldRow(), failOn: 'insert' });
+  const a = await commitItemImport(rejected.db as any, BIZ, item, RUN, HELD);
+  ok(a.ok === false, '§D2 🔴 an insert the DATABASE REJECTED reports ok:false — this is the live case, "Could not find the \'source\' column"');
+  ok(a.committed === false && a.stoppedAt === 'create' && a.created === 0, '§D2 …with committed:false, stoppedAt:create, created:0');
+  ok((a.error ?? '') !== '', '§D2 …and an error a person can read');
+
+  // ② a zero-row insert — no error, nothing written (an RLS refusal)
+  const silent = recorder({ inventory: oldRow(), insertLands: 0 });
+  const b = await commitItemImport(silent.db as any, BIZ, item, RUN, HELD);
+  ok(b.ok === false, '§D2 🔴 a SILENT zero-row insert reports ok:false too — no error is not success');
+
+  // ③ a partial insert
+  const partial = recorder({ inventory: oldRow(), insertLands: 1 });
+  const c = await commitItemImport(partial.db as any, BIZ,
+    [it('1', 'A', { description: 'Live Oak - 15 gallon' }), it('2', 'B', { description: 'Red Maple - 30 gallon' })], RUN, HELD);
+  ok(c.ok === false, '§D2 a PARTIAL insert reports ok:false');
+
+  // ④ the retire stopping, after a create that landed
+  const retireFails = recorder({ inventory: oldRow(), failOn: 'update' });
+  const d = await commitItemImport(retireFails.db as any, BIZ, item, RUN, HELD);
+  ok(d.ok === false && d.stoppedAt === 'retire', '§D2 a stopped RETIRE reports ok:false as well — both phases, not just the first');
+  ok(d.created === 1, '§D2 …while still reporting what DID land, so the undo has a number to check');
+
+  // ⑤ 🔴 THE NEGATIVE CONTROL. A clean run must be the ONLY thing that reports ok:true, or the
+  // assertions above pass on a function that always says false.
+  const clean = recorder({ inventory: oldRow() });
+  const e = await commitItemImport(clean.db as any, BIZ, item, RUN, HELD);
+  ok(e.ok === true, '§D2 🔴 a COMPLETED run reports ok:true — the only case that does');
+  ok(e.committed === true && e.stoppedAt === null && e.error === null, '§D2 …and everything else agrees with it');
+
+  // ⑥ THE PROPERTY DAVID ASKED FOR, ASSERTED AS A PROPERTY RATHER THAN CASE BY CASE.
+  for (const [label, r] of [['rejected', a], ['silent', b], ['partial', c], ['retire-stopped', d], ['clean', e]] as const) {
+    ok(r.ok === (r.committed && r.stoppedAt === null && r.error === null),
+       `§D2 🔴 [${label}] \`ok\` agrees with committed/stoppedAt/error — no caller reading ONE of them can be misled by another`);
+  }
 }
 
 // ── §E the write boundary, exhaustively ──────────────────────────────────────
@@ -560,7 +680,7 @@ async function sectionPreview() {
 // Sequential, not Promise.all: each section builds its own recorder, and a shared failure order
 // is what makes a red run readable.
 (async () => {
-  for (const section of [sectionB, sectionC, sectionD, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionPreview]) {
+  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionPreview]) {
     await section();
   }
   console.log(`\nitemImportWriter — ${passed} passed, ${failed} failed`);

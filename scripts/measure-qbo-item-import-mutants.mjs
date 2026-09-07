@@ -175,6 +175,16 @@ const MUTANTS = [
   { id: 'W21', file: WRITER, why: 'the un-retire leftover is not counted, so a refused un-retire leaves the catalogue hidden and the undo says it worked',
     from: '    if ((retiredLeft ?? 0) > 0) leftovers.push(`${retiredLeft} product row(s) this run hid are still hidden`);',
     to:   '' },
+  // 🔴 W27–W29 ARE THE CARD 5 STEP 3 DEFECTS. Both shipped past verify and 40 green mutants.
+  { id: 'W27', file: WRITER, why: '🔴 THE LIVE DEFECT: `source` goes back on the row — a column business_inventory has never had, so the FIRST insert of every run is rejected',
+    from: '    import_run_id: runId,\n    // 🔴 NO `source`',
+    to:   "    import_run_id: runId,\n    source: ITEM_IMPORT_SOURCE,\n    // 🔴 NO `source`" },
+  { id: 'W28', file: WRITER, why: '🔴 THE SECOND ONE: `ok` is inherited from the PREVIEW again, so a run that wrote nothing reports success beside created:0 and an error',
+    from: '    ...plan, ok: false, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,',
+    to:   '    ...plan, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,' },
+  { id: 'W29', file: WRITER, why: '🔴 `ok` is set true unconditionally on the commit path, so a stopped run and a clean one are indistinguishable by it',
+    from: '  return { ...base, ok: true, created, retired, stoppedAt: null, committed: true };',
+    to:   '  return { ...base, ok: true, created, retired, stoppedAt, committed: true };' },
 
   // ── the reader-side filter (⑤) ──────────────────────────────────────────────
   // 🔴 THESE ARE THE POINT OF THE CORPUS CAP. The filter itself cannot be wrong; a reader that
