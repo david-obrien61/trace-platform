@@ -18,6 +18,46 @@ the catalogue import. **Recorded OPEN rather than papered over** (§9 story gate
 owner-gated (R-80) **and** requires `customers:create` + `customers:update` — an AND, not an OR.
 The **undo** carries the same gate, deliberately without a delete verb (see the notice below).
 
+
+> 🔴 **A CONTRACT FROM LEDGER #277's SESSION — READ THIS BEFORE BUILDING A SECOND SURFACE.**
+> Written here at David's explicit instruction (*"tell that session so we get one surface and not
+> two"* · *"Write the contract into qb-customer-import-full-surface-test.md and the tech-debt log.
+> Do not guess at sessions"*). 16 peer sessions were listed and none was identifiable as this one,
+> so nothing was messaged — this file is the handoff.
+>
+> **DAVID'S RULING, 2026-09-07: ONE BUTTON, ONE RUN ID, COVERING CUSTOMERS AND ITEMS TOGETHER.**
+> *"Not a preference — it is what the undo needs. Two run ids means Lauren undoes twice in the right
+> order, and the failure case is worse than the inconvenience: items wipe cleanly, customers hit a
+> RESTRICT because she rang up an order, and she is left with half a catalogue and a full customer
+> list. Two mechanisms, one mental model, and the mismatch is hers to sort out."*
+>
+> | | Term |
+> |---|---|
+> | ① | **ONE run id spans both halves**, minted once server-side, stamped on `customers.import_run_id` and `business_inventory.import_run_id` alike. |
+> | ② | **Customers first, items second.** *"An order rung against an imported item needs a customer to point at."* The failure asymmetry agrees: customers-with-no-catalogue is re-runnable; a catalogue whose orders cannot attach to anyone is not. |
+> | ③ | 🔴 **NO AUTO-ROLLBACK.** A stop **reports what landed and OFFERS the undo as a button.** An automatic rollback that itself partly fails leaves a state nobody chose — and your half genuinely can fail halfway, because a customer with an order cannot be deleted. Same shape as `leftovers`. |
+> | ④ | **ONE surface** — `packages/shared/src/components/QboCatalogueImport.tsx`, Settings → Accounting. It ships today for the items half, two presses (Preview → counts → Import) plus an Undo that appears only after a committed run. **Join that panel; do not add a second.** |
+> | ⑤ | **Services are NOT on this button** — *"they are not ingested, they are PROPOSED… a review screen, not an import"*, sequenced behind the pre-ticked/$0 leak. |
+>
+> ✅ **MOST OF THE MACHINERY EXISTS: `undoItemImport` ALREADY DELETES BOTH `customers` AND
+> `business_inventory` BY RUN ID.** One id over both means one undo call cleans both halves.
+> 🔴 **WHAT IT LACKS IS YOURS:** `customerImportWriter.ts`'s row-by-row FK retry — a chunk refused
+> on a foreign key retried per row, so one undeletable customer does not take 1,925 others down
+> with it. That has to move into the shared undo, and it is your code, not mine.
+>
+> ⚠️ **TWO THINGS THIS SESSION FOUND IN YOUR FILES AND DID NOT TOUCH (R-62):**
+> **(a)** `customerImportWriter.ts:425` gates on `isPushHeld` alone. There are **two** switches —
+> the operator's `QBO_PUSH_HOLD` and the owner's `businesses.qbo_writes_enabled` — and the shared
+> predicate is `pushPermitted({ writesEnabled, platformHeld })` in `business-logic/testMode.ts`.
+> Ledger #277 shipped that exact defect and it made the undo refuse in the state it exists to serve
+> (tech-debt #199). Unreachable in your build today only because the undo has no route.
+> **(b)** Your report types share the preview/commit split that made `ok: true` sit beside
+> `created: 0` in #277 — an outcome field inherited across a boundary where it stopped being true
+> (tech-debt #202). Worth a look before the undo gets a route.
+>
+> **The open design question, and it is the FIRST thing to settle rather than the last: where the
+> shared run id is minted, and which writer owns the combined undo.** Tech-debt #207.
+
 ---
 
 > ✅ **NO MIGRATION. NOTHING TO APPLY. THIS BUILD IS CODE ONLY.**
