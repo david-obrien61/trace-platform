@@ -484,12 +484,12 @@ export function BusinessInventory() {
                 {collisions.filter(c => c.pricesDiffer).length > 0 && (
                   <b>{collisions.filter(c => c.pricesDiffer).length} of them are two products at the same name and size with <u>different prices</u> — sorted to the top.</b>
                 )}{' '}
-                The rest share a variant group and size, so the scanner can’t tell them apart. Edit the <b>&nbsp;price&nbsp;</b>, the <b>&nbsp;size&nbsp;</b> or the <b>&nbsp;variant group&nbsp;</b> on a flagged row to fix it.
+                The rest share a variant group and size, so the scanner can’t tell them apart. Edit the <b>price</b>, the <b>size</b> or the <b>variant group</b> on a flagged row to fix it.
                 {elsewhere > 0 && <> {elsewhere} more {elsewhere === 1 ? 'is' : 'are'} outside this filter.</>}
               </>
             ) : (
               <>
-                {elsewhere} flagged {elsewhere === 1 ? 'row' : 'rows'} <b>&nbsp;elsewhere&nbsp;</b> in your inventory share a variant group and size — nothing on this screen is affected. Clear the search or status filter to see {elsewhere === 1 ? 'it' : 'them'}.
+                {elsewhere} flagged {elsewhere === 1 ? 'row' : 'rows'} <b>elsewhere</b> in your inventory share a variant group and size — nothing on this screen is affected. Clear the search or status filter to see {elsewhere === 1 ? 'it' : 'them'}.
               </>
             )}
           </>

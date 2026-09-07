@@ -350,8 +350,9 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <span style={S.countPill}>{view.length} of {rows.length}{status !== 'all' || search ? ' shown' : ` ${itemNoun}`}</span>
             </div>
 
+            {/* 🔴 ONE FLEX CHILD, NOT N — see `dupBannerText` for why. */}
             {rowFlag && flagBanner && (flags.inView > 0 || flags.elsewhere > 0) && (
-              <div style={S.dupBanner}>{flagBanner(flags.inView, flags.elsewhere)}</div>
+              <div style={S.dupBanner}><span style={S.dupBannerText}>{flagBanner(flags.inView, flags.elsewhere)}</span></div>
             )}
 
             {/* Table — bounded scroll box: sticky header (top) + frozen identifier column (left),
@@ -539,6 +540,14 @@ const S = {
   colMenu: { position: 'absolute' as const, top: 'calc(100% + 6px)', right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', padding: '0.5rem', zIndex: 50, minWidth: 190, maxHeight: 320, overflowY: 'auto' as const } as React.CSSProperties,
   colMenuItem: { display: 'flex', alignItems: 'center', gap: 8, padding: '0.35rem 0.5rem', fontSize: '0.85rem', color: '#374151', cursor: 'pointer', borderRadius: 6 } as React.CSSProperties,
   countPill: { fontSize: '0.8rem', color: '#6b7280', marginLeft: 'auto' } as React.CSSProperties,
+  // 🔴 ONE FLEX CHILD, NOT N. `dupBanner` is `display:flex` with a gap, so EVERY element a consumer
+  // puts in its banner — each emphasis tag, each text run — became its own flex item, and the
+  // sentence rendered ONE WORD PER LINE. David, 2026-09-07, reading the inventory banner off a
+  // printout: *"Edit the / price / , / the / size / , / the / variant group."* Wrapping the
+  // consumer's output in a single block makes it one item and lets the text flow normally.
+  // Fixed in the ENGINE so all eight consumers inherit it (STD-011) — a banner carrying inline
+  // emphasis is the ordinary case, not a special one, and every consumer would have hit this.
+  dupBannerText: { display: 'block', lineHeight: 1.55 } as React.CSSProperties,
   dupBanner: { display: 'flex', alignItems: 'center', gap: 8, background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.83rem', marginBottom: 12 } as React.CSSProperties,
   // Bounded scroll box: BOTH scrollbars live on this container (not the page), so the horizontal
   // scrollbar is reachable within the viewport instead of below all N rows. The offset leaves room

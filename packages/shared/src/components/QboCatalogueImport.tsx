@@ -33,9 +33,10 @@
 //
 // 🔴 SIX SURFACE STATES, none of them a blank panel: idle · loading · empty · error · refused
 //   (writes are on — the undo is closed, and it says why) · ready.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useBusinessContext } from '../context';
+import { supabase } from '../supabase/client';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -80,7 +81,48 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
   // 🔴 THE RUN ID LIVES HERE AND NOWHERE ELSE SHE CAN SEE. Set by the import, consumed by the
   // undo, cleared when the undo succeeds — so the button cannot be pressed twice against a run
   // that is already gone.
-  const runId = run?.runId ?? null;
+  const [recovered, setRecovered] = useState<string | null>(null);
+  const [stacked, setStacked] = useState(0);
+  useEffect(() => {
+    if (!businessId) return;
+    let alive = true;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('business_inventory')
+        .select('import_run_id')
+        .eq('business_id', businessId)
+        .is('retired_at', null)
+        .not('import_run_id', 'is', null)
+        .limit(2000);
+      if (!alive) return;
+      if (error) { console.log('[TRACE:QBITEMS] run recovery failed', { message: error.message }); return; }
+      const ids = [...new Set((data ?? []).map(r => (r as { import_run_id: string }).import_run_id))];
+      setStacked(ids.length);
+      setRecovered(ids.length === 1 ? ids[0] : null);
+      console.log('[TRACE:QBITEMS] recoverable runs', { businessId, distinct: ids.length });
+    })();
+    return () => { alive = false; };
+  }, [businessId, undone, run]);
+
+  const runId = run?.runId ?? recovered;
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 A PAGE REFRESH USED TO LOSE THE RUN ID, AND WITH IT THE ONLY WAY BACK.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // `run` is component state. Reload the page after an import — or open Settings on a second
+  // device, or come back tomorrow — and the Undo button simply was not there. 647 rows live, no
+  // route to remove them through any surface. David named it before it was tested: *"the run id
+  // surviving a page refresh mid-run."*
+  //
+  // 🔴 RECOVERED BY DERIVING IT, NOT BY CACHING IT (R-101 ③ / [[R-84]]). A localStorage copy would
+  // be a second record of one fact and would go stale the moment the run was undone from anywhere
+  // else. **The table already knows**: a live row carrying an `import_run_id` IS an undoable run.
+  // Nothing is stored, and the answer cannot disagree with the data it came from.
+  //
+  // ⚠️ MORE THAN ONE DISTINCT ID IS NOT A RUN TO OFFER — it is two stacked imports, and guessing
+  // which to undo is exactly the choice this build refuses to make on her behalf. The panel says so
+  // rather than picking the newest.
+
 
   async function call(step: 'preview' | 'import' | 'undo') {
     setBusy(step); setFailed(null);
@@ -154,7 +196,8 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
         </button>
         {/* 🔴 THE UNDO APPEARS ONLY ONCE A RUN EXISTS. Before that there is nothing to take back,
             and a permanently-visible undo invites a press that can only error. */}
-        {runId && run?.committed && (
+        {/* Shown for a run this page just made OR one recovered from the data after a refresh. */}
+        {runId && (run?.committed || (!run && recovered)) && (
           <button
             onClick={() => void call('undo')}
             disabled={busy !== null}
@@ -167,6 +210,23 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
       </div>
 
       {failed && <p style={{ marginTop: '.75rem', color: RED, fontSize: '.85rem' }}>⚠️ {failed}</p>}
+
+      {/* 🔴 A RUN THIS PAGE DID NOT MAKE. She reloaded, or came back later, or is on another
+          device. Saying where it came from is the difference between a button she trusts and one
+          that appeared for no reason. */}
+      {!run && recovered && !undone && (
+        <p style={{ marginTop: '.75rem', color: AMBER, fontSize: '.85rem', lineHeight: 1.5 }}>
+          There is an import already in your catalogue from an earlier session. You can undo it, or
+          preview and import again to replace it.
+        </p>
+      )}
+      {!run && !recovered && stacked > 1 && (
+        <p style={{ marginTop: '.75rem', color: RED, fontSize: '.85rem', lineHeight: 1.5 }}>
+          ⚠️ Your catalogue contains products from <strong>{stacked}</strong> different imports.
+          Undo cannot tell you which one you meant, so it is not offered — ask David before
+          importing again.
+        </p>
+      )}
 
       {/* ── THE PLAN ─────────────────────────────────────────────────────────── */}
       {plan && !plan.ok && plan.error && (
