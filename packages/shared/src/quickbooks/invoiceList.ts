@@ -341,6 +341,21 @@ export interface DiscountNameTally {
   excludedFromBase: { itemName: string; times: number }[];
   /** A handful of real invoices so the counts above are checkable rather than asserted. */
   examples: DiscountExample[];
+  /**
+   * 🔴 THE PERCENT, DISTRIBUTED — NEVER AVERAGED. `|amount| ÷ base × 100` per line, tallied by
+   * value, most-used first. An AVERAGE would report a discount used at 10% forty times and at 40%
+   * once as "10.7%", which is a number nobody granted; the distribution says "10% on 40 lines,
+   * 40% on 1" and lets a reader see the outlier that an average dissolves. `consistent` is then a
+   * FACT about the tally rather than a judgement — one entry means one rate, always.
+   *
+   * A line with no readable base, a zero base, or no amount contributes NOTHING here (it is
+   * already counted in `verdicts.noBase`), so `Σ percents[].lines ≤ lines` and the shortfall is
+   * exactly what could not be measured. Rounded to 2dp so float dust cannot split one rate in two.
+   */
+  percents: { pct: number; lines: number }[];
+  /** Intuit's `TxnDate` STRING of the latest invoice carrying this discount — `null` if none
+   *  carried a date. Kept as the string it arrived as, the same treatment `txnDate` gets. */
+  mostRecent: string | null;
 }
 
 export interface DiscountBreakdown {
@@ -480,10 +495,26 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
         const row = discountTally.get(nameKey) ?? {
           itemName: l.itemName ?? '(unnamed)', lines: 0, withBase: 0, baseTotal: 0, amountTotal: 0,
           verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0 },
-          excludedFromBase: [], examples: [],
+          excludedFromBase: [], examples: [], percents: [], mostRecent: null,
         };
         row.lines++;
         if (l.amount !== null) row.amountTotal += l.amount;
+
+        // The DATE this discount was last granted. `localeCompare` on Intuit's `YYYY-MM-DD` is a
+        // correct ordering without parsing a Date — the same reason `txnDate` is kept as a string
+        // everywhere else in this file (a Date would apply a timezone nobody asked for).
+        if (inv.txnDate && (row.mostRecent === null || inv.txnDate.localeCompare(row.mostRecent) > 0)) {
+          row.mostRecent = inv.txnDate;
+        }
+
+        // The RATE this line actually granted, tallied by value. Guarded on a POSITIVE base: a
+        // zero base would divide to Infinity and a negative one would report a negative rate, and
+        // both would render as a confident number on a screen (D-9).
+        if (l.qty !== null && l.qty > 0 && l.amount !== null) {
+          const pct = Math.round((Math.abs(l.amount) / l.qty) * 100 * 100) / 100;
+          const seen = row.percents.find(x => x.pct === pct);
+          if (seen) seen.lines++; else row.percents.push({ pct, lines: 1 });
+        }
 
         const base = l.qty;
         const baseCents = cents(base);
@@ -591,7 +622,9 @@ export function summariseInvoices(invoices: QboInvoiceRow[]): InvoiceBreakdown {
     bundleItems: [...bundleTally.values()].sort((a, b) => b.lines - a.lines),
     linesOnItemId1,
     discounts: {
-      byName: [...discountTally.values()].sort((a, b) => b.lines - a.lines || a.itemName.localeCompare(b.itemName)),
+      byName: [...discountTally.values()]
+        .map(r => ({ ...r, percents: [...r.percents].sort((a, b) => b.lines - a.lines || a.pct - b.pct) }))
+        .sort((a, b) => b.lines - a.lines || a.itemName.localeCompare(b.itemName)),
       unnamedDiscountLines: [...unnamedDiscounts.entries()]
         .map(([itemName, lines]) => ({ itemName, lines }))
         .sort((a, b) => b.lines - a.lines || a.itemName.localeCompare(b.itemName)),

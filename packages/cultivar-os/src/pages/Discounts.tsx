@@ -29,6 +29,10 @@ import {
 // The FIX 5 required-field pattern — ONE home (STD-011, §6 r8). This file's own comment used to
 // point at Settings as "the reference" while holding a byte-identical copy; now it imports it.
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
+// The REVIEW that fills this config from her own books. Mounted HERE, not on its own route,
+// because /discounts is already the sole writer of `config.discountTypes` — a second screen
+// writing the same jsonb key is a second writer of one field (STD-011). See its own header.
+import { DiscountReview } from '../components/discounts/DiscountReview';
 
 const GREEN = '#27500A';
 const DARK  = '#111827';
@@ -71,6 +75,10 @@ export function Discounts() {
   const [saveMsg, setSaveMsg] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
   const [customName, setCustomName] = useState('');
+  // Bumped by the review after it writes, so the editor below re-reads and shows the tiers she
+  // just accepted. Re-reading beats splicing them into local state: the editor then renders what
+  // the CONFIG says, not what this screen hoped it wrote.
+  const [reloadKey, setReloadKey] = useState(0);
 
   const palette = TYPE_SUGGESTIONS[business?.business_type ?? ''] ?? DEFAULT_PALETTE;
 
@@ -97,7 +105,7 @@ export function Discounts() {
       console.log('[TRACE:config] discounts load', { businessId, typeCount: loaded.length, aiEnabled: cfg.aiBiEnabled === true });
     })();
     return () => { cancelled = true; };
-  }, [businessId, seedPctText]);
+  }, [businessId, seedPctText, reloadKey]);
 
   // ── structural mutations (local state until Save) ──
   function addType(name: string) {
@@ -209,6 +217,12 @@ export function Discounts() {
         Tag a customer's tier on the Customers page — the discount comes off automatically at checkout. You set every
         number; nothing is applied on its own.
       </p>
+
+      {/* 🔴 THE REVIEW, ABOVE THE EDITOR. It reads her books and offers what it can evidence; the
+          editor below stays the permanent home for everything she types herself. It renders its
+          own compact invitation until she presses it, so it is never a wall between her and the
+          editor. */}
+      <DiscountReview businessId={businessId ?? null} onWritten={() => setReloadKey(k => k + 1)} />
 
       {/* Retail floor — implicit, always available, never a discount. Shown for clarity (non-editable). */}
       <div style={{ ...card, background: '#f3f4f6' }}>

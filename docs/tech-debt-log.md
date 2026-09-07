@@ -586,3 +586,77 @@ alongside the JSX-guard form. **Surfaced, not fixed** — extending an authority
 build needs its own red-first proof, and a cap changed without one is the thing [[R-33]] is about.
 
 ---
+
+## #208 — 🔴 ONE PRESS OF SAVE ON THE COST PANEL DELETES LAWNS'S SALES-TAX RATE (NEW 2026-09-07)
+
+**FILED, NOT FIXED — David's instruction: *"it wants its own ledger row and its own fix."***
+
+`CostToProduceSettings.tsx:435-444` re-reads the latest config before saving and PRESERVES the keys
+other screens own — **by name, and the list is three long:**
+
+```ts
+for (const k of ['discountTypes', 'pricingTiers', 'aiBiEnabled'] as const) {
+  if (lc[k] !== undefined) preserved[k] = lc[k];
+}
+const configToWrite = { ...baseConfig, ...preserved };
+```
+
+**`taxRate` is not one of them.** The chain at LAWNS, each link verified against the live row:
+
+1. `parseConfig` requires `Array.isArray(config.locations)`. LAWNS's `{"taxRate": 0.0825}` has no
+   `locations`, so it returns `null` and the panel loads `EMPTY_COST_CONFIG` — **which has no
+   `taxRate` key** — while showing platform defaults as though they were LAWNS's numbers.
+2. On Save, `preserved` is `{}` (LAWNS has none of the three keys).
+3. `writePricingConfig` upserts the whole `config` column. **The 8.25% is gone.**
+4. `resolveTaxRate` → `null` → `taxStatus: 'not_identified'` → **every invoice after it charges $0
+   tax under a redline.**
+
+🔴 **AND BOTH CONTROLS ARE ON THE SAME PAGE.** `packages/cultivar-os/src/pages/Settings.tsx:788`
+renders `<CostToProduceSettings />` inside the same `/settings` page that carries the tax-rate field.
+Pressing the wrong Save is not a contrived path.
+
+⚠️ **THIS IS THE FAILURE THE PRESERVE-LIST WAS WRITTEN TO PREVENT, ONE KEY OVER.** Its own comment
+says *"A stale cost-panel load can never wipe what /discounts saved"* — which is exactly
+`pricingRecipeFields.ts:53-60`'s argument about enumerative lists: *"a protected list alone is
+ENUMERATIVE… the next field added is unprotected BY DEFAULT."* An allow-list of three names is
+silent about the fourth.
+
+**THE FIX IS NOT ADDING `taxRate` TO THE LIST** — that repeats the mistake with a longer list. It is
+the same inversion `discountReview.buildAcceptancePatch` uses: write only the keys this panel OWNS,
+and let everything else survive by never being mentioned. `PRICING_RECIPE_PROTECTED_PATHS` +
+`PRICING_RECIPE_NOT_CONFIDENTIAL` between them already enumerate the config exhaustively and would
+derive that list rather than hand-keeping it.
+
+⚠️ **#279 SHRINKS THE BLAST RADIUS AND DOES NOT CLOSE IT.** Once the review has written `locations`,
+`parseConfig` succeeds and the panel loads the real config — so a Save round-trips `taxRate` through
+`baseConfig` and it survives. **The hazard remains for any tenant whose config lacks `locations`,
+which is every un-reviewed tenant**, and it remains structurally for the next key nobody lists.
+
+**NOT FIXED HERE:** re-pointing a shared panel's write inside a review build is the scope creep the
+pre-flight gate exists to catch, and it needs its own red-first proof.
+
+---
+
+## #209 — 🟡 THE DISCOUNT REVIEW READS THE BOOKS ON ITS OWN, AND CANNOT REPLAY A SAVED CAPTURE (NEW 2026-09-07)
+
+`DiscountReview.tsx` fetches `/api/qbo/invoices` and `/api/qbo/items` directly. `QboBooksReader`
+fetches the same two routes. **Two CALLERS of one read — which is not what §6 r8 forbids (that is two
+implementations of one OPERATION)** — but there is no shared "give me an invoice breakdown for this
+business" seam, so the parse-and-summarise step exists in two places and could drift.
+
+Not consolidated deliberately: `QboBooksReader`'s read is entity-generic across three entities and
+its whole point is **saving the verbatim capture to the operator's download folder** (R-23). The
+review wants one entity and no file. Folding them needs a decision about which of those two jobs the
+shared function has, and that is a refactor of a live operator surface.
+
+🔴 **THE PART THAT WILL BE FELT FIRST IS THE REPLAY, NOT THE DUPLICATION.** `QboBooksReader` can load
+a saved `qbo-Invoice-*.json` and render from it (`readCaptureFile` + `projectCapture`), so the books
+can be re-read without querying a customer's books again. **The review cannot** — it has only the
+live path. So it cannot be demonstrated, debugged, or shown to anyone without a working QuickBooks
+connection and a several-second round trip against a real company's accounting system.
+
+**The fix is small and the seam already exists:** `projectCapture` already returns a
+`breakdown: InvoiceBreakdown`, which is exactly what `buildDiscountReview` takes. A file input on the
+review, or a shared "capture source" both screens read through, closes both halves at once.
+
+---

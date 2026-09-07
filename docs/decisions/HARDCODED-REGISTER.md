@@ -144,3 +144,21 @@ lands, **P1 is DELETED rather than extended**, and this row clears.
 source_url)` is per-site. Identity is not a catalogue. Whether it earns a column, its own row shape,
 or simply feeds `business_context` as a proposal is the open design question — **not** whether a
 crawl exists.
+
+---
+
+## Owning capability: **discounts / pricing config** — the owner-stated tiers on the review screen
+
+| id | file:line | what it is | why it is debt | now | sev | status |
+|---|---|---|---|---|---|---|
+| D1 | [`components/discounts/DiscountReview.tsx`](../../packages/cultivar-os/src/components/discounts/DiscountReview.tsx) — `OWNER_STATED_TIERS` | `['Contractor 35%', 'Contractor 25%']` — two tier names from **Lauren's own pricing spreadsheet**, as a TypeScript constant | one tenant's facts in vertical code. It is the AC-1 shape, and unlike a placeholder it is RENDERED as content: the screen says "you named these" to any business that opens it | 🔴 **it is there so the screen can MEASURE their absence.** They are in no invoice, no item and no table — there is no data source in this platform that holds them — and David's instruction was explicit: *"Put this section ON the screen. She will ask why her spreadsheet's tiers are missing, and the answer should already be in front of her."* The literal is in the VERTICAL, never in `shared`; the pure builder takes `statedTiers` as an **input** and holds no tenant string. Removing it removes the section; deriving it is impossible until a stated-but-unevidenced tier has somewhere real to live | MED | 🟡 **OPEN** |
+
+🔴 **THE EXIT, NAMED.** A tier the owner asserts and the books do not evidence is a real category —
+it is the same shape as a service named on a website and never invoiced (`services-review`'s SITE
+provenance). It wants a home: a per-business list she can add to and the screen reads back, so
+"tiers I say I have" becomes data on the same footing as "tiers my books show". Until then the
+constant is the honest form: **two names, in the vertical, rendered as HER claim rather than as our
+finding, with their absence measured in both directions** (no invoice line AND no item).
+
+⚠️ **THIS CAPS THE DISCOUNTS CAPABILITY AT AMBER** (§6 r12) — which costs nothing today: the
+capability is amber already at 0 of its owner-test cards covered.

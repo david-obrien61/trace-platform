@@ -178,6 +178,14 @@ export { PRICING_RECIPE_PROTECTED_PATHS, TAX_RATE_PATH, jsonbPath } from './pric
 // seed a FULL pricing-config row at business creation — the missing row, not just the rate
 export { seedPricingConfig } from './seedPricingConfig';
 
+// The REVIEW that fills that row for a business already past creation — where seedPricingConfig
+// cannot reach (ignoreDuplicates:true makes it a silent no-op on an existing tenant). Pure.
+export { buildDiscountReview, buildAcceptancePatch, suggestTypeName, REVIEW_REFUSALS } from './discountReview';
+export type {
+  DiscountReview, EvidencedDiscount, StatedTier, DiscountItemFact,
+  AcceptedTier, PatchResult, ReviewRefusal,
+} from './discountReview';
+
 // The module seed — its sibling, one table over, and the one whose missing row is MONEY.
 export { seedBusinessModules, warnOnShortModuleSeed } from './seedBusinessModules';
 export type { ModuleSeedRow, ModuleSeedResult } from './seedBusinessModules';

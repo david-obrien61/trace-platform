@@ -298,9 +298,12 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const fs = evaluateBooks({
     customers: CUSTOMERS, items: [item('1', 'Tree', { unitPrice: 10 })],
     invoices: [inv('i1', '1', [line('1', 'Tree', 10, 10)])],
-    discounts: { byName: [{ itemName: 'MD10', lines: 3, withBase: 3, baseTotal: 100, amountTotal: -10,
-      verdicts: { equalsSubtotal: 0, belowSubtotal: 3, aboveSubtotal: 0, noBase: 0 },
-      excludedFromBase: [], examples: [] }], unnamedDiscountLines: [] } as never,
+    // ✏️ `noBase`, not `belowSubtotal` (2026-09-07). A base BELOW the subtotal is the tree-only
+    // rule working and no longer asks anything — see M-DISC. The verdict that still poses a real
+    // question is the one where the discount does not record what it was taken from.
+    discounts: { byName: [{ itemName: 'MD10', lines: 3, withBase: 0, baseTotal: 0, amountTotal: -10,
+      verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 3 },
+      excludedFromBase: [], examples: [], percents: [], mostRecent: null }], unnamedDiscountLines: [] } as never,
   });
   const asking = fs.filter(f => f.needsAnswer !== null);
   ok(asking.length === 2,
@@ -514,7 +517,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])],
     discounts: { byName: [{ itemName: 'CD10%', lines: 4, withBase: 4, baseTotal: 100, amountTotal: 10,
                             verdicts: { equalsSubtotal: 4, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0 },
-                            excludedFromBase: [], examples: [] }],
+                            excludedFromBase: [], examples: [], percents: [{ pct: 10, lines: 4 }], mostRecent: '2026-08-19' }],
                  unnamedDiscountLines: [] },
   });
   const word = fs.find(f => f.id === 'discount-in-wording');
@@ -564,6 +567,64 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   ok(g?.measured === true && g.sentence.includes('3x'),
     'and where the list DOES follow a 3x rule it says so — the negative control, without which the probe above passes on a rule that never fires at all');
   ok(g?.value === 60, 'the gap is computed: 3x on a $60 cost base is $180, and $120 was taken');
+}
+
+// ══ M-DISC ✏️ THE REWORDED DISCOUNT RULE — tree-only is CORRECT, not broken ══════════════════
+// 🔴 THIS IS THE REGRESSION GUARD FOR A FINDING THAT SCORED THE INTENT AS A DEFECT. The rule used
+// to fire on `belowSubtotal` and tell an owner that "some customers got less off than the name
+// suggests" — which is exactly what a discount that comes off the trees and not off the delivery
+// looks like. Its `needsAnswer` then offered to "fix" it, i.e. to start discounting her labour.
+{
+  const tally = (itemName: string, v: Partial<{ equalsSubtotal: number; belowSubtotal: number; aboveSubtotal: number; noBase: number }>) => ({
+    itemName, lines: 10, withBase: 10, baseTotal: 1000, amountTotal: 100,
+    verdicts: { equalsSubtotal: 0, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0, ...v },
+    excludedFromBase: [{ itemName: 'Tailgate delivery', times: 6 }],
+    examples: [], percents: [{ pct: 10, lines: 10 }], mostRecent: '2026-08-19',
+  });
+  const base = { items: [item('1', 'Widget')], customers: CUSTOMERS,
+                 invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])] };
+  const findingFor = (byName: ReturnType<typeof tally>[]) =>
+    evaluateBooks({ ...base, discounts: { byName, unnamedDiscountLines: [] } })
+      .find(f => f.id === 'discounts-that-do-not-work');
+
+  // ① THE CORRECTION ITSELF.
+  const treeOnly = findingFor([tally('CD10%', { belowSubtotal: 10 })]);
+  ok(treeOnly?.population.matched === 0,
+    '🔴 a discount taken on PART of the invoice is NOT flagged — that is the tree-only rule working');
+  // `?? null` at the wrapper (booksFindings.ts:828) normalises an absent question, so `null` is
+  // the shape a caller actually sees — asserting `undefined` would have tested the rule's return
+  // rather than the finding a screen renders.
+  ok(treeOnly?.needsAnswer === null,
+    '🔴 and it asks her NOTHING — the old rule offered to "fix" correct behaviour into discounting her own labour');
+  ok(/CORRECT/.test(treeOnly?.sentence ?? ''),
+    'the sentence says so out loud, so the next reader does not re-file it as a defect');
+  ok(/never off delivery/.test(treeOnly?.sentence ?? ''),
+    'and it names what the discount does not come off, which is the whole rule in one clause');
+
+  // ② WHAT STILL FIRES — the base nobody stated. This is the case the reword is FOR.
+  const unstated = findingFor([tally('MD10', { noBase: 10 })]);
+  ok(unstated?.population.matched === 1, 'an UNSTATED base still fires — the amount cannot be checked');
+  ok(/not record what the percentage was taken from/.test(unstated?.sentence ?? ''),
+    'and the sentence names the actual problem rather than the old one');
+  ok(unstated?.needsAnswer !== null, 'and this one DOES ask her, because there is something to decide');
+
+  // ③ AND THE OTHER GENUINELY-WRONG SHAPE, kept deliberately rather than dropped with the reword.
+  const overRun = findingFor([tally('FD10', { aboveSubtotal: 10 })]);
+  ok(overRun?.population.matched === 1,
+    '🔴 a base ABOVE the whole invoice still fires — a percentage of more than everything is not tree-only, it is wrong');
+  ok(/MORE than the whole invoice/.test(overRun?.sentence ?? ''),
+    'and it is worded SEPARATELY from the unstated-base case, because the two need different answers');
+
+  // ④ THE NEGATIVE CONTROL. Without this the three above would pass on a rule that never fires.
+  const clean = findingFor([tally('CD15%', { equalsSubtotal: 10 })]);
+  ok(clean?.population.matched === 0 && clean?.measured === true,
+    'a discount taken on the whole invoice is measured and clean — the rule can still return zero');
+  const mixed = findingFor([tally('CD10%', { belowSubtotal: 10 }), tally('MD10', { noBase: 10 })]);
+  ok(mixed?.population.matched === 1 && mixed?.population.of === 2,
+    '🔴 with one of each, exactly ONE is flagged out of two — the two verdicts are genuinely separated, ' +
+    'not merged into "any discount with an odd verdict"');
+  ok(/CORRECT/.test(mixed?.sentence ?? '') && /cannot be checked/.test(mixed?.sentence ?? ''),
+    'and the sentence carries both halves — what is wrong AND what is right');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);

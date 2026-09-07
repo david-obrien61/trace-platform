@@ -379,22 +379,55 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'discounts-that-do-not-work', tier: 'money', shape: 'written-never-read', needs: ['invoices'],
     quoted: '3 military, 2 broken',
-    remeasured: '3 military discount items CONFIRMED. 5 discount items in total did not take their percentage off the whole invoice.',
+    remeasured: '3 military discount items CONFIRMED. The "broken" count was WRONG — see the rule below: a base BELOW the invoice subtotal is the INTENT, not a defect.',
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // ✏️ CORRECTED 2026-09-07 (David). THIS RULE WAS SCORING THE INTENT AS A DEFECT.
+    //
+    // It read: *"5 discount items did not take their percentage off the whole invoice — they were
+    // worked out on part of it, so some customers got less off than the name suggests."* That is
+    // `verdicts.belowSubtotal`, and **a base below the invoice subtotal is EXACTLY what a
+    // tree-only discount looks like.** A discount comes off the GOODS and never off delivery,
+    // placement, the trip charge or an add-on — the same rule this platform enforces at checkout
+    // (D-39, `tierPricing.ts`: the tier applies to `kind:'goods'` and services pass through at
+    // full price). So the old finding told an owner that the correct behaviour was broken, and
+    // its `needsAnswer` then offered to "fix" it — i.e. to start discounting her own labour.
+    //
+    // 🔴 THE TELL WAS ALREADY IN THE DATA AND THE RULE IGNORED IT. `excludedFromBase` names the
+    // line whose amount accounts for the gap — the delivery, the placement. A gap with a NAME on
+    // it is a deliberate exclusion, not a miscalculation.
+    //
+    // WHAT STILL FIRES, and why the reword is not simply "drop it":
+    //   · `noBase`        — the discount does not record what it was taken from. THE finding: an
+    //                       amount nobody can check, which is the case the reword is FOR.
+    //   · `aboveSubtotal` — the base exceeded the whole invoice. That is not tree-only and it is
+    //                       not anything else either; a percentage of more than everything is
+    //                       wrong in any reading. Kept, worded separately, and NOT folded in with
+    //                       the unstated-base case, because the two need different answers.
+    // `belowSubtotal` is now counted and reported as CORRECT — visibly, so the next reader does
+    // not re-file it as a defect.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
     run: (x) => {
       if (!x.discounts) return null;
       // REUSES `summariseInvoices`' own DiscountBreakdown rather than re-deriving it (§6 r8).
-      // A discount whose base does not equal the invoice subtotal is one that did not compute
-      // the way it looks like it should — that is the whole finding, and the breakdown already
-      // counts it four ways.
       const rows = x.discounts.byName;
-      const broken = rows.filter(r => r.verdicts.belowSubtotal > 0 || r.verdicts.aboveSubtotal > 0);
+      const unstated = rows.filter(r => r.verdicts.noBase > 0);
+      const overRun  = rows.filter(r => r.verdicts.aboveSubtotal > 0);
+      const treeOnly = rows.filter(r => r.verdicts.belowSubtotal > 0 && r.verdicts.noBase === 0 && r.verdicts.aboveSubtotal === 0);
+      const flagged = [...new Set([...unstated, ...overRun])];
+      const clause = [
+        unstated.length ? `${plural(unstated.length, 'discount item does', 'discount items do')} not record what the percentage was taken from, so the amount cannot be checked` : '',
+        overRun.length ? `${plural(overRun.length, 'was', 'were')} worked out on MORE than the whole invoice, which cannot be right in any reading` : '',
+      ].filter(Boolean).join('; and ');
+      const treeClause = treeOnly.length
+        ? ` ${plural(treeOnly.length, 'discount item takes', 'discount items take')} their percentage off part of the invoice rather than all of it — that is CORRECT, and it is how a discount is meant to work: it comes off the trees and never off delivery, placement or a trip charge.`
+        : '';
       return {
-        matched: broken.length, of: rows.length, noun: 'discount items in use',
-        sentence: broken.length === 0
-          ? 'Every discount item in your books took its percentage off the whole invoice, which is what they look like they should do.'
-          : `${plural(broken.length, 'discount item did', 'discount items did')} not take their percentage off the whole invoice — they were worked out on part of it, so some customers got less off than the name suggests.`,
-        needsAnswer: broken.length === 0 ? undefined : {
-          question: 'These discount items are not doing what their names say. Fix them, or stop using them?',
+        matched: flagged.length, of: rows.length, noun: 'discount items in use',
+        sentence: flagged.length === 0
+          ? `Every discount item in your books records what it was worked out from, and none was taken on more than the invoice was worth.${treeClause}`
+          : `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.${treeClause}`,
+        needsAnswer: flagged.length === 0 ? undefined : {
+          question: 'These discount items do not record what they were worked out from. Fix them, or stop using them?',
           options: ['Fix them in QuickBooks', 'Retire them — stop offering these', 'Leave them as they are for now'],
         },
       };
