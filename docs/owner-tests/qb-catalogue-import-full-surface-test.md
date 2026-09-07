@@ -31,7 +31,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 2 of 33 covered** (29 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
+**Board: 2 of 34 covered** (30 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
@@ -1138,3 +1138,31 @@ rows, that **the new rows did land**, that the catalogue now holds both lists, a
 ⚠️ **(b) and (c) are covered by probes and mutants** (`itemImportWriter.test.ts` §D2, mutants
 W28/W29) — the code is proven to distinguish them by `ok` alone. What is untested is the WORDING
 on screen, and that is what this card is holding open.
+
+
+---
+
+## CARD 34 — 🔴 THE H-SCROLLBAR SURVIVES THE BANNER
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+`/inventory`, with the "needs a look" banner showing (it shows whenever any row is flagged — 14 are
+on the 447 today, so it is up by default).
+
+1. The grid's **own horizontal scrollbar is visible without scrolling the page down.**
+2. Drag it right. **Price, Size and Variant group** come into view.
+3. Now filter to something with no flagged rows so the banner disappears. The scrollbar is **still**
+   in the same place — the grid did not jump.
+4. Resize the window shorter. The grid gets shorter; the scrollbar stays on screen.
+
+**PASS:** the h-scrollbar is reachable in all four states.
+🔴 **THIS IS THE ONE THAT MADE THE FLAG USELESS.** The banner made the grid taller, the box's bottom
+edge went below the fold, and the h-scrollbar went with it — while the three columns past that fold
+were **price, size and variant group, the exact three the banner tells her to edit.** A flag naming
+a fix she cannot reach. David: *"nobody scrolls to the bottom of a page to find the control that
+scrolls right."*
+✏️ *Fixed by making the CARD the bounded flex column and letting the box take the remainder, so
+anything rendered above it shrinks the box instead of displacing it. The old fixed
+`calc(100vh - 280px)` could not know the banner existed. **G2 amended** in
+`docs/standards/ui-control-standards.md` — the bound must survive chrome added above the box.*
+⚠️ **CHECK THE OTHER GRIDS TOO** — assets and customers use the same engine and inherit this. A
+quick look at each is worth more than trusting that one change was uniform.
+**FAIL:** the scrollbar is below the fold in any of the four states.

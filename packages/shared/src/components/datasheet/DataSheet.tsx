@@ -531,7 +531,18 @@ const S = {
   page: { minHeight: '100vh', background: '#EAF3DE', padding: 16, fontFamily: 'system-ui, -apple-system, sans-serif' } as React.CSSProperties,
   header: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' as const } as React.CSSProperties,
   title: { fontSize: '1.25rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
-  card: { background: '#fff', borderRadius: 12, padding: '1.25rem', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' } as React.CSSProperties,
+  // 🔴 THE CARD CARRIES THE BOUND, AND THE SCROLL BOX TAKES WHAT IS LEFT (G2, amended 2026-09-07).
+  // It used to be the other way round: the box owned a fixed `calc(100vh - 280px)` and the card
+  // grew to fit it. That is bounded but NOT ROBUST — the number cannot know about anything rendered
+  // ABOVE the box inside this card, so the "needs a look" banner made the grid taller and pushed
+  // the box's bottom edge, **and its horizontal scrollbar**, below the fold. David, live:
+  // *"nobody scrolls to the bottom of a page to find the control that scrolls right"* — and the
+  // columns past that fold were price, size and variant group, the exact three the banner tells
+  // her to edit. A flag naming a fix she cannot reach.
+  // As a flex column the card absorbs the banner, the toolbar and anything added later by SHRINKING
+  // the box rather than displacing it, and there is no per-consumer number to re-tune.
+  card: { background: '#fff', borderRadius: 12, padding: '1.25rem', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 190px)' } as React.CSSProperties,
   toolbar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' as const } as React.CSSProperties,
   searchWrap: { display: 'flex', alignItems: 'center', gap: 6, border: '1.5px solid #d1d5db', borderRadius: 8, padding: '0.4rem 0.6rem', background: '#fff', minWidth: 220 } as React.CSSProperties,
   searchInput: { border: 'none', outline: 'none', fontSize: '0.9rem', color: '#111827', width: '100%', background: 'transparent' } as React.CSSProperties,
@@ -556,7 +567,10 @@ const S = {
   // Negative horizontal margin bleeds the grid FLUSH to the card edges (cancels the card's 1.25rem
   // side padding) — zero left gutter, so the frozen identifier column gets that reclaimed room and
   // more columns fit before horizontal scroll kicks in. Cell padding keeps content off the edge.
-  scroll: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)', position: 'relative' as const, margin: '0 -1.25rem' } as React.CSSProperties,
+  // `flex:1` takes the remainder of the card; `minHeight:0` is LOAD-BEARING — a flex item defaults
+  // to `min-height:auto`, which refuses to shrink below its content and would let the table push
+  // the box past the card's bound, undoing the whole thing.
+  scroll: { overflow: 'auto', flex: 1, minHeight: 0, position: 'relative' as const, margin: '0 -1.25rem' } as React.CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.85rem' } as React.CSSProperties,
   // Sticky header row — stays visible on vertical scroll. box-shadow (not just borderBottom) keeps the
   // underline drawn during scroll under border-collapse. Opaque bg so body rows don't show through.
