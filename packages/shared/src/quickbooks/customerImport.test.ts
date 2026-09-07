@@ -33,6 +33,13 @@ import {
   CUSTOMER_INSERT_COLUMNS, CUSTOMER_RECONCILE_COLUMNS, CUSTOMER_INSERT_BATCH,
 } from './customerImportWriter';
 
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Resolved from the runner's cwd, which is the repo root. §M asserts the scan FOUND something,
+// so a wrong root fails loudly instead of reporting a clean sweep over nothing.
+const ROOT_DIR = process.cwd();
+
 let passed = 0, failed = 0;
 const failures: string[] = [];
 function ok(cond: boolean, msg: string): void {
@@ -415,6 +422,9 @@ async function main() {
   const created = customers.find(c => c.qb_customer_id === '102');
   ok(created.import_run_id === RUN && created.source === CUSTOMER_IMPORT_SOURCE,
     'the row this run created carries the run id and the import source');
+  // THE POSITIVE CONTROL FOR #202 — without it, "ok is always false" would pass the probe above.
+  ok(run.ok === true && run.created === run.stampedWithThisRun,
+    'a run whose rows are all found afterwards reports ok:TRUE — the fix computes the field, it does not hardcode it false');
 }
 
 // ══ §G2 CLAIMED vs OBSERVED — the re-read has to be able to disagree ═══════════════════
@@ -432,6 +442,12 @@ async function main() {
     '🔴 …and re-reads ZERO actually carrying the run id. The observed number is READ BACK from the table, never computed from the plan — otherwise a silently refused import reports a clean success (#274)');
   ok(run.created !== run.stampedWithThisRun,
     '🔴 claimed and observed are genuinely different values here — an assertion that can only ever compare a number to itself is not an assertion (R-33)');
+  // 🔴 tech-debt #202, checked here before this run report was ever read by anything. `ok` was
+  // INHERITED from the preview, which had genuinely succeeded, so `ok: true` sat over a commit
+  // that wrote nothing. On a plan `ok` means "the plan is sound"; on a run it means "the run
+  // wrote what it said it wrote". Same field name, two claims, and the compiler cannot tell.
+  ok(run.ok === false,
+    '🔴 a run that CLAIMED two rows and can find NONE of them reports ok:FALSE — the preview\'s success must not be spread into the run report, or a silently declined import reads as a clean one');
 }
 
 // ══ §H THE WRITE BOUNDARY, EXHAUSTIVELY — against the recorder, not the comment ═════════
@@ -675,6 +691,67 @@ async function main() {
 
   ok(CUSTOMER_INSERT_BATCH > 0 && CUSTOMER_INSERT_BATCH <= 1000,
     'the batch size is bounded — 1,946 rows in one request body is how a serverless import fails at the far end');
+}
+
+// ══ §M EVERY COLUMN THE IMPORT WRITES REALLY EXISTS ON `customers` ═════════════════════
+// 🔴 tech-debt #203's class, and the catalogue import's fix DOES NOT PORT HERE. That one parses
+// `business_inventory`'s CREATE TABLE out of the migration corpus. `customers` HAS NO CREATE
+// TABLE ANYWHERE IN THE CORPUS (live-only schema, tech-debt #39) and 10 of the 23 columns this
+// import writes — `qb_customer_id`, `source`, `first_name`, `last_name`, `email`, `phone`,
+// `address_line1`, `city`, `state`, `zip` — appear in NO migration at all. Run the corpus check
+// against this table and it reports ten real columns as unknown.
+//
+// So the assertion rests on a COMMITTED SNAPSHOT of the live column list
+// (`docs/schema-snapshots/customers-columns.json`, refreshed by
+// `scripts/snapshot-customers-columns.mjs`) — and, because a declaration nobody re-derives is
+// tech-debt #73's class, the snapshot is itself held to the corpus in the direction the corpus
+// CAN answer: every `ALTER TABLE customers ADD COLUMN` must appear in it, so a migration that
+// adds a column without a refresh fails the build.
+{
+  const snap = JSON.parse(readFileSync(join(ROOT_DIR, 'docs/schema-snapshots/customers-columns.json'), 'utf8'));
+  const known: string[] = snap.columns;
+  ok(Array.isArray(known) && known.length > 20,
+    '🔴 ANCHOR — the snapshot loaded and holds a real column list. A missing or empty file must fail here, not silently make every subset check below pass over nothing');
+  ok(snap.table === 'customers' && typeof snap.taken_at === 'string',
+    'the snapshot names its table and when it was taken — a column list with no provenance is a claim');
+
+  const unknown = CUSTOMER_INSERT_COLUMNS.filter(c => !known.includes(c));
+  ok(unknown.length === 0,
+    `🔴 EVERY COLUMN THE INSERT WRITES EXISTS ON THE TABLE. Unknown: [${unknown.join(', ')}]. `
+    + 'This is the defect the catalogue import shipped — a `source` column copied from a writer '
+    + 'whose table really has one. PostgREST rejects the whole insert, so it is not a bad value '
+    + 'in one row, it is zero rows written');
+
+  const recon = CUSTOMER_RECONCILE_COLUMNS.filter(c => !known.includes(c));
+  ok(recon.length === 0, `every column the RECONCILE updates exists too. Unknown: [${recon.join(', ')}]`);
+
+  // NEGATIVE CONTROL — the check must be shown to REFUSE something real, or it is decoration.
+  ok(!known.includes('a_column_that_does_not_exist'),
+    '🔴 NEGATIVE CONTROL — a fabricated column is NOT in the snapshot, so the subset test above is capable of failing (R-33)');
+
+  // ── the snapshot is held to the corpus, in the direction the corpus can answer ──
+  const MIG = 'supabase/migrations';
+  const files = readdirSync(join(ROOT_DIR, MIG)).filter(f => f.endsWith('.sql'));
+  ok(files.length > 50, '🔴 ANCHOR — the migration corpus was found. A wrong root would sweep zero files and report a clean pass');
+  const fromCorpus = new Set<string>();
+  let sawCreateTable = false;
+  for (const f of files) {
+    const sql = readFileSync(join(ROOT_DIR, MIG, f), 'utf8');
+    if (/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?customers\b/i.test(sql)) sawCreateTable = true;
+    for (const block of sql.split(/alter\s+table\s+(?:only\s+)?(?:public\.)?customers\b/i).slice(1)) {
+      const re = /add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(block.slice(0, 600))) !== null) fromCorpus.add(m[1].toLowerCase());
+    }
+  }
+  ok(fromCorpus.size > 10,
+    `🔴 ANCHOR — the ALTER TABLE scan found ${fromCorpus.size} columns. A broken regex must fail here rather than make the subset check below trivially true`);
+  ok(sawCreateTable === false,
+    '🔴 THE PREMISE OF THIS WHOLE SECTION, ASSERTED RATHER THAN ASSUMED: there is still NO `CREATE TABLE customers` in the corpus. If one ever lands, this snapshot stops being the only answer and §M should be rewritten to parse it — the catalogue import\'s way (tech-debt #39)');
+
+  const missingFromSnapshot = [...fromCorpus].filter(c => !known.includes(c));
+  ok(missingFromSnapshot.length === 0,
+    `🔴 THE SNAPSHOT IS STALE — a migration adds [${missingFromSnapshot.join(', ')}] and the snapshot has not been refreshed. Run \`node scripts/snapshot-customers-columns.mjs\`. This is the half that stops the declaration rotting (tech-debt #73)`);
 }
 
 } // end main

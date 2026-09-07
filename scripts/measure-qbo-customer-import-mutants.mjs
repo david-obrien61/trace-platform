@@ -158,6 +158,18 @@ const MUTANTS = [
   { id: 'G4', file: WRITER, why: '🔴 "we could not check" is worded as "you are live" — the operator fixes the wrong thing',
     from: "      refusedBecause: 'We could not check whether this business is sending invoices to QuickBooks, '",
     to:   "      refusedBecause: 'QuickBooks writes are ON for this business. '" },
+  { id: 'R1', file: WRITER, why: '🔴 tech-debt #202 — `ok` spread in from the PREVIEW, so a commit that wrote NOTHING reports success. Two claims, one field name, and the compiler cannot tell them apart',
+    from: '    ok: stampedWithThisRun === created,',
+    to:   '    ok: plan.ok,' },
+  { id: 'R2', file: WRITER, why: '🔴 `ok` hardcoded false — the opposite failure, and the reason the positive control exists',
+    from: '    ok: stampedWithThisRun === created,',
+    to:   '    ok: false,' },
+  { id: 'C1', file: WRITER, why: '🔴 tech-debt #203\'s EXACT SHAPE — the insert declares a column the table does not have (`shop_id`, a real column on other tables). PostgREST rejects the WHOLE insert, so it is zero rows written, not one bad value',
+    from: "  'business_id', 'qb_customer_id', 'import_run_id', 'source',",
+    to:   "  'business_id', 'qb_customer_id', 'import_run_id', 'source', 'shop_id'," },
+  { id: 'C2', file: WRITER, why: '🔴 the RECONCILE declares a column that does not exist — the exemption update fails for every existing customer',
+    from: "export const CUSTOMER_RECONCILE_COLUMNS = ['tax_exempt', 'tax_exempt_reason', 'tax_exempt_cert_ref'] as const;",
+    to:   "export const CUSTOMER_RECONCILE_COLUMNS = ['tax_exempt', 'tax_exempt_reason', 'tax_exempt_cert_ref', 'tax_exempt_verified'] as const;" },
 ];
 
 if (!suiteIsGreen()) {

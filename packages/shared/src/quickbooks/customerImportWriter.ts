@@ -105,7 +105,21 @@ export interface CustomerPlanReport {
   headline: string | null;
 }
 
-export interface CustomerRunReport extends Omit<CustomerPlanReport, 'wrote'> {
+export interface CustomerRunReport extends Omit<CustomerPlanReport, 'wrote' | 'ok'> {
+  /**
+   * 🔴 REDECLARED, NOT INHERITED, AND THAT IS THE WHOLE POINT (tech-debt #202, found in the
+   * catalogue import's twin of this type and checked here before it was ever exercised).
+   *
+   * On the PLAN this field means *"the plan is sound"*. On the RUN it means *"the run wrote what
+   * it said it wrote"* — two different claims, and the compiler is perfectly happy to let the
+   * first satisfy the second. Building the run report with `{ ...plan }` therefore shipped the
+   * PREVIEW's `ok: true` on a commit that may have written nothing: with an RLS policy declining
+   * the insert, PostgREST returns no error and no rows, so `created: 1946` and
+   * `stampedWithThisRun: 0` sat under `ok: true`. A caller reading `ok` saw success.
+   *
+   * It is now COMPUTED from what was observed after the write, in exactly one place.
+   */
+  ok: boolean;
   runId: string;
   created: number;
   reconciled: number;
@@ -335,8 +349,15 @@ export async function commitCustomerImport(
   const stampedWithThisRun = await countStamped(db, businessId, runId);
   console.log('[TRACE:CUSTIMPORT] commit', { businessId, runId, created, reconciled, customersAfter, stampedWithThisRun });
 
+  // 🔴 `ok` IS COMPUTED FROM WHAT CAME BACK OUT OF THE TABLE, NEVER SPREAD IN FROM THE PLAN.
+  // `stampedWithThisRun` was re-read after the write; `created` is what we believe we sent. If a
+  // policy declined the insert both the error and the rows are absent, and only these two
+  // disagreeing says so. `plan.ok` is deliberately destructured away so it cannot leak through.
+  const { ok: _planOk, wrote: _planWrote, ...planRest } = plan;
   return {
-    ...plan, wrote: true, runId, created, reconciled, customersAfter, stampedWithThisRun,
+    ...planRest,
+    ok: stampedWithThisRun === created,
+    wrote: true, runId, created, reconciled, customersAfter, stampedWithThisRun,
   };
 }
 
