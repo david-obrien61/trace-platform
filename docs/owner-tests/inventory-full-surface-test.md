@@ -94,6 +94,11 @@ the run; it is a failure of the *build* that shipped that surface without a test
 > is a probe or a mutant — 22 mutants, 22 caught — and **not one of them opened a browser.** The
 > whole point of G11 is where a button IS on a screen; a probe can prove the code says so and it
 > cannot prove your eye agrees.
+>
+> **1 of 4 covered (2026-09-07).** The frozen-identifier card is proven — the one that was a live
+> defect rather than a preference. The three still `owed` are the two SHAPE cards (is the button in
+> the same place on inventory, customers and assets) and the two write cards, **of which the MEMBER
+> one matters most**: it is the card that proves the fix is safe rather than merely fast.
 
 ### ACTIONS · NAME · DATA — the same shape on inventory, customers and assets
 STATUS: owed
@@ -107,10 +112,10 @@ SIGNAL: the Edit / + / Delete buttons on `/inventory` now sit **between the ⚠ 
 - **Why:** four grids carried three different orders and none of them was a decision. The cost is muscle memory — the same button in a different place on each screen.
 
 ### The Name column stays put when you scroll right — the silent G3 failure
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: R-108, G3, G11
-LAST-PROVEN: never
+LAST-PROVEN: 2026-09-07 — David, on `/inventory`, scrolled fully right. **The one card in this block that was proving a defect rather than a preference**, and it is the one that is now proven.
 SIGNAL: **this is the one to run carefully — it was broken and nothing said so.**
 - **Do:** on `/inventory`, scroll the grid **all the way right**, past Sell price and Reorder at.
 - **PASS:** the ⚠ flag column, the action buttons and the **Name** stay pinned at the left the whole way, with a crisp freeze line at their right edge. You always know which row you are editing.
@@ -126,7 +131,7 @@ SIGNAL: the grid no longer blinks after a cell edit.
 - **Do:** on `/inventory`, edit a **Sell price** and press Tab. Then edit a **Size**. Then change **On hand** (a qty movement takes a different path — it goes through the ledger RPC).
 - **PASS:** the edited cell keeps its new value, **`Last touched` on that row updates**, and nothing else on the screen moves or redraws. After the **On hand** edit, `Available` recomputes and `Status` follows the quantity (set it to 0 and the row reads *depleted*).
 - **FAIL:** the whole grid blinks / rows reflow *(the refetch is back)* · `Last touched` does not move *(the row was patched from what we asked for rather than from what landed)* · the value reverts a moment later.
-- **⚠️ ALSO CHECK, and it is a real change:** `Committed` is no longer re-counted on every cell edit. If someone else places an order while you are editing, that row's `Committed` will be stale **until you reload the page**. That is deliberate — no cell on this grid moves an order line — but it is a behaviour change and you should see it and agree with it.
+- **✅ ALREADY RULED, so do not re-open it — just know it:** `Committed` is no longer re-counted on every cell edit, so a row's `Committed` goes stale if someone else places an order while you are editing, **until you reload**. David accepted this on 2026-09-07 — *"the right trade against the flash"* (tech-debt #212). It is here because a stale number needs an explanation on the card where it will be noticed, not only in a log.
 - **Why:** the reload existed to prove the write landed. That proof now comes from the write itself.
 
 ### A refused edit says so and CHANGES NOTHING — sign in as a member

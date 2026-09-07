@@ -726,7 +726,7 @@ Related: #61, #145, #180 — the same family, all about our own repo rather than
 
 ---
 
-## #212 — 🟡 `Committed` STOPS RE-COUNTING ON AN INLINE EDIT (NEW 2026-09-07, an accepted trade, stated)
+## #212 — 🟢 `Committed` STOPS RE-COUNTING ON AN INLINE EDIT (NEW 2026-09-07 · **ACCEPTED BY DAVID THE SAME DAY**)
 
 `/inventory` used to refetch the whole list after every cell edit, and one thing rode along that the
 edit itself did not need: `fetchCommittedByLot` re-derived **`Committed`** — the units on open order
@@ -744,9 +744,14 @@ will not move that row's `Committed` until she reloads. That was never this func
 was never advertised — but it was real, and a reader finding stale numbers deserves to find this
 row rather than reason it out.
 
-**The honest fix, if it is ever wanted:** re-derive `Committed` on an interval or on window focus,
-not on an unrelated write. **Not built** — it is a different question (how fresh should another
-person's orders be on my screen?) and it is David's, not a detail of an edit path.
+✅ **RULED 2026-09-07, DAVID, ON BEING SHOWN IT:** *"Committed not recounting on an unrelated cell
+edit is the right trade against the flash."* **This row is CLOSED as a decision, not as a fix** — the
+behaviour stands as described and is no longer owed. It stays in the log because the next reader
+finding a stale `Committed` needs to find a ruling here, not reason it out and "fix" it back.
+
+**The fix, if the question ever changes:** re-derive `Committed` on an interval or on window focus —
+never on an unrelated write. **Deliberately not built.** *How fresh should another person's orders be
+on my screen* is its own question, and it was not answered by accepting this trade.
 
 ⚠️ **On the owner-test card as a thing to LOOK AT and agree with**, not buried here alone —
 `inventory-full-surface-test.md` → *"An inline edit changes ONE row"*.
