@@ -17,6 +17,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { planTracks, type TrackColumn } from './columnOrder';
 
 const SRC = readFileSync(
   join(process.cwd(), 'packages/shared/src/components/datasheet/DataSheet.tsx'), 'utf8');
@@ -28,15 +29,28 @@ function ok(cond: boolean, msg: string): void {
 }
 
 // ── ① THE TOGGLE LEADS ───────────────────────────────────────────────────────────────────────
-const headIdx = SRC.indexOf('key="__expand__"');
-const frozenHeadIdx = SRC.indexOf('{frozenCols.map(headerCell)}');
-ok(headIdx > -1 && frozenHeadIdx > -1 && headIdx < frozenHeadIdx,
-  '🔴 G10a: the toggle HEADER cell is emitted BEFORE the frozen identifier run — leading, not trailing');
+//
+// ✏️ FOUR OF THESE PROBES CHANGED INSTRUMENT ON 2026-09-07 (G11), AND IT IS AN UPGRADE, NOT A
+// RELAXATION. They used to compare the character offsets of two JSX fragments in this file's
+// source — the weaker instrument this header already apologises for — and G11 moved the pinned
+// segment's arithmetic into `columnOrder.ts`, where it can be RUN. So G10a/b/e/f now assert the
+// same facts by planning a real column set and reading the result, and G10c/d still read source
+// because what they forbid is a fragment of markup, which is a text fact.
+//
+// ⚠️ The clause ids are UNCHANGED on purpose: `ui-standards.html` and the divergence declarations
+// cite G10 by id, and renumbering to tidy a refactor breaks references to fix a preference.
+const COLS: TrackColumn[] = [
+  { key: 'flag', frozen: true, frozenWidth: 34 },
+  { key: 'name', frozen: true, frozenWidth: 180, identifier: true },
+  { key: 'data' },
+];
+const withToggle = planTracks(COLS, { expandWidth: 36, actionsWidth: 122 });
 
-const bodyExpandIdx = SRC.indexOf('{expandPin && (');
-const frozenBodyIdx = SRC.indexOf('{frozenCols.map(col => bodyCell(');
-ok(bodyExpandIdx > -1 && frozenBodyIdx > -1 && bodyExpandIdx < frozenBodyIdx,
-  'G10b: the toggle BODY cell is emitted before the frozen run too — header and body agree, or the columns misalign');
+ok(withToggle.pinned[0].key === '__expand__',
+  '🔴 G10a: the toggle leads the pinned segment — ahead of the frozen identifier run AND ahead of G11\'s actions track, not trailing');
+
+ok(/\{plan\.pinned\.map\(t => pinnedHeader\(t\)\)\}/.test(SRC) && /\{plan\.pinned\.map\(t => pinnedCell\(/.test(SRC),
+  'G10b: header and body render from THE SAME plan array, so they cannot disagree about the toggle\'s position — the old probe compared two independently-written fragments and could only notice a mismatch after someone edited one of them');
 
 ok(!/\{renderExpand && <th style=\{S\.th\}><\/th>\}/.test(SRC),
   '🔴 G10c: the OLD TRAILING header cell is gone — leaving it would render an empty column at the far right AND throw the colSpan out');
@@ -44,10 +58,10 @@ ok(!/\{renderExpand && <th style=\{S\.th\}><\/th>\}/.test(SRC),
 // ── ② THE RESERVED TRACK (§6 r14 — the #104/#105 defect) ─────────────────────────────────────
 ok(/const EXPAND_TRACK_W = \d+;/.test(SRC),
   'G10d: the toggle track has a FIXED width constant — a pinned column without a deterministic width is exactly what let scrolling columns pass underneath at #104/#105');
-ok(/let frozenAcc = expandPin \? expandPin\.width : 0;/.test(SRC),
-  '🔴 G10e: the frozen accumulator STARTS at the toggle width — every downstream left offset shifts by exactly one track, so the offsets still accumulate exactly');
-ok(/expandPin = renderExpand \? \{ left: 0, width: EXPAND_TRACK_W \} : null/.test(SRC),
-  'G10f: the toggle occupies track 0, and exists ONLY when the grid has an expansion');
+ok(withToggle.pinned[0].left === 0 && withToggle.pinned[1].left === 36,
+  '🔴 G10e: the toggle takes track 0 and every downstream left offset shifts by exactly one track — the offsets still accumulate exactly (§6 r14)');
+ok(!planTracks(COLS, { actionsWidth: 122 }).pinned.some(t => t.kind === 'expand'),
+  'G10f: the toggle exists ONLY when the grid has an expansion — a grid with nothing to disclose gets no gutter and no mystery click target');
 
 // ── ③ THE ROW IS THE CLICK TARGET, AND THE GUARD IS THE LOAD-BEARING PART ────────────────────
 ok(/onClick=\{renderExpand \?/.test(SRC),

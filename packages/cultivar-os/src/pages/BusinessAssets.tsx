@@ -34,6 +34,7 @@ import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
   type DataSheetColumn,
 } from '@trace/shared/components/datasheet/DataSheet';
+import { writeLanded, applyRowPatch } from '@trace/shared/components/datasheet/rowPatch';
 
 const STATUS_OPTIONS = ['ACTIVE', 'IN_REPAIR', 'OFFLINE', 'RETIRED'] as const;
 type AssetStatus = typeof STATUS_OPTIONS[number];
@@ -143,18 +144,33 @@ export function BusinessAssets() {
     setProjects((data ?? []).map((p: { id: string; name: string | null }) => ({ id: String(p.id), name: p.name ?? 'Untitled project' })));
   }
 
-  // ── Inline edit: one immediate write per field, RLS-scoped, ASSET-guarded. ──
+  // ── Inline edit: one immediate write per field, RLS-scoped, ASSET-guarded. ────────────────────
+  //
+  // 🔴 THIS WRITE HAD NO EVIDENCE CHECK AT ALL, AND THE REFETCH WAS HIDING IT (found 2026-09-07 in
+  // the G11 pass, fixed in the same pass per §1.6). It asked only `if (error)` — but a row-level
+  // RLS refusal returns NO error and ZERO rows (A8 / R-12), so a refused edit reported success and
+  // the only thing that ever contradicted it was the reload silently putting the old value back.
+  // Removing the reload WITHOUT adding `.select('id')` would have turned a confusing snap-back
+  // into a clean lie, which is exactly the failure David named: do not move local state before the
+  // write is proven.
+  //
+  // ⚠️ WHAT THE RELOAD ALSO DID: its comment said *"reload → /costs recomputes from the same fresh
+  // rows"*. That is a claim about ANOTHER page, and it was never true across a route change —
+  // /costs reads on its own mount. Within this page nothing downstream of `assets` is derived, so
+  // the patched row is the whole update.
   async function writeAsset(asset: AssetRow, patch: Record<string, unknown>, field: string, to: unknown) {
     const from = (asset as unknown as Record<string, unknown>)[field];
     console.log('[TRACE:assets] edit', { assetId: asset.id, field, from, to });
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('cost_objects')
       .update(patch)
       .eq('id', asset.id)
       .eq('business_id', businessId)
-      .eq('node_type', 'ASSET');
-    if (error) { console.error('[TRACE:assets] edit error', field, error.message); setListError(error.message); return; }
-    await loadAssets(); // reload → /costs recomputes from the same fresh rows
+      .eq('node_type', 'ASSET')
+      .select('id');
+    const verdict = writeLanded({ data, error }, 'That change was not saved — you may not have permission to edit this asset.');
+    if (!verdict.landed) { console.error('[TRACE:assets] edit not saved', field, verdict.cause, verdict.message); setListError(verdict.message); return; }
+    setAssets(prev => applyRowPatch(prev, asset.id, patch));
   }
 
   function onText(asset: AssetRow, field: 'name' | 'make' | 'model' | 'serial_number' | 'location' | 'notes', raw: string | null) {
@@ -214,7 +230,7 @@ export function BusinessAssets() {
 
   // ── Column config ──
   const columns: DataSheetColumn<AssetRow>[] = [
-    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180,
+    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180, identifier: true,
       render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => onText(r, 'name', v)} /> },
     { key: 'make', header: 'Make', sortable: true, sortVal: r => (r.make ?? '').toLowerCase(),
       render: r => <TextCell key={`make-${r.id}-${r.updated_at}`} value={r.make} width={100} placeholder="—" onCommit={v => onText(r, 'make', v)} /> },

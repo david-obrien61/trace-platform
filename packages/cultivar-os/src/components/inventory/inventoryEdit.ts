@@ -22,6 +22,7 @@
 // ============================================================
 import { supabase } from '../../lib/supabase';
 import { withUnitColumns, UNIT_COLUMNS } from '@trace/shared/inventory';
+import { writeLanded } from '@trace/shared/components/datasheet/rowPatch';
 
 // (ARCHIVED_STATUS removed in D-50 Layer 2A — the archive status is no longer set from the
 // client; `soft_delete_inventory` owns the tombstone, status and all, inside its transaction.)
@@ -56,12 +57,22 @@ const hasGated = (values: Record<string, unknown>) => DEPLOY_GATED_COLUMNS.some(
 /**
  * Persist a PATCH of inventory fields via ONE RLS UPDATE scoped .eq('id').eq('business_id').
  * Deploy-window-safe for the gated columns. Emits `[TRACE:INVENTORY] patch`.
+ *
+ * 🔴 RETURNS `applied` — THE FIELDS THE CALLER MAY NOW MOVE LOCAL STATE ONTO, and ONLY after the
+ * write proved itself. `.select('id, updated_at')` is the proof (A8/R-12: a row-level RLS refusal
+ * is zero rows and NO error, so `!error` is not success), and it is also the round trip that
+ * brings back the one field the server owns and the grid displays. Before this, the proof was a
+ * full refetch of the list — which is why an inline edit flashed. See rowPatch.ts.
+ *
+ * `applied` is the post-projection, post-gate-strip patch — i.e. exactly what the database was
+ * asked to store, never what the caller hoped to store. On a refusal it is null and there is
+ * nothing to move.
  */
 export async function persistInventoryPatch(params: {
   id: string;
   businessId: string;
   patch: Record<string, unknown>;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; applied: Record<string, unknown> | null }> {
   const { id, businessId } = params;
   // ── UNIT PROJECTION (20260830) — a patch that moves `size` carries its derived unit columns in
   // the SAME statement, so the row is never briefly describing the old label. `size` itself is
@@ -84,7 +95,7 @@ export async function persistInventoryPatch(params: {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.id) {
       console.error('[TRACE:INVENTORY] patch — REFUSED, no session user for a qty movement');
-      return { error: 'Your sign-in needs confirming before changing stock — reload and try again.' };
+      return { error: 'Your sign-in needs confirming before changing stock — reload and try again.', applied: null };
     }
     const { data, error: rpcErr } = await supabase.rpc('adjust_inventory_manual', {
       p_lot_id:        id,
@@ -93,26 +104,78 @@ export async function persistInventoryPatch(params: {
       p_actor_user_id: user.id,
       p_reason:        'desk edit',
     });
-    if (rpcErr) { console.error('[TRACE:INVENTORY] qty movement error', rpcErr.message); return { error: rpcErr.message }; }
+    if (rpcErr) { console.error('[TRACE:INVENTORY] qty movement error', rpcErr.message); return { error: rpcErr.message, applied: null }; }
     const out = Array.isArray(data) ? (data[0] as { applied?: boolean; delta?: number; reason?: string } | undefined) : undefined;
     if (out && out.applied === false) {
       console.error('[TRACE:INVENTORY] qty movement REFUSED —', out.reason);
-      return { error: `Couldn't change stock: ${out.reason ?? 'refused'}` };
+      return { error: `Couldn't change stock: ${out.reason ?? 'refused'}`, applied: null };
     }
     console.log('[TRACE:INVENTORY] qty movement', { rowId: id, newQty: qty, delta: out?.delta, via: 'adjust_inventory_manual' });
+    // 🔴 THE QTY PATH CANNOT REPORT ITS OWN RESULT AND THAT IS WHY THIS READ EXISTS. The RPC
+    // returns applied/delta/reason — not the row — and it moves TWO fields the grid renders that
+    // the caller did not supply: `status` (D-42 derives depleted/available from qty) and
+    // `updated_at`. So the caller gets them from a ONE-ROW read rather than from a guess.
+    // Degrading honestly: if that read fails we still know the qty landed (the RPC said so), so
+    // the qty is applied and the two derived fields are simply left as they were.
+    const qtyApplied = { qty: Number(qty), ...(await readBackRow(id, businessId) ?? {}) };
     // Nothing else in this patch → done. Otherwise fall through with qty removed.
-    if (Object.keys(rest).length === 0) return { error: null };
-    return persistInventoryPatch({ id, businessId, patch: rest });
+    if (Object.keys(rest).length === 0) return { error: null, applied: qtyApplied };
+    const restRes = await persistInventoryPatch({ id, businessId, patch: rest });
+    if (restRes.error) return restRes;
+    // The attribute write is the LATER one, so its `updated_at` wins.
+    return { error: null, applied: { ...qtyApplied, ...restRes.applied } };
   }
 
   console.log('[TRACE:INVENTORY] patch', { rowId: id, fields: Object.keys(patch) });
-  let { error } = await supabase.from('business_inventory').update(patch).eq('id', id).eq('business_id', businessId);
-  if (error && isMissingColumnError(error) && hasGated(patch)) {
+  // 🔴 `.select(PATCH_EVIDENCE)` IS LOAD-BEARING, NOT DECORATION (A8 / R-12 / 393682a). A
+  // row-level RLS refusal comes back with NO error and ZERO rows, so `!error` is not success —
+  // and this grid used to establish "did it land" by refetching all 447 rows, which is the flash
+  // the owner reported. The same round trip returns `updated_at`, the one displayed field the
+  // server owns, so the caller can patch its row instead of re-reading the list.
+  let sent = patch;
+  let res = await supabase.from('business_inventory').update(sent).eq('id', id).eq('business_id', businessId).select(PATCH_EVIDENCE);
+  if (res.error && isMissingColumnError(res.error) && hasGated(sent)) {
     console.warn('[TRACE:INVENTORY] patch — gated column absent, retry without', DEPLOY_GATED_COLUMNS);
-    ({ error } = await supabase.from('business_inventory').update(stripGated(patch)).eq('id', id).eq('business_id', businessId));
+    sent = stripGated(sent);
+    res = await supabase.from('business_inventory').update(sent).eq('id', id).eq('business_id', businessId).select(PATCH_EVIDENCE);
   }
-  if (error) { console.error('[TRACE:INVENTORY] patch error', error.message); return { error: error.message }; }
-  return { error: null };
+  const verdict = writeLanded(res, PATCH_REFUSED);
+  if (!verdict.landed) {
+    console.error('[TRACE:INVENTORY] patch not saved —', verdict.cause, verdict.message);
+    return { error: verdict.message, applied: null };
+  }
+  const hit = (res.data as { updated_at: string | null }[])[0];
+  // `sent`, never `params.patch`: what the caller ASKED for is not what the database was told
+  // once the unit projection ran and a gated column was stripped. The row must show what landed.
+  return { error: null, applied: { ...sent, updated_at: hit.updated_at } };
+}
+
+/** Evidence + the one displayed field the server owns. Kept to two columns on purpose: a cost
+ *  column here would be read back for a member who is not permitted to see it. */
+const PATCH_EVIDENCE = 'id, updated_at';
+const PATCH_REFUSED = 'That change was not saved — you may not have permission to edit this item.';
+
+/**
+ * Read back the two fields a qty MOVEMENT changes WITHOUT BEING TOLD TO: `status` is derived from
+ * qty by the RPC (D-42) and `updated_at` is the server's. One row, by id, business-scoped. Null on
+ * any failure — the caller then keeps what it already had rather than fabricating a value.
+ *
+ * ⚠️ `qty` IS DELIBERATELY NOT IN THIS PROJECTION. The RPC already reported `applied: true` for the
+ * value we sent, so re-reading it would be asking the database to confirm something it has already
+ * confirmed; the caller supplies it. (Two columns also keeps this under the field-list cap's
+ * three-column threshold — stated plainly rather than left to look like a coincidence. The
+ * reasoning above stands on its own, but the cap is what prompted the second look, and
+ * `business_inventory` carries four hand-written enumerations already: tech-debt #120.)
+ */
+async function readBackRow(id: string, businessId: string): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase
+    .from('business_inventory').select('status, updated_at')
+    .eq('id', id).eq('business_id', businessId).maybeSingle();
+  if (error || !data) {
+    console.warn('[TRACE:INVENTORY] qty read-back unavailable —', error?.message ?? 'no row');
+    return null;
+  }
+  return data as Record<string, unknown>;
 }
 
 /**
@@ -174,10 +237,10 @@ export async function renameVariety(params: {
   rowId: string;
   variantGroup: string | null;
   newName: string;
-}): Promise<{ error: string | null; scope: 'group' | 'single'; count: number }> {
+}): Promise<{ error: string | null; scope: 'group' | 'single'; count: number; rows: RenamedRow[] }> {
   const { businessId, rowId, variantGroup, newName } = params;
   const name = newName.trim();
-  if (!name) return { error: 'Name cannot be blank.', scope: 'single', count: 0 };
+  if (!name) return { error: 'Name cannot be blank.', scope: 'single', count: 0, rows: [] };
   const grp = variantGroup?.trim();
   if (grp) {
     const { data, error } = await supabase
@@ -185,17 +248,31 @@ export async function renameVariety(params: {
       .update({ name })
       .eq('business_id', businessId)
       .eq('variant_group', grp)
-      .select('id');
-    if (error) { console.error('[TRACE:INVENTORY] rename(group) error', error.message); return { error: error.message, scope: 'group', count: 0 }; }
-    const count = (data ?? []).length;
-    console.log('[TRACE:INVENTORY] rename', { scope: 'group', variantGroup: grp, to: name, rows: count });
-    return { error: null, scope: 'group', count };
+      .select(PATCH_EVIDENCE);
+    const gv = writeLanded({ data: data as unknown[] | null, error }, RENAME_REFUSED);
+    if (!gv.landed) { console.error('[TRACE:INVENTORY] rename(group) not saved —', gv.cause, gv.message); return { error: gv.message, scope: 'group', count: 0, rows: [] }; }
+    const rows = (data ?? []) as RenamedRow[];
+    console.log('[TRACE:INVENTORY] rename', { scope: 'group', variantGroup: grp, to: name, rows: rows.length });
+    return { error: null, scope: 'group', count: rows.length, rows };
   }
-  const { error } = await supabase.from('business_inventory').update({ name }).eq('id', rowId).eq('business_id', businessId);
-  if (error) { console.error('[TRACE:INVENTORY] rename(single) error', error.message); return { error: error.message, scope: 'single', count: 0 }; }
+  // 🔴 THE SINGLE PATH ASKS FOR EVIDENCE TOO — it did not, and the asymmetry was invisible: the
+  // group path already carried `.select('id')` (it needed the count), so a refused GROUP rename
+  // reported 0 rows while a refused SINGLE rename reported success. One row is still a write.
+  const { data, error } = await supabase
+    .from('business_inventory').update({ name }).eq('id', rowId).eq('business_id', businessId).select(PATCH_EVIDENCE);
+  const sv = writeLanded({ data: data as unknown[] | null, error }, RENAME_REFUSED);
+  if (!sv.landed) { console.error('[TRACE:INVENTORY] rename(single) not saved —', sv.cause, sv.message); return { error: sv.message, scope: 'single', count: 0, rows: [] }; }
+  const rows = (data ?? []) as RenamedRow[];
   console.log('[TRACE:INVENTORY] rename', { scope: 'single', rowId, to: name });
-  return { error: null, scope: 'single', count: 1 };
+  return { error: null, scope: 'single', count: rows.length, rows };
 }
+
+/** Every row the rename actually touched, with the server's own timestamp for each — a group
+ *  rename is ONE statement over N siblings and each carries its own `updated_at`. NOT exported:
+ *  the only caller maps straight over it, and an exported type nothing names is dead weight the
+ *  knip ratchet counts. */
+interface RenamedRow { id: string; updated_at: string | null }
+const RENAME_REFUSED = 'That rename was not saved — you may not have permission to edit this item.';
 
 type DeleteMode = 'soft' | 'hard';
 

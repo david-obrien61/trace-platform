@@ -725,3 +725,29 @@ reading it; comments about someone else's system are not, and those are the ones
 Related: #61, #145, #180 — the same family, all about our own repo rather than a customer's books.
 
 ---
+
+## #212 — 🟡 `Committed` STOPS RE-COUNTING ON AN INLINE EDIT (NEW 2026-09-07, an accepted trade, stated)
+
+`/inventory` used to refetch the whole list after every cell edit, and one thing rode along that the
+edit itself did not need: `fetchCommittedByLot` re-derived **`Committed`** — the units on open order
+lines — for every row.
+
+R-109 removed the refetch (the flash), so that re-derivation is gone with it.
+
+**WHY IT IS CORRECT FOR THE EDIT:** no cell on this grid moves an order line, so `Committed` cannot
+change as a result of anything typed here. `Available` recomputes correctly from the patched `qty`
+against the `Committed` already in hand — the arithmetic is unaffected.
+
+**WHAT IS ACTUALLY LOST, AND IT IS NOT NOTHING:** the refetch also picked up **someone else's**
+order as a side effect of an unrelated edit. A member ringing up a sale while Lauren edits a price
+will not move that row's `Committed` until she reloads. That was never this function's job and it
+was never advertised — but it was real, and a reader finding stale numbers deserves to find this
+row rather than reason it out.
+
+**The honest fix, if it is ever wanted:** re-derive `Committed` on an interval or on window focus,
+not on an unrelated write. **Not built** — it is a different question (how fresh should another
+person's orders be on my screen?) and it is David's, not a detail of an edit path.
+
+⚠️ **On the owner-test card as a thing to LOOK AT and agree with**, not buried here alone —
+`inventory-full-surface-test.md` → *"An inline edit changes ONE row"*.
+

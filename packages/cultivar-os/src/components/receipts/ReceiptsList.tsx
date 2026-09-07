@@ -324,7 +324,7 @@ function ReceiptExpansion({ row, businessId }: { row: ReceiptRowModel; businessI
 //    fact declares one. The identifier column is frozen with a RESERVED TRACK (§6 r14). ──
 const columns: DataSheetColumn<ReceiptRowModel>[] = [
   {
-    key: 'vendor', header: 'Vendor', frozen: true, frozenWidth: 200, hideable: false,
+    key: 'vendor', header: 'Vendor', frozen: true, frozenWidth: 200, hideable: false, identifier: true,
     sortable: true, sortVal: r => r.vendorText.toLowerCase(),
     render: r => <Link to={`/receipts/${r.id}`} style={VENDOR_LINK}>{r.vendorText}</Link>,
   },

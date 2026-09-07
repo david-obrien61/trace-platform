@@ -241,7 +241,7 @@ export function InventoryReconcile() {
   const columns: DataSheetColumn<LotRow>[] = useMemo(() => {
     const cols: DataSheetColumn<LotRow>[] = [
       {
-        key: 'name', header: 'Item', sortable: true, hideable: false, frozen: true, frozenWidth: 240,
+        key: 'name', header: 'Item', sortable: true, hideable: false, frozen: true, frozenWidth: 240, identifier: true,
         sortVal: r => r.name.toLowerCase(),
         render: r => (
           <div>

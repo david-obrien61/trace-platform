@@ -34,6 +34,7 @@ import {
   DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
 } from '@trace/shared/components/datasheet/DataSheet';
+import { writeLanded, applyRowPatch } from '@trace/shared/components/datasheet/rowPatch';
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
@@ -172,9 +173,12 @@ export function Customers() {
       // A8 — a grid cell is a write too: without the affected-row check a refused tier change
       // silently repaints as if it landed, then reverts on the next load.
       const { data, error } = await supabase.from('customers').update({ price_tier: v }).eq('id', c.id).eq('business_id', bid).select('id');
-      if (error) { setListError(error.message); return; }
-      if (!data?.length) { setListError('That tier change was not saved — you may not have permission to edit this customer.'); return; }
-      await loadCustomers();
+      const verdict = writeLanded({ data, error }, 'That tier change was not saved — you may not have permission to edit this customer.');
+      if (!verdict.landed) { setListError(verdict.message); return; }
+      // The row is patched from the write's own proven response — no refetch, no flash (G11 pass,
+      // 2026-09-07). `price_tier` is the only field this write moves and the roster shows no
+      // server-derived column beside it, so there is nothing left to read back.
+      setCustomers(prev => applyRowPatch(prev, c.id, { price_tier: v }));
     })();
   }
 
@@ -198,9 +202,9 @@ export function Customers() {
     void (async () => {
       // A8 — see onTier.
       const { data, error } = await supabase.from('customers').update({ status: v }).eq('id', c.id).eq('business_id', bid).select('id');
-      if (error) { setListError(error.message); return; }
-      if (!data?.length) { setListError('That status change was not saved — you may not have permission to edit this customer.'); return; }
-      await loadCustomers();
+      const verdict = writeLanded({ data, error }, 'That status change was not saved — you may not have permission to edit this customer.');
+      if (!verdict.landed) { setListError(verdict.message); return; }
+      setCustomers(prev => applyRowPatch(prev, c.id, { status: v }));
     })();
   }
 
@@ -223,7 +227,7 @@ export function Customers() {
   // ── Column config — the LEAN at-a-glance roster (name/type/tier/tax/status/added + Edit).
   //    The full field set lives in CustomerPartyEditor (opened via the name or the Edit button). ──
   const columns: DataSheetColumn<CustomerRow>[] = [
-    { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200,
+    { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200, identifier: true,
       render: r => (
         <button onClick={() => navigate(`/customers/${r.id}`)} title="Open customer record + order history"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 600, color: '#1f2937' }}>
@@ -250,8 +254,11 @@ export function Customers() {
       render: r => <span style={SS.muted}>{fmtDate(r.created_at)}</span> },
   ];
 
-  // Row action — LEFT-PINNED by the shared engine (adjacent to the frozen Name column) so Edit is
-  // always reachable without scrolling right (STD-011 engine behavior, same as inventory).
+  // Row action — LEFT-PINNED by the shared engine, immediately BEFORE the identifier column, so
+  // Edit is always reachable without scrolling right AND sits where it sits on /inventory (G11:
+  // ACTIONS · NAME · DATA). ⚠️ THIS ROSTER IS THE CLAUSE'S REASON: it used to render NAME · ACTIONS
+  // while inventory rendered ACTIONS · NAME, and neither was a decision — each fell out of where
+  // its config happened to put the frozen run.
   const rowActions = (r: CustomerRow) => (
     <button onClick={() => openEdit(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
   );

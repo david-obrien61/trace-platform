@@ -88,6 +88,58 @@ the run; it is a failure of the *build* that shipped that surface without a test
 > **Standing (OP-15):** every owner-test board carries this GATE 0 at the top. Inventory is the only
 > board today; any future board (the planned orders board included) inherits it by this rule.
 
+## G11 — THE GRID STANDARD, AND THE EDIT THAT NO LONGER RELOADS (2026-09-07)
+
+> These four cards are the **only** proof that matters for this build. Every assertion behind them
+> is a probe or a mutant — 22 mutants, 22 caught — and **not one of them opened a browser.** The
+> whole point of G11 is where a button IS on a screen; a probe can prove the code says so and it
+> cannot prove your eye agrees.
+
+### ACTIONS · NAME · DATA — the same shape on inventory, customers and assets
+STATUS: owed
+DEVICE: desktop
+COVERS: R-108, G11
+LAST-PROVEN: never
+SIGNAL: the Edit / + / Delete buttons on `/inventory` now sit **between the ⚠ flag column and the Name column**, and on `/customers` they lead the row instead of following the name.
+- **Do:** open `/inventory`, then `/customers`, then `/assets`. Look only at the left-hand end of a row on each.
+- **PASS:** on `/inventory` and `/customers` the row's action buttons are in the **same place relative to the name** — actions, then the name. `/assets` has no row actions today, so its name simply leads.
+- **FAIL:** the buttons are on the far side of the name on one screen and the near side on another *(the shape this clause exists to remove)* · the actions column scrolls away when you scroll right *(it must stay pinned)*.
+- **Why:** four grids carried three different orders and none of them was a decision. The cost is muscle memory — the same button in a different place on each screen.
+
+### The Name column stays put when you scroll right — the silent G3 failure
+STATUS: owed
+DEVICE: desktop
+COVERS: R-108, G3, G11
+LAST-PROVEN: never
+SIGNAL: **this is the one to run carefully — it was broken and nothing said so.**
+- **Do:** on `/inventory`, scroll the grid **all the way right**, past Sell price and Reorder at.
+- **PASS:** the ⚠ flag column, the action buttons and the **Name** stay pinned at the left the whole way, with a crisp freeze line at their right edge. You always know which row you are editing.
+- **FAIL:** the Name scrolls away with the data *(the live defect: `Needs a look` had been inserted between the flag and the Name, and only a CONTIGUOUS leading run pins — so `Name` said `frozen: true` and was not)* · columns slide UNDERNEATH the pinned block *(a reserved track lost its width — the #104/#105 defect)*.
+- **Why:** the identifier column is the one thing a wide grid must never lose, and its failure is invisible until the moment you need it.
+
+### An inline edit changes ONE row — no flash, no reload
+STATUS: owed
+DEVICE: desktop
+COVERS: R-109
+LAST-PROVEN: never
+SIGNAL: the grid no longer blinks after a cell edit.
+- **Do:** on `/inventory`, edit a **Sell price** and press Tab. Then edit a **Size**. Then change **On hand** (a qty movement takes a different path — it goes through the ledger RPC).
+- **PASS:** the edited cell keeps its new value, **`Last touched` on that row updates**, and nothing else on the screen moves or redraws. After the **On hand** edit, `Available` recomputes and `Status` follows the quantity (set it to 0 and the row reads *depleted*).
+- **FAIL:** the whole grid blinks / rows reflow *(the refetch is back)* · `Last touched` does not move *(the row was patched from what we asked for rather than from what landed)* · the value reverts a moment later.
+- **⚠️ ALSO CHECK, and it is a real change:** `Committed` is no longer re-counted on every cell edit. If someone else places an order while you are editing, that row's `Committed` will be stale **until you reload the page**. That is deliberate — no cell on this grid moves an order line — but it is a behaviour change and you should see it and agree with it.
+- **Why:** the reload existed to prove the write landed. That proof now comes from the write itself.
+
+### A refused edit says so and CHANGES NOTHING — sign in as a member
+STATUS: owed
+DEVICE: desktop
+COVERS: R-109, A8, R-12
+LAST-PROVEN: never
+SIGNAL: **this card is the reason the fix is safe, and it is the one that would fail loudly if the order were wrong.**
+- **Do:** sign in as a MEMBER who cannot edit inventory (or a member without `costs:read` for the cost cells). Try to change a cell on `/inventory`, and a field on `/assets`.
+- **PASS:** an error line appears saying the change **was not saved**, and the cell shows the **OLD** value — the true one.
+- **FAIL:** the new value sits there looking saved and only reverts on reload *(local state moved before the write was proven — the exact defect this build was told not to introduce)* · nothing at all happens, with no message.
+- **Why:** a row-level RLS refusal returns **no error and zero rows**. `/assets` had no evidence check at all before this build; its reload was the only thing that ever contradicted a refused write.
+
 ### The app states its own SHA — visibly, on every screen
 STATUS: owed
 DEVICE: phone

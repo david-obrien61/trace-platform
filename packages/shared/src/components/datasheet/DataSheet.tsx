@@ -46,6 +46,7 @@
 import { useState, useMemo, useEffect, Fragment } from 'react';
 import { Plus, Minus, SlidersHorizontal, Search, Lock } from 'lucide-react';
 import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
+import { planTracks, type PinnedTrack } from './columnOrder';
 import { partitionFlagged } from './flagCounts';
 
 /** G10's reserved track: the border-box width of the leading disclosure-toggle column. A fixed,
@@ -72,6 +73,12 @@ export interface DataSheetColumn<T> {
    *  the frozen column and never render beneath it. Set it ≥ the cell content width (fixed-width input +
    *  ~19px padding). Required on EVERY frozen column for a deterministic track; defaults to 160 if omitted. */
   frozenWidth?: number;
+  /** 🔴 G11 — THE RECORD'S IDENTIFIER COLUMN (Name / Item / Invoice #). EXACTLY ONE PER GRID.
+   *  The pinned ACTIONS track is reserved immediately BEFORE it, which is what makes every grid on
+   *  the platform read ACTIONS · NAME · DATA without any consumer choosing an order. Declaring it
+   *  is not optional decoration: a grid that declares none falls back to actions-first (still
+   *  conforming, see columnOrder.ts) and the grid-standard probe fails the file. */
+  identifier?: boolean;
   /** Force the system-managed lock on/off, overriding the registry. Default: registry decides by key
    *  (see systemManagedFields.ts — the single source). `false` = force editable; `true` = force locked. */
   systemManaged?: boolean;
@@ -117,8 +124,9 @@ interface DataSheetProps<T> {
   /** Optional per-row detail drawer. When present, a trailing expand toggle column appears. */
   renderExpand?: (r: T) => React.ReactNode;
   /** Optional per-row action buttons (Edit / Add / Delete). When present, the engine renders them in
-   *  a LEFT-PINNED column immediately after the frozen identifier run, so the actions stay reachable
-   *  regardless of horizontal scroll (STD-011 — one engine behavior, every consumer inherits it). */
+   *  a LEFT-PINNED track immediately BEFORE the column that declares `identifier: true` — G11's
+   *  ACTIONS · NAME · DATA — so the actions stay reachable regardless of horizontal scroll AND land
+   *  in the same place on every grid (STD-011 — one engine behavior, every consumer inherits it). */
   rowActions?: (r: T) => React.ReactNode;
   rowActionsHeader?: string;   // default '' (blank header)
   rowActionsWidth?: number;    // reserved-track width of the pinned actions column, px (default 128)
@@ -161,6 +169,15 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       frozen: columns.filter(c => c.frozen).length,
       systemManaged: columns.filter(c => lockInfoFor(c)).length,
       pinnedActions: !!rowActions,
+      // G11 — the RESOLVED pinned order, left to right, and the identifier the actions track was
+      // placed against. This is the one fact that used to be visible only by opening the app and
+      // looking; a grid whose `identifier` is missing prints `identifier: null` here and lands
+      // actions-first, which is the fallback saying so out loud rather than silently.
+      identifier: columns.find(c => c.identifier)?.key ?? null,
+      pinnedOrder: planTracks(columns.filter(c => c.defaultVisible !== false), {
+        expandWidth: renderExpand ? EXPAND_TRACK_W : null,
+        actionsWidth: rowActions ? rowActionsWidth : null,
+      }).pinned.map(t => t.key).join(' · '),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title]);
@@ -212,41 +229,27 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const shownCols = columns.filter(c => visible[c.key]);
   const hideable = columns.filter(c => c.hideable !== false);
 
-  // ── Frozen columns: pin the LEADING contiguous run so the identifier stays put on horizontal scroll.
-  //    Each frozen col RESERVES A TRACK — its frozenWidth is the actual (border-box) cell width, so the
-  //    left offsets accumulate exactly and the scrolling region begins at the pinned block's right edge
-  //    (scrolling columns lay out BESIDE the pinned block, never beneath it). The RIGHTMOST pinned
-  //    element gets a crisp freeze line + shadow. Computed over SHOWN columns so hiding a col is safe.
-  //    When rowActions is set, a LEFT-PINNED actions column is reserved right after the frozen run — so
-  //    per-row actions stay reachable regardless of horizontal scroll (STD-011 engine behavior). ──
-  let firstScroll = 0;
-  while (firstScroll < shownCols.length && shownCols[firstScroll].frozen) firstScroll++;
-  const frozenCols = shownCols.slice(0, firstScroll);
-  const scrollCols = shownCols.slice(firstScroll);
-
+  // ── The pinned segment. THE ORDER IS G11's AND IT IS DECIDED IN `columnOrder.ts`, NOT HERE ──────
+  //    [G10 toggle] · [gutter marks] · [ACTIONS] · [IDENTIFIER] · [rest of the frozen run] · scrolling.
+  //    Each pinned track RESERVES its width (border-box), so the `left` offsets accumulate exactly and
+  //    the scrolling region begins at the pinned block's right edge — scrolling columns lay out BESIDE
+  //    the pinned block, never beneath it (§6 r14; the #104/#105 defect). The RIGHTMOST pinned track
+  //    carries the freeze line + shadow. Computed over SHOWN columns, so hiding a column is safe.
+  //
+  // 🔴 THE ARITHMETIC LEFT THIS FILE ON PURPOSE (2026-09-07, G11). It used to be three `let`s and a
+  //    loop sitting between two JSX blocks — a rule inside a .tsx, which is tech-debt #134's shape:
+  //    unreachable by any probe, so the only way to know what order a grid rendered in was to open
+  //    the app. `planTracks` is the same arithmetic with a test suite and a mutant board behind it.
+  const plan = planTracks(shownCols, {
+    expandWidth: renderExpand ? EXPAND_TRACK_W : null,
+    actionsWidth: rowActions ? rowActionsWidth : null,
+  });
+  const scrollCols = plan.scrollKeys.map(k => shownCols.find(c => c.key === k)!);
   const frozenMap = new Map<string, { left: number; width: number; last: boolean }>();
-  // 🔴 G10 — THE DISCLOSURE TOGGLE LEADS, AND IT RESERVES TRACK 0 (2026-09-03, ledger #270).
-  // It is pinned BEFORE the frozen identifier run, so `frozenAcc` starts at its width rather than
-  // 0 and every downstream `left` offset shifts by exactly one track. This is the §6 r14 rule
-  // applied to a new column rather than worked around: the toggle's width is its ACTUAL
-  // border-box width, so the offsets still accumulate exactly and the scrolling region still
-  // begins at the pinned block's right edge. Getting this wrong is the #104/#105 defect — a
-  // pinned column with no deterministic width, which scrolling columns then pass underneath.
-  const expandPin = renderExpand ? { left: 0, width: EXPAND_TRACK_W } : null;
-  let frozenAcc = expandPin ? expandPin.width : 0;
-  for (const c of frozenCols) {
-    const w = c.frozenWidth ?? 160;
-    frozenMap.set(c.key, { left: frozenAcc, width: w, last: false });
-    frozenAcc += w;
+  for (const t of plan.pinned) {
+    if (t.kind === 'column') frozenMap.set(t.key, { left: t.left, width: t.width, last: t.last });
   }
-  // Pinned actions column: its own reserved track immediately after the frozen run.
-  const actionsPin = rowActions ? { left: frozenAcc, width: rowActionsWidth } : null;
-  // Freeze edge belongs to the RIGHTMOST pinned element: the actions column when present, else the
-  // last frozen column (preserves prior behavior for consumers without row actions).
-  if (!actionsPin && frozenCols.length) {
-    const e = frozenMap.get(frozenCols[frozenCols.length - 1].key);
-    if (e) e.last = true;
-  }
+  const pinnedCount = plan.pinned.length;
 
   // ── Shared header/body cell renderers (used by the frozen + scrolling segments alike). ──
   const headerCell = (col: DataSheetColumn<T>) => {
@@ -281,6 +284,43 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       ? { ...tdStyle, left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
       : tdStyle;
     return <td key={col.key} style={cellStyle}>{col.render(row)}</td>;
+  };
+
+  // ── The pinned segment renders straight off the plan, so ORDER is never re-decided here (G11).
+  //    A track is one of three kinds and each knows its own left/width; the plan already marked the
+  //    rightmost one, which is the only track that carries the freeze edge. ──
+  const pinnedHeader = (t: PinnedTrack) => {
+    if (t.kind === 'column') return headerCell(shownCols.find(c => c.key === t.key)!);
+    const style: React.CSSProperties = {
+      ...S.th, left: t.left, width: t.width, minWidth: t.width, boxSizing: 'border-box',
+      zIndex: 3, background: '#fff', ...(t.last ? S.frozenEdgeTh : {}),
+    };
+    return t.kind === 'expand'
+      ? <th key={t.key} style={style} aria-label="Details" />
+      : <th key={t.key} style={style}>{rowActionsHeader}</th>;
+  };
+  const pinnedCell = (
+    t: PinnedTrack, row: T, tdStyle: React.CSSProperties, flagged: boolean, id: string, isOpen: boolean,
+  ) => {
+    if (t.kind === 'column') return bodyCell(shownCols.find(c => c.key === t.key)!, row, tdStyle, flagged);
+    const style = {
+      ...tdStyle, left: t.left, width: t.width, minWidth: t.width, boxSizing: 'border-box' as const,
+      position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff',
+      ...(t.last ? S.frozenEdgeTd : {}),
+    };
+    if (t.kind === 'actions') return <td key={t.key} style={style}>{rowActions!(row)}</td>;
+    return (
+      <td key={t.key} style={style}>
+        <button
+          style={S.expandBtn}
+          onClick={ev => { ev.stopPropagation(); toggleExpand(id); }}
+          aria-expanded={isOpen}
+          title={isOpen ? 'Hide details' : 'Show details'}
+        >
+          {isOpen ? <Minus size={14} /> : <Plus size={14} />}
+        </button>
+      </td>
+    );
   };
 
   return (
@@ -362,15 +402,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {expandPin && (
-                      <th key="__expand__" style={{ ...S.th, left: expandPin.left, width: expandPin.width, minWidth: expandPin.width, boxSizing: 'border-box', zIndex: 3, background: '#fff' }} aria-label="Details" />
-                    )}
-                    {frozenCols.map(headerCell)}
-                    {actionsPin && (
-                      <th key="__actions__" style={{ ...S.th, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...S.frozenEdgeTh }}>
-                        {rowActionsHeader}
-                      </th>
-                    )}
+                    {plan.pinned.map(t => pinnedHeader(t))}
                     {scrollCols.map(headerCell)}
                   </tr>
                 </thead>
@@ -396,29 +428,12 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                           }) : undefined}
                           style={renderExpand ? { cursor: 'pointer' } : undefined}
                         >
-                          {expandPin && (
-                            <td key="__expand__" style={{ ...tdStyle, left: expandPin.left, width: expandPin.width, minWidth: expandPin.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff' }}>
-                              <button
-                                style={S.expandBtn}
-                                onClick={ev => { ev.stopPropagation(); toggleExpand(id); }}
-                                aria-expanded={isOpen}
-                                title={isOpen ? 'Hide details' : 'Show details'}
-                              >
-                                {isOpen ? <Minus size={14} /> : <Plus size={14} />}
-                              </button>
-                            </td>
-                          )}
-                          {frozenCols.map(col => bodyCell(col, row, tdStyle, flagged))}
-                          {actionsPin && (
-                            <td key="__actions__" style={{ ...tdStyle, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...S.frozenEdgeTd }}>
-                              {rowActions!(row)}
-                            </td>
-                          )}
+                          {plan.pinned.map(t => pinnedCell(t, row, tdStyle, flagged, id, isOpen))}
                           {scrollCols.map(col => bodyCell(col, row, tdStyle, flagged))}
                         </tr>
                         {renderExpand && isOpen && (
                           <tr style={S.expandRow}>
-                            <td colSpan={shownCols.length + (actionsPin ? 1 : 0) + 1} style={{ padding: 0 }}>
+                            <td colSpan={scrollCols.length + pinnedCount} style={{ padding: 0 }}>
                               {renderExpand(row)}
                             </td>
                           </tr>

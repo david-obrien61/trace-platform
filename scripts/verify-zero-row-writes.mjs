@@ -124,6 +124,40 @@ function stripComments(src) {
     .join('\n');
 }
 
+/**
+ * THIS WRITE'S OWN result, inspected through the SHARED helper. Three conditions, and the third is
+ * what makes the branch discriminating rather than decorative:
+ *   ① `writeLanded(` is called below the statement,
+ *   ② its verdict is READ (`.landed`) — calling it for the trace and carrying on is not a check,
+ *   ③ 🔴 THE CALL NAMES THIS STATEMENT'S OWN BINDING. Without ③ a site would read as CHECKED
+ *      because a NEIGHBOURING write's verdict happened to fall inside the window — the cap
+ *      crediting one write with another's proof, which is the R-33 shape it exists to prevent.
+ * The binding is read off the assignment: `let res = await …` gives `res`, and
+ * `const { data, error } = await …` gives both names, either of which may be passed.
+ */
+function sharedCheckOn(src, at, after) {
+  if (!/\bwriteLanded\s*\(/.test(after) || !/\.landed\b/.test(after)) return false;
+  // The binding is found from the STATEMENT start, not the line start, and a bare reassignment
+  // counts. Both shapes are live in one file: the deploy-gated retry reassigns (`res = await …`,
+  // no declarator) and the group rename spans four lines before `.update(` ever appears, so a
+  // one-line lookback found neither and reported two correctly-checked writes as uninspected.
+  // ⚠️ THE BOUNDARY IS `;` AND A CHARACTER CAP — DELIBERATELY NOT `{`/`}`. The first draft used
+  // braces too, and it cut the binding in half: `const { data, error } = await supabase…` has a
+  // brace INSIDE the very destructure being looked for, so the lookback started after it and both
+  // multi-line probes went red. Caught by the probes, which is what they are for.
+  const from = Math.max(src.lastIndexOf(';', at), at - 400, 0);
+  const decl = src.slice(from, at);
+  const assigns = [...decl.matchAll(/(?:(?:const|let|var)\s+)?(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=(?![=>])/g)];   // `=>` excluded: an arrow parameter is not a binding
+  if (assigns.length === 0) return false;             // no binding at all → nothing to trace
+  const target = assigns[assigns.length - 1][1];      // the nearest assignment is this statement's
+  const names = target.startsWith('{')
+    ? (target.match(/[A-Za-z_$][\w$]*/g) ?? [])
+    : [target];
+  const call = /writeLanded\s*\(([\s\S]{0,200}?)\)\s*;/.exec(after);
+  const args = call ? call[1] : '';
+  return names.some(n => new RegExp(`\\b${n}\\b`).test(args));
+}
+
 /** Pure: [{path, content}] → { sites: [{tag, path, verb, status}] } */
 export function analyze(files) {
   const sites = [];
@@ -141,7 +175,19 @@ export function analyze(files) {
       const win  = semi === -1 ? rest.slice(0, 500) : rest.slice(0, semi);
       // The statement's assignment target, to look for a length/null check just after it.
       const stmtEnd = semi === -1 ? rest.length : semi;
-      const after = rest.slice(stmtEnd, stmtEnd + 400);
+      // 🔴 620, NOT 400 — WIDENED 2026-09-07 FOR THE DEPLOY-GATED RETRY, WHICH THIS FILE'S OWN
+      // HEADER ALREADY NAMED AS THE LIVE BLIND SPOT ("the same site reads as checked on one pass,
+      // unchecked on the second — customerUpsert's retry is the live example"). A retry sits
+      // BETWEEN the write and its inspection: the error is caught, the gated columns stripped, the
+      // statement re-issued, and only THEN is the affected-row count read — for both attempts, by
+      // one verdict. 400 characters cannot span that, so the first attempt reported as
+      // uninspected. The measured effect of the widening is exactly one site, and it is
+      // `customerUpsert::filled` — the one the header predicted.
+      // ⚠️ THE LIMIT IS STILL A WINDOW AND IT IS STILL BOUNDED, WHICH Z14b HOLDS: a check far
+      // enough below an unchecked write does not rescue it. A window can never distinguish "the
+      // check for THIS write" from "a check for the next one"; that needs a parser, and the cap
+      // says so rather than implying a precision it does not have.
+      const after = rest.slice(stmtEnd, stmtEnd + 620);
 
       let status;
       if (!/\.select\(/.test(win)) {
@@ -156,6 +202,18 @@ export function analyze(files) {
       // one, and an awkward line written to satisfy a regex is not a safer line.
       } else if (/\.length\s*===\s*0|\.length\s*<\s*1|!\s*\w+\?\.\s*length|!\w+\.length|\.length\s*>\s*0|length\s*===\s*0|\.length\s*!==?\s*\d+|\.length\s*===\s*[1-9]\d*/.test(after)) {
         status = 'CHECKED';                           // explicit affected-row inspection
+      // 🔴 THE CAP PUNISHING THE FIX, A THIRD TIME — AND THIS ONE IS THE STRONGEST FORM OF THE FIX
+      // (2026-09-07). The affected-row inspection moved OUT of the call sites and INTO one shared
+      // function, `writeLanded()` in components/datasheet/rowPatch.ts, so three grids cannot drift
+      // apart on what "it landed" means. Every one of those sites then read as NEEDS_CHECK,
+      // because the regexes above look for the inspection INLINE. A cap that only recognises the
+      // copy-pasted form rewards the copy-paste — which is the opposite of §6 r8.
+      //
+      // ⚠️ TWO CONDITIONS, NOT ONE, AND THE SECOND IS THE REAL ASSERTION: the helper must be
+      // CALLED *and* its verdict READ (`.landed`). Calling it for the trace and then carrying on
+      // regardless is a real shape and it is not a check — Z20b holds that line.
+      } else if (sharedCheckOn(src, m.index, after)) {
+        status = 'CHECKED';                           // the shared affected-row inspection (A8), consulted
       } else {
         status = 'NEEDS_CHECK';                       // selectable, not inspected
       }
@@ -206,6 +264,27 @@ function runProbes() {
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nconst n = data.length;`)]));
   ck('Z3d NEGATIVE CONTROL for Z3b — the widening must not make MERE USE of data read as a check', 'NEEDS_CHECK',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nreturn data.map(r => r.id);`)]));
+  ck('Z20 🔴 .select() inspected through the SHARED helper → CHECKED — the inspection lives in one place and is consulted', 'CHECKED',
+    st([f('a.ts', `const { data, error } = await supabase.from('t').update(p).eq('id', id).select('id');\nconst verdict = writeLanded({ data, error }, MSG);\nif (!verdict.landed) return;`)]));
+  ck('Z20b 🔴 NEGATIVE CONTROL for Z20 — CALLING the helper and never reading its verdict is NOT a check', 'NEEDS_CHECK',
+    st([f('a.ts', `const { data, error } = await supabase.from('t').update(p).eq('id', id).select('id');\nwriteLanded({ data, error }, MSG);\nreturn ok();`)]));
+  ck('Z20c 🔴 NEGATIVE CONTROL for Z20 — a NEIGHBOURING write\'s verdict must not be credited to THIS one. The first draft of Z20c asserted that a COMMENT naming the helper does not count, which `stripComments` already guarantees upstream: a control that could not fail, exactly the thing this cap is for.', 'NEEDS_CHECK',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nconst other = await supabase.from('u').update(q).eq('id', id).select('id');\nconst v = writeLanded(other, MSG);\nif (!v.landed) return;`)]));
+  ck('Z20d …and the SECOND write in that pair, whose verdict it IS, still reads CHECKED', 'CHECKED',
+    st([f('a.ts', `const other = await supabase.from('u').update(q).eq('id', id).select('id');\nconst v = writeLanded(other, MSG);\nif (!v.landed) return;`)]));
+  ck('Z20e 🔴 the RETRY shape — a bare REASSIGNMENT (`res = await …`, no declarator) still names its binding', 'CHECKED',
+    st([f('a.ts', `let res = await supabase.from('t').update(a).eq('id', id).select('id');\nif (res.error) {\n  res = await supabase.from('t').update(b).eq('id', id).select('id');\n}\nconst v = writeLanded(res, MSG);\nif (!v.landed) return;`)]));
+  ck('Z20f 🔴 a MULTI-LINE chain — the binding is four lines above `.update(`, which a one-line lookback could not see', 'CHECKED',
+    st([f('a.ts', `const { data, error } = await supabase\n  .from('t')\n  .update({ name })\n  .eq('business_id', bid)\n  .select('id');\nconst v = writeLanded({ data, error }, MSG);\nif (!v.landed) return;`)]));
+  ck('Z21 🔴 THE DEPLOY-GATED RETRY — write, catch a missing column, strip, re-issue, THEN inspect once for both → CHECKED', 'CHECKED',
+    st([f('a.ts', `let res = await supabase.from('t').update(sent).eq('id', id).select('id');\nif (res.error && isMissingColumnError(res.error) && hasGated(sent)) {\n  console.warn('[TRACE] gated column absent, retry without', DEPLOY_GATED_COLUMNS);\n  sent = stripGated(sent);\n  res = await supabase.from('t').update(sent).eq('id', id).select('id');\n}\nconst verdict = writeLanded(res, MSG);\nif (!verdict.landed) return { error: verdict.message };`)]));
+  ck('Z21b 🔴 NEGATIVE CONTROL for Z21 — the window is WIDER, not unbounded: a check far below an unchecked write still does not rescue it', 'NEEDS_CHECK',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\n${'const fillerThatIsNotAnInspection = compute(nothing);\n'.repeat(14)}if (!other?.length) return fail();`)]));
+  // ⚠️ Z21b's filler is CODE, not comments, and that is not incidental: `stripComments` blanks
+  // comment lines before the window is measured, so a wall of `//` fillers collapses to nothing
+  // and the probe would have measured a distance that does not exist. It was written with comments
+  // first and it reported CHECKED — a negative control that could not fail, caught by running it.
+
   ck('Z4 🔴 .select() with NO length check → NEEDS_CHECK (selectable, not inspected)', 'NEEDS_CHECK',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nreturn ok();`)]));
   ck('Z5 a plain .delete() with no select → UNCHECKABLE', 'UNCHECKABLE',

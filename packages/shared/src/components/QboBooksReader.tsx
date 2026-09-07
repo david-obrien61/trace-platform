@@ -813,7 +813,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
             renderExpand={r => <InvoiceLines row={r.row} />}
             columns={[
               {
-                key: 'number', header: 'Invoice number', sortable: true, hideable: false,
+                key: 'number', header: 'Invoice number', sortable: true, hideable: false, identifier: true,
                 // G3 — the identifier column pins, with a RESERVED TRACK (§6 r14): the width is
                 // the cell's actual border-box width, or the scrolling columns pass underneath it.
                 frozen: true, frozenWidth: 150,

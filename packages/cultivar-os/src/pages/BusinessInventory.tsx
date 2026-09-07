@@ -39,6 +39,7 @@ import {
 } from '@trace/shared/components/datasheet/DataSheet';
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
+import { applyRowPatch, applyRowPatches } from '@trace/shared/components/datasheet/rowPatch';
 import { onlyLiveInventory } from '@trace/shared/inventory/retiredFilter';
 import { findShapeCollisions } from '@trace/shared/inventory/shapeCollision';
 import {
@@ -193,20 +194,41 @@ export function BusinessInventory() {
 
   function toast(msg: string) { setFlash(msg); setTimeout(() => setFlash(null), 2600); }
 
-  // ── Inline write: one immediate UPDATE per field, via the shared helper (STD-011). ──
+  // ── Inline write: one immediate UPDATE per field, via the shared helper (STD-011). ─────────────
+  //
+  // 🔴 THE EDITED ROW IS PATCHED FROM THE WRITE'S OWN RESPONSE — NO REFETCH (2026-09-07, David).
+  // This used to `await loadItems()` after every cell edit: 447 rows re-read, every row object
+  // replaced, every `key`-ed cell remounted, and the grid re-sorted under the cursor. The owner
+  // reported it as *"an inline edit flashes and reloads."* The refetch was there to prove the
+  // write landed — and that proof now comes from the write itself (`.select('id, updated_at')`,
+  // the 393682a pattern), so the same honesty costs one round trip instead of two and moves one
+  // row instead of the whole list.
+  //
+  // ⚠️ THE ORDER IS NOT NEGOTIABLE: `writeLanded` decides FIRST, local state moves SECOND. Moving
+  // it first is the opposite defect — the one 393682a removed from four Settings write sites,
+  // where a refused write repainted as a saved one.
+  //
+  // ⚠️ WHAT THE REFETCH ALSO DID, STATED RATHER THAN LOST: it re-derived `committedByLot`. That is
+  // NOT needed for this edit — `committed` counts open ORDER lines and no cell on this grid moves
+  // one, so `Available` recomputes correctly from the patched qty against the committed figure
+  // already in hand. What is lost is picking up someone ELSE's order as a side effect of an
+  // unrelated edit, which was never this function's job and is one page refresh away.
   async function doPatch(row: InventoryRow, patch: Record<string, unknown>) {
     const res = await persistInventoryPatch({ id: row.id, businessId: businessId!, patch });
-    if (res.error) { setListError(res.error); return; }
-    await loadItems();
+    if (res.error || !res.applied) { setListError(res.error); return; }
+    const applied = res.applied;
+    setItems(prev => applyRowPatch(prev, row.id, applied));
   }
   // Name is GROUP-AWARE — renaming a grouped row renames its size-siblings too (keeps them linked).
+  // So the local patch is per-ROW, over exactly the ids the statement reported back: the siblings
+  // are already on screen and each carries its own `updated_at`.
   async function doRename(row: InventoryRow, raw: string) {
     const name = (raw ?? '').trim();
     if (name === '' || name === row.name) return; // NOT NULL — refuse to blank it
     const res = await renameVariety({ businessId: businessId!, rowId: row.id, variantGroup: row.variant_group, newName: name });
     if (res.error) { setListError(res.error); return; }
     if (res.scope === 'group' && res.count > 1) toast(`Renamed all ${res.count} sizes of this variety.`);
-    await loadItems();
+    setItems(prev => applyRowPatches(prev, res.rows.map(r => ({ id: r.id, applied: { name, updated_at: r.updated_at } }))));
   }
   function onText(row: InventoryRow, field: 'size' | 'variant_group' | 'location' | 'serial_number' | 'notes' | 'description', raw: string | null) {
     const trimmed = (raw ?? '').trim();
@@ -346,8 +368,9 @@ export function BusinessInventory() {
   );
 
   // ── Row actions (Edit · + Add size · Delete). Rendered by the SHARED DataSheet engine in a
-  //    LEFT-PINNED column pinned adjacent to the frozen Name column (STD-011 engine behavior), so
-  //    they stay reachable regardless of horizontal scroll — no more scrolling past every column. ──
+  //    LEFT-PINNED track placed immediately BEFORE the identifier column (G11: ACTIONS · NAME ·
+  //    DATA), so they stay reachable regardless of horizontal scroll AND sit in the same place on
+  //    every grid on the platform. The engine decides that, not this file. ──
   const rowActions = (r: InventoryRow) => (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <button style={rowActionBtn} title="Edit item" onClick={() => setEditor({ mode: 'edit', item: toEditorItem(r) })}>
@@ -367,10 +390,18 @@ export function BusinessInventory() {
   const columns: DataSheetColumn<InventoryRow>[] = [
     { key: 'flag', header: '', sortable: false, hideable: false, frozen: true, frozenWidth: 34,
       render: r => isDup(r) ? <span style={SS.dupTag} title="Duplicate (variant group, size) — uncountable by scan until you disambiguate the size or variant group."><AlertTriangle size={13} /></span> : null },
+    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180, identifier: true,
+      render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => doRename(r, v ?? '')} /> },
     /* 🔴 "Needs a look" — the receipts shape David named, and what `defaultSortKey` targets.
        `sortValue` is the MONEY AT STAKE so the six price disagreements lead; the cell shows the
        gap, because "$875" is a reason to click and "⚠" is not. The tooltip carries the full
-       sentence, which names the product and both prices. */
+       sentence, which names the product and both prices.
+
+       ⚠️ IT SITS AFTER `name`, AND MOVING IT THERE FIXED A SILENT G3 FAILURE (2026-09-07, G11).
+       Between `flag` and `name` it BROKE THE LEADING FROZEN RUN — only a CONTIGUOUS leading run
+       pins — so `name` carried `frozen: true` and was not pinned, and the way to notice was to
+       scroll right on a 20-column grid and find the identifier gone. It is data, not a gutter, so
+       after the identifier is also where G11 says it belongs. */
     { key: 'needs', header: 'Needs a look', sortable: true,
       sortVal: (r: InventoryRow) => collisionMoney(r),
       render: (r: InventoryRow) => {
@@ -382,8 +413,6 @@ export function BusinessInventory() {
           </span>
         );
       } },
-    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180,
-      render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => doRename(r, v ?? '')} /> },
     { key: 'sku', header: 'SKU', sortable: true, sortVal: r => (r.sku ?? '').toLowerCase(),
       render: r => r.sku ? <span style={SS.skuText}>{r.sku}</span> : <span style={SS.muted}>—</span> },
     // D-52 — the three numbers, side by side. On-hand ("Qty") is the ONLY editable one; Committed

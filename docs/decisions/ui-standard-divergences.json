@@ -63,6 +63,10 @@
         "G10": {
           "verdict": "dropped",
           "reason": "VACUOUS HERE, and answered rather than left to fail the cap. G10 governs a grid that renders PER-ROW EXPANSION: the toggle must lead and the row must be a click target. Vendors.tsx is a bespoke card list with no disclosure of any kind — it passes no renderExpand and imports no DataSheet (grep: the only occurrence of 'DataSheet' in the file is the header comment naming the standard it diverges from). A surface with nothing to disclose cannot violate a clause about how disclosure is opened. If this surface ever gains an expansion it inherits G10 from the shared control, and this cell must be re-answered. ⚠️ ANSWERED BY trace-platform-e2 (ledger #270), NOT by the session that built this surface: G10 was minted after this declaration was written, and adding a clause invalidates every declaration until it is re-answered — which is the cap working as designed, not a defect. The verdict is confined to G10; nothing else in this declaration was touched."
+        },
+        "G11": {
+          "verdict": "dropped",
+          "reason": "There are no columns, so there is no column order. Each vendor is a card and its one control (Open) sits at the end of the card, not in a track. ⚠️ RECORDED RATHER THAN GLOSSED: on 2026-09-07 David measured what this shape now costs — \"21 vendors runs to five printed pages where a grid would be twelve lines with search and sort\" — and named this one of the two surfaces where cards ACTIVELY cost her. That is the third weakening of this file's deviation (the first: E7 moved the note into the modal; the second: the 8-vendor population it was argued at is now 21). G11 is dropped because it cannot apply to a card, NOT because the card shape is still the right answer. The open question is the SHAPE, and it is on the G11 build's report to David, not settled here."
         }
       }
     },
@@ -147,6 +151,10 @@
         "E7": {
           "verdict": "met",
           "reason": "David's ruling: the cell stays a cell, because the unit of work is the plan and not the lot, and E7's own text says 'a cell edited in a list of many stays a cell'. The E7 MOMENT is the commit, which carries one reason for the whole batch rather than fourteen."
+        },
+        "G11": {
+          "verdict": "met",
+          "reason": "Vacuously, and it is worth saying which kind of vacuous. This table has NO per-row action track at all — the one write on the screen is a single page-level Commit button (E2's batch model, deliberate), so there is no actions column to place and nothing to get out of order. The identifier (variety + size) does lead the row. If a per-row control is ever added here, this answer becomes false and must be re-answered; the surface would at that point be better served by converging on <DataSheet>, which is where G1/G3/G4/G5 are already owed above."
         }
       }
     },

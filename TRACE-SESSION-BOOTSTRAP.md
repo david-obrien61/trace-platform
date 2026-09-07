@@ -78,6 +78,19 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 THE GRID STANDARD — G11: ACTIONS · NAME · DATA (2026-09-07, ledger #281)
+
+- 🟡 **BUILDER-COMPLETE · 4 owner-test cards, 0 COVERED** · `verify` exit 0 ZERO NET-NEW · **85/85 files, 4654 assertions** · **22 mutants, 22 caught, 0 survived** · **NO MIGRATION · api/ 12/12 · no new permission string** · `build:cultivar` 7.09s.
+- 🔴 **FOUR GRIDS, THREE COLUMN ORDERS, AND NONE OF THEM A DECISION.** The engine pinned the actions track *after* each config's frozen run, so `/customers` rendered NAME · ACTIONS and `/inventory` ACTIONS · NAME — the shape fell out of wherever that run happened to end. Filed as clause **G11** in `docs/standards/ui-control-standards.md`; the position is now a property of the CONFIG (`identifier: true`) and no consumer chooses.
+- 🔴 **AND IT FOUND A SILENT G3 FAILURE ON THE REFERENCE GRID.** `/inventory`'s `Name` carried `frozen: true` **and was not pinned** — `Needs a look` sat ahead of it and only a CONTIGUOUS leading run pins. Discoverable only by scrolling right on a twenty-column screen.
+- 🔴 **THE RULE LEFT THE `.tsx`** — `columnOrder.ts`'s `planTracks()`, 40 lines with 22 probes behind it. It was three `let`s between two JSX blocks (tech-debt #134's shape), so *"what order does this render in"* could only be answered by opening the app. **Mutant S5 guards the guard.**
+- 🔴 **THE INLINE-EDIT FLASH WAS WORSE THAN REPORTED ([[R-109]]): `persistInventoryPatch` HAD NO AFFECTED-ROW CHECK AT ALL.** A row-level RLS refusal is zero rows with NO error, so the full refetch was the only thing that ever contradicted a refused write. `/assets` had the same gap and was **fixed in the same pass**; `renameVariety`'s single path had it while its group path did not.
+- ✅ **THE DOC-FIRST ORDER WAS ENFORCED MECHANICALLY, NOT REMEMBERED** — adding G11 to the standard **invalidated both live divergence declarations and failed the build by name** until they were re-answered.
+- 🔴 **A CAP PUNISHED THE FIX A THIRD TIME AND WAS TAUGHT, NOT WAIVED.** `verify-zero-row-writes` is now **binding-aware** about the shared `writeLanded` (Z20–Z20f, Z21–Z21b); **8 sites left the baseline**, incl. `customerUpsert::filled` — the retry the cap's own header named as its blind spot.
+- ⚠️ **VENDORS + PMI REPORTED, NOT BUILT** (David's instruction) → `docs/decisions/2026-09-07-vendors-pmi-card-lists-report.md`. **Vendors is one unblocked build; PMI is BLOCKED on tech-debt #157** (it lives in `shared`, Ignition renders it, `sheetStyles` carries 7 cultivar-green literals).
+- ✏️ **[[R-101]]'s grid row said "OPEN — nothing built" while `67ab644` had shipped it.** Corrected. ⚠️ **NEW: tech-debt #212** — `Committed` no longer re-counts on an unrelated cell edit (stated on owner-test card ③, David's to overrule).
+- 🔴 **CARD 2 IS THE ONE TO RUN CAREFULLY:** scroll `/inventory` all the way right and confirm the **Name stays pinned**. Not one assertion in this build opened a browser.
+
 ### 🔴 DISCOUNTS — CORRECTED: THE PERCENTS WERE DOLLAR AMOUNTS (2026-09-07, ledger #280)
 
 - 🟡 **BUILDER-COMPLETE · 25 owner-test cards, 0 COVERED** · `verify` exit 0 ZERO NET-NEW · **82/82 files, 4581 assertions** · **46 mutants, 46 caught** · **NO MIGRATION · api/ 12/12 · no new permission string**. Board: [discount-config](docs/owner-tests/discount-config-full-surface-test.md).

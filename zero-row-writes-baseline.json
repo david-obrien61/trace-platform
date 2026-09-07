@@ -1,6 +1,6 @@
 {
   "_comment": "Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline",
-  "stamped": "2026-08-29",
+  "stamped": "2026-09-07",
   "unchecked": [
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update",
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update@2",
@@ -24,11 +24,6 @@
     "packages/cultivar-os/src/components/ProjectsManager.tsx::name#cost_objects.update",
     "packages/cultivar-os/src/components/ProjectsManager.tsx::reparent#cost_objects.update",
     "packages/cultivar-os/src/components/ProjectsManager.tsx::reparent#cost_objects.update@2",
-    "packages/cultivar-os/src/components/inventory/inventoryEdit.ts::count#business_inventory.update",
-    "packages/cultivar-os/src/components/inventory/inventoryEdit.ts::grp#business_inventory.update",
-    "packages/cultivar-os/src/components/inventory/inventoryEdit.ts::out#business_inventory.update",
-    "packages/cultivar-os/src/components/inventory/inventoryEdit.ts::out#business_inventory.update@2",
-    "packages/cultivar-os/src/pages/BusinessAssets.tsx::from#cost_objects.update",
     "packages/cultivar-os/src/pages/CampaignDetail.tsx::saveEdit#campaign_posts.update",
     "packages/cultivar-os/src/pages/Dashboard.tsx::doCopy#social_drafts.update",
     "packages/cultivar-os/src/pages/Dashboard.tsx::handleSaveEdit#social_drafts.update",
@@ -47,9 +42,7 @@
     "packages/shared/src/auth/members.ts::removeMember#business_members.delete",
     "packages/shared/src/auth/members.ts::setMemberActive#business_members.update",
     "packages/shared/src/auth/members.ts::setMemberPhone#business_members.update",
-    "packages/shared/src/auth/pinReset.ts::armPinReset#business_members.update",
     "packages/shared/src/auth/pinReset.ts::pinHash#business_members.update",
-    "packages/shared/src/business-logic/customerUpsert.ts::filled#customers.update",
     "packages/shared/src/business-logic/financialDataAccess.ts::childUpsert#labor_resource_wages.upsert",
     "packages/shared/src/business-logic/financialDataAccess.ts::childUpsert#labor_resources.update",
     "packages/shared/src/business-logic/financialDataAccess.ts::gated#business_pricing_config.upsert",
@@ -73,7 +66,6 @@
     "packages/shared/src/quickbooks/secrets.ts::writeQBSecrets#business_accounting_secrets.upsert",
     "packages/shared/src/quickbooks/secrets.ts::writeQBSecrets#businesses.update",
     "packages/shared/src/supabase/auth.ts::label#member_devices.update",
-    "packages/shared/src/sync/syncEngine.ts::p#?.update",
-    "scripts/rls/customer-write-permission.rls.mjs::res2#customers.update"
+    "packages/shared/src/sync/syncEngine.ts::p#?.update"
   ]
 }
