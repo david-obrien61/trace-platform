@@ -15,6 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { ORDER_STATUSES, ORDER_STATUS_META, orderStatusMeta } from '../lib/orderStatus';
 import { OrderTotals } from '../components/checkout/OrderTotals';
@@ -310,7 +311,7 @@ export function OrderDetail() {
       <Card title="Customer">
         {cust ? (
           <>
-            <p style={row}><b>{cust.first_name} {cust.last_name}</b></p>
+            <p style={row}><b>{customerDisplayName(cust, '—')}</b></p>
             <p style={sub}>{cust.email}{cust.phone ? ` · ${cust.phone}` : ''}</p>
             {(cust.billing_line1 ?? cust.address_line1 ?? cust.billing_city ?? cust.city) && (
               <p style={sub}>{[cust.billing_line1 ?? cust.address_line1, cust.billing_city ?? cust.city,

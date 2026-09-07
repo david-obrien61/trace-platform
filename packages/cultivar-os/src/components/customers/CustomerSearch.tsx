@@ -52,6 +52,7 @@ import { useState } from 'react';
 import { Search, UserPlus, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
+import { formatPersonName } from '@trace/shared/utils/personName';
 import { CUSTOMER_ORDER_COLS, CUSTOMER_ORDER_COLS_CORE, CUSTOMER_SEARCH_FIELDS } from './customerFieldRegistry';
 
 /** 🔴 R-19 · THE HIT CARRIES WHAT THE COPY NEEDS — INCLUDING THE ADDRESS.
@@ -135,7 +136,7 @@ const noticeBox: React.CSSProperties = {
  *  so an organization customer could be picked as "Cedar Park HOA" and then attach as its contact. */
 export function customerDisplayName(h: CustomerSearchHit): string {
   if (h.customer_type === 'organization') return h.organization_name?.trim() || h.first_name;
-  return `${h.first_name} ${h.last_name ?? ''}`.trim() || h.first_name;
+  return formatPersonName(h.first_name, h.last_name) || h.first_name;
 }
 
 export function CustomerSearch({ businessId, onSelect, onAddNew }: Props) {

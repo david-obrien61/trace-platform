@@ -30,6 +30,7 @@ import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { deliveryQueryBounds } from '../lib/deliveryWindow';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
@@ -510,7 +511,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {group.items.map(d => {
                   const addr = fullAddress(d);
-                  const name = d.customers ? `${d.customers.first_name} ${d.customers.last_name}`.trim() : 'Customer';
+                  const name = customerDisplayName(d.customers, 'Customer');
                   return (
                     <div key={d.id} style={{
                       background: '#fff', borderRadius: 12, padding: '14px 16px',

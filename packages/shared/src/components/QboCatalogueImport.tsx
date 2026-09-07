@@ -398,10 +398,47 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
             </>
           ) : undone.ok ? (
             <>
+              {/* ══════════════════════════════════════════════════════════════════════════════
+                  🔴 NO PART OF THIS SENTENCE MAY FABRICATE A NUMBER IT WAS NOT GIVEN.
+                  ══════════════════════════════════════════════════════════════════════════════
+                  MEASURED 2026-09-07 2:05p: this printed *"647 imported products and 0 imported
+                  customers removed"* over a run that had removed **1,934**. The data was right;
+                  only the sentence was wrong — and `?? 0` is what made a wrong sentence possible,
+                  because it converts "the server did not tell me" into a confident zero. Absent is
+                  not empty (D-9 / A9): a number we were not given is reported as unknown, and the
+                  reader is told the report is incomplete rather than being handed a plausible 0.
+
+                  ⚠️ THE MECHANISM THAT PRODUCED THE LIVE 0 IS NOT REPRODUCED AND IS NOT CLAIMED
+                  FIXED. Every link was verified against the current tree — `undoCustomerImport`
+                  returns `deleted` from a real `.select('id')`, `handleBooksUndo` puts it on the
+                  envelope under `customers`, the route resolves, and the unit probes covering it
+                  pass. What IS fixed is that the surface can no longer print a number the response
+                  did not contain, and it now shows `remainingWithThisRun` — the post-delete
+                  RE-READ, which is the authoritative proof and disagrees with a wrong count. */}
               <strong style={{ color: GREEN, fontSize: '.9rem' }}>
-                Undone. {undone.items?.inventoryDeleted} imported products and {undone.customers?.deleted ?? 0} imported
-                customers removed, {undone.items?.unretired} of your own rows brought back.
+                Undone. {undone.items?.inventoryDeleted ?? 'an unreported number of'} imported products and{' '}
+                {undone.customers
+                  ? `${undone.customers.deleted} imported customers`
+                  : 'an unreported number of imported customers'} removed,{' '}
+                {undone.items?.unretired ?? 'an unreported number'} of your own rows brought back.
               </strong>
+              {/* The re-read, stated separately because it is EVIDENCE rather than a tally: it is
+                  taken AFTER the delete and counts what still carries this run id. Zero here is the
+                  claim that the run is gone; any other number contradicts the sentence above. */}
+              {undone.customers && (
+                <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
+                  {undone.customers.remainingWithThisRun === 0
+                    ? 'Checked afterwards: no customer row still carries this run.'
+                    : `Checked afterwards: ${undone.customers.remainingWithThisRun} customer row(s) still carry this run.`}
+                </p>
+              )}
+              {!undone.customers && (
+                <p style={{ margin: '.35rem 0 0', color: RED, fontSize: '.82rem', lineHeight: 1.5 }}>
+                  ⚠ The server did not report on the customer half of this run. The products above
+                  are accurate; the customers are unknown from here. Re-run Preview to see what is
+                  actually in the table before importing again.
+                </p>
+              )}
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
                 Your receipts ({undone.items?.receiptsAfter}) and deliveries ({undone.items?.deliveriesAfter}) are
                 exactly as they were — the undo cannot reach them. You can preview and import again.

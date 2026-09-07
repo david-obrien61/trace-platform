@@ -130,8 +130,30 @@ export function Confirmation() {
       <div style={{ background: '#27500A', padding: '36px 24px 28px', textAlign: 'center', color: '#fff' }}>
         <div style={{ fontSize: '3.5rem', lineHeight: 1, marginBottom: 10 }}>✓</div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Order confirmed</h1>
+        {/* ══════════════════════════════════════════════════════════════════════════════════
+            🔴 THIS LINE SAID "Invoice sent to {email}" UNCONDITIONALLY, AND NOTHING EVER SENT IT.
+            ══════════════════════════════════════════════════════════════════════════════════
+            Observed 2026-09-07 in TEST MODE on an "I'll pay at the office" order: the header
+            promised an email while the badge DIRECTLY BENEATH IT read "Order saved — invoice NOT
+            sent to QuickBooks (sending is paused)". The page contradicted itself in two adjacent
+            blocks, and the header is the half a customer reads.
+
+            🔴 IT WAS NEVER TRUE IN ANY STATE, NOT JUST THIS ONE. The platform does not email an
+            invoice: `api/qbo/invoice/cultivar.ts` sets `BillEmail` on the QuickBooks invoice and
+            **never calls the QuickBooks send endpoint** — creating an invoice does not deliver it.
+            The only `sendNotification` on the checkout path is an SMS leakage alert to the
+            BUSINESS. (A Resend integration does exist in `notifications/send.ts`; nothing in
+            checkout invokes it for the customer, and with no key configured it logs and returns
+            success — which is this same class of defect one layer down.)
+
+            THE WORST OF THE FIVE BECAUSE IT IS A PROMISE MADE TO A CUSTOMER: Lauren reads it and
+            tells them the invoice is on its way. So the header now states WHAT HAPPENED — the
+            order is confirmed — and the invoice's fate is reported by the badge below, which was
+            already honest and is now the only thing making that claim (STD-011). */}
         <p style={{ fontSize: '0.9375rem', color: '#c8ddb4', marginTop: 8 }}>
-          Invoice sent to {email}
+          {qbState === 'success'
+            ? <>Invoice created in QuickBooks for {email}</>
+            : <>Order saved for {email}</>}
         </p>
         <p style={{ fontSize: '0.8125rem', color: '#a8c890', marginTop: 4 }}>{invoiceNumber}</p>
       </div>
@@ -279,8 +301,14 @@ export function Confirmation() {
             View invoice in QuickBooks
           </a>
         ) : payOnline ? (
+          /* 🔴 "Invoice emailed to {email}" — the same false claim, in the action slot. This
+             branch is reached when the customer chose to pay online and we have NO QuickBooks
+             invoice URL to send them to, which is the state where LEAST has happened, not most.
+             It now says what is true and what comes next, and it never claims a delivery. */
           <div style={{ padding: '14px 16px', background: '#eff6ff', borderRadius: 8, textAlign: 'center', fontSize: '0.9375rem', color: '#1d4ed8', fontWeight: 600 }}>
-            Invoice emailed to {email}
+            {qbState === 'success'
+              ? <>Invoice created in QuickBooks — {businessName ?? 'the nursery'} will send it to {email}</>
+              : <>{businessName ?? 'The nursery'} will send your invoice to {email}</>}
           </div>
         ) : (
           <div style={{ padding: '14px 16px', background: '#f0f7ea', borderRadius: 8, textAlign: 'center', fontSize: '0.9375rem', color: '#27500A', fontWeight: 600 }}>

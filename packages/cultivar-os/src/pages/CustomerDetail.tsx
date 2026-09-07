@@ -26,6 +26,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, Package, Pencil, ShoppingBag, DollarSign, TrendingUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { formatPersonName } from '@trace/shared/utils/personName';
 import { orderItemName, orderItemTag, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { orderStatusMeta } from '../lib/orderStatus';
 import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
@@ -143,7 +144,7 @@ export function CustomerDetail() {
   const isOrg = customer.customer_type === 'organization';
   const name = (isOrg
     ? (customer.organization_name?.trim() || customer.first_name)
-    : `${customer.first_name} ${customer.last_name ?? ''}`.trim() || customer.first_name) || '—';
+    : formatPersonName(customer.first_name, customer.last_name) || customer.first_name) || '—';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
   const contact = [customer.email, customer.phone, customer.city].filter(Boolean).join(' · ');
 

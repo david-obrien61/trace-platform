@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
@@ -497,7 +498,7 @@ export function DeliveryRoute() {
     // Same ordered set, structured for the embedded map (label = customer name).
     const stopModels: RouteStop[] = selectedOrders
       .map(o => ({
-        label: o.customers ? `${o.customers.first_name} ${o.customers.last_name}` : 'Customer',
+        label: customerDisplayName(o.customers, 'Customer'),
         address: getAddress(o),
       }))
       .filter(s => s.address.length > 0);
@@ -586,9 +587,7 @@ export function DeliveryRoute() {
                 // discarding "Mexican Sycamore - 45 gallon" that was sitting on the same row.
                 const firstItem = order.order_items?.[0];
                 const plant = firstItem ? orderItemName(firstItem) : 'No items';
-                const custName = order.customers
-                  ? `${order.customers.first_name} ${order.customers.last_name}`
-                  : 'Unknown customer';
+                const custName = customerDisplayName(order.customers, 'Unknown customer');
 
                 return (
                   <div key={order.id} style={{

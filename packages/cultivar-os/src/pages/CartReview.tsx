@@ -4,8 +4,10 @@ import { Minus, Plus, X } from 'lucide-react';
 import { useCart } from '../hooks/useCart';
 import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
+import { formatPersonName } from '@trace/shared/utils/personName';
 import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
+  fetchAttachedCustomerTier,
   fetchTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
   type PricingLineInput, type DiscountType, type OrderTaxExemption,
 } from '@trace/shared/business-logic';
@@ -41,6 +43,37 @@ export function CartReview() {
   // gates the redline so it doesn't flash before the config resolves.
   const [taxRate, setTaxRate] = useState<number | null>(null);
   const [taxLoaded, setTaxLoaded] = useState(false);
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE TIER IS RESOLVED FROM THE CUSTOMER **ROW**, BY ID — THE SAME KEY `submit.ts` USES.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // OWNER-PROVED 2026-09-07 5:54p: Review quoted $974.25 on its button and Confirm charged
+  // $876.83. The server was right; Review was reading the tier off the wrong thing.
+  //
+  // `customer.price_tier` is set in CustomerCapture by an **EMAIL** lookup. `submit.ts:451` reads
+  // `customers WHERE id = <attachedCustomerId>` and takes `price_tier` off THAT ROW. Two different
+  // identity keys for one question — and they disagree exactly when the attached customer has no
+  // email on file. LAWNS's one contractor, `LEANDER AREA WHLS NRSY SPLY`, has `email = NULL`
+  // (measured), so the typed address matched nothing, `price_tier` came back null, and Review
+  // resolved to retail while submit resolved to CD10%.
+  //
+  // ⚠️ THIS IS THE SECOND PATCH TO THIS SCREEN FOR THE SAME DISAGREEMENT (the July handover
+  // carried it as must-fix #1). The first one fixed the CONFIG half — it made the resolution wait
+  // for `discountTypes` instead of trusting the `orderTier` snapshot — and then re-derived the
+  // tier NAME from the weakest identity the flow holds instead of the strongest one it already
+  // had in hand. That is why it did not hold, and it is why this reads the row by id: not a
+  // better guess, the same key.
+  const [attachedTier, setAttachedTier] = useState<string | null>(null);
+  useEffect(() => {
+    if (!attachedCustomerId || !businessId) { setAttachedTier(null); return; }
+    let alive = true;
+    void (async () => {
+      const tier = await fetchAttachedCustomerTier(supabase, businessId, attachedCustomerId);
+      if (!alive) return;
+      setAttachedTier(tier);
+      console.log('[TRACE:PRICE] tier read from the attached customer ROW (the key submit uses)', { attachedCustomerId, tier });
+    })();
+    return () => { alive = false; };
+  }, [attachedCustomerId, businessId]);
   useEffect(() => {
     const bid = businessId ?? items[0]?.plant.business_id;
     if (!bid) return;
@@ -171,7 +204,10 @@ export function CartReview() {
   // config loads (avoids a retail flash), NEVER the sole source — that's what left Review at 0% when
   // the customer was entered at CustomerCapture. Once config is loaded the authoritative resolution
   // governs, so Review === submit === QBO regardless of how the customer was attached.
-  const effectiveTierName = invokedTier ?? customer?.price_tier ?? null;
+  // 🔴 THE SAME PRECEDENCE `submit.ts` APPLIES: an order-scoped invoke wins, then the customer's
+  // STORED tier. `attachedTier` (read by id) is preferred over `customer.price_tier` (resolved by
+  // email) because it is the value the server will actually charge against.
+  const effectiveTierName = invokedTier ?? attachedTier ?? customer?.price_tier ?? null;
   const resolvedTier = discountTypes !== null
     ? resolveTier(effectiveTierName, discountTypes)
     : (orderTier ?? RETAIL_FLOOR);
@@ -569,7 +605,7 @@ export function CartReview() {
           </button>
         </div>
         <p style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1f2937' }}>
-          {customer.first_name} {customer.last_name}
+          {formatPersonName(customer.first_name, customer.last_name)}
         </p>
         <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.email}</p>
         {customer.phone && (
@@ -587,14 +623,23 @@ export function CartReview() {
         )}
         {/* Tier badge — the pricing agreement shown BEFORE submit. Display-only; the discounted
             total is recomputed server-authoritatively at checkout (money-safety). */}
-        {orderTierLabel && orderTierLabel !== 'Retail — no discount' && (
+        {/* 🔴 THE BADGE READS FROM THE RESOLUTION THE MONEY USES, NOT THE ATTACH-TIME SNAPSHOT.
+            `orderTierLabel` is set only when a customer is attached at ScanOrder; enter the same
+            customer at CustomerCapture and it is null — so the screen could apply a discount and
+            show nothing naming it. `resolvedTier` is what `pricing` was computed from, which makes
+            the badge and the numbers the same fact (STD-011). */}
+        {resolvedTier.discountPercent > 0 && (
           <div style={{ marginTop: 8 }}>
             <span style={{ display: 'inline-block', background: '#eef2ff', color: '#3730a3', fontWeight: 700, fontSize: '0.75rem', borderRadius: 6, padding: '3px 9px' }}>
-              {orderTierLabel}{invokedTier ? ' · this order' : ''}
+              {orderTierLabel ?? `${resolvedTier.name} — ${resolvedTier.discountPercent}% off`}{invokedTier ? ' · this order' : ''}
             </span>
-            <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '4px 0 0' }}>
-              {invokedTier ? 'Order discount' : 'Customer tier'} applies at checkout — the invoice total reflects it.
-            </p>
+            {/* 🔴 THE COPY THAT USED TO SIT HERE IS DELETED, NOT REWORDED.
+                It read: *"Customer tier applies at checkout — the invoice total reflects it."*
+                **Review IS checkout.** There is no later screen — the next thing the customer sees
+                is Confirmation, after the order is placed. The sentence was covering for a total
+                that did not include the discount, and a promise that the real number comes later
+                is exactly how a wrong number on a button survives an owner-prove. The discount is
+                now IN the breakdown above and IN the button, so there is nothing left to promise. */}
           </div>
         )}
 

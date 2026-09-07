@@ -71,3 +71,66 @@ export function personNamesMatch(a: string | null | undefined, b: string | null 
   if (sa.size === 0 || sb.size === 0) return false; // absence is not agreement (D-9)
   return tokenSetsEqual(sa, sb);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// DISPLAY — assembling a person's name from its parts, for a SCREEN rather than for matching
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Assemble a person's display name from its parts, dropping the parts that are absent.
+ *
+ * 🔴 WHY THIS EXISTS: `${first_name} ${last_name}` renders the four characters **"null"** when
+ * `last_name` is NULL — JavaScript stringifies null inside a template literal, and NULL is now
+ * the TRUE value for a mononym person (`20260907_customers_last_name_nullable`, David's ruling:
+ * a company has no family name, and neither does Tina). Measured on the 2026-09-07 import: **39
+ * people with one name** rendered as `Terry null`, `Raj null`, `Sample Customer null`. The
+ * importer never wrote the string — every one of those was assembled at render time, which is
+ * why it survives every undo and returns on every import.
+ *
+ * ⚠️ JSX `{a} {b}` does NOT have this bug — React renders null as nothing — but it leaves a
+ * trailing space and it is a SECOND way of doing one thing. One helper, every call site, so
+ * the next person-name render cannot reintroduce it (§6 r8).
+ *
+ * Returns '' when nothing is known, so a caller can choose its own fallback rather than being
+ * handed a fabricated one (D-9: absent is not empty).
+ */
+export function formatPersonName(
+  first: string | null | undefined,
+  last: string | null | undefined,
+): string {
+  return [first, last]
+    .map(p => (typeof p === 'string' ? p.trim() : ''))
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * The display name for a customer-shaped record — an ORGANIZATION renders its organization name,
+ * a PERSON renders its assembled parts. The one place the person/organization split is decided
+ * for display, so a roster, an order screen and a delivery list cannot disagree about what a
+ * customer is called.
+ *
+ * `fallback` is what shows when NOTHING is known. It is a required argument on purpose: an
+ * unnamed record is a real state and each surface should say so in its own words ('—', 'Customer',
+ * 'Unknown customer') rather than silently inheriting one.
+ */
+export function customerDisplayName(
+  c: {
+    customer_type?: string | null;
+    organization_name?: string | null;
+    display_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null | undefined,
+  fallback: string,
+): string {
+  if (!c) return fallback;
+  if (c.customer_type === 'organization') {
+    const org = c.organization_name?.trim() || c.display_name?.trim();
+    if (org) return org;
+  }
+  return formatPersonName(c.first_name, c.last_name)
+    || c.display_name?.trim()
+    || c.organization_name?.trim()
+    || fallback;
+}

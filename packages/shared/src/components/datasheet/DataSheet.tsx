@@ -44,6 +44,7 @@
 //               loads/writes (invsheet for inventory, assets for the asset grid).
 // ============================================================
 import { useState, useMemo, useEffect, Fragment } from 'react';
+import { countPillText } from './countPill';
 import { Plus, Minus, SlidersHorizontal, Search, Lock } from 'lucide-react';
 import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
 import { planTracks, type PinnedTrack } from './columnOrder';
@@ -135,6 +136,19 @@ interface DataSheetProps<T> {
   emptyIcon?: React.ReactNode;
   emptyText?: string;
   itemNoun?: string; // "items" / "assets"
+  /**
+   * 🔴 THE TRUE ROW COUNT IN THE TABLE, when `rows` is only a PAGE of it.
+   *
+   * `rows.length` is what the grid was HANDED, which is not the same claim as how many exist.
+   * PostgREST caps an unbounded `.select()` at 1000, so a 1,964-row customers table rendered
+   * `1000 of 1000` — the list reporting its own cap as the truth, and the 1,000th customer was
+   * the last one that existed as far as anyone reading the screen could tell. It was honest on
+   * `/inventory` (647 rows) for the sole reason that 647 is under the cap.
+   *
+   * A consumer that reads a bounded page passes the `count: 'exact'` total here and the pill says
+   * `showing N of TOTAL`. Omitted → the grid holds everything and `rows.length` IS the total
+   * (D-9: a surface may only assert what it was actually given). */
+  totalRows?: number | null;
 }
 
 export function DataSheet<T>(props: DataSheetProps<T>) {
@@ -142,7 +156,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
     statusFilter, extraFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
-    actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items',
+    actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items', totalRows = null,
   } = props;
 
   const [search, setSearch] = useState('');
@@ -387,7 +401,13 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                   </>
                 )}
               </div>
-              <span style={S.countPill}>{view.length} of {rows.length}{status !== 'all' || search ? ' shown' : ` ${itemNoun}`}</span>
+              {/* 🔴 THE PILL MAY ONLY CLAIM WHAT IT WAS GIVEN — the arithmetic lives in
+                  `countPill.ts` so a probe can reach it, not inline here where it shipped
+                  `1000 of 1000` over 1,964 rows. */}
+              <span style={S.countPill}>{countPillText({
+                visible: view.length, loaded: rows.length, total: totalRows,
+                filtered: status !== 'all' || !!search, itemNoun,
+              })}</span>
             </div>
 
             {/* 🔴 ONE FLEX CHILD, NOT N — see `dupBannerText` for why. */}

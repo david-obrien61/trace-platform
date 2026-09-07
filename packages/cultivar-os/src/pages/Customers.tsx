@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import {
   DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
@@ -104,6 +105,9 @@ export function Customers() {
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  // The TRUE number of customers in the table, from `count: 'exact'` — not `customers.length`,
+  // which is only what this page managed to load. The grid header renders the difference.
+  const [customerTotal, setCustomerTotal] = useState<number | null>(null);
 
   // The ONE customer form (STD-011): Add (create) AND Edit both open CustomerPartyEditor. null =
   // closed; { mode:'create' } opens it empty; { mode:'edit', row } opens it populated.
@@ -126,18 +130,63 @@ export function Customers() {
     // omit a field (a field added to the form but missed here reads back null forever). Now DERIVED.
     const CORE = CUSTOMER_SELECT_CORE;
     const FULL = CUSTOMER_SELECT_FULL;
-    const run = (cols: string) => supabase.from('customers').select(cols).eq('business_id', businessId).order('created_at', { ascending: false });
-    let { data, error } = await run(FULL);
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 THE READ IS PAGED AND THE TOTAL IS COUNTED — IT USED TO BE NEITHER.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // This was one unbounded `.select()`. **PostgREST caps that at 1000 rows**, so against 1,964
+    // customers the roster held exactly 1000 and the header — which derived its total from
+    // `rows.length` — read `1000 of 1000`. The screen did not truncate, it ASSERTED: the 1,000th
+    // customer was the last one that existed as far as Lauren could tell, and there was no
+    // scrollbar, banner or count anywhere that disagreed.
+    //
+    // ⚠️ IT WAS HONEST ON `/inventory` IN THE SAME SESSION (`647 of 647`) FOR ONE REASON: 647 is
+    // under the cap. Same code, honest below 1000, lying above it — which is why this is fixed in
+    // the shared grid's contract (`totalRows`) and not with a bigger number here.
+    //
+    // `count: 'exact'` on the first page gives the TRUE total; `.range()` then pages until the
+    // rows run out. The count and the rows come from the same filter, so they cannot disagree.
+    const PAGE = 1000;
+    const run = (cols: string, from: number) => supabase
+      .from('customers')
+      .select(cols, { count: 'exact' })
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    // Which column set ANSWERED is remembered, so the remaining pages are read with the same one —
+    // paging page 2 with FULL after page 1 fell back to CORE would fail every page but the first.
+    let answered = FULL;
+    let { data, error, count } = await run(FULL, 0);
     if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {
       console.log('[TRACE:customers] party/exemption cols absent — roster retrying with CORE (migration pending)', { code: (error as any).code });
-      ({ data, error } = await run(CORE));
+      answered = CORE;
+      ({ data, error, count } = await run(CORE, 0));
     }
+    // Pull the remaining pages. `total` bounds the loop, and a short or empty page ends it, so a
+    // mis-sized page can never spin.
+    if (!error) {
+      const total = count ?? (data?.length ?? 0);
+      const all = [...((data ?? []) as any[])];
+      while (all.length < total) {
+        const next = await run(answered, all.length);
+        if (next.error) { console.log('[TRACE:customers] page read failed — showing what loaded', { got: all.length, total, message: next.error.message }); break; }
+        const rows = (next.data ?? []) as any[];
+        if (rows.length === 0) break;
+        all.push(...rows);
+      }
+      data = all as any;
+      count = total;
+    }
+    setCustomerTotal(count ?? null);
     if (error) { console.error('[TRACE:customers] loadCustomers error', error.message); setListError(error.message); setListLoading(false); return; }
     // `searchableFields` is on this emit deliberately: the roster's search covering fewer fields
     // than it displays was invisible from every screen and every log. Now the trail says what a
     // customer can be FOUND BY, next to how many were loaded.
     console.log('[TRACE:customers] loadCustomers ok', {
       count: data?.length ?? 0,
+      // 🔴 BOTH NUMBERS, ALWAYS. `loaded === total` is the assertion the header makes; if they ever
+      // diverge the trail says so rather than leaving a capped read looking complete.
+      totalInTable: count ?? null,
       searchableFields: CUSTOMER_SEARCH_FIELDS.length,
       searchable: CUSTOMER_SEARCH_FIELDS.join(','),
     });
@@ -212,10 +261,10 @@ export function Customers() {
   // quick-edit). The NAME click instead navigates to /customers/:id (the detail page + order history).
   const openEdit = (r: CustomerRow) => setEditor({ mode: 'edit', row: r as unknown as PartyCustomer });
 
-  const displayName = (r: CustomerRow) =>
-    r.customer_type === 'organization'
-      ? (r.organization_name?.trim() || r.first_name)
-      : `${r.first_name} ${r.last_name}`.trim() || r.first_name;
+  // 🔴 ONE helper, every surface. This line rendered `Terry null` for the 39 mononym people the
+  // 2026-09-07 import created — `${r.last_name}` stringifies NULL to four characters, and NULL is
+  // now the TRUE value for a person with one name. `customerDisplayName` drops absent parts.
+  const displayName = (r: CustomerRow) => customerDisplayName(r, '—');
 
   // 🔴 THE SEARCH READS THE SAME LIST THE RECORD DECLARES (`searchText` on <DataSheet> below).
   // It WAS a hand-written eight-field array inline in that prop, and it omitted `organization_name`
@@ -287,6 +336,7 @@ export function Customers() {
         defaultSortKey="created_at"
         defaultSortDir="desc"
         itemNoun="customers"
+        totalRows={customerTotal}
         emptyIcon={<Users size={32} color="#d1d5db" style={{ marginBottom: 8 }} />}
         emptyText="No customers yet. They appear here from checkout + invoice scans, or add one."
         actions={

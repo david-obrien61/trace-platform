@@ -72,7 +72,7 @@ export { STATUS_COLORS, PMI_STATUS_COLORS, ORDER_STATUS_COLORS } from './utils/s
 export type { StatusLevel } from './utils/statusColors';
 export { normalizePhone } from './utils/normalizePhone';
 export { nameTokenSet, canonicalNameKey, tokenSetsEqual } from './utils/canonicalName';
-export { personNameTokenSet, personNamesMatch } from './utils/personName';
+export { personNameTokenSet, personNamesMatch, formatPersonName, customerDisplayName } from './utils/personName';
 
 // Components
 export { FormField, inputStyle, inputErrorStyle } from './components/FormField';

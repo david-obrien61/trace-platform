@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Truck, Package, Wrench, ScanLine, ChevronRight, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { orderItemName, orderItemTag, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { orderStatusMeta } from '../lib/orderStatus';
 import {
@@ -284,7 +285,7 @@ export function Orders() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem', color: '#111827' }}>
-                    {order.customers ? `${order.customers.first_name} ${order.customers.last_name}` : 'Unknown customer'}
+                    {customerDisplayName(order.customers, 'Unknown customer')}
                   </p>
                   <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
                     {order.customers?.email ?? ''}

@@ -55,6 +55,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, AlertTriangle, Truck, Sprout, Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { NotPermitted, requirementText } from '@trace/shared/components/SurfaceState';
 import { DeliverySchedule } from './DeliverySchedule';
 import {
@@ -264,7 +265,7 @@ export function OperationsCalendar() {
         kind: 'delivery',
         date: r.delivery_date!,
         label: r.customers
-          ? `${r.customers.first_name} ${r.customers.last_name}`.trim()
+          ? customerDisplayName(r.customers, 'Customer')
           : ([r.address_line1, r.city].filter(Boolean).join(', ') || 'Delivery'),
         detail: r.service_type,
         serviceType: r.service_type,

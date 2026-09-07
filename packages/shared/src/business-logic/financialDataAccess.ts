@@ -272,3 +272,41 @@ export async function mergePricingConfig(
   const next = { ...current, ...patch };
   return writePricingConfig(supabase, businessId, next);
 }
+
+/**
+ * fetchAttachedCustomerTier — the STORED price-tier NAME of a customer, read BY ID.
+ *
+ * 🔴 WHY BY ID, AND WHY THIS IS ITS OWN FUNCTION. `submit.ts:451` resolves the charge from
+ * `customers WHERE id = <attachedCustomerId>` and takes `price_tier` off that row. The Review
+ * preview was resolving the same tier from an **email lookup** in CustomerCapture — a different
+ * identity key for one question — and the two disagree exactly when the attached customer has no
+ * email on file. LAWNS's only contractor, `LEANDER AREA WHLS NRSY SPLY`, has `email = NULL`, so
+ * Review priced at retail while submit charged CD10%: a $974.25 button on an $876.83 order,
+ * owner-proved 2026-09-07 (and a RECURRENCE — the July handover carried the same disagreement as
+ * must-fix #1, and the first patch re-derived the tier from the weaker key instead of this one).
+ *
+ * It lives HERE beside `readPricingConfig`/`fetchTaxRate` — the other two reads the checkout
+ * preview needs — rather than inline in the page, for the same reason `fetchTaxRate` does: a
+ * checkout screen should ask a named question, not carry its own table access.
+ *
+ * Returns null when there is no attached customer, when the row carries no tier, or when the read
+ * fails — and a failed read is LOGGED rather than swallowed, because silently returning null here
+ * is precisely how the preview drifted from the charge in the first place. Never authoritative for
+ * the CHARGE: submit re-resolves server-side under RLS.
+ */
+export async function fetchAttachedCustomerTier(
+  db: { from: (t: string) => any },
+  businessId: string,
+  customerId: string,
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('customers').select('price_tier')
+    .eq('id', customerId).eq('business_id', businessId).maybeSingle();
+  if (error) {
+    console.log('[TRACE:PRICE] attached-customer tier read FAILED — preview falls back to the carried tier', {
+      customerId, businessId, message: (error as { message?: string }).message,
+    });
+    return null;
+  }
+  return (data as { price_tier?: string | null } | null)?.price_tier ?? null;
+}

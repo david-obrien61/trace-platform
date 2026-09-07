@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sendSilently } from '@trace/shared/notifications';
+import { formatPersonName } from '@trace/shared/utils/personName';
 import type { NotifyBusiness } from '@trace/shared/notifications';
 import { supabase } from '../lib/supabase';
 import type { ServiceSelection } from '../types/order';
@@ -175,12 +176,12 @@ export function useSubmitOrder() {
         templateId: 'order_confirmation',
         to: {
           email:      customer.email,
-          name:       `${customer.first_name} ${customer.last_name}`,
+          name:       formatPersonName(customer.first_name, customer.last_name),
           emailOptIn: customer.marketing_opt_in ?? true,
         },
         data: {
           business,   // AC-1: active tenant identity → the email renders the true business, not a literal
-          customerName:  `${customer.first_name} ${customer.last_name}`,
+          customerName:  formatPersonName(customer.first_name, customer.last_name),
           invoiceNumber,
           plantName:     plantLabel,
           container:     firstPlant?.current_container ?? '',
