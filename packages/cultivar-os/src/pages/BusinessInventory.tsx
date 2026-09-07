@@ -40,6 +40,7 @@ import {
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
 import { onlyLiveInventory } from '@trace/shared/inventory/retiredFilter';
+import { findShapeCollisions } from '@trace/shared/inventory/shapeCollision';
 import {
   fetchCommittedByLot, availableFrom, statusSelectValue, statusSelectOptions,
   resolveStatusSelection, ALL_STATUS_VALUES, type CommittedByLot,
@@ -289,6 +290,52 @@ export function BusinessInventory() {
   }, [items]);
   const isDup = (r: InventoryRow) => { const k = sizeGroupKey(r.variant_group, r.size); return k != null && dupKeys.has(k); };
 
+  // ── SHAPE COLLISIONS (R-101) — same name, same PARSED size, however it was spelled. ──────────
+  //
+  // 🔴 THIS SITS BESIDE `isDup`, IT DOES NOT REPLACE IT (R-101 clause ②). `sizeGroupKey` feeds the
+  // editor's PRE-WRITE uniqueness guard, which REFUSES a save; widening what that refuses is its
+  // own decision and not this one. Two keys, two jobs.
+  //
+  // 🔴 AND IT IS DERIVED, NEVER STORED (clause ③): fix a price and the mark clears itself on the
+  // next load. `name` and `size` are both already in the select, so this costs no column and no
+  // migration — `parseUnitOfMeasure` runs in the browser, which is R-27's one derive.
+  //
+  // ⚠️ WHY IT CATCHES WHAT `isDup` CANNOT, MEASURED 2026-09-07: `sizeGroupKey` returns null on a
+  // blank `variant_group` — true of **647 of 647** imported rows before this pass — so it never
+  // ran at all; and it compares the size TEXT, so `45G` and `45 gallon` were two products. Brodie
+  // Juniper ($1,400 vs $1,250) and Skyward Holly ($65 vs $60) were invisible on this screen while
+  // the import report had them the whole time.
+  const collisions = useMemo(
+    () => findShapeCollisions(items.map(r => ({ id: r.id, name: r.name, size: r.size, price: r.sell_price }))),
+    [items],
+  );
+  const collisionByRow = useMemo(() => {
+    const m = new Map<string, { money: number; pricesDiffer: boolean; reason: string }>();
+    for (const c of collisions) {
+      for (const mem of c.members) {
+        m.set(mem.id, { money: c.moneyAtStake, pricesDiffer: c.pricesDiffer, reason: c.reason });
+      }
+    }
+    if (collisions.length > 0) {
+      console.log('[TRACE:invsheet] shape collisions', {
+        groups: collisions.length,
+        rows: m.size,
+        withPriceGap: collisions.filter(c => c.pricesDiffer).length,
+        topMoney: collisions[0]?.moneyAtStake ?? 0,
+      });
+    }
+    return m;
+  }, [collisions]);
+  const isCollision = (r: InventoryRow) => collisionByRow.has(r.id);
+  /** The sort weight: money at stake, so the six that are money lead (R-101 ①). */
+  const collisionMoney = (r: InventoryRow) => collisionByRow.get(r.id)?.money ?? 0;
+  const NEEDS_ALOOK = 'price disagreement';
+  const NEEDS_DUP   = 'duplicate';
+  const needsLook = (r: InventoryRow): string =>
+    collisionByRow.get(r.id)?.pricesDiffer ? NEEDS_ALOOK
+    : (isCollision(r) || isDup(r)) ? NEEDS_DUP
+    : '';
+
   // The tenant's rows, as the editor's uniqueness guards need them (SKU + (variant_group, size)).
   // ONE prop: the editor derives BOTH guards and excludes the row being edited itself — a caller
   // cannot supply one guard's data and forget the other's, which is precisely how the size guard
@@ -320,6 +367,21 @@ export function BusinessInventory() {
   const columns: DataSheetColumn<InventoryRow>[] = [
     { key: 'flag', header: '', sortable: false, hideable: false, frozen: true, frozenWidth: 34,
       render: r => isDup(r) ? <span style={SS.dupTag} title="Duplicate (variant group, size) — uncountable by scan until you disambiguate the size or variant group."><AlertTriangle size={13} /></span> : null },
+    /* 🔴 "Needs a look" — the receipts shape David named, and what `defaultSortKey` targets.
+       `sortValue` is the MONEY AT STAKE so the six price disagreements lead; the cell shows the
+       gap, because "$875" is a reason to click and "⚠" is not. The tooltip carries the full
+       sentence, which names the product and both prices. */
+    { key: 'needs', header: 'Needs a look', sortable: true,
+      sortVal: (r: InventoryRow) => collisionMoney(r),
+      render: (r: InventoryRow) => {
+        const c = collisionByRow.get(r.id);
+        if (!c) return isDup(r) ? <span style={{ fontSize: 12, color: '#8a6d1f' }} title="Duplicate (variant group, size).">duplicate</span> : null;
+        return (
+          <span title={c.reason} style={{ fontSize: 12, color: c.pricesDiffer ? '#A32D2D' : '#8a6d1f', fontWeight: c.pricesDiffer ? 700 : 400 }}>
+            {c.pricesDiffer ? `$${c.money.toLocaleString()} apart` : 'duplicate'}
+          </span>
+        );
+      } },
     { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180,
       render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => doRename(r, v ?? '')} /> },
     { key: 'sku', header: 'SKU', sortable: true, sortVal: r => (r.sku ?? '').toLowerCase(),
@@ -394,8 +456,18 @@ export function BusinessInventory() {
         searchText={r => [r.name, r.sku, r.size, r.variant_group, r.location, r.serial_number, r.notes].filter(Boolean).join(' ')}
         searchPlaceholder="Search name, SKU, size, location…"
         statusFilter={{ label: 'statuses', options: STATUS_FILTER_OPTIONS, get: r => r.status }}
-        defaultSortKey="name"
-        rowFlag={isDup}
+        /* "a filter that shows only them" — R-101. A SECOND dimension, because status and
+           needs-a-look are different questions and folding them into one control would make
+           "available" and "price disagreement" mutually exclusive, which they are not. */
+        extraFilter={{ label: 'needs a look', options: [NEEDS_ALOOK, NEEDS_DUP], get: needsLook }}
+        /* 🔴 THE SIX THAT ARE MONEY LEAD (R-101 ①). Every non-colliding row weighs 0 and falls
+           through to name, so the catalogue still reads alphabetically underneath — nothing is
+           hidden and nothing is reordered except the rows that need her first. */
+        defaultSortKey="needs"
+        defaultSortDir="desc"
+        /* BOTH rules — a row is flagged if it duplicates a (variant group, size) pair OR shares a
+           name and a PARSED size with another row. Beside, never replacing (R-101 ②). */
+        rowFlag={r => isDup(r) || isCollision(r)}
         /* The banner describes the rows ON SCREEN. It used to count flagged rows over the WHOLE
            catalog and render the number above whatever the filter had narrowed to — so filtering to
            the clean "alley" rows still shouted "2 size collisions … edit a flagged row", about
@@ -408,7 +480,11 @@ export function BusinessInventory() {
             <AlertTriangle size={15} />
             {inView > 0 ? (
               <>
-                {inView} flagged {inView === 1 ? 'row' : 'rows'} here — each shares a variant group and size with another row, so the scanner can’t tell them apart. Edit the <b>&nbsp;size&nbsp;</b> or <b>&nbsp;variant group&nbsp;</b> on a flagged row to fix it.
+                {inView} flagged {inView === 1 ? 'row' : 'rows'} here.{' '}
+                {collisions.filter(c => c.pricesDiffer).length > 0 && (
+                  <b>{collisions.filter(c => c.pricesDiffer).length} of them are two products at the same name and size with <u>different prices</u> — sorted to the top.</b>
+                )}{' '}
+                The rest share a variant group and size, so the scanner can’t tell them apart. Edit the <b>&nbsp;price&nbsp;</b>, the <b>&nbsp;size&nbsp;</b> or the <b>&nbsp;variant group&nbsp;</b> on a flagged row to fix it.
                 {elsewhere > 0 && <> {elsewhere} more {elsewhere === 1 ? 'is' : 'are'} outside this filter.</>}
               </>
             ) : (

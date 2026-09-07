@@ -21,3 +21,5 @@ export {
 export type { UnitKind, UnitParse, UnitColumns, MultiUnitGroup, MultiUnitCandidate, UnitSummary, UnitSummaryRow } from './unitOfMeasure';
 export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retiredFilter';
 export type { LiveFilterable } from './retiredFilter';
+export { shapeCollisionKey, findShapeCollisions, collisionReason, moneyAtStake } from './shapeCollision';
+export type { ShapeCandidate, ShapeCollision } from './shapeCollision';

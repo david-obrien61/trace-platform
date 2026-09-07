@@ -124,6 +124,7 @@ import { isPushHeld } from './pushHold';
 import { pushPermitted } from '../business-logic/testMode';
 import { unitColumnsFor } from '../inventory/unitOfMeasure';
 import { STOCK_LINE_IDENTITY_COLUMNS } from '../inventory/stockLineResolver';
+import { variantGroupSlug } from '../inventory/variantGroup';
 import type { QboItemRow } from './itemList';
 
 /**
@@ -219,7 +220,7 @@ export interface UndoReport {
  *  list. #179's class: a select naming fewer columns than its migration creates is invisible to
  *  tsc, eslint and knip. */
 export const ITEM_IMPORT_INSERT_COLUMNS = [
-  'business_id', 'name', 'size', 'description', 'sku', 'qty', 'status',
+  'business_id', 'name', 'size', 'description', 'sku', 'qty', 'status', 'variant_group',
   'sell_price', 'price_basis', 'qb_item_id', 'import_run_id',
   'unit_kind', 'unit_value', 'unit_value_max', 'unit_name', 'unit_parsed_from',
 ] as const;
@@ -250,6 +251,26 @@ export function rowForItem(businessId: string, runId: string, item: AdaptedItem)
     price_basis: item.unitPrice === null ? null : 'quickbooks_item_price',
     qb_item_id: item.qboId,
     import_run_id: runId,
+    // 🔴 `variant_group` ADDED 2026-09-07 (tech-debt #205) — THE IMPORT WAS LEAVING EVERY FAMILY
+    // UNGROUPED AND THE SIZE PICKER COULD NOT FIRE ON ANY OF THEM.
+    //
+    // Measured on LAWNS's 647: `variant_group` was NULL on 647 of 647, while **124 variety names
+    // carried more than one size — 416 rows, 64% of the catalogue** (Natchez Crape Myrtle 9 sizes,
+    // Lacey Oak 8, Live Oak 8). `detectSizeCollision` returns false the instant the group is null
+    // (`stockLineResolver.ts` — *"group must be set…"*), so scanning "Live Oak" in the lot returned
+    // eight token-equal rows and no picker. That is exactly the state `countPromote.ts`'s D-49
+    // invariant forbids: *"ANY path that mints a size-sibling must leave the family in a state
+    // where the size-picker fires BY CONSTRUCTION."* This import mints size-siblings; it now
+    // leaves them grouped.
+    //
+    // ⚠️ AND IT DOES **NOT** MERGE A COLLIDING PAIR, WHICH WAS THE WORRY. Two Lacey Oak 45 Gallon
+    // rows land in one family with a duplicate normalised size, and `detectSizeCollision`
+    // **correctly declines** to offer a picker for that family — its own comment says so: *"a
+    // family carrying both spellings of one physical size is a DUP (not a clean picker)."* The
+    // rows stay two rows, with two ids and two prices, and the collision flag marks them.
+    // MEASURED over the 685: grouping by name gives **110 families a working picker and 13 a
+    // correct refusal** — and fixing a flagged collision is what turns its family's picker on.
+    variant_group: variantGroupSlug(item.name),
     // 🔴 NO `source` — see ITEM_IMPORT_SOURCE's note. The column does not exist on this table, and
     // `qb_item_id` + `import_run_id` already answer both questions it would have answered.
     ...unitColumnsFor(item.size),

@@ -97,6 +97,11 @@ interface DataSheetProps<T> {
   searchText: (r: T) => string;
   searchPlaceholder?: string;
   statusFilter?: StatusFilterConfig<T>;
+  /** A SECOND, independent quick-filter. Added 2026-09-07 for R-101: "needs a look" and "status"
+   *  are different questions about a row, and folding them into one control would make
+   *  `available` and `price disagreement` mutually exclusive when a row is routinely both.
+   *  Optional and additive — every existing consumer renders exactly as before. */
+  extraFilter?: StatusFilterConfig<T>;
   defaultSortKey?: string;
   defaultSortDir?: 'asc' | 'desc';
   /** Highlight + count rows (e.g. dup-size collisions). Evaluated against the FULL row set — a flag
@@ -127,13 +132,14 @@ interface DataSheetProps<T> {
 export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
-    statusFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
+    statusFilter, extraFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
     actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items',
   } = props;
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [extra, setExtra] = useState('all');
   const [sortKey, setSortKey] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir);
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
@@ -177,6 +183,9 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     const q = search.trim().toLowerCase();
     let out = rows;
     if (statusFilter && status !== 'all') out = out.filter(r => statusFilter.get(r) === status);
+    // The second dimension is AND-ed with the first: they are different questions, so a row
+    // must satisfy both to survive. Independent state, so clearing one does not clear the other.
+    if (extraFilter && extra !== 'all') out = out.filter(r => extraFilter.get(r) === extra);
     if (q) out = out.filter(r => searchText(r).toLowerCase().includes(q));
     const col = columns.find(c => c.key === sortKey);
     if (col?.sortVal) {
@@ -188,7 +197,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       });
     }
     return out;
-  }, [rows, search, status, statusFilter, sortKey, sortDir, columns, searchText]);
+  }, [rows, search, status, statusFilter, extra, extraFilter, sortKey, sortDir, columns, searchText]);
 
   // Flagged rows, split by what the filter/search actually SHOWS. Computed AFTER `view` — deriving
   // it from `rows` (as it did) is exactly the defect: the count was of the whole catalog while the
@@ -311,6 +320,12 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                 <select style={S.toolSelect} value={status} onChange={e => setStatus(e.target.value)} title={statusFilter.label ?? 'Filter by status'}>
                   <option value="all">All {statusFilter.label ?? 'statuses'}</option>
                   {statusFilter.options.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
+              {extraFilter && (
+                <select style={S.toolSelect} value={extra} onChange={e => setExtra(e.target.value)} title={extraFilter.label ?? 'Filter'}>
+                  <option value="all">All {extraFilter.label ?? 'rows'}</option>
+                  {extraFilter.options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               )}
               <div style={{ position: 'relative' }}>

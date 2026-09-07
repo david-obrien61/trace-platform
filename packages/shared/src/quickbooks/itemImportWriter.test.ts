@@ -232,6 +232,20 @@ const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers e
   ok(!(ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).includes('source'),
      "§A 🔴 `source` IS NOT WRITTEN — the column does not exist on business_inventory, and qb_item_id + import_run_id already say where a row came from and which run made it");
   ok(!('source' in r), '§A and the row itself does not carry one');
+
+  // 🔴 #205 — THE FAMILY IS GROUPED, OR THE SIZE PICKER CANNOT FIRE. Measured on LAWNS: 124 variety
+  // names carry more than one size (416 rows), and `detectSizeCollision` returns false the instant
+  // `variant_group` is null. An import that mints size-siblings ungrouped violates D-49's invariant.
+  ok(r.variant_group === 'natchez-crape-myrtle',
+     `§A 🔴 variant_group IS WRITTEN, from the shared slug (got ${JSON.stringify(r.variant_group)})`);
+  const sibA = rowForItem(BIZ, RUN, adaptQboItems([it('1', 'X', { description: 'Live Oak - 15 gallon' })]).items[0]);
+  const sibB = rowForItem(BIZ, RUN, adaptQboItems([it('2', 'Y', { description: 'Live Oak - 30 gallon' })]).items[0]);
+  ok(sibA.variant_group === sibB.variant_group && sibA.variant_group === 'live-oak',
+     '§A 🔴 two SIZES of one variety land in the SAME family — that is what makes the picker fire');
+  const other = rowForItem(BIZ, RUN, adaptQboItems([it('3', 'Z', { description: 'Lacey Oak - 15 gallon' })]).items[0]);
+  ok(other.variant_group !== sibA.variant_group, '§A …and a different variety does not join it');
+  ok((ITEM_IMPORT_INSERT_COLUMNS as readonly string[]).includes('variant_group'),
+     '§A and the column is DECLARED, so §A2 checks it against the migrations');
 }
 
 // ── §A2 🔴 THE COLUMN SET, AGAINST THE MIGRATIONS THAT ACTUALLY CREATE IT ─────

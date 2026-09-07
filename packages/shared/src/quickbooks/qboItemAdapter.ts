@@ -55,7 +55,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type { QboItemRow } from './itemList';
 import { parseUnitOfMeasure } from '../inventory/unitOfMeasure';
-import { variantGroupSlug } from '../inventory/variantGroup';
+import { findShapeCollisions } from '../inventory/shapeCollision';
 import type { IncomingItem } from '../inventory/retireAndReplace';
 
 /** How confident we are about this product's size. Three states — see the header. */
@@ -93,6 +93,8 @@ export interface ItemCollision {
   members: AdaptedItem[];
   /** True when the members do not all publish the same price — the sharp case. */
   pricesDiffer: boolean;
+  /** Widest price gap in the group; 0 when they agree. The sort key (R-101 ①). */
+  moneyAtStake: number;
   reason: string;
 }
 
@@ -227,19 +229,6 @@ export function readProductFromDescription(raw: string | null | undefined): Prod
 }
 
 /**
- * The planner's own shape key, recomputed here so a collision is detected on EXACTLY the identity
- * the create loop would have collapsed on. Duplicating the arithmetic in a different shape would
- * flag collisions the planner does not have and miss the ones it does.
- */
-function shapeKeyOf(name: string, size: string | null): string {
-  const u = parseUnitOfMeasure(size);
-  const sizeKey = u
-    ? `u:${u.kind}:${u.value ?? ''}:${u.valueMax ?? ''}:${u.unit}`
-    : `raw:${(size ?? '').trim().toLowerCase()}`;
-  return `n:${variantGroupSlug(name)}|${sizeKey}`;
-}
-
-/**
  * Adapt a QuickBooks item list into catalogue rows.
  *
  * ══════════════════════════════════════════════════════════════════════════════════════════
@@ -300,39 +289,20 @@ export function adaptQboItems(rows: QboItemRow[]): AdaptedItemList {
   }
 
   // ── collisions ──────────────────────────────────────────────────────────────────────────────
-  const byShape = new Map<string, AdaptedItem[]>();
-  for (const it of items) {
-    const k = shapeKeyOf(it.name, it.size);
-    const bucket = byShape.get(k);
-    if (bucket) bucket.push(it); else byShape.set(k, [it]);
-  }
-
-  const collisions: ItemCollision[] = [];
-  for (const [shapeKey, members] of byShape) {
-    if (members.length < 2) continue;
-    // The product, as a person would say it. Every member shares the name and the parsed size by
-    // construction, so the first member speaks for the group; the size text may differ between
-    // them, which is exactly what a same-parse/different-spelling collision IS.
-    const label = `${members[0].name}${members[0].size ? ` ${members[0].size}` : ''}`;
-    const prices = new Set(members.map(m => (m.unitPrice === null ? 'null' : String(m.unitPrice))));
-    const pricesDiffer = prices.size > 1;
-    collisions.push({
-      shapeKey,
-      members,
-      pricesDiffer,
-      // 🔴 THE PRODUCT IS NAMED IN THE SENTENCE, ADDED 2026-09-07. It previously said "under this
-      // name and size" without ever saying WHICH — so a reader scanning the collision list for a
-      // product they had just seen on the grid could not find it by searching the reasons, and
-      // would reasonably conclude it was not in the list. That is not a hypothetical: it is how a
-      // correct detector came to be reported as missing a pair.
-      reason: pricesDiffer
-        // The money is named because it is the reason this is urgent rather than untidy.
-        ? `${label} — QuickBooks lists ${members.length} separate products under this name and size, and they do not agree on price (${members.map(m => (m.unitPrice === null ? 'no price' : `$${m.unitPrice}`)).join(' vs ')}). Both are here so you can see them; neither was chosen for you.`
-        : `${label} — QuickBooks lists ${members.length} separate products under this name and size. Both are here so you can see them; neither was chosen for you.`,
-    });
-  }
-  // Biggest first, then by key, so two runs over one list report in the same order.
-  collisions.sort((a, b) => b.members.length - a.members.length || a.shapeKey.localeCompare(b.shapeKey));
+  // 🔴 ONE DEFINITION, SHARED WITH THE GRID (`../inventory/shapeCollision`). It used to live here
+  // as a private `shapeKeyOf`, and the inventory grid had a second, different rule — so the import
+  // report found eleven collisions and the screen showed none of them. Two implementations of one
+  // operation is §6 r8, and this is what it cost. `findShapeCollisions` already orders by money at
+  // stake and writes the owner-facing sentence; nothing about that is import-specific.
+  const collisions: ItemCollision[] = findShapeCollisions(
+    items.map(i => ({ name: i.name, size: i.size, price: i.unitPrice, item: i })),
+  ).map(c => ({
+    shapeKey: c.key,
+    members: c.members.map(m => m.item),
+    pricesDiffer: c.pricesDiffer,
+    moneyAtStake: c.moneyAtStake,
+    reason: c.reason,
+  }));
 
   const sized        = items.filter(i => i.sizeState === 'sized').length;
   const notStated    = items.filter(i => i.sizeState === 'not_stated').length;

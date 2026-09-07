@@ -33,10 +33,12 @@ const WRITER  = ROOT + 'packages/shared/src/quickbooks/itemImportWriter.ts';
 const GRID    = ROOT + 'packages/cultivar-os/src/pages/BusinessInventory.tsx';
 const PICKER  = ROOT + 'packages/shared/src/inventory/stockLineResolver.ts';
 const FILTER  = ROOT + 'packages/shared/src/inventory/retiredFilter.ts';
+const SHAPE   = ROOT + 'packages/shared/src/inventory/shapeCollision.ts';
 const SUITES  = [
   'packages/shared/src/quickbooks/qboItemAdapter.test.ts',
   'packages/shared/src/quickbooks/itemImportWriter.test.ts',
   'packages/shared/src/inventory/retiredFilter.test.ts',
+  'packages/shared/src/inventory/shapeCollision.test.ts',
 ];
 
 function suitesAreGreen() {
@@ -66,30 +68,24 @@ const MUTANTS = [
   { id: 'A5', file: ADAPTER, why: '🔴 a BARE trailing number becomes a size — "…p 1000 Heritage G" turns into a 1000-gallon container',
     from: '    if (BARE_NUMBER.test(candidate)) continue;',
     to:   '' },
-  { id: 'A6', file: ADAPTER, why: '🔴 THE REAL DEFECT: colliding items are silently deduped — 12 products dropped, the $350 row kept over the $1,250 one',
+  { id: 'A6', file: SHAPE, why: '🔴 THE REAL DEFECT: colliding items are silently deduped — products dropped, the $350 row kept over the $1,250 one',
     from: '    if (members.length < 2) continue;',
     to:   '    if (members.length < 99) continue;' },
-  { id: 'A7', file: ADAPTER, why: '🔴 a price DISAGREEMENT stops being flagged — the collision reads as untidy rather than as $875 at stake',
-    from: '    const pricesDiffer = prices.size > 1;',
-    to:   '    const pricesDiffer = false;' },
-  { id: 'A8', file: ADAPTER, why: 'the collision sentence drops the prices, so an owner is told there is a collision and not what it costs',
-    from: "`${label} — QuickBooks lists ${members.length} separate products under this name and size, and they do not agree on price (${members.map(m => (m.unitPrice === null ? 'no price' : `$${m.unitPrice}`)).join(' vs ')}). Both are here so you can see them; neither was chosen for you.`",
-    to:   "'QuickBooks lists more than one product under this name and size.'" },
-  { id: 'A15', file: ADAPTER, why: '🔴 the collision sentence stops NAMING the product — a reader who saw the pair on the grid cannot find it in the list and concludes it was missed (2026-09-07, exactly what happened)',
-    from: '    const label = `${members[0].name}${members[0].size ? ` ${members[0].size}` : \'\'}`;',
-    to:   "    const label = 'A product';" },
-  { id: 'A16', file: ADAPTER, why: '🔴 the shape key drops the parsed unit for the RAW size text, so `45G` and `45 gallon` stop colliding — the Brodie Juniper pair goes unreported',
-    from: '  const u = parseUnitOfMeasure(size);\n  const sizeKey = u',
-    to:   '  const u = null as ReturnType<typeof parseUnitOfMeasure>;\n  const sizeKey = u' },
+  { id: 'A7', file: SHAPE, why: '🔴 a price DISAGREEMENT stops being flagged — the collision reads as untidy rather than as $875 at stake',
+    from: '      pricesDiffer: prices.size > 1,',
+    to:   '      pricesDiffer: false,' },
+  { id: 'A8', file: SHAPE, why: 'the collision sentence drops the prices, so an owner is told there is a collision and not what it costs',
+    from: "  const shown = members.map(m => (priceOf(m) === null ? 'no price' : `$${priceOf(m)}`)).join(' vs ');",
+    to:   "  const shown = 'some prices';" },
+  { id: 'A15', file: SHAPE, why: '🔴 the collision sentence stops NAMING the product — a reader who saw the pair on the grid cannot find it in the list and concludes it was missed (2026-09-07, exactly what happened)',
+    from: '  const label = `${members[0].name}${members[0].size ? ` ${members[0].size}` : \'\'}`;',
+    to:   "  const label = 'A product';" },
   { id: 'A9', file: ADAPTER, why: '🔴 the size anchor is dropped, so the scan eats the sentence — 24 rows got a size of "myrtle - 15 gallon" this way',
     from: '    if (candidate === \'\' || !CANDIDATE_STARTS_A_SIZE.test(candidate)) continue;',
     to:   "    if (candidate === '') continue;" },
   { id: 'A10', file: ADAPTER, why: '🔴 the scan runs LONGEST-first, which is the same defect from the other direction',
     from: '  for (let k = 1; k <= Math.min(MAX_SIZE_WORDS, words.length); k++) {',
     to:   '  for (let k = Math.min(MAX_SIZE_WORDS, words.length); k >= 1; k--) {' },
-  { id: 'A11', file: ADAPTER, why: '🔴 the shape key stops parsing the unit, so "30 gal" and "30 Gallon" become two different products (#56 at import time)',
-    from: "  const u = parseUnitOfMeasure(size);\n  const sizeKey = u\n    ? `u:${u.kind}:${u.value ?? ''}:${u.valueMax ?? ''}:${u.unit}`\n    : `raw:${(size ?? '').trim().toLowerCase()}`;",
-    to:   "  const sizeKey = `raw:${(size ?? '').trim().toLowerCase()}`;" },
   { id: 'A12', file: ADAPTER, why: 'the name keeps the size on it — every product reads "Live Oak - 15 gallon" with a size column beside it saying the same thing',
     from: "      const name = words.slice(0, words.length - k).join(' ').replace(/[-–—,:(\\s]+$/, '').trim();",
     to:   "      const name = body;" },
@@ -183,14 +179,30 @@ const MUTANTS = [
     to:   '' },
   // 🔴 W27–W29 ARE THE CARD 5 STEP 3 DEFECTS. Both shipped past verify and 40 green mutants.
   { id: 'W27', file: WRITER, why: '🔴 THE LIVE DEFECT: `source` goes back on the row — a column business_inventory has never had, so the FIRST insert of every run is rejected',
-    from: '    import_run_id: runId,\n    // 🔴 NO `source`',
-    to:   "    import_run_id: runId,\n    source: ITEM_IMPORT_SOURCE,\n    // 🔴 NO `source`" },
+    from: '    qb_item_id: item.qboId,\n    import_run_id: runId,',
+    to:   "    qb_item_id: item.qboId,\n    import_run_id: runId,\n    source: 'quickbooks-items'," },
   { id: 'W28', file: WRITER, why: '🔴 THE SECOND ONE: `ok` is inherited from the PREVIEW again, so a run that wrote nothing reports success beside created:0 and an error',
     from: '    ...plan, ok: false, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,',
     to:   '    ...plan, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,' },
   { id: 'W29', file: WRITER, why: '🔴 `ok` is set true unconditionally on the commit path, so a stopped run and a clean one are indistinguishable by it',
     from: '  return { ...base, ok: true, created, retired, stoppedAt: null, committed: true };',
     to:   '  return { ...base, ok: true, created, retired, stoppedAt, committed: true };' },
+  // ── the collision surface (R-101) and the variant_group fix (#205) ──────────
+  { id: 'S1', file: SHAPE, why: '🔴 the key uses the RAW size text again, so `45G` and `45 gallon` stop colliding — Brodie Juniper and Skyward Holly go dark on the grid AND in the import report',
+    from: '  const u = parseUnitOfMeasure(size ?? null);',
+    to:   '  const u = null as ReturnType<typeof parseUnitOfMeasure>;' },
+  { id: 'S2', file: SHAPE, why: '🔴 a MISSING price counts as $0, fabricating a price gap on a pair where one side simply never published one',
+    from: '  typeof r.price === \'number\' && Number.isFinite(r.price) ? r.price : null;',
+    to:   '  typeof r.price === \'number\' && Number.isFinite(r.price) ? r.price : 0;' },
+  { id: 'S3', file: SHAPE, why: '🔴 groups stop being ordered by money, so the six that are money no longer lead (R-101 ①)',
+    from: '    b.moneyAtStake - a.moneyAtStake\n    || b.members.length - a.members.length',
+    to:   '    b.members.length - a.members.length' },
+  { id: 'S4', file: SHAPE, why: 'two UNPARSEABLE sizes merge into one bucket, inventing a collision between labels nobody compared',
+    from: "    : `raw:${(size ?? '').trim().toLowerCase()}`;",
+    to:   "    : 'raw:unknown';" },
+  { id: 'S5', file: WRITER, why: '🔴 #205 REGRESSES: the import stops writing variant_group, so 124 families go ungrouped and the size picker cannot fire on 416 rows',
+    from: '    variant_group: variantGroupSlug(item.name),',
+    to:   '    variant_group: null,' },
 
   // ── the reader-side filter (⑤) ──────────────────────────────────────────────
   // 🔴 THESE ARE THE POINT OF THE CORPUS CAP. The filter itself cannot be wrong; a reader that
@@ -219,6 +231,7 @@ const originals = new Map([
   [GRID,    readFileSync(GRID,    'utf8')],
   [PICKER,  readFileSync(PICKER,  'utf8')],
   [FILTER,  readFileSync(FILTER,  'utf8')],
+  [SHAPE,   readFileSync(SHAPE,   'utf8')],
 ]);
 let caught = 0, survived = 0, errored = 0;
 
