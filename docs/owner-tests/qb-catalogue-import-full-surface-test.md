@@ -31,7 +31,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 2 of 24 covered** (20 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
+**Board: 2 of 33 covered** (29 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
@@ -53,6 +53,11 @@ owner-gated (R-80) **and** require the verb permission — it is an AND, not an 
 >
 > **CARD 23 is the closing sequence** — wipe, reload clean, writes on — the one you will actually
 > perform on the day. It is last because it **deliberately closes the undo**.
+>
+> 🔴 **AND CARDS 24–33 ARE PART TWO: THE SAME LOOP THROUGH THE BUTTON.** Cards 1–23 proved the
+> mechanism through console calls, which is a work-around and not the path Lauren takes. The
+> surface builds the request, holds the run id, renders the counts and decides when to offer the
+> undo — **none of which cards 1–23 touch.** Run PART TWO before she does.
 >
 > ⚠️ **CARD 10 step 4 is the one to read slowly.** `leftovers` being empty is a STRONGER claim than
 > `inventoryDeleted: 647`, because under RLS a **refused** delete returns no error and zero rows —
@@ -933,3 +938,203 @@ mis-click deletes rows behind invoices you have already sent.
 not an undo.** That is the trade you are making at step 4, deliberately.
 **FAIL:** step 5 returns 200 — **stop, and put Test Mode back on immediately** (`qbo_writes_enabled = false`). Or step 2's re-run
 creates ~1,294 rows, which means step 1's wipe did not land and CARD 10 lied.
+
+
+---
+
+# PART TWO — THE SURFACE (cards 24–33)
+
+> 🔴 **CARDS 1–23 PROVED THE MECHANISM THROUGH CONSOLE CALLS. THAT IS NOT THE PATH.**
+> David: *"I proved the endpoints via console calls — a work-around, not the path. The button
+> builds the request, holds the run id, renders the counts and decides when to offer the undo, and
+> none of that has been exercised."* Everything below runs **only** through
+> **Settings → Accounting → "Your product list from QuickBooks"**. **No console. No `curl`.**
+> If a step here cannot be done by pressing something, that is the finding.
+>
+> **TENANT:** LAWNS · **ACTOR:** the owner, signed in normally.
+> **BEFORE YOU START:** take CARD 6's fingerprint. Every card below compares against it.
+
+---
+
+## CARD 24 — the panel is there, and only for the owner
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Settings → Accounting.
+
+1. Below **Preview the loads / Record 0 loads** there is a section headed
+   **"Your product list from QuickBooks"**.
+2. It has **two** buttons: *Preview your product list* and *Import*.
+3. **Import is greyed out.** Nothing has been previewed.
+4. There is **no Undo button.**
+5. Sign in as the **manager** and open the same page: the section is **not there at all**.
+
+**PASS:** all five.
+🔴 **Step 3 and step 4 are the card.** A button that can only error should not be pressable, and
+an Undo offered before anything exists to undo invites a press that teaches her the screen lies.
+⚠️ *Step 5 is courtesy, not the control — the server refuses a manager regardless (CARD 13). If the
+panel shows for a manager that is a real bug, but it is not a security hole.*
+**FAIL:** Import is pressable with nothing previewed, or Undo is visible.
+
+---
+
+## CARD 25 — Preview, and read the numbers off the screen
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Press **Preview your product list**. It says *"Reading QuickBooks…"* while it works.
+
+1. **Read 685 items. 38 are category folders, not products, and are skipped. That leaves 647.**
+2. **create 647** and **hide 447**, in those words.
+3. Sizes: **536** read · **78** with no size given · **33** we could not read.
+4. **Import** is now pressable and reads **"Import 647 products"**.
+5. Nothing has changed: `/inventory` still shows **447** rows.
+
+**PASS:** the numbers match CARD 1's, read off a screen instead of a console.
+🔴 **Step 5 matters.** Preview is a read. If the catalogue moved, the button did something the
+panel did not say it would.
+**FAIL:** any number differs from CARD 1 — note which, they mean different things.
+
+---
+
+## CARD 26 — 🔴 the counted rows you are about to hide are NAMED
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Still on the preview.
+
+1. An amber block reads **"2 rows you have counted will be hidden"**.
+2. It lists them by name, size and quantity: **Brodie Juniper · 30 gallon — 1 on hand** and
+   **Arizona Cypress, Blue Ice · 30 gallon — 1 on hand**.
+3. It says **"Hidden, not deleted. The count is still there and the undo brings it back."**
+
+**PASS:** both rows named with their numbers.
+🔴 **A count is the one number nobody can recreate**, so if one is about to leave the grid it is
+named here — not summarised as "2 rows", and not left as a figure to go looking for.
+**FAIL:** a bare count with no names, or no block at all.
+
+---
+
+## CARD 27 — 🔴 the eleven collisions, money first
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Still on the preview.
+
+1. **"11 products appear twice in QuickBooks — 6 with different prices."**
+2. A list of eleven, each naming the product and both prices.
+3. **The six with a price gap are at the TOP, in red, biggest gap first:**
+   Lacey Oak 45 Gallon **($875 apart)** · Native Female Yaupon Holly 45 **($650)** ·
+   Lacey Oak 30 **($550)** · Natchez Crape Myrtle 30 **($550)** · Brodie Juniper 45 **($150)** ·
+   Skyward Holly 5 **($5)**.
+4. The five tidy-ups are below them in grey — **still listed, not dropped**.
+
+**PASS:** eleven listed, six red and first.
+🔴 **This is R-101 on the screen she reads before committing.** Six of these are two prices for one
+product in a catalogue she is about to sell from — not tidiness.
+**FAIL:** a count with no list, or the money ones not leading, or fewer than eleven.
+
+---
+
+## CARD 28 — Import, and what it says when it lands
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Press **Import 647 products**.
+
+1. It says *"Importing…"* while it works.
+2. Then, in green: **"Imported. 647 products created, 447 of your old rows hidden."**
+3. It tells you to look at your Inventory screen and says your receipts and delivery schedule are
+   not touched either way.
+4. **An "Undo this import" button has appeared.**
+5. 🔴 **You were never shown a run id and never asked to write one down.**
+
+**PASS:** all five.
+🔴 **Step 5 is the card.** A person asked to copy a uuid between two screens will eventually paste
+the wrong one, and the undo is keyed on exactly that value.
+**FAIL:** a uuid on screen, or no Undo button, or the counts disagreeing with CARD 6's.
+
+---
+
+## CARD 29 — 🔴 REFRESH THE PAGE. The Undo must survive it.
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+With the import live, **reload the browser** and go back to Settings → Accounting.
+
+1. The **Undo this import** button is **still there**.
+2. Above it: *"There is an import already in your catalogue from an earlier session. You can undo
+   it, or preview and import again to replace it."*
+3. Press it. It undoes the run you made before the refresh.
+
+**PASS:** the button survives and works.
+🔴 **THIS WAS BROKEN AND DAVID NAMED IT BEFORE IT WAS TESTED.** The run id lived in page state, so a
+reload left 647 rows live with **no route back through any surface**. It is now recovered by
+*deriving* it — a live row carrying an import run id IS an undoable run — rather than cached, so it
+cannot go stale. Fixed in `cb3c0bf`.
+⚠️ **Also try it from a second device or a different browser.** Same answer: the run is in the data,
+not in a tab.
+**FAIL:** no Undo after the reload. Note the run id from CARD 28's response before re-testing, or
+you will have no way to clean up.
+
+---
+
+## CARD 30 — the wipe, through the button
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Press **Undo this import**.
+
+1. *"Undoing…"*, then green: **"Undone. 647 imported products removed, 447 of your own rows brought back."**
+2. It names your receipts and deliveries with their counts and says the undo cannot reach them.
+3. The **Undo button is gone** — there is nothing left to undo.
+4. `/inventory` shows **447**.
+5. 🔴 **Re-run CARD 6's fingerprint query. Same hash, `447 · 2 · 0`.**
+
+**PASS:** all five, and the hash matches.
+**FAIL:** the hash differs while the counts match — rows came back and a quantity did not.
+
+---
+
+## CARD 31 — 🔴 press Undo twice
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Import again (CARD 28), then press **Undo this import** and, the moment it returns, look for the
+button and try to press it a second time.
+
+1. While it is working the button is **disabled** — a second click does nothing.
+2. After it succeeds the button is **gone**, so there is nothing to press.
+3. No error appears, and nothing is deleted twice.
+
+**PASS:** the second press is impossible rather than merely harmless.
+🔴 **A run that has been consumed must not be pressable again.** The undo is keyed on a run id; a
+second call against a spent one would report zero rows removed, which reads as a failure and is not.
+**FAIL:** the button stays and a second press errors.
+
+---
+
+## CARD 32 — the re-run, through the surface
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Straight after CARD 30: **Preview → Import** again.
+
+1. Preview reads **the same numbers** — 685 / 38 / 647, create 647, hide 447.
+2. Import lands **647 created, 447 hidden** — not 1,294.
+3. `/inventory` shows **647**.
+4. Undo it once more and the fingerprint matches again.
+
+**PASS:** the loop closes twice.
+🔴 **THIS IS THE LOOP DAVID PROMISED HER** — *"import, look, wipe, reload as many times as it
+takes"* — done entirely by pressing things.
+**FAIL:** ~1,294 rows, which means CARD 30's wipe did not land.
+
+---
+
+## CARD 33 — 🔴 the two stopped states, and the undo refusing
+**STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** —
+**REASON IT IS `needs-test`:** two of these three cannot be provoked from the surface — they need a
+deliberate fault injected, and there is no way to do that by pressing a button. Recorded rather
+than skipped, because an untested error path is exactly what shipped `source` and `ok: true`.
+
+**(a) THE UNDO REFUSING — this one you CAN do.** Import, then turn the **Test Mode switch off**
+(`qbo_writes_enabled = true`) at the top of the same page, then press **Undo this import**.
+- **EXPECT:** a red block, **"Undo is closed."**, and a sentence saying an imported product may
+  already be on an invoice you have sent and that **nothing was changed**.
+- The 647 are still there. **Put Test Mode back on afterwards.**
+
+**(b) STOPPED AT `create`** — the shape CARD 5's first attempt hit. The panel must say
+**"Nothing was imported — it stopped while creating the new products"** and
+**"Your current catalogue is untouched — nothing was hidden."**
+*Not provokable from the surface. If you ever see it for real, that sentence is what to check.*
+
+**(c) STOPPED AT `retire`** — the worse one. The panel must say it stopped while hiding the old
+rows, that **the new rows did land**, that the catalogue now holds both lists, and **offer Undo.**
+*Not provokable from the surface either.*
+
+⚠️ **(b) and (c) are covered by probes and mutants** (`itemImportWriter.test.ts` §D2, mutants
+W28/W29) — the code is proven to distinguish them by `ok` alone. What is untested is the WORDING
+on screen, and that is what this card is holding open.
