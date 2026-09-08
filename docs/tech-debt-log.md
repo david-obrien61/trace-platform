@@ -1073,8 +1073,11 @@ on any surface saying so.
 ✅ **LAWNS IS NOT EXPOSED.** Its `business_pricing_config.config` is `{"taxRate": 0.0825}` and
 nothing else (R-103, measured 2026-09-06) — neither key is present, so `seeded` is true and the
 first accept writes onto an empty record. ⚠️ **Test Dave's has not been checked** —
-`SUPABASE_SERVICE_KEY` is empty in both env files and no live read was possible this session
-(#183's blocker recurring).
+✏️ **CORRECTED 2026-09-08 (#284): `SUPABASE_SERVICE_KEY` IS NOT EMPTY.** It is empty in the two ROOT
+env files and **populated and working in `packages/cultivar-os/.env.local`**, the file every script
+reads — probed read-only, `businesses` returned rows, negative control failed correctly. **So Test
+Dave's config is not blocked; it is simply UNCHECKED, and it is one query away** (the command at the
+foot of this entry).
 
 **FIX:** `buildAcceptancePatch` should read `existing` through `normalizeDiscountTypes` whenever
 **either** key is present — i.e. the same condition `buildDiscountReview` already calls `seeded` —
@@ -1090,12 +1093,25 @@ first: `select config ? 'pricingTiers', config ? 'discountTypes' from business_p
 
 ## #223 — 🟡 FOUR OF THE 685 QUOTED FIGURES IN THIS BUILD ARE **[STATED]** AND NOT ONE OF THEM WAS RE-MEASURED (NEW 2026-09-08)
 
-**`SUPABASE_SERVICE_KEY` IS EMPTY IN BOTH ENV FILES — #183's blocker, third recurrence in five
-days** (#283 flagged it as (e), and so did the pass before it). So every figure this build reasons
-about — **72 duplicate records · 69 given-name-only · 639 collections worth $722,526 · 249 genuinely
+✏️ **THIS ENTRY'S ORIGINAL HEADLINE WAS FALSE AND IS CORRECTED IN PLACE RATHER THAN QUIETLY EDITED —
+IT IS THIS BUILD'S OWN [[R-26]], FILED HOURS AFTER THE BUILD THAT IS ABOUT R-26.** It read:
+*"`SUPABASE_SERVICE_KEY` IS EMPTY IN BOTH ENV FILES — #183's blocker, third recurrence in five days."*
+**MEASURED 2026-09-08, after David asked where to put the key:** it is empty in the two ROOT files
+(`.env.local`, `.env.prod.local`, both `""`) and **populated — 219 characters — in
+`packages/cultivar-os/.env.local`, which is the file `memberSession.mjs` and
+`measure-migrations-applied.mjs` actually read.** A read-only probe authenticated, returned
+`businesses` rows, and its **negative control failed correctly** (`PGRST205` on a table name that
+cannot exist), so the probe could disagree. 🔴 **THE CLAIM WAS INHERITED VERBATIM FROM #283's
+HANDOFF AND RESTATED AS MEASURED IN SIX DOCUMENTS WITHOUT ONE `ls`.** *Two* env files were checked;
+there are *three*.
+
+🔴 **THE CONCLUSION SURVIVES AND ITS REASON DOES NOT, WHICH IS THE WORSE OF THE TWO OUTCOMES.**
+Every figure this build reasons about — **72 duplicate records · 69 given-name-only · 639 collections worth $722,526 · 249 genuinely
 undated · 49 giveaway lines across 29 invoices · 15 unreadable product sizes · 27/27/9 tax
-paperwork · 34 customer types · 9 notes · 853 of 1,953** — is a PRIOR SESSION'S measurement against
-a capture file that does not live in this repository.
+paperwork · 34 customer types · 9 notes · 853 of 1,953** — is a PRIOR SESSION'S measurement against a
+capture file that does not live in this repository — and **no service key could ever have changed
+that**, because those numbers come from Intuit's responses, not from our Postgres. The key reaches
+`businesses`, `customers` and `service_offerings`; it reaches LAWNS's QuickBooks not at all.
 
 🔴 **THE CODE DOES NOT HARDCODE ANY OF THEM, AND THAT IS THE ONLY REASON THIS IS AMBER RATHER THAN
 RED.** Every one is computed from the walk at runtime; the numbers appear in the corpus solely as
@@ -1108,6 +1124,13 @@ six defects that 77 green fixtures did not.
 **FIX:** re-run the review against the 2026-09-03 capture through the file door and compare every
 `[STATED]` figure with what the screen prints. That needs no service key — it needs the capture
 file, which is on David's machine and outside version control by construction (R-23 clause c).
+**That was true when it was written and it is the only part of this entry that was.**
+
+⚠️ **WHAT THE WORKING KEY *DOES* UNBLOCK, AND IT IS NOT NOTHING:** anything about OUR tables —
+#227's apply-state (now MEASURED, both tables absent, with a negative control), #283's flag (e)
+about the live `service_offerings` row and its $125 placement price, and #222's *"Test Dave's is
+UNCHECKED"*. Each of those was recorded as unmeasurable for the same false reason and each is a
+read away.
 
 **TRIGGER:** before any of these figures is quoted to Terry or Lauren as a fact.
 

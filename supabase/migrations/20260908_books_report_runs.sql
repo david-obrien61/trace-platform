@@ -2,10 +2,15 @@
 -- 20260908 — BOOKS REPORT RUNS: what the review said, the last time it ran
 -- ════════════════════════════════════════════════════════════════════════════════
 -- APPLY AS: postgres, IN THE SQL EDITOR — never the dashboard TABLE EDITOR (CLAUDE.md §6 r17).
--- 🔴 DAVID APPLIES THIS. It is written as a file and has NOT been run. Nothing in this build has
---    touched the live database — `SUPABASE_SERVICE_KEY` is empty in both env files (tech-debt
---    #183's blocker, recurring), so every statement below is UNVERIFIED AGAINST THE CATALOG and is
---    marked as such in the write-back. The VERIFY block at the foot is what settles it.
+-- 🔴 DAVID APPLIES THIS. It is written as a file and has NOT been run.
+--    ✏️ CORRECTED 2026-09-08, SAME DAY: this header first said the build could not reach the live
+--    database because `SUPABASE_SERVICE_KEY` was empty. IT IS NOT — it is populated and working in
+--    `packages/cultivar-os/.env.local`. So the absence of these two tables is now MEASURED rather
+--    than assumed: a read-only probe returned `PGRST205 Could not find the table` for BOTH, and its
+--    NEGATIVE CONTROL (a table name that cannot exist) failed identically, so the probe could
+--    disagree. `businesses` answered with rows on the same key. **Every statement below is still
+--    UNRUN and unverified against the catalog** — that part was always true, and the VERIFY block
+--    at the foot is what settles it.
 --
 -- ── WHY THESE TWO TABLES EXIST ────────────────────────────────────────────────
 -- The books review is a snapshot. Read twice, and the only thing that says anything about the
