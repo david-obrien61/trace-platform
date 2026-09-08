@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-09-07 (**#282 — REPORT FIDELITY: FIVE SURFACES ASSERTED A NUMBER THEY NEVER GOT FROM THE OPERATION THEY DESCRIBE.** ① `/checkout/review` quoted **$974.25 on an $876.83 order** — it resolved the customer's tier from an **email lookup** while `submit.ts:451` resolves it from the customer **row by id**, and LAWNS's only contractor has `email = NULL`; now `fetchAttachedCustomerTier`, by id, and the covering copy is deleted because **Review IS checkout**. ② **"Invoice sent to <email>" when nothing sent it** — unconditional, above a badge saying the invoice was NOT sent, and never true in any state: the push sets `BillEmail` and **never calls QuickBooks' send endpoint**. ③ the undo's **`?? 0`** over a run that removed 1,934 — 🔴 **the stated diagnosis did not hold and the mechanism is NOT reproduced (tech-debt #213)**; the surface is hardened, the bug is not claimed fixed. ④ **`1000 of 1000` over 1,964 rows** — PostgREST's cap asserted as the truth; the read now pages with `count:'exact'` and the pill arithmetic left the JSX into `countPill.ts`. ⑤ **39 people rendered "Terry null"** — one helper, twelve call sites. ✅ **NO MIGRATION · api/ 12/12 · no new permission string · 13 mutants, 13 caught.** ✅ **MERGED TO `main` 2026-09-08 (`592a039`) and DEPLOYED, stamp confirmed — 0 of 11 owner-test cards.** ✅ **#281 STANDS AND ITS OWNER-PROOF IS CARRIED FORWARD, NOT OVERWRITTEN: 1 of 4 cards COVERED 2026-09-07** — David proved the frozen identifier holds on a full right-scroll, the card that was proving a defect rather than a preference — and **tech-debt #212 was ACCEPTED** the same day. See also #281, #280.)
+# Last updated: 2026-09-08 (**#283 — THE SERVICES REVIEW: 147 ITEMS CALLED PRODUCTS, AND A LADDER INSIDE THE TREE PRICE.** The `/discounts` review pointed at `service_offerings`, reading QuickBooks DIRECTLY and needing no import to have run. 🔴 **THE CENSUS CORRECTS THE BRIEF'S OWN NUMBER:** the import filters `Type:'Category'` and nothing else so the button says **647 products**; the brief said **500**; MEASURED on LAWNS's complete 685-item capture the honest split is **564 products · 73 services · 8 discounts · 2 bookkeeping · 38 folders**, because **64 of the 147 `Type:'Service'` items are TREES** on `Sales of Nursery Stock` and 35 are goods — filtering on `Type` alone would move **99 real products OUT of the catalogue**. The axis is `IncomeAccountRef.name`, matched by NAME never by id (**R-112**). **"Sure of the price" is a majority + three agreeing lines** (**R-113**); the **unit is measured from `Qty`** (trip charge 516/523 → per ORDER, bubbler 26/81 → per PLANT); a **$0 price is refused and refuses the whole press**; the screen **re-runs without eating its prior work** (**R-114**). 🔴 **PLACEMENT IS NOT A LINE ON ANY INVOICE** — the ladder is the difference between the same plant sold planted and bare (**193 plants both ways, 909 planted lines, median ratio 2.00**): 7gal $101 · 15gal $214 · 30gal $418 · 45gal $529 · 65gal $650 · 95gal $906 — **REPORTED, never written** (#220). The website is a checklist that makes **no claim** (**R-115**, superseding **R-102**). ✅ **NO MIGRATION · api/ 12/12 · no new permission string · 48 mutants, 48 caught.** 🔴 **`dc162bc` on `thunder/services-review` — NOT MERGED, NOTHING DEPLOYED — 0 of 18 owner-test cards.** See also #282, #281, #280.)
 # (prior line, preserved: 2026-09-07 (**#279 — DISCOUNTS: WHAT WE FOUND, WHAT WE REFUSED, AND THE TAX RATE THAT SURVIVES.** A review card above the `/discounts` editor reads the business's own QuickBooks invoices + product list and offers every discount it can EVIDENCE — the percent measured `|amount| ÷ base` per line, the line count, the last-used date and the Intuit item id, **not one number typed into the repo.** 🔴 **THE PERCENT IS A DISTRIBUTION, NEVER AN AVERAGE** — Σamount ÷ Σbase on a 10%×4 + 40%×1 tally gives **10.68%**, which rounds to the clean rate and makes the outlier vanish; a name whose rates disagree is **REFUSED with no number at all** and she sets it. 🔴 **THE WRITE REFUSES ON AN UNREADABLE CONFIG** — `mergePricingConfig` fails open (`data:null`, no error → `current` `{}` → the whole config replaced), which at LAWNS deletes `taxRate: 0.0825`; the patch never carries `taxRate` (asserted on KEY ABSENCE) and plumbing is filled **only where absent**. Verified by read-back, because `writePricingConfig` upserts without `.select()`. Lauren's two spreadsheet-only tiers are **shown and deliberately NOT seeded** (R-105 cl.2). ✅ **NO MIGRATION · api/ 12/12 · no new permission string.** ✏️ **R-106** reworded the books finding that called tree-only discounting broken. ⚠️ **No owner-proof yet — 0 of 22 cards.** See also #278, #277.))
 # (prior line, preserved: 2026-09-06 (**#278 — THE QUICKBOOKS CUSTOMER IMPORT: 1,946 PEOPLE, AND THE 27 WHO MUST NOT BE TAXED.** Bulk import of the customer read on `api/qbo/router.ts` as `_route=customers-preview` / `customers-ingest`, owner-gated (R-80). 🔴 **THE EXEMPT FLAG COMES FROM THE CUSTOMER RECORD, NOT THE INVOICES (R-100)** — `Taxable` false on exactly 27 of 1,946, every one carrying a reason id; the 21 derivable from invoices are a strict subset, and **the six missing have never been BILLED exempt.** Four semantic labels read back (`GOVT`/`School`/`Ag`/`City Of Liberty`); the ten permit numbers are carried, never rendered as a reason. **Upsert PARTITIONED, not blind** — a single upsert would stamp `import_run_id` on all 19 pre-existing rows and an undo would delete real customers. **NOT `findOrCreateCustomer`** (it mints un-undoable `people` rows). The **72** possible duplicates are flagged and shown, **never merged**. ✅ **NO MIGRATION — every column already existed.** ✅ **UNDO WIRED (R-104)** — `orders_customer_id_fkey` is ON DELETE RESTRICT, so a customer with orders cannot be deleted; the undo is RESTRICT-aware (one refusal cannot take the run down) and names what it could not remove. **No `customers:delete` verb minted.** Gated on BOTH write switches via `pushPermitted` — an env-only gate would refuse at LAWNS, the state it exists to serve. ⚠️ **No screen.** See also #277, #275.))
 # (prior line, preserved: 2026-09-05 — **#276 — UPPOT PLANNING ①+②: THE FOUR-WAY SPLIT, AND THE HOLD THAT IS THE PLAN.** A production manager sets how much of each variety moves up a container size; the screen computes must-keep / cushion / delta, takes his number, and reports the mix, the pots, the crew-hours, the batch dates and the window fit — then holds the stock on commit. 🔴 **THE HOLD IS DERIVED FROM OPEN PLAN LINES; there is no `held_qty` column anywhere**, asserted by the migration's own VERIFY (D). Labour is **setup + handling**, so batch size is the lever — the same 1,245-pot plan is 187 crew-hours or 73. The **pot cascade** works down the ladder and saves 708 pots of 1,328 on the workbook's own varieties. Every number carries **fact / suggestion / guess**. ⛔ **MIGRATION `20260905_production_planning.sql` NOT APPLIED.** ⚠️ Batch completion, the seven-day flags and sales-a-month are NOT built. See also #275, #274.)
@@ -1598,6 +1598,55 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 - DELIVERY — demo delivery stops → Google Maps route → SMS driver link
 
 **finalize() behavior:** If business row exists (OwnerSignup path), skips businesses.insert and business_members.insert. Always upserts nursery_profiles. DONE screen uses name loaded from businesses table.
+
+---
+
+## Services Review — read her books, price what they evidence, refuse the rest (#283)
+
+**What:** The `/discounts` review pointed at `service_offerings`. Reads QuickBooks DIRECTLY — the
+item list and the whole invoice history — classifies every item into the destination it belongs in,
+prices the services her invoices actually evidence, and **writes nothing until a row is pressed.**
+It does NOT require the catalogue import to have run.
+**Status:** 🟡 BUILDER-COMPLETE — `dc162bc` on `thunder/services-review`. **NOT MERGED, NOTHING
+DEPLOYED. 0 of 18 owner-test cards.**
+**Vertical:** platform (no tenant literal anywhere in it) | **Type:** capability
+**Location:** `packages/shared/src/business-logic/serviceReview.ts` (PURE — all the judgement) ·
+`packages/shared/src/components/services/ServicesReview.tsx` (the screen)
+**Route:** mounted at the TOP of the Services card on `/settings/services` — above the editor,
+because **correction is the undo** (R-114) and the fix belongs on the same page as the mistake.
+**Reads:** `/api/qbo/items` · `/api/qbo/invoices` · optionally `/api/discovery/ingest` — **all
+existing routes, api/ stays 12 of 12.** **Writes:** `service_offerings` INSERT only.
+**Migration:** none. **New permission string:** none.
+**Owner test:** `docs/owner-tests/services-review-full-surface-test.md` (18 cards, 0 covered).
+**Reports:** `docs/decisions/2026-09-08-services-review-four-reports.md`.
+
+**The five things it does, each with its evidence on screen:**
+1. **THE CENSUS** — 685 items are not 647 products. **564 · 73 · 8 · 2 · 38**, classified by
+   `IncomeAccountRef.name` (R-112) — 64 `Type:'Service'` items are TREES.
+2. **"WE'RE SURE OF THE PRICE"** — a majority of priced lines **and** ≥3 agreeing (R-113). $0 lines
+   counted apart, never averaged in.
+3. **"WE CAN'T TELL YOU THE PRICE"** — the amount moves; the row states how many figures across how
+   many lines and leaves the box empty.
+4. **"WE'RE NOT SUGGESTING THESE"** — work she never charges for (WARRANTY, 19 invoices at $0) and
+   charges that never repeat (DIW, 21 figures across 22 lines). No price box at all.
+5. **THE PLACEMENT LADDER** — measured, reported, and **not written**: `service_offerings.price` is
+   one column and six prices have nowhere to live (tech-debt #220).
+
+**Parses the capture IN THE BROWSER.** `/api/qbo/invoices` returns counts only — the parsed records
+never leave that function (R-23/R-24) — but the verbatim bodies come back inside `capture`. So the
+tally is computed client-side and nothing is persisted: no new endpoint, no payload carrying a
+customer's purchases.
+
+**Proof:** `serviceReview.test.ts` — **125 assertions**, incl. §A (two services differing ONLY in
+proportion), §M (probes that start from an Intuit body, added after five parser mutants survived)
+and §N (the declared lists parsed out of the migration, both directions — #179's lesson).
+`scripts/measure-service-review-mutants.mjs` — **48 mutants, 48 caught, 0 survived, 0 never applied.**
+⚠️ **Not one assertion opens a browser**, and all six acceptance criteria are things a person sees.
+
+**Known gaps, filed:** #217 (`seedServiceOfferings` writes a category Postgres refuses) · #218 (a
+third `service_offerings` write file) · #219 (one QuickBooks item can become a service AND a
+product — nothing detects it) · #220 (the ladder has nowhere to live) · #221 (the import still says
+647) · #222 (`/discounts`' first accept retires legacy `pricingTiers`).
 
 ---
 

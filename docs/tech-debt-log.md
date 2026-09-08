@@ -1043,3 +1043,45 @@ it splits **564 products · 73 services · 8 discounts · 2 bookkeeping · 38 fo
 **Not made:** the import is a WRITE path that has already run twice against LAWNS, and the 64
 misfiled trees are exactly the rows R-70's retire-and-replace is about — a data question, not a
 filter. Full working: `docs/decisions/2026-09-08-services-review-four-reports.md` §①.
+
+---
+
+## #222 — 🔴 ON `/discounts`, THE **FIRST** ACCEPT SILENTLY RETIRES EVERY LEGACY `pricingTiers` TIER (NEW 2026-09-08)
+
+Found while answering *"does /discounts have the same re-run exposure?"* for the services review.
+**The second pass is safe. The FIRST one is not, on a business carrying legacy tiers.**
+
+`business-logic/discountReview.ts` → `buildAcceptancePatch`:
+
+```ts
+const existing: DiscountType[] = config.discountTypes === undefined ? [] : normalizeDiscountTypes(config);
+```
+
+and `tierPricing.ts:182-193` → `normalizeDiscountTypes` forward-migrates a legacy flat `pricingTiers`
+**only while `discountTypes` is absent.**
+
+🔴 **SO ON A BUSINESS WITH `pricingTiers` AND NO `discountTypes`:** `existing` is `[]`, the first
+accept writes `discountTypes` holding **only the newly accepted tier**, and from that moment
+`normalizeDiscountTypes` never looks at `pricingTiers` again. **Every legacy tier leaves checkout
+in one press**, and the customers tagged with them silently resolve to the retail floor.
+
+🔴 **AND THE REVIEW SCREEN CANNOT SHOW HER THAT IT HAPPENED.** `buildDiscountReview` reads the same
+`normalizeDiscountTypes`, so those legacy tiers count as **`alreadyConfigured`** and are excluded
+from the offering. They are neither offered nor written — they simply stop existing, with nothing
+on any surface saying so.
+
+✅ **LAWNS IS NOT EXPOSED.** Its `business_pricing_config.config` is `{"taxRate": 0.0825}` and
+nothing else (R-103, measured 2026-09-06) — neither key is present, so `seeded` is true and the
+first accept writes onto an empty record. ⚠️ **Test Dave's has not been checked** —
+`SUPABASE_SERVICE_KEY` is empty in both env files and no live read was possible this session
+(#183's blocker recurring).
+
+**FIX:** `buildAcceptancePatch` should read `existing` through `normalizeDiscountTypes` whenever
+**either** key is present — i.e. the same condition `buildDiscountReview` already calls `seeded` —
+so a legacy business's tiers are carried forward into `discountTypes` by the first write instead of
+being stranded. Roughly one line, plus a probe with a `pricingTiers`-only fixture asserting the
+legacy tier survives the accept. **Not taken here:** it is a change to the money path of a
+DIFFERENT screen, made from inside a services build, and it deserves its own owner-test card.
+
+**TRIGGER:** before `/discounts` is run on any tenant whose config carries `pricingTiers`. Check
+first: `select config ? 'pricingTiers', config ? 'discountTypes' from business_pricing_config;`
