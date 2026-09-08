@@ -22,6 +22,7 @@
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useBusinessContext } from '../context';
+import { holdsOwnerAuthority } from '../auth/ownerAuthority';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -68,7 +69,13 @@ function localToday(): string {
 // carries. A panel that renders its buttons before the tenant has resolved would fire a read
 // against `business_id=` and get a 400 back; it says it is still loading instead (six states).
 export function QboDeliveryIngest({ businessId }: { businessId: string | null | undefined }) {
-  const { isOwner } = useBusinessContext();
+  // 🔴 INTERIM (David, 2026-09-08): owner authority is `owner_id` OR the OWNER ROLE, so a SECOND
+  // OWNER is not hidden from her own importer by a single-valued column (R-22). The SERVER moved
+  // in the same commit — `refuseUnlessOwner` → `callerHoldsOwnerAuthority` — so this never draws
+  // a control the server would refuse. Replaced by a permission once defect ① is fixed;
+  // NOT a permission today, because the alias table would open it to STAFF. See ownerAuthority.ts.
+  const { role } = useBusinessContext();
+  const isOwner = holdsOwnerAuthority(role);
   const [busy, setBusy]       = useState<null | 'preview' | 'ingest'>(null);
   const [report, setReport]   = useState<IngestReport | null>(null);
   const [failed, setFailed]   = useState<string | null>(null);

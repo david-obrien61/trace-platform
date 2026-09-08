@@ -54,6 +54,17 @@ const DARK  = '#111827';
  * file, which matters at 12 of 12 (§6 r11).
  */
 export function QboWriteSwitch({ businessId }: { businessId: string | null | undefined }) {
+  // 🔴 DO NOT WIDEN THIS TO `holdsOwnerAuthority`. THE INCONSISTENCY WITH ITS NEIGHBOURS IS
+  // DELIBERATE AND IS DAVID'S EXPLICIT EXCEPTION (2026-09-08). Every other panel on this card moved
+  // to `owner_id` OR the OWNER ROLE in the same commit; this one stays `owner_id` ONLY, because
+  // turning QuickBooks writes on is the POINT OF NO RETURN — it permanently closes the per-run undo
+  // and it is the conversion moment: a business decision, not an operational one. Widening the
+  // readers and importers is safe precisely because everything they do is undoable while test mode
+  // holds. Widening THIS is not. David: *"One exception, and it is not negotiable."*
+  //
+  // ⚠️ AND `isOwner` IS NOT WHAT ENFORCES IT — Postgres is. `businesses_owner_update` USING
+  // (owner_id = auth.uid()) is the authority, as the header above already says; this check only
+  // decides whether to DRAW the control, which is what `isOwner` is FOR under the 2026-07-30 ruling.
   const { business, isOwner, reload } = useBusinessContext();
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);

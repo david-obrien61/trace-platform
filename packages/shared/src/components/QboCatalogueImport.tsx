@@ -36,6 +36,7 @@
 import React, { useEffect, useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useBusinessContext } from '../context';
+import { holdsOwnerAuthority } from '../auth/ownerAuthority';
 import { supabase } from '../supabase/client';
 
 const GREEN = '#27500A';
@@ -100,7 +101,13 @@ const money = (n: number | null) =>
   n === null || n === undefined ? 'no price' : `$${n.toLocaleString('en-US')}`;
 
 export function QboCatalogueImport({ businessId }: { businessId: string | null }) {
-  const { isOwner } = useBusinessContext();
+  // 🔴 INTERIM (David, 2026-09-08): owner authority is `owner_id` OR the OWNER ROLE, so a SECOND
+  // OWNER is not hidden from her own importer by a single-valued column (R-22). The SERVER moved
+  // in the same commit — `refuseUnlessOwner` → `callerHoldsOwnerAuthority` — so this never draws
+  // a control the server would refuse. Replaced by a permission once defect ① is fixed;
+  // NOT a permission today, because the alias table would open it to STAFF. See ownerAuthority.ts.
+  const { role } = useBusinessContext();
+  const isOwner = holdsOwnerAuthority(role);
   const [busy, setBusy]       = useState<null | 'preview' | 'import' | 'undo'>(null);
   const [plan, setPlan]       = useState<PlanReport | null>(null);
   const [run, setRun]         = useState<RunReport | null>(null);

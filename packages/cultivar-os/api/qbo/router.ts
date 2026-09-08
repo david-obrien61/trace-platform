@@ -27,7 +27,7 @@
  */
 
 import crypto from 'crypto';
-import { callerCan, callerIsBusinessOwner } from '../../../shared/src/auth/callerPermission';
+import { callerCan, callerHoldsOwnerAuthority } from '../../../shared/src/auth/callerPermission';
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 import { readQBSecrets, writeQBSecrets, QBO_CONNECTION_COLUMNS } from '../../../shared/src/quickbooks/secrets';
@@ -836,12 +836,38 @@ async function handleDeliveriesPreview(req: any, res: any) {
  * import class, not a bypass of the existing one.
  *
  * ⚠️ AND IT IS NOT `settings:update`, WHICH WOULD HAVE LOOKED RIGHT AND BEEN WRONG: the manager
- * floor holds that too. The only gate that means *the owner* is `businesses.owner_id`, which is
- * what `callerIsBusinessOwner` compares — and it is the same authority the writes switch rests
- * on (`businesses_owner_update`), so the two controls are now one class rather than two.
+ * floor holds that too. That half of R-80 is untouched and still decisive.
+ *
+ * ✏️ SUPERSEDED IN PART, 2026-09-08 — recorded rather than rewritten, because the reasoning above
+ * is still why this gate exists. This clause used to end: *"The only gate that means the owner is
+ * `businesses.owner_id`, which is what `callerIsBusinessOwner` compares — and it is the same
+ * authority the writes switch rests on (`businesses_owner_update`), so the two controls are now one
+ * class rather than two."* Both halves have changed:
+ *   · the gate is now `callerHoldsOwnerAuthority` — `owner_id` OR an ACTIVE OWNER-role member —
+ *     because `owner_id` is single-valued and cannot express a second owner (R-22);
+ *   · so this control and the writes switch are NO LONGER one class, deliberately. The switch
+ *     stays `owner_id` only: it is the point of no return, it permanently closes the per-run undo,
+ *     and it is the conversion moment. These importers are safe to widen precisely because
+ *     everything they do is undoable while test mode holds.
  */
+// ⚠️ AMENDED 2026-09-08 — R-80's REASON SURVIVES, ITS MECHANISM DOES NOT (David's ruling).
+// The gate is now `owner_id` OR an ACTIVE member whose ROLE is OWNER (`callerHoldsOwnerAuthority`).
+// Everything R-80 measured is UNCHANGED and still excluded: the MANAGER floor holds `orders:create`
+// and `settings:update`, and a MANAGER is not an OWNER, so a manager still cannot pull a customer's
+// whole QuickBooks catalogue. What changes is that a SECOND OWNER — a member holding the OWNER role,
+// which is R-22's whole case — is no longer refused by a single-valued column that cannot express
+// her. David: *"Lauren is not a manager — she is a second OWNER."*
+//
+// 🔴 IT IS STILL AN **AND**, NOT AN OR. Every caller below still has to hold the verb permissions
+// too; owner-authority is an ADDITIONAL requirement for the import class, never a bypass.
+//
+// 🔴 AND IT IS AN INTERIM, DELIBERATELY NOT A PERMISSION STRING. Open defect ① means
+// `has_permission`'s alias lookup runs backwards and `permission_aliases` collapses
+// `settings:read` onto `settings:update` — so gating this on a permission today would not loosen
+// it to a second owner, it would open it to STAFF. A role check cannot be fooled by the alias
+// table. Replaced by a real permission once ① is fixed (R-22 Stage 2). See ownerAuthority.ts.
 async function refuseUnlessOwner(auth: string | undefined, businessId: string, area: string, res: any): Promise<boolean> {
-  if (await callerIsBusinessOwner(auth, businessId)) return true;
+  if (await callerHoldsOwnerAuthority(auth, businessId)) return true;
   console.log(`[TRACE:${area}] ingest REFUSED — importing a company's books is an owner act`, { businessId });
   res.status(403).json({
     error: 'Importing records from QuickBooks is done by the business owner. Ask them to run this import.',

@@ -4,18 +4,20 @@
 //   CALLER's authority for the TARGET business before writing (MB_D-015 — write-authority
 //   ≥ read-authority). Authority is resolved from the request AUTH CONTEXT (the Bearer
 //   token), NEVER the request body — a forged businessId the caller doesn't belong to
-//   returns false. Two gates: holds-a-permission (has_permission RPC) and is-the-owner
-//   (businesses.owner_id). Both run under the caller's anon-key+token, so they see exactly
-//   what that caller is allowed to see.
+//   returns false. THREE gates: holds-a-permission (has_permission RPC), is-the-owner
+//   (businesses.owner_id), and holds-owner-AUTHORITY (owner_id OR an active member row whose
+//   role is OWNER — the R-22 interim, see ownerAuthority.ts). All run under the caller's
+//   anon-key+token, so they see exactly what that caller is allowed to see.
 // DEPENDENCIES: @supabase/supabase-js (anon key + caller token), env (SUPABASE_URL,
 //   VITE_SUPABASE_ANON_KEY | SUPABASE_ANON_KEY).
-// OUTPUTS: callerHoldsPermission, callerIsBusinessOwner — each returns true only on an
+// OUTPUTS: callerHoldsPermission, callerIsBusinessOwner, callerHoldsOwnerAuthority — each returns true only on an
 //   explicit grant; refuses on a missing/blank token before any network call.
 //
 // SERVER-ONLY: imported by api/ handlers via a relative path — NOT re-exported from the
 //   shared auth barrel (would pull createClient + env reads into the client bundle).
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from '@supabase/supabase-js';
+import { holdsOwnerAuthority } from './ownerAuthority';
 
 function bearer(authHeader: string | undefined): string {
   return String(authHeader || '').replace(/^Bearer\s+/i, '').trim();
@@ -78,6 +80,40 @@ export async function callerIsBusinessOwner(
   const { data, error } = await caller
     .from('businesses').select('owner_id').eq('id', businessId).maybeSingle();
   return !error && (data as { owner_id?: string } | null)?.owner_id === uid;
+}
+
+/**
+ * Does the CALLER hold OWNER AUTHORITY for this business — `owner_id`, OR an ACTIVE member row
+ * whose role is OWNER? The server half of `ownerAuthority.ts`; read that file for the ruling,
+ * the interim status, and why this is a role check and not a permission string.
+ *
+ * 🔴 IT IS A **NEW** FUNCTION AND `callerIsBusinessOwner` IS DELIBERATELY UNTOUCHED. Widening
+ * that one would have silently widened `callerCan` — which every gate in the QBO router and
+ * `submit.ts` sits on — turning a scoped interim into a platform-wide authority change nobody
+ * asked for. The blast radius is the reason for the extra function, not an accident of style.
+ *
+ * ⚠️ NOT FOR THE WRITES SWITCH. That is `owner_id` only and is enforced by Postgres
+ * (`businesses_owner_update`), not by this. See ownerAuthority.ts.
+ *
+ * The member read runs under the CALLER's token, so it is RLS-scoped and a forged `businessId`
+ * returns nothing. `active` is required: a deactivated owner-role member holds no authority.
+ */
+export async function callerHoldsOwnerAuthority(
+  authHeader: string | undefined,
+  businessId: string,
+): Promise<boolean> {
+  if (await callerIsBusinessOwner(authHeader, businessId)) return true;
+  const uid = await resolveCallerUid(authHeader);
+  if (!uid) return false;
+  const token = bearer(authHeader);
+  const e = env();
+  if (!e) return false;
+  const caller = createClient(e.url, e.anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data, error } = await caller
+    .from('business_members').select('role')
+    .eq('business_id', businessId).eq('user_id', uid).eq('active', true).maybeSingle();
+  if (error || !data) return false;
+  return holdsOwnerAuthority((data as { role?: string | null }).role);
 }
 
 /**
