@@ -117,6 +117,21 @@ export interface QboInvoiceLine {
    * neither of them ever charged.
    */
   sizeFromDescription: string | null;
+  /**
+   * 🔴 DID THIS LINE'S WORDING SAY IT WAS A WARRANTY OR A REPLACEMENT? A BOOLEAN, PROSE DROPPED.
+   *
+   * Added 2026-09-08. It exists because a business can give the same thing away four different
+   * ways on four different invoices and then hold **no figure at all** for what that costs them:
+   * MEASURED on LAWNS's export [STATED — a prior session's figures], 49 lines charged $0, and they
+   * are recorded as a `WARRANTY` item (19), as a `Tree Replacement` item (3), under a coded item
+   * name that says nothing (1), and **26 as the product itself at $0 with the word only in the
+   * description**. Those 26 are invisible to any rule that reads the item.
+   *
+   * ⚠️ SAME READ-ONCE-AND-DROP TREATMENT as `discountInDescription` and `installInDescription`,
+   * and the same R-50 constraint: this says the WORDING mentions it. Nothing downstream may treat
+   * a true here as *"this line IS a warranty claim"*.
+   */
+  replacementInDescription: boolean;
 }
 
 /** One invoice. 🔴 `customerId` and NO customer name — see the file header. */
@@ -236,6 +251,27 @@ export function mentionsInstall(description: string | null | undefined): boolean
   return typeof description === 'string' && INSTALL_WORDING.test(description);
 }
 
+/**
+ * Wording that says this line was given under a warranty, or is a replacement for something.
+ *
+ * 🔴 IT IS NARROW ON PURPOSE, THE SAME CALL AS `DISCOUNT_WORDING` AND FOR THE SAME REASON. This
+ * feeds a finding about a business's own record-keeping, so a false positive INFLATES a claim
+ * about how disorderly their books are. `\breplace\b` is excluded — *"replace the header"*,
+ * *"replace on request"* — and only the noun and the past participle are matched.
+ *
+ * ⚠️ IT IS NOT PAIRED WITH `install`. `INSTALL_WORDING` deliberately excludes `warranty` because
+ * LAWNS sells *"(Install & Warranty)"* on planted trees AND sells a warranty on collected ones, so
+ * treating warranty as installation would crush the measured placement premium toward zero. This
+ * predicate is the other half of that decision: warranty gets its OWN flag rather than being
+ * folded into a neighbour's, so neither reading contaminates the other.
+ */
+export const REPLACEMENT_WORDING = /\bwarrant(?:y|ies)\b|\breplacements?\b|\breplaced\b/i;
+
+/** Did this line's wording say warranty or replacement? A BOOLEAN; the prose is not kept. */
+export function mentionsReplacement(description: string | null | undefined): boolean {
+  return typeof description === 'string' && REPLACEMENT_WORDING.test(description);
+}
+
 const DISCOUNT_SET = new Set(DISCOUNT_ITEM_NAMES.map(n => n.toLowerCase()));
 const BUNDLE_SET   = new Set(BUNDLE_ITEM_NAMES.map(n => n.toLowerCase()));
 
@@ -311,6 +347,7 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
         // Read, tested, discarded — the string never reaches the returned row. See the field.
         discountInDescription: mentionsDiscount(str(l?.Description)),
         installInDescription: mentionsInstall(str(l?.Description)),
+        replacementInDescription: mentionsReplacement(str(l?.Description)),
         itemAccountName: str((detail?.ItemAccountRef as { name?: unknown } | null)?.name),
         // The SIZE only — `readProductFromDescription` returns the plant's own size string and
         // nothing else from the prose, so no free text survives this line (R-24).

@@ -84,6 +84,33 @@ write; cards 5–8 prove the rules that survived the change.
 
 ## THE CARDS
 
+### CARD 0 — 🔴 THE DUPLICATE MARK ON THIS ROSTER IS PROVED ON THE BOOKS BOARD, NOT HERE
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · `ui-control-standards.md` G12
+🔧 **A POINTER, NOT A HOLE — and it is marked `needs-test` rather than `owed` because the test
+exists and is not on this board.**
+
+🔴 **THE ROSTER CHANGED ON 2026-09-08 AND ITS PROOF LIVES SOMEWHERE ELSE, DELIBERATELY.** `/customers`
+now marks records that may be the same customer entered more than once, sorts them to the top by
+default, and filters to them — the DEPENDENCY of David's names-on-paper ruling, which took the
+customer names OFF the printed books report and put them here instead. **The card that proves it is
+`quickbooks-books-read-full-surface-test.md` → CARD 20**, because the thing being proved is that the
+printed report's promise (*"review your customers in Cultivar"*) is kept — and that is one sitting,
+not two.
+
+⚠️ **WRITING A SECOND CARD HERE WOULD BE THE DRIFT OP-14 CLAUSE (4) FORBIDS:** two documents
+answering one question, and the copy that goes stale is never the one you are reading. This block is
+the doorway; CARD 20 is the test.
+
+⚠️ **ONE THING THAT DID CHANGE FOR EVERY CARD BELOW: the roster's DEFAULT SORT.** It was newest-added
+first; it is now flagged-first (G12), with everything unflagged below in the grid's own order. **No
+card on this board asserted the old order**, which is why none of them is flipped — checked, not
+assumed. If you find one that depends on row position, it is `owed` and this line is why.
+
+---
+
 ### CARD 1 — a text edit actually persists (the defect, head-on)
 STATUS: owed
 LAST-PROVEN: never

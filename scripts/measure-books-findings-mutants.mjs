@@ -29,6 +29,16 @@ function suiteIsGreen() {
   } catch { return false; }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 M7, M8 AND M11 STOOD HERE AND WERE REMOVED ON 2026-09-08, NOT WEAKENED — THEIR TARGETS ARE
+//    GONE, AND A MUTANT THAT NEVER APPLIES IS AN ERROR THIS HARNESS ALREADY FAILS ON.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// They mutated `possible-duplicate-customers` (summing the two duplicate tallies), the
+// `customers-with-no-contact` derivation, and the `duplicate-invoice-numbers` sentence. All three
+// rules were RETIRED that day, so their from-text no longer exists in the source. Their defects
+// did not go away with them and are re-aimed at the successors: N1 is M7's shape at the union,
+// N17 is M8's at the reach rule, N12 is M11's at the same-document rule. Deleting a mutant whose
+// rule was retired is honest; deleting one whose rule still exists would be a rubber stamp.
 const MUTANTS = [
   { id: 'M1', why: '🔴 a population of ZERO reports a clean result instead of not-measured',
     from: '    if (r.of === 0) {', to: '    if (false) {' },
@@ -50,8 +60,8 @@ const MUTANTS = [
     from: '        statusQuoCost: shortfall,',
     to:   '        statusQuoCost: 6000,' },
   { id: 'M16', why: 'a finding loses its shape — a one-off finding wearing a rule\'s clothes',
-    from: '      id: rule.id, tier: rule.tier, shape: rule.shape, quoted: rule.quoted,',
-    to:   "      id: rule.id, tier: rule.tier, shape: 'written-never-read' as never, quoted: rule.quoted," },
+    from: '      id: rule.id, version: rule.version, tier: rule.tier, shape: rule.shape, quoted: rule.quoted,',
+    to:   "      id: rule.id, version: rule.version, tier: rule.tier, shape: 'written-never-read' as never, quoted: rule.quoted," },
   { id: 'M17', why: 'a rule blocked on a FIELD reports the generic blocked-on-policy sentence',
     from: '        notMeasured: rule.cannotCompute\n          ?? \'We cannot work this one out from your books on their own — it needs something only you can tell us.\',',
     to:   "        notMeasured: 'We cannot work this one out from your books on their own — it needs something only you can tell us.'," },
@@ -73,21 +83,12 @@ const MUTANTS = [
   { id: 'M6', why: '🔴 notes, discounts and subtotals count as sales at $0 — findings manufactured from one invoice',
     from: '  return inv.lines.filter(l => l.itemName !== null && l.unitPrice !== null && (l.amount ?? 0) > 0);',
     to:   '  return inv.lines.filter(l => l.itemName !== null) as never;' },
-  { id: 'M7', why: 'the duplicate-customer count SUMS the two tallies, double-counting the same records',
-    from: '      const dup = Math.max(c.byEmail.recordsInvolved, c.byPhone.recordsInvolved);',
-    to:   '      const dup = c.byEmail.recordsInvolved + c.byPhone.recordsInvolved;' },
-  { id: 'M8', why: 'unreachable customers derived by subtraction instead of the field that means it',
-    from: '        matched: x.customers.withNoContactAtAll, of: x.customers.total, noun: \'customers\',',
-    to:   '        matched: x.customers.total - x.customers.withEmail, of: x.customers.total, noun: \'customers\',' },
   { id: 'M9', why: 'a finding gains a `blocking` flag — something a caller could stop the import on',
     from: '      needsAnswer: null as Finding[\'needsAnswer\'],',
     to:   '      needsAnswer: null as Finding[\'needsAnswer\'], blocking: true,' },
   { id: 'M10', why: 'Category folders count as never-sold stock',
     from: "      const sellable = x.items.filter(it => (it.type ?? '').toLowerCase() !== 'category');",
     to:   '      const sellable = x.items;' },
-  { id: 'M11', why: 'a sentence leaks a QuickBooks field name to a nursery owner',
-    from: "        sentence: `${plural(dupInvoices, 'invoice shares', 'invoices share')} an invoice number",
-    to:   "        sentence: `${plural(dupInvoices, 'invoice shares', 'invoices share')} a DocNumber" },
 
   // ── 2026-09-03: the withdrawn price-card rule, the per-line basis, the giveaway
   //    exclusion, and the receivables rule whose old refusal was false. Every one of these
@@ -123,6 +124,71 @@ const MUTANTS = [
   { id: 'M26', why: '🔴 the invoice with no readable due date is dropped from the total owed instead of declared',
     from: '        if (!inv.dueDate) { undated++; continue; }',
     to:   '        if (!inv.dueDate) { continue; }' },
+
+  // ── 2026-09-08: the FIVE PROPERTIES and the FOUR RULE-LEVEL FIXES. Every mutant below makes
+  //    the review SHORTER, TIDIER or MORE CONFIDENT than the truth — a union collapsing back into
+  //    a max(), a clean result quietly vanishing, a window forgotten so "in the period we read"
+  //    becomes "never", a retired rule coming back to life.
+  { id: 'N1', why: '🔴 THE UNION COLLAPSES BACK INTO max() — the exact defect that reported 52 where the answer was 72, silently discarding every record one axis found and the other did not',
+    from: '      const records = groups.reduce((n, g) => n + g.members.length, 0);',
+    to:   '      const records = Math.max(0, ...groups.map(g => g.members.length));' },
+  { id: 'N2', why: '🔴 the duplicate rule FALLS BACK to the breakdown when it has no rows — a plausible, smaller, wrong number with nothing on screen saying anything was substituted',
+    from: '      if (!x.customerRows || x.customerRows.length === 0) return null;',
+    to:   '      if (!x.customerRows || x.customerRows.length === 0) return x.customers ? { matched: Math.max(x.customers.byEmail.recordsInvolved, x.customers.byPhone.recordsInvolved), of: x.customers.total, noun: \'customer records\', sentence: \'At least some customers look like duplicates.\' } : null;' },
+  { id: 'N3', why: '🔴 the rows lose their AXIS — a merge decision made without knowing whether the evidence was a shared email or a spelling',
+    from: '          id: m.id, label: m.label, group: g.key, note: axisNames(g),',
+    to:   '          id: m.id, label: m.label, group: g.key, note: null,' },
+  { id: 'N4', why: '🔴 the row CAP moves from the runner into nothing at all — 1,900 real people painted onto a screen',
+    from: '      rows: found === null ? null : found.slice(0, FINDING_ROW_LIMIT),',
+    to:   '      rows: found,' },
+  { id: 'N5', why: '🔴 `rowsTotal` reports what SURVIVED the cap rather than what was found — a truncated list presented as the whole answer',
+    from: '      rowsTotal: found === null ? 0 : found.length,',
+    to:   '      rowsTotal: found === null ? 0 : Math.min(found.length, FINDING_ROW_LIMIT),' },
+  { id: 'N6', why: '🔴 `clean` becomes matched === 0 WITHOUT requiring `measured` — a rule that could not run certifies the business',
+    from: '      clean: r.matched === 0,',
+    to:   '      clean: true,' },
+  { id: 'N7', why: '🔴 a CLEAN finding still declares the capabilities it blocks — "Campaigns · Review requests" printed beside "every record has an email or a phone"',
+    from: '      blocks: r.matched === 0 ? [] : (rule.blocks ?? []),',
+    to:   '      blocks: rule.blocks ?? [],' },
+  { id: 'N8', why: '🔴 the WINDOW is read from the clock instead of the walk — "the period we read" becomes today, and the same capture answers differently tomorrow',
+    from: '    const dates = (input.invoices ?? []).map(i => i.txnDate).filter((d): d is string => !!d).sort();\n    if (dates.length === 0) return null;\n    return { from: dates[0], to: dates[dates.length - 1], of: \'your invoice history\' };',
+    to:   '    const dates = (input.invoices ?? []).map(i => i.txnDate).filter((d): d is string => !!d).sort();\n    if (dates.length === 0) return null;\n    return { from: dates[0], to: new Date().toISOString().slice(0, 10), of: \'your invoice history\' };' },
+  { id: 'N9', why: '🔴 a rule that could not run LOSES its window — "we could not work this out" stops saying which period it could not work it out for',
+    from: "      window: rule.needs.includes('invoices') ? window : null,",
+    to:   '      window: null,' },
+  { id: 'N10', why: '🔴 EVERY rule gets a window, including the ones that never read a dated walk — a duplicate customer given an expiry date',
+    from: "      window: rule.needs.includes('invoices') ? window : null,",
+    to:   '      window,' },
+  { id: 'N11', why: '🔴 the retired `duplicate-invoice-numbers` COMES BACK TO LIFE — one field compared, 44 invoices under a risk heading, and a bookkeeper\'s deliberate renumbering reported as a defect',
+    from: "export const RETIRED_RULE_IDS = [\n  'duplicate-invoice-numbers',",
+    to:   "export const RETIRED_RULE_IDS = [\n  'duplicate-invoice-numbers-x'," },
+  { id: 'N12', why: '🔴 the same-document rule keys on the DOCUMENT NUMBER again, so a renumbered pair reads as a duplicate and a genuinely duplicated document goes invisible the moment somebody renumbers one of the two',
+    from: '        matched: c.recordsInvolved, of: c.comparable, noun: \'invoices we could compare\',',
+    to:   '        matched: c.repeatedNumberGroups * 2, of: c.comparable, noun: \'invoices we could compare\',' },
+  { id: 'N13', why: '🔴 collections are counted as missing delivery dates again — three-fifths of her history reported as broken when it is correct',
+    from: '        matched: c.dispatchedWithoutDate, of: c.seen, noun: \'invoices\',',
+    to:   '        matched: c.dispatchedWithoutDate + c.collectedWithoutDate, of: c.seen, noun: \'invoices\',' },
+  { id: 'N14', why: '🔴 the unreadable-size denominator goes back to EVERY row — the 33 that are 15, and a count that can never reach zero because 18 of them are unfixable',
+    from: '        matched: c.productsUnreadable, of: c.products, noun: \'products\',',
+    to:   '        matched: c.unreadableAcrossEverything, of: c.products, noun: \'products\',' },
+  { id: 'N15', why: '🔴 the giveaway finding is valued at RETAIL — "$48,000 of warranty" for something that cost them a third of that, the overstatement Lauren already caught once',
+    from: '        value: c.costTotal,',
+    to:   '        value: c.retailTotalNotToBeQuoted,' },
+  { id: 'N16', why: '🔴 the giveaway denominator goes back to the giveaways themselves, so an invoice walk with NO LINES AT ALL reports "nothing was given away" — a pass over an empty set',
+    from: '      const allLines = x.invoices.reduce((n, i) => n + i.lines.length, 0);',
+    to:   '      const allLines = Math.max(1, x.invoices.reduce((n, i) => n + i.lines.length, 0));' },
+  { id: 'N17', why: '🔴 the reach finding leads with the UNREACHABLE count — "125 customers cannot be reached" instead of "1,828 can", same numbers, opposite meaning',
+    from: "        sentence: `${plural(r.withEither, 'of your customers can', 'of your customers can')} be reached",
+    to:   "        sentence: `${plural(r.withNeither, 'of your customers cannot', 'of your customers cannot')} be reached" },
+  { id: 'N18', why: '🔴 the no-purchase finding says "never bought" — a claim about the years before the window that nobody measured',
+    from: "which is not the same as never having bought, because your books before this period were not read.`,",
+    to:   "and have never bought anything from you.`," },
+  { id: 'N19', why: '🔴 a rule\'s VERSION is dropped from the finding, so stored results cannot be paired with the question that produced them',
+    from: '      id: rule.id, version: rule.version, tier: rule.tier,',
+    to:   '      id: rule.id, version: 0, tier: rule.tier,' },
+  { id: 'N20', why: '🔴 the tax finding counts the exemption REASON as evidence — a note somebody typed standing in for a document an auditor accepts',
+    from: '      const unevidenced = Math.max(0, pw.nonTaxable - pw.withResaleNumber);',
+    to:   '      const unevidenced = Math.max(0, pw.nonTaxable - pw.withExemptionReason);' },
 ];
 
 const original = readFileSync(TARGET, 'utf8');

@@ -15,10 +15,10 @@
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/booksFindings.test.ts \
  *     --bundle --platform=node --format=cjs | node
  */
-import { evaluateBooks, BOOKS_RULES, FINDING_TIERS, SHAPES } from './booksFindings';
+import { evaluateBooks, BOOKS_RULES, FINDING_TIERS, SHAPES, RETIRED_RULE_IDS, FINDING_ROW_LIMIT } from './booksFindings';
 import type { QboInvoiceRow } from './invoiceList';
 import type { QboItemRow } from './itemList';
-import type { CustomerBreakdown } from './customerList';
+import type { CustomerBreakdown, QboCustomerRow } from './customerList';
 
 let passed = 0, failed = 0;
 function ok(cond: boolean, msg: string): void {
@@ -39,7 +39,10 @@ const line = (itemId: string | null, itemName: string | null, unitPrice: number 
      // out of the description. None of them is read by `booksFindings`; they are here so a fixture
      // is a whole line rather than a subset that happens to compile.
      installInDescription: false, itemAccountName: null as string | null,
-     sizeFromDescription: null as string | null });
+     sizeFromDescription: null as string | null,
+     // Added 2026-09-08 with the giveaway census. A fixture that omits a field the parser always
+     // writes is a fixture that cannot provoke the rule reading it — #182's shape, in miniature.
+     replacementInDescription: false });
 const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[],
              o: Partial<QboInvoiceRow> = {}): QboInvoiceRow =>
   ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, balance: 0, dueDate: null,
@@ -50,7 +53,20 @@ const CUSTOMERS: CustomerBreakdown = {
   withNoContactAtAll: 110, inactive: 12,
   byEmail: { sharedValues: 30, recordsInvolved: 72, largestCluster: 4 },
   byPhone: { sharedValues: 20, recordsInvolved: 51, largestCluster: 3 },
+  census: {
+    reach: { withBoth: 800, withEither: 1300, withNeither: 627, emailOnly: 100, phoneOnly: 400,
+             withAddressLine1: 1400, withPostalCode: 1100, addressWithoutPostalCode: 300, withoutAddress: 527 },
+    names: { givenNameOnly: 69, companyEqualsGivenName: 31, pureOrganisations: 47, noNameAtAll: 5 },
+    paperwork: { nonTaxable: 27, withExemptionReason: 27, withResaleNumber: 9, withCustomerType: 34, withNotes: 9 },
+  },
 };
+
+/** A whole customer RECORD, for the rules that need rows rather than counts. */
+const cust = (id: string, displayName: string, o: Partial<QboCustomerRow> = {}): QboCustomerRow => ({
+  id, displayName, email: null, phone: null, address: null, companyName: null, active: true,
+  givenName: null, familyName: null, addressLine1: null, postalCode: null,
+  taxable: true, taxExemptionReason: null, resaleNum: null, customerType: null, hasNotes: false, ...o,
+});
 
 const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => f.id === id);
 
@@ -202,7 +218,17 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
 
 // ══ §C 🔴 A PASS OVER AN EMPTY SET IS A FAILURE ════════════════════════════
 {
-  const empty = evaluateBooks({ items: [], invoices: [], customers: { ...CUSTOMERS, total: 0, withNoContactAtAll: 0, byEmail: { sharedValues: 0, recordsInvolved: 0, largestCluster: 0 }, byPhone: { sharedValues: 0, recordsInvolved: 0, largestCluster: 0 } } });
+  // 🔴 THE CENSUS IS ZEROED TOO, AND LEAVING IT POPULATED WAS ITSELF A FINDING. A breakdown that
+  // says `total: 0` while its census says *27 customers are not charged sales tax* is not an empty
+  // read, it is an incoherent one — and a rule reading the census would have measured against a
+  // population that does not exist. An empty walk must be empty in every field a rule can reach.
+  const EMPTY_CENSUS: CustomerBreakdown['census'] = {
+    reach: { withBoth: 0, withEither: 0, withNeither: 0, emailOnly: 0, phoneOnly: 0,
+             withAddressLine1: 0, withPostalCode: 0, addressWithoutPostalCode: 0, withoutAddress: 0 },
+    names: { givenNameOnly: 0, companyEqualsGivenName: 0, pureOrganisations: 0, noNameAtAll: 0 },
+    paperwork: { nonTaxable: 0, withExemptionReason: 0, withResaleNumber: 0, withCustomerType: 0, withNotes: 0 },
+  };
+  const empty = evaluateBooks({ items: [], invoices: [], customerRows: [], customers: { ...CUSTOMERS, total: 0, withNoContactAtAll: 0, census: EMPTY_CENSUS, byEmail: { sharedValues: 0, recordsInvolved: 0, largestCluster: 0 }, byPhone: { sharedValues: 0, recordsInvolved: 0, largestCluster: 0 } } });
   ok(empty.every(f => f.measured === false),
     '🔴 EVERY RULE OVER EMPTY WALKS REPORTS NOT-MEASURED. Not one returns a clean result — a read that found nothing because there was nothing to read must never certify a business');
   ok(empty.every(f => f.notMeasured !== null && f.notMeasured.length > 0),
@@ -223,7 +249,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   ok(/have not been read yet|has not been read yet/.test(priceCard?.notMeasured ?? ''),
     'so the reader knows what to DO about it, not merely that something is absent');
 
-  const custRule = find(invoicesOnly, 'customers-with-no-contact');
+  const custRule = find(invoicesOnly, 'contact-reach');
   ok(custRule?.measured === false && /customer list/.test(custRule.notMeasured ?? ''),
     'a customer rule with no customer walk says so too');
 
@@ -305,6 +331,11 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const fs = evaluateBooks({
     customers: CUSTOMERS, items: [item('1', 'Tree', { unitPrice: 10 })],
     invoices: [inv('i1', '1', [line('1', 'Tree', 10, 10)])],
+    // The duplicate rule reads ROWS, not the breakdown — see its own comment. Without them it
+    // reports itself uncomputed and asks nothing, so the "exactly two" assertion below would pass
+    // for the wrong reason. Two records sharing an email is the smallest input that makes it fire.
+    customerRows: [cust('c1', 'Ann Spannaus', { email: 'a@x.com' }),
+                   cust('c2', 'A Spannaus',   { email: 'A@X.com' })],
     // ✏️ CORRECTED TWICE, 2026-09-06 then 2026-09-07. The first fixture used `belowSubtotal`, the
     // second `noBase` — and BOTH were verdicts derived from a base that was never read (`Qty`,
     // which is 1). The rule now fires on a RATE QuickBooks stated that no product names, so the
@@ -322,27 +353,122 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     'a finding that could not be measured never asks a question about it');
 }
 
-// ══ §J 🔴 THE CUSTOMER NUMBERS THEMSELVES — added after M7 and M8 survived ══
-// Both rules read a breakdown somebody else computed, so it is tempting to assert only that
-// they RAN. Two mutants proved that is not enough: one summed the two duplicate tallies
-// (double-counting the very records it is about) and one derived unreachable customers by
-// subtracting an OVERLAPPING coverage count. Both produce a plausible larger number on a
-// screen nobody can check by eye, against a QUOTED figure four days stale — so a reader would
-// have read the gap as drift in the data rather than a defect in the arithmetic.
+// ══ §J 🔴 THE CUSTOMER NUMBERS THEMSELVES — AND THE TWO RULES THAT USED TO GET THEM WRONG ══
+//
+// Both of the rules that stood here read a breakdown somebody else computed, so it was tempting to
+// assert only that they RAN. Two mutants proved that is not enough: one summed the two duplicate
+// tallies (double-counting the very records it is about) and one derived unreachable customers by
+// subtracting an OVERLAPPING coverage count. Both produce a plausible larger number on a screen
+// nobody can check by eye.
+//
+// 🔴 BOTH RULES ARE NOW RETIRED, AND THE REASON IS THE SAME CLASS ONE LEVEL UP: the arithmetic was
+// only ever as good as what the rule was HANDED. `max(byEmail, byPhone)` is not a union and cannot
+// be made into one from two counts, however carefully it is asserted.
 {
   const fs = evaluateBooks({ customers: CUSTOMERS, items: [item('1', 'T', { unitPrice: 1 })],
                              invoices: [inv('i1', '1', [line('1', 'T', 1, 1)])] });
 
-  const dup = find(fs, 'possible-duplicate-customers');
-  ok(dup?.population.matched === 72,
-    '🔴 THE DUPLICATE COUNT IS max(byEmail, byPhone) = 72, NOT the sum. A customer entered twice usually shares BOTH an email and a phone, so adding the two tallies counts those records twice and reports roughly double');
-  ok(dup?.population.of === 1927, 'against the full customer population, not the matched set');
-  ok(/At least/.test(dup?.sentence ?? ''),
-    'and the sentence says "at least" — the two tallies overlap by an amount this read cannot see, so a confident total would be a claim the data does not support');
+  // 🔴 THE FOUR IDS ARE WRITTEN OUT HERE, NOT READ FROM THE EXPORT — AND MUTANT N11 IS WHY.
+  // The loop below iterates `RETIRED_RULE_IDS`, so a change to that array changes the POPULATION
+  // the probe walks: renaming an entry made the whole check vacuous while every assertion still
+  // passed. That is #182's shape exactly — a probe that reports a count it never states an
+  // expectation for — and the fix is a literal expectation the mutant cannot move.
+  const RETIRED_EXPECTED = [
+    'duplicate-invoice-numbers', 'invoices-without-delivery-date',
+    'possible-duplicate-customers', 'customers-with-no-contact',
+  ];
+  ok(RETIRED_EXPECTED.every(id => (RETIRED_RULE_IDS as readonly string[]).includes(id))
+     && RETIRED_RULE_IDS.length === RETIRED_EXPECTED.length,
+    '🔴 THE RETIRED LIST IS EXACTLY THESE FOUR IDS, ASSERTED LITERALLY. Reading the list from the export and then looping over it means the export defines its own test — rename an entry and the probe walks a different population and still goes green');
+  for (const dead of [...RETIRED_EXPECTED, ...RETIRED_RULE_IDS]) {
+    ok(find(fs, dead) === undefined,
+      `🔴 THE RETIRED RULE \`${dead}\` IS GONE AND MAY NEVER COME BACK UNDER ITS OWN ID. Stored results are compared on (rule_id, rule_version); an id that has meant two things makes every comparison across it a lie`);
+    ok(!BOOKS_RULES.some(r => r.id === dead),
+      `and \`${dead}\` is absent from BOOKS_RULES itself, not merely filtered out of one run`);
+  }
 
-  const contact = find(fs, 'customers-with-no-contact');
-  ok(contact?.population.matched === 110,
-    '🔴 UNREACHABLE CUSTOMERS COMES FROM `withNoContactAtAll` (110), NOT `total - withEmail` (1,027). The three coverage counts OVERLAP: subtracting one of them calls every customer who has a phone but no email unreachable');
+  // ── the union, which is the whole reason `max()` had to go ──
+  //
+  // 🔴 THIS IS THE CASE `max()` CANNOT SEE AND NO ASSERTION ABOUT `max()` COULD HAVE CAUGHT.
+  // Two records share an email; two DIFFERENT records share a phone; nobody shares both. The
+  // email tally is 2 and the phone tally is 2, so `max()` reports 2 — and the true answer is 4.
+  const rows = [
+    cust('c1', 'Ann Spannaus',   { email: 'a@x.com' }),
+    cust('c2', 'A Spannaus',     { email: 'A@X.com' }),          // same email, different casing
+    cust('c3', 'Zach Mcgrath',   { phone: '(512) 456-3632' }),
+    cust('c4', 'Zack Mcgrath',   { phone: '512-456-3632' }),     // same phone, different format
+    cust('c5', 'Sarah Wilson'),                                   // same NAME, no email, no phone
+    cust('c6', 'Sarah Wilson'),
+    cust('c7', 'Nicholas Servin'),                                // one letter apart — NOT matched
+    cust('c8', 'Nicolas Servin'),
+    cust('c9', 'Somebody Else',  { email: 'unique@x.com', phone: '5551234567' }),
+  ];
+  const withRows = evaluateBooks({ customers: { ...CUSTOMERS, total: rows.length }, customerRows: rows });
+  const dup = find(withRows, 'customers-entered-more-than-once');
+  ok(dup?.population.matched === 6,
+    '🔴 THE UNION IS 6, NOT max(2, 2) = 2. Two records share an email, two DIFFERENT records share a phone, two more share only a name — `max()` reports the largest single axis and silently discards every record the other axes found. That is the defect that reported 52 where the answer was 72');
+  ok(dup?.population.of === rows.length, 'against the full customer population, not the matched set');
+  ok(dup?.rowsTotal === 6 && (dup?.rows?.length ?? 0) === 6,
+    'and the RECORDS come back, not just a count — a union cannot be computed from tallies, which is why this rule takes rows at all');
+  ok(new Set(dup?.rows?.map(r => r.group)).size === 3,
+    'the six records arrive as THREE groups — an owner deciding whether to merge needs the cluster, not six unrelated rows');
+  ok(dup?.rows?.some(r => /email/.test(r.note ?? '')) === true
+     && dup?.rows?.some(r => /phone/.test(r.note ?? '')) === true
+     && dup?.rows?.some(r => /name/.test(r.note ?? '')) === true,
+    '🔴 AND EVERY GROUP SAYS WHICH AXIS FOUND IT. A merge decision made without knowing whether the evidence was an email or a spelling is a merge made blind');
+  ok(!dup?.rows?.some(r => /Nicolas|Nicholas/.test(r.label)),
+    '🔴 `Nicholas` AND `Nicolas` ARE NOT MATCHED, AND THAT IS THE DECLARED LIMIT RATHER THAN A BUG. `personNamesMatch` is exact token-set equality; a one-letter difference is a different token. Widening it to edit distance would also merge `Sarah` with `Sara`, and a wrong merge is not fixable');
+
+  // ── the rule REFUSES the weaker answer rather than falling back to it ──
+  const noRows = evaluateBooks({ customers: CUSTOMERS });
+  const refused = find(noRows, 'customers-entered-more-than-once');
+  ok(refused?.measured === false && /cannot be worked out from a count/.test(refused.notMeasured ?? ''),
+    '🔴 WITH COUNTS BUT NO ROWS IT REPORTS ITSELF UNCOMPUTED. The breakdown is right there and using it would produce a plausible, smaller, wrong number with nothing on screen to say anything had been substituted');
+
+  // ── the tax paperwork: three fields, and only one of them is evidence ──
+  //
+  // 🔴 THE FIXTURE IS BUILT SO THE TWO SUBTRACTIONS DISAGREE, WHICH IS THE ONLY WAY THIS PROBE
+  // MEANS ANYTHING. 27 exempt, 27 with a REASON, 9 with a RESALE NUMBER: subtracting the reason
+  // gives 0 and subtracting the number gives 18. A fixture where the two agree would pass under
+  // either arithmetic and would be asserting nothing (mutant N20).
+  const tax = find(fs, 'tax-exemption-without-evidence');
+  ok(tax?.population.matched === 18 && tax.population.of === 27,
+    '🔴 EVIDENCE IS THE RESALE NUMBER, NOT THE REASON. A reason is a note somebody typed; a resale number is the document a tax auditor accepts, and 18 of these 27 exemptions rest on the first');
+  ok(tax?.blocks.join(' ') === 'Proving a sales-tax exemption at audit',
+    'and what it switches off is named as a capability');
+
+  // ── reach, worded as a capability ──
+  const contact = find(fs, 'contact-reach');
+  ok(contact?.population.matched === CUSTOMERS.census.reach.withNeither,
+    'the contact finding counts the records with NEITHER an email nor a phone — not `total - withEmail`, which calls every phone-only customer unreachable');
+  ok(/can be reached/.test(contact?.sentence ?? '')
+     && contact!.sentence.indexOf(String(CUSTOMERS.census.reach.withEither.toLocaleString()))
+        < contact!.sentence.indexOf('switched off'),
+    '🔴 THE SENTENCE LEADS WITH HOW MANY CAN BE REACHED. David: "THE HEADLINE IS 1,828 REACHABLE, NOT 125 UNREACHABLE." Same numbers, opposite meaning — the order of the clauses IS the finding');
+  ok(contact?.blocks.join(' ') === 'Campaigns Review requests',
+    '🔴 AND `blocks` NAMES CAPABILITIES, NEVER FAULTS — "Campaigns", not "125 customers have no contact details". The sentence already says what is true; this says what the business cannot do');
+
+  const addr = find(fs, 'address-reach');
+  ok(addr?.population.matched === CUSTOMERS.census.reach.withoutAddress,
+    'the address finding is about a DIFFERENT capability and has its own count — routing needs a line, pricing by distance needs a postcode');
+  ok(/postcode/.test(addr?.sentence ?? ''),
+    'and it names both rungs, because an address with no postcode can be driven to and not measured');
+
+  // ── a clean finding blocks nothing ──
+  const reachable = { ...CUSTOMERS, census: { ...CUSTOMERS.census,
+    reach: { ...CUSTOMERS.census.reach, withNeither: 0, withEither: CUSTOMERS.total } } };
+  const cleanContact = find(evaluateBooks({ customers: reachable }), 'contact-reach');
+  ok(cleanContact?.clean === true && cleanContact.measured === true,
+    '🔴 A RULE THAT RAN AND FOUND NOTHING IS `clean`, NOT MERELY `matched: 0`. A rule that could not run also has matched 0, and calling that clean lets an empty read certify a business');
+  ok(cleanContact?.blocks.length === 0,
+    '🔴 AND A CLEAN FINDING BLOCKS NOTHING. "Campaigns · Review requests" printed beside "every record has an email or a phone" says the opposite of the sentence, in the half a reader skims');
+  // 🔴 THE OTHER DIRECTION, AND MUTANT N6 IS WHY IT IS HERE. Asserting only that a clean finding
+  // is `clean` passes on `clean: true` for EVERYTHING — the whole review rendering under "we
+  // checked and found nothing wrong", including the findings that found something.
+  ok(contact?.clean === false && contact.measured === true,
+    '🔴 A MEASURED FINDING THAT FOUND SOMETHING IS NOT CLEAN. Without this, `clean: true` everywhere passes every other assertion in this file and renders the entire review as a clean bill of health');
+  ok(evaluateBooks({}).every(f => f.clean === false),
+    '🔴 AND NOTHING IS CLEAN WHEN NOTHING WAS READ. A rule that could not run also matched zero, and calling that clean lets an empty read certify a business — the same conflation `measured` exists to refuse, arriving through a second field');
 }
 
 // ══ §K 🔴 A CATEGORY IS A FOLDER, NOT UNSOLD STOCK — added after M10 survived ══
@@ -653,6 +779,261 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   // ⑥ NEGATIVE CONTROL — the rule can return NOTHING AT ALL, not merely zero.
   ok(findingFor([], [CD10]) === undefined || findingFor([], [CD10])?.measured === false,
     'a business with no discount lines at all is not measured — absent is not the same as clean');
+}
+
+// ══ §P 🔴 THE FIVE PROPERTIES — VERSION · ROWS · WINDOW · BLOCKS · CLEAN ═══════════════════
+//
+// These are what make a SECOND run of this review mean anything. Without them the review is a
+// snapshot that can only be read, never compared — and *"33 last month, 13 today"* is the single
+// number that proves this product does something. Each one is probed for the way it silently
+// stops working, not for the way it works.
+{
+  const ids = BOOKS_RULES.map(r => r.id);
+  ok(new Set(ids).size === ids.length,
+    '🔴 EVERY RULE ID IS UNIQUE. Two rules sharing an id makes `(rule_id, rule_version)` ambiguous, and a stored comparison across it silently pairs the wrong two results');
+  ok(BOOKS_RULES.every(r => Number.isInteger(r.version) && r.version >= 1),
+    'and every rule declares a whole version — a rule with no version cannot be compared across runs at all');
+  // 🔴 AND THE VERSION REACHES THE FINDING, ASSERTED BY VALUE. Mutant N19 dropped it to 0 on the
+  // way out and every other assertion here passed — the rules had versions, the findings did not,
+  // and a stored result would have been keyed to a question nobody could identify.
+  {
+    const versions = new Map(BOOKS_RULES.map(r => [r.id, r.version]));
+    const all = evaluateBooks({ items: [], customers: CUSTOMERS, invoices: [] });
+    ok(all.length > 0 && all.every(f => f.version === versions.get(f.id)),
+      '🔴 EVERY FINDING CARRIES ITS OWN RULE\'S VERSION, not a constant and not a zero. `(rule_id, rule_version)` is the comparison key, and a run stored under the wrong half of it can never be paired with anything');
+    ok(all.every(f => f.version >= 1),
+      'and no finding leaves with version 0 — a value no rule declares, which is what a dropped field looks like');
+  }
+
+  const fs = evaluateBooks({
+    customers: CUSTOMERS,
+    items: [item('1', 'Tree 15 gal', { unitPrice: 10 })],
+    invoices: [inv('i1', '1', [line('1', 'Tree 15 gal', 10, 10)], { txnDate: '2025-04-30' }),
+               inv('i2', '2', [line('1', 'Tree 15 gal', 10, 10)], { txnDate: '2026-09-03', customerId: 'c2' })],
+  });
+
+  // ── WINDOW: computed from the walk, never typed ──
+  const sold = find(fs, 'never-sold');
+  ok(sold?.window?.from === '2025-04-30' && sold.window.to === '2026-09-03',
+    '🔴 THE WINDOW IS THE WALK\'S OWN EXTENT — the earliest and latest transaction dates actually present. Not the read date, not a range somebody wrote down, and not today');
+  const custDup = find(fs, 'customer-types-nothing-uses');
+  ok(custDup?.window === null,
+    'and a rule that never reads the invoice walk carries NO window — a duplicate customer is a duplicate whatever the dates say, and putting a period on it implies the finding expires');
+  const unrunnable = find(evaluateBooks({ invoices: [inv('i1', '1', [line('1', 'T', 1, 1)], { txnDate: '2025-04-30' })] }), 'never-sold');
+  ok(unrunnable?.measured === false && unrunnable.window?.from === '2025-04-30',
+    '🔴 AND A RULE THAT COULD NOT RUN STILL CARRIES THE WINDOW. "We could not work this out" is also a statement about a period, and a reader deserves to know which one');
+  ok(evaluateBooks({ invoices: [] }).every(f => f.window === null),
+    'an invoice walk with no dated rows produces no window at all rather than a fabricated one');
+
+  // ── the wording that the window exists to police ──
+  const noPurchase = find(evaluateBooks({
+    customers: { ...CUSTOMERS, total: 3 },
+    invoices: [inv('i1', '1', [line('1', 'T', 1, 1)], { customerId: 'c1' })],
+  }), 'customers-with-no-purchase-in-the-period');
+  ok(/period we read/.test(noPurchase?.sentence ?? '')
+     && /not the same as never having bought/.test(noPurchase?.sentence ?? '')
+     && !/have never bought|never bought from you/.test(noPurchase?.sentence ?? ''),
+    '🔴 THE SENTENCE SAYS "IN THE PERIOD WE READ" AND NEVER "NEVER BOUGHT". A customer who bought the month before the window opened is indistinguishable here from one who never bought, and only one of those two claims is true');
+
+  // ── ROWS: capped by the runner, and the cap declares itself ──
+  const many = Array.from({ length: FINDING_ROW_LIMIT + 40 }, (_, i) =>
+    cust(`c${i}`, 'Same Person'));            // one enormous name-axis cluster
+  const capped = find(evaluateBooks({ customers: { ...CUSTOMERS, total: many.length }, customerRows: many }),
+                      'customers-entered-more-than-once');
+  ok((capped?.rows?.length ?? 0) === FINDING_ROW_LIMIT,
+    '🔴 THE ROW CAP IS ENFORCED BY THE RUNNER, NOT BY THE RULE. A limit that lives in the caller is a limit one future caller forgets, and the failure mode is 1,900 real people painted onto a screen');
+  ok(capped?.rowsTotal === many.length,
+    '🔴 AND WHAT THE CAP REMOVED STAYS VISIBLE. A truncated list presented as a whole one is the invoice-grid defect — "nothing found" for a record that exists — arriving on a different screen');
+  ok(find(fs, 'income-accounts-in-use')?.rows === null,
+    'a rule with no records worth looking at returns null rather than an empty array — "there are none to show" and "we did not collect any" are different answers');
+}
+
+// ══ §Q 🔴 GIVEN AWAY, AND RECORDED MORE THAN ONE WAY ══════════════════════════════════════
+//
+// The finding is not that they give trees away — that is a policy. It is that the SAME decision is
+// written down three different ways, so no report anybody runs can ever total it.
+{
+  const items = [
+    item('w', 'WARRANTY',        { unitPrice: 0,   purchaseCost: null }),
+    item('t', 'Lacey Oak 45',    { unitPrice: 1250, purchaseCost: 400 }),
+    item('c', 'BPJ30REP',        { unitPrice: 900,  purchaseCost: 300 }),
+  ];
+  const free = (id: string, name: string, replacementWording: boolean) =>
+    ({ ...line(id, name, 0, 0), replacementInDescription: replacementWording });
+  const invoices = [
+    inv('i1', '1', [line('t', 'Lacey Oak 45', 1250, 1250), free('w', 'WARRANTY', false)], { txnDate: '2025-04-30' }),
+    inv('i2', '2', [free('t', 'Lacey Oak 45', true)],  { txnDate: '2026-01-05' }),   // wording only
+    inv('i3', '3', [free('c', 'BPJ30REP', false)],     { txnDate: '2026-07-23' }),   // nothing says it
+  ];
+  const f = find(evaluateBooks({ items, invoices }), 'given-away-and-recorded-more-than-one-way');
+  ok(f?.population.matched === 3,
+    'the three $0 lines are counted, and the paid line is not');
+  ok(f?.population.of === 4,
+    '🔴 THE DENOMINATOR IS EVERY INVOICE LINE. The first draft returned `of: 1` so the clean sentence would render — which would have let an invoice walk with NO LINES AT ALL report "nothing was given away", a pass over an empty set');
+  ok(/3 different ways/.test(f?.sentence ?? ''),
+    '🔴 AND THE COUNT OF WAYS IS THE FINDING. One way is a policy; three ways is why nothing can add them up');
+  ok(/no report you or your accountant can run will ever add them up/.test(f?.sentence ?? ''),
+    'the sentence says what the disorder COSTS her, in a sentence an owner would say');
+  ok(f?.value === null && /cannot tell you what that cost you/.test(f?.sentence ?? ''),
+    '🔴 IT REFUSES TO PUT A NUMBER ON IT. One line uses an item with no recorded cost, so no total is stated — a partial cost total is not a smaller truth, it is a different number wearing the same label');
+  ok(!/1,?250|2,?150/.test(f?.sentence ?? ''),
+    '🔴 AND THE RETAIL TOTAL NEVER REACHES THE PAGE. Valuing a warranty replacement at its selling price overstates it by the whole markup — the overstatement Lauren already caught once');
+  ok(/could not read at all/.test(f?.sentence ?? '') && /fifth way/.test(f?.sentence ?? ''),
+    '🔴 THE LINE NOTHING EXPLAINS IS NAMED, NOT DROPPED. A $0 line whose item code says nothing and whose wording says nothing is exactly where a fourth or fifth way of recording this would hide, and the sentence asks for it');
+
+  // cost is stated only when EVERY line's item carries one
+  const costed = [item('w', 'WARRANTY tree', { unitPrice: 500, purchaseCost: 150 })];
+  const costedInv = [inv('i1', '1', [{ ...line('w', 'WARRANTY tree', 0, 0), replacementInDescription: false }], { txnDate: '2026-01-01' })];
+  const g = find(evaluateBooks({ items: costed, invoices: costedInv }), 'given-away-and-recorded-more-than-one-way');
+  ok(g?.value === 150 && /\$150/.test(g?.sentence ?? '') && /your cost, not what you would have sold them for/.test(g?.sentence ?? ''),
+    '🔴 WITH FULL COST COVERAGE IT STATES THE COST AND SAYS WHICH FIGURE IT IS. $150, not the $500 it would have sold for');
+
+  // negative control: nothing free at all is a CLEAN finding, not a silence
+  const clean = find(evaluateBooks({
+    items: [item('t', 'Tree', { unitPrice: 10, purchaseCost: 3 })],
+    invoices: [inv('i1', '1', [line('t', 'Tree', 10, 10)])],
+  }), 'given-away-and-recorded-more-than-one-way');
+  ok(clean?.measured === true && clean.clean === true && /Nothing in your invoice history was charged at zero/.test(clean.sentence),
+    '🔴 A BUSINESS THAT GIVES NOTHING AWAY GETS A CLEAN RESULT SAID OUT LOUD, not a silence. On a page about what a business cannot measure, an absent line reads as "we did not look"');
+}
+
+// ══ §R 🔴 THE SAME DOCUMENT TWICE — FOUR FIELDS, NOT ONE ══════════════════════════════════
+{
+  const L = [line('1', 'Tree', 100, 100)];
+  // 🔴 THREE RENUMBERED RECORDS AGAINST A PAIR OF REAL ONES, AND THE ASYMMETRY IS DELIBERATE.
+  // A first draft used two of each: the real finding was 2 records and the renumbered group was
+  // also 2, so a rule that reported `repeatedNumberGroups * 2` gave the same answer as the correct
+  // one and mutant N12 survived. Any fixture where the two arithmetics agree is a fixture that
+  // asserts nothing about which one is running.
+  const invoices = [
+    // Same customer, same day, same lines, same total — DIFFERENT numbers. A real finding.
+    inv('a1', '5120', L, { txnDate: '2025-10-01', totalAmt: 100 }),
+    inv('a2', '5121', L, { txnDate: '2025-10-01', totalAmt: 100 }),
+    // SAME NUMBER, different totals — the renumbering. Must NOT be reported. THREE of them.
+    inv('b1', '4000', L, { txnDate: '2025-11-01', totalAmt: 100, customerId: 'c9' }),
+    inv('b2', '4000', [line('1', 'Tree', 250, 250)], { txnDate: '2025-11-02', totalAmt: 250, customerId: 'c9' }),
+    inv('b3', '4001', [line('1', 'Tree', 300, 300)], { txnDate: '2025-11-03', totalAmt: 300, customerId: 'c9' }),
+    inv('b4', '4001', [line('1', 'Tree', 400, 400)], { txnDate: '2025-11-04', totalAmt: 400, customerId: 'c9' }),
+    inv('b5', '4002', [line('1', 'Tree', 500, 500)], { txnDate: '2025-11-05', totalAmt: 500, customerId: 'c9' }),
+    inv('b6', '4002', [line('1', 'Tree', 600, 600)], { txnDate: '2025-11-06', totalAmt: 600, customerId: 'c9' }),
+  ];
+  const f = find(evaluateBooks({ invoices }), 'same-document-recorded-twice');
+  ok(f?.population.matched === 2,
+    '🔴 ONLY THE PAIR WHERE ALL FOUR AGREE IS REPORTED — customer, date, line items, total. The reused NUMBER is not a finding');
+  ok(f?.rows?.length === 2 && f.rows.every(r => /Invoice 512/.test(r.label)),
+    'and the rows carry the invoice NUMBER, which is what lets an owner find the record — and no customer, in any form (R-77)');
+  ok(/3 invoice numbers are used more than once/.test(f?.sentence ?? '')
+     && /not one of those pairs charges the same amount/.test(f?.sentence ?? ''),
+    '🔴 THE RETIRED QUESTION IS ANSWERED OUT LOUD RATHER THAN SILENTLY DROPPED. A reader shown "44 invoices share a number" last month would otherwise conclude we stopped looking — and WHY we stopped is the useful half');
+  ok(!f?.rows?.some(r => /4000/.test(r.label)),
+    'the renumbered pair reaches no row');
+
+  // a difference in ONE of the four is enough to say nothing
+  const oneOff = [inv('a1', '1', L, { txnDate: '2025-10-01', totalAmt: 100 }),
+                  inv('a2', '2', L, { txnDate: '2025-10-02', totalAmt: 100 })];
+  const g = find(evaluateBooks({ invoices: oneOff }), 'same-document-recorded-twice');
+  ok(g?.clean === true && /No two invoices/.test(g?.sentence ?? ''),
+    '🔴 A DIFFERENT DAY IS ENOUGH TO REPORT NOTHING — and reporting nothing is said out loud, because a clean result here is the finding that the old rule was noise');
+
+  // an invoice with no customer or no date cannot be compared, and says so
+  const partial = [inv('a1', '1', L, { customerId: null }), inv('a2', '2', L, { txnDate: null })];
+  const h = find(evaluateBooks({ invoices: partial }), 'same-document-recorded-twice');
+  ok(h?.measured === false,
+    'and when NOTHING is comparable the rule reports itself uncomputed rather than clean — "we could not look" is not "we found nothing"');
+}
+
+// ══ §S 🔴 A COLLECTION IS NOT A MISSING DELIVERY DATE ═════════════════════════════════════
+{
+  const carriage = { ...line('d', 'Delivery', 125, 125), itemAccountName: 'Delivery Income' };
+  const planted  = { ...line('t', 'Tree', 900, 900), installInDescription: true };
+  const bare     = line('t', 'Tree', 900, 900);
+  const invoices = [
+    inv('i1', '1', [bare],     { totalAmt: 900 }),   // collected, no date  → NOT a gap
+    inv('i2', '2', [carriage], { totalAmt: 125 }),   // delivered, no date  → the finding
+    inv('i3', '3', [planted],  { totalAmt: 900 }),   // planted,   no date  → the finding
+    inv('i4', '4', [carriage], { totalAmt: 125 }),   // delivered, HAS date
+  ];
+  const shipDates = new Map<string, string | null>([
+    ['i1', null], ['i2', null], ['i3', null], ['i4', '2026-01-02'],
+  ]);
+  const f = find(evaluateBooks({ invoices, shipDates }), 'dispatched-with-no-date');
+  ok(f?.population.matched === 2,
+    '🔴 ONLY THE TWO THAT LEFT THE YARD ARE THE FINDING. The old rule counted all three and told an owner that most of her history was broken when it was right');
+  ok(/is an order nobody delivered/.test(f?.sentence ?? '') && /\$900/.test(f?.sentence ?? ''),
+    'and the collections are named, with what they are worth, so "most of your history is fine" carries a figure');
+  ok(/no delivery charge, no planting/.test(f?.sentence ?? ''),
+    '🔴 THE PREDICATE IS IN THE SENTENCE. The whole finding is the separation; a reader who cannot see how the two were told apart has a number to trust rather than one to check');
+  ok(/That is at least/.test(f?.sentence ?? ''),
+    'and it declares the one direction it can be wrong in — a delivery made as a favour, nothing charged, reads here as a collection');
+  // ⚠️ A `|| true` ASSERTION STOOD HERE AND IS DELETED RATHER THAN REPAIRED. It read
+  //    `ok(x === false || true, …)` and could not fail under any input — §6 r19 in its purest
+  //    form, written by the same hand that was writing the rule it was meant to guard. The two
+  //    money figures ARE asserted, separately and by value, in the clauses above and below.
+
+  // 🔴 THE PLANTED LINE IS THE SECOND CLAUSE AND IT IS NOT REDUNDANT — these books weld the
+  // planting into the tree's price, so 909 planted lines carry no carriage line at all.
+  const plantedOnly = find(evaluateBooks({
+    invoices: [inv('i3', '3', [planted], { totalAmt: 900 })],
+    shipDates: new Map<string, string | null>([['i3', null]]),
+  }), 'dispatched-with-no-date');
+  ok(plantedOnly?.population.matched === 1,
+    '🔴 A PLANTED TREE LEFT THE YARD EVEN WITH NO DELIVERY CHARGE ON THE INVOICE. Reading only the carriage account would call every one of them a collection');
+
+  // an invoice the dispatch walk never covered is EXCLUDED, not counted as undated
+  const uncovered = find(evaluateBooks({
+    invoices: [inv('i1', '1', [carriage]), inv('i9', '9', [carriage])],
+    shipDates: new Map<string, string | null>([['i1', null]]),
+  }), 'dispatched-with-no-date');
+  ok(uncovered?.population.of === 1,
+    'an invoice outside the dispatch walk is not in the denominator — "we did not look" and "there is nothing there" are the two answers a reader cannot tell apart');
+}
+
+// ══ §T 🔴 THE 33 UNREADABLE SIZES ARE 15 ══════════════════════════════════════════════════
+//
+// A discount has no size. Neither does a trip charge or a refund. Reporting all of them together
+// makes the one number that proves this product works impossible to produce, because the count can
+// never fall to zero.
+{
+  const STOCK = 'Sales of Nursery Stock';
+  const items = [
+    // 🔴 EVERY NON-PRODUCT HERE CARRIES AN UNREADABLE SIZE TOO, AND THAT IS THE POINT OF THE
+    // FIXTURE. A first draft used rows whose sizes were simply absent, so the split "passed" while
+    // the product count was ZERO — a probe that never reached the thing it was written to defend
+    // (#182). `45 Grade` is the real shape: something size-SHAPED where a size sits.
+    item('p1', 'AP47',  { type: 'NonInventory', incomeAccount: STOCK, description: 'Afgan Black Pine, 45 Grade', unitPrice: 400 }),
+    item('p2', 'AP46',  { type: 'NonInventory', incomeAccount: STOCK, description: 'Afgan Black Pine, 45 Gallon', unitPrice: 400 }),
+    item('s1', 'TC',    { type: 'Service', incomeAccount: 'Delivery Income', description: 'Trip Charge, 2 Grade', unitPrice: 125 }),
+    item('d1', 'CD10%', { type: 'Service', incomeAccount: 'Discounts given', description: 'Contractor Discount, 10%', unitPrice: -0.1 }),
+    item('n1', 'Refund',{ type: 'Service', incomeAccount: 'Refund', description: 'Overpayment Refund, 3 Grade', unitPrice: 0 }),
+  ];
+  const f = find(evaluateBooks({ items }), 'sizes-we-could-not-read');
+  ok(f?.population.matched === 1,
+    '🔴 ONE PRODUCT IS REPORTED, OUT OF FOUR ROWS THAT ALL CARRY AN UNREADABLE SIZE. Without this the split could report zero and every other assertion here would still pass');
+  ok(f?.population.of === 2,
+    '🔴 THE DENOMINATOR IS THE PRODUCTS. A discount, a trip charge and a refund are not rows a size can be fixed on, and leaving them in means the count never reaches zero and the owner concludes the tool is broken');
+  ok(/not counted above/.test(f?.sentence ?? '') && /a discount has no size/.test(f?.sentence ?? ''),
+    '🔴 AND THE OTHERS ARE NAMED AS NOT-APPLICABLE WITH THE REASON, not silently dropped. A number that shrank with no explanation is a number nobody trusts');
+  ok(/There is nothing to fix on/.test(f?.sentence ?? ''),
+    'the sentence says outright that those rows need no work');
+}
+
+// ══ §U 🔴 TWO ROWS ON ONE SHELF — THE SAME RULE THE GRID MARKS WITH ═══════════════════════
+{
+  const items = [
+    item('1', 'Lacey Oak 45G',      { unitPrice: 375,  description: 'Lacey Oak, 45 Gallon' }),
+    item('2', 'Lacey Oak 45',       { unitPrice: 1250, description: 'Lacey Oak, 45 gallon' }),
+    item('3', 'Cedar Elm 15 Gallon',{ unitPrice: 200,  description: 'Cedar Elm, 15 Gallon' }),
+  ];
+  const f = find(evaluateBooks({ items }), 'products-that-share-a-shelf');
+  ok(f?.population.matched === 2,
+    '🔴 `45G` AND `45 gallon` ARE ONE SHELF. The parsed size, not the size text — a key over the raw string misses exactly the pairs that have a spelling difference AND a price gap, which is the combination that costs money');
+  ok(/\$875 apart/.test(f?.sentence ?? ''),
+    'and the widest price gap is named, because "$875" is a reason to look and "two duplicates" is not');
+  ok(f?.value === null,
+    '🔴 THE GAP IS NOT A MONEY-AT-STAKE FIGURE. It is the difference between two prices; rendering it as "$875 at stake" would put a number on the page that nobody lost');
+  const cleanItems = [item('1', 'Lacey Oak 45G', { unitPrice: 375, description: 'Lacey Oak, 45 Gallon' })];
+  ok(find(evaluateBooks({ items: cleanItems }), 'products-that-share-a-shelf')?.clean === true,
+    'and a catalogue with no collisions says so out loud');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);

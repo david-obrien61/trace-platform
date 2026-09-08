@@ -181,15 +181,21 @@ SCOPE: platform, vertical:cultivar
 BUILD: active
 ARC: ocr-doc-routing
 MAPS-TO: 3.5
-PIECES: capture_file_export, capture_file_replay, books_findings, first_look_report
-NEEDS: nothing — written as-built (#260). The acceptance run itself is owed: Lauren drives it on LAWNS live while David watches, and every question she asks him is a defect.
+PIECES: capture_file_export, capture_file_replay, books_findings, first_look_report, books_report_runs, customer_duplicate_mark
+NEEDS: nothing — written as-built (#260). The acceptance run itself is owed: Lauren drives it on LAWNS live while David watches, and every question she asks him is a defect. ⚠️ **TWO PIECES ADDED 2026-09-08 (#284) and one of them changes what the story PROMISES.** `books_report_runs` is the pair of append-only tables that let a SECOND run be compared with the first — *"33 sizes we could not read last month, 13 today"* — which is the only thing that turns this story from a demonstration into a product; the migration is **written and unapplied** (#227). `customer_duplicate_mark` is not an addition so much as a DEBT the story had been carrying silently: the report tells her to *"review your customers in Cultivar"*, and until this build that screen had no mark, no sort and no filter — **the paper sent her somewhere that could not help her** ([[R-116]]).
 
 Lauren connects her QuickBooks and the platform says *give me a few minutes with your accounting
 information*. It reads her products, her customers and her invoice history — counting first, and
 **refusing to present a partial list as a list**. Then it tells her, in her own words and with the
 denominator attached every time, what is in there: where there is money in it, what could cause
 trouble later, and what shape her business is. She presses **Visualize** and gets a report she can
-print and hand to her accountant, which asks her for nothing at all. Then she presses Ingest — and
+print and hand to her accountant, which asks her for nothing at all — **and which names not one of her
+customers.** Where a finding is about particular records, the paper says how many and sends her to the
+screen where they are marked and sorted to the top; a count in a document is analysis, and a list of
+her customers in the same document is a data export nobody asked for. **It also says what it CHECKED
+and found nothing wrong with**, as loudly as it says what it found — because a page that lists only
+problems teaches her to read every line as one, and because the next run's clean line is the whole
+proof that anything got better. Then she presses Ingest — and
 she can press it with **every finding unresolved**, because a finding that could stop her is a
 finding that makes her phone David at 4pm on a Friday.
 

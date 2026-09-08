@@ -63,6 +63,9 @@ import { buildInvoiceGrid, invoiceSearchText, type InvoiceGridRow, type InvoiceF
 import { readCaptureFile, REPLAY_SOURCE } from '../quickbooks/captureReplay';
 import { projectCapture } from '../quickbooks/captureProjection';
 import { buildBooksReport, renderBooksReportHtml, type WalkState } from '../quickbooks/booksReport';
+import { parseCustomerList } from '../quickbooks/customerList';
+import { planBooksRun, saveBooksRun } from '../quickbooks/booksRunStore';
+import { supabase } from '../supabase/client';
 
 // The bundle items are NAMED BY THE MODULE THAT COUNTS THEM. A second list typed into this
 // screen is a second representation of one fact (STD-011), and it is the copy that drifts — a
@@ -486,6 +489,10 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   // ⚠️ CORRECTIONS ARE PASSED AS AN EMPTY LIST BECAUSE NOTHING RECORDS THEM YET. The report
   // then STATES that it reflects no corrections, which is true and is the honest rendering —
   // the alternative, omitting the line, would read as "none were needed".
+  // 🔴 WHAT THE LAST RUN WAS RECORDED AS — or, honestly, that it was not. Null until Visualize
+  // has been pressed once, so the panel is silent about a save nobody has attempted.
+  const [runNote, setRunNote] = useState<{ ok: boolean; text: string } | null>(null);
+
   function visualize() {
     const walks: WalkState[] = QBO_ENTITIES.map(e => {
       const r = reads[e];
@@ -518,6 +525,36 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     }
     w.document.write(html);
     w.document.close();
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 RECORD THE RUN — AFTER THE REPORT IS ON SCREEN, AND IT CAN NEVER PREVENT IT.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // The whole reason the two tables exist is the DIFFERENCE between two runs: *"33 sizes we
+    // could not read last month, 13 today."* A review that remembers nothing can never produce
+    // that number, which is the one demonstration this product has.
+    //
+    // It runs LAST, after `w.document.write`, and its failure is reported rather than thrown —
+    // R-57's reasoning one step stronger: a bookkeeping row failing to write must not cost Lauren
+    // the document she pressed the button for.
+    //
+    // ⚠️ AND A REFUSAL IS SAID OUT LOUD. `books_report_runs` is created by a migration DAVID
+    // APPLIES BY HAND, so until he does, these inserts are refused by a table that does not exist
+    // — and through PostgREST that is zero rows with NO ERROR, which is indistinguishable from
+    // success unless somebody reads the count (tech-debt #216). `saveBooksRun` reads it.
+    const plan = planBooksRun(findings, walks);
+    void (async () => {
+      if (!businessId) { setRunNote({ ok: false, text: 'This run was not recorded — no business is selected.' }); return; }
+      const verdict = await saveBooksRun(supabase, businessId, plan);
+      console.log('[TRACE:QBO] books run recorded', {
+        saved: verdict.saved,
+        results: verdict.saved ? verdict.results : 0,
+        complete: plan.complete,
+        reason: verdict.saved ? null : verdict.reason,
+      });
+      setRunNote(verdict.saved
+        ? { ok: true, text: `This run was recorded — ${plan.results.length} checks saved. Read your books again after you fix something, and the two runs can be compared.` }
+        : { ok: false, text: verdict.reason });
+    })();
   }
 
   const btn: React.CSSProperties = {
@@ -553,10 +590,33 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     };
   })();
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE CUSTOMER RECORDS ARE PARSED HERE TOO, AND THE REASON IS ARITHMETIC RATHER THAN TASTE.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // The duplicate rule used to read the BREAKDOWN and take `max(byEmail, byPhone)`. A union cannot
+  // be computed from two counts: `max()` silently discards every record one axis found and the
+  // other did not, `sum()` double-counts the records both found, and the true figure is reachable
+  // from neither. So the rule needs the ROWS — the same conclusion the invoice parse above reached,
+  // for the same reason, and by the same route: the verbatim bodies are ALREADY in this component
+  // because it writes them to the operator's file, so parsing them costs no second read of a
+  // customer's book of customers and mints no `api/` function.
+  //
+  // ⚠️ THE ENDPOINT STILL DOES NOT SEND PARSED CUSTOMER RECORDS, AND THAT CONSTRAINT IS UNTOUCHED
+  // (R-23/R-24). What changed is that the browser, which already holds the raw response, now reads
+  // it — and what it renders is a handful of flagged names, capped twice, never a roster.
+  const customerRows = (() => {
+    const cust = reads.Customer;
+    if (!cust?.capture) return undefined;
+    const pages = (cust.capture as { pages?: { body?: string }[] }).pages ?? [];
+    const rows = pages.map(p => p.body ?? '').filter(Boolean).flatMap(raw => parseCustomerList(raw).customers);
+    return rows.length > 0 ? rows : undefined;
+  })();
+
   const findings: Finding[] = (() => {
     const input: BooksInput = {
       items:     reads.Item?.items,
       customers: reads.Customer?.breakdown as CustomerBreakdown | undefined,
+      customerRows,
       invoices:  parsed.invoices,
       discounts: (reads.Invoice?.breakdown as InvoiceBreakdown | undefined)?.discounts,
       shipDates: parsed.shipDates,
@@ -900,6 +960,20 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           fact — has anything been read — must not be asked two ways on one screen (STD-011), or
           the two answers drift and the page shows a report button over an absent review, or the
           reverse. */}
+      {/* 🔴 WHETHER THIS RUN WAS RECORDED, SAID PLAINLY, IN THE VERDICT'S OWN COLOUR.
+          It sits directly above the review because that is what the reader was just looking at,
+          and because a review that silently never accumulates a history looks exactly like one
+          that does — right up until the second run has nothing to compare against. */}
+      {runNote && (
+        <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 9,
+                      background: runNote.ok ? '#f0fdf4' : '#fef2f2',
+                      border: `1px solid ${runNote.ok ? GREEN : RED}` }}>
+          <p style={{ fontSize: '0.8125rem', color: runNote.ok ? GREEN : RED, margin: 0, lineHeight: 1.55 }}>
+            {runNote.text}
+          </p>
+        </div>
+      )}
+
       {Object.keys(reads).length > 0 && <BooksReview findings={findings} />}
 
       {state?.savedAs && (

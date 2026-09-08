@@ -67,6 +67,10 @@
         "G11": {
           "verdict": "dropped",
           "reason": "There are no columns, so there is no column order. Each vendor is a card and its one control (Open) sits at the end of the card, not in a track. ⚠️ RECORDED RATHER THAN GLOSSED: on 2026-09-07 David measured what this shape now costs — \"21 vendors runs to five printed pages where a grid would be twelve lines with search and sort\" — and named this one of the two surfaces where cards ACTIVELY cost her. That is the third weakening of this file's deviation (the first: E7 moved the note into the modal; the second: the 8-vendor population it was argued at is now 21). G11 is dropped because it cannot apply to a card, NOT because the card shape is still the right answer. The open question is the SHAPE, and it is on the G11 build's report to David, not settled here."
+        },
+        "G12": {
+          "verdict": "dropped",
+          "reason": "This surface computes no derived row mark at all — there is no `rowFlag`, no exception column and nothing to sort to the top, so the clause has nothing to bind to. It is DROPPED rather than owed because the mark G12 governs is a WORKLIST, and vendor identity has no exception a rule can derive: the one judgement on this screen — which vendor Terry prefers — is succession knowledge he types in, not a collision a key can find (`user_stories.md`, *Terry knows which vendor to buy from*). ⚠️ If a duplicate-vendor detector is ever built — and `vendorIdentity.ts` already resolves aliases, so the ingredients exist — this becomes `met` or `owed`, never a permanent drop. The G9 answer above stands unchanged: with no mark, G9 governs."
         }
       }
     },
@@ -155,6 +159,10 @@
         "G11": {
           "verdict": "met",
           "reason": "Vacuously, and it is worth saying which kind of vacuous. This table has NO per-row action track at all — the one write on the screen is a single page-level Commit button (E2's batch model, deliberate), so there is no actions column to place and nothing to get out of order. The identifier (variety + size) does lead the row. If a per-row control is ever added here, this answer becomes false and must be re-answered; the surface would at that point be better served by converging on <DataSheet>, which is where G1/G3/G4/G5 are already owed above."
+        },
+        "G12": {
+          "verdict": "dropped",
+          "reason": "The plan is not a worklist and carries no derived exception mark — no `rowFlag`, no 'needs a look' column, nothing computed that some rows fail and others pass. Every row on it is equally intended; what varies is the size and the date, which are DATA and are answered by G4/G9, not by a mark. ⚠️ The honest limit of this answer: it is a read of the code, not of a screen anyone has driven, and if the uppot plan ever surfaces a row the platform doubts — a lot with no space to move into, a size the ladder cannot place — that IS a derived mark and this clause binds immediately."
         }
       }
     },

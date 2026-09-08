@@ -25,7 +25,7 @@
 // INSTRUMENTATION (STD-003): `[TRACE:customers]` on load + every inline edit + insert.
 //               ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,8 @@ import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '.
 import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
+import { findDuplicateParties, DUP_AXES } from '@trace/shared/customers/duplicateParties';
+import { AlertTriangle } from 'lucide-react';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -266,6 +268,61 @@ export function Customers() {
   // now the TRUE value for a person with one name. `customerDisplayName` drops absent parts.
   const displayName = (r: CustomerRow) => customerDisplayName(r, '—');
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 DUPLICATE CUSTOMERS — MARKED, SORTED TO THE TOP, FILTERABLE. DERIVED, NEVER STORED.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // This is the DEPENDENCY that ships with David's names-on-paper ruling (2026-09-08). The printed
+  // books report deliberately carries no customer names — it says *"we identified X potential
+  // duplicates — review your customers in Cultivar"* — and until this existed, that sentence sent
+  // Lauren to a screen that could not answer the question. A pointer to a surface that cannot help
+  // is worse than no pointer at all.
+  //
+  // 🔴 THE SAME RULE THE BOOKS REVIEW USES, IMPORTED AND NOT RE-KEYED (§6 r8). That is R-101's
+  // whole lesson, paid for once already: the catalogue import found eleven collisions and the
+  // inventory grid showed none of them, for a fortnight, because two files implemented one
+  // operation. A duplicate here and a duplicate there must be the same word.
+  //
+  // 🔴 DERIVED AT READ TIME (R-101 clause ③). Merge two records or correct an email and the mark
+  // clears itself on the next load; a stored flag stays red until somebody re-runs something. It
+  // also means a duplicate typed by hand is flagged identically to one an import created.
+  //
+  // ⚠️ IT MARKS AND IT NEVER MERGES. *"It never merges two firms on its own, because a duplicate is
+  // fixable and a wrong merge is not"* (`user_stories.md`). Every control here is read-only.
+  const dupGroups = useMemo(
+    () => findDuplicateParties(customers.map(c => ({
+      id: c.id,
+      label: displayName(c),
+      email: c.email,
+      phone: c.phone,
+      // The NAME axis reads the same string the roster prints, so what she sees flagged and what
+      // was compared are the same thing — an organisation compared on `organization_name` and
+      // displayed as one cannot disagree with itself.
+      name: displayName(c),
+    }))),
+    [customers],
+  );
+  const dupByRow = useMemo(() => {
+    const m = new Map<string, { size: number; axes: string }>();
+    for (const g of dupGroups) {
+      const axes = g.axes.map(a => DUP_AXES[a]).join(' and ');
+      for (const mem of g.members) m.set(mem.id, { size: g.members.length, axes });
+    }
+    if (dupGroups.length > 0) {
+      // Both nouns, named. The banner counts ROWS and a trace that counted GROUPS made the two
+      // contradict each other on /inventory — a number that disagrees with its own trace is how
+      // the next session misdiagnoses this.
+      console.log('[TRACE:customers] possible duplicates', {
+        groups: dupGroups.length, rows: m.size,
+        byAxis: dupGroups.reduce<Record<string, number>>((acc, g) => {
+          for (const a of g.axes) acc[a] = (acc[a] ?? 0) + 1;
+          return acc;
+        }, {}),
+      });
+    }
+    return m;
+  }, [dupGroups]);
+  const isDuplicate = (r: CustomerRow) => dupByRow.has(r.id);
+
   // 🔴 THE SEARCH READS THE SAME LIST THE RECORD DECLARES (`searchText` on <DataSheet> below).
   // It WAS a hand-written eight-field array inline in that prop, and it omitted `organization_name`
   // — the field `displayName` above RENDERS for an organization — so an org customer printed its own
@@ -283,6 +340,25 @@ export function Customers() {
           {displayName(r) || '—'}
         </button>
       ) },
+    /* 🔴 "Needs a look" — the same mark, in the same place, as `/inventory` (R-101 · G11: it sits
+       AFTER the identifier, because it is data and not a gutter, and because putting it BEFORE the
+       name would break the contiguous leading frozen run and silently unpin the identifier).
+       `sortVal` is the GROUP SIZE so the biggest merge decision leads. The cell says WHICH axis
+       matched, because "email" and "same name" call for different levels of caution — §5 clause 4:
+       the header carries the shared fact, the cell carries what distinguishes THIS row.
+       ⚠️ READ-ONLY MARK, not a control (E7 · G8): a plain span, no handler, no pointer cursor. */
+    { key: 'dup', header: 'Needs a look', sortable: true,
+      sortVal: (r: CustomerRow) => dupByRow.get(r.id)?.size ?? 0,
+      render: (r: CustomerRow) => {
+        const d = dupByRow.get(r.id);
+        if (!d) return null;
+        return (
+          <span title={`This record shares ${d.axes} with ${d.size - 1} other ${d.size === 2 ? 'record' : 'records'}. Check whether they are the same customer before you merge anything in QuickBooks.`}
+                style={{ fontSize: 12, color: '#8a6d1f' }}>
+            possible duplicate
+          </span>
+        );
+      } },
     { key: 'customer_type', header: 'Type', sortable: true, sortVal: r => (r.customer_type ?? 'person'),
       render: r => <span style={sourceStyle}>{r.customer_type === 'organization' ? 'Organization' : 'Person'}</span> },
     { key: 'price_tier', header: 'Tier', sortable: true, sortVal: r => (r.price_tier ?? '').toLowerCase(),
@@ -333,7 +409,37 @@ export function Customers() {
         searchText={customerSearchHaystack}
         searchPlaceholder="Search name, phone, email, city…"
         statusFilter={{ label: 'sources', options: ['qr-scan', 'ocr-invoice', 'manual'], get: r => r.source ?? '' }}
-        defaultSortKey="created_at"
+        /* The filter the report's sentence promises: "marked and sorted to the top". Without a way
+           to see ONLY them, a duplicate on row 900 of 1,953 is marked and unreachable. */
+        extraFilter={{ label: 'duplicates', options: ['possible duplicate'], get: r => (isDuplicate(r) ? 'possible duplicate' : 'no duplicate') }}
+        rowFlag={r => isDuplicate(r)}
+        /* 🔴 THE BANNER DESCRIBES THE ROWS ON SCREEN, and says separately how many are outside the
+           current filter. Counting flagged rows over the WHOLE table and printing that above a
+           narrowed view is the defect fixed on /inventory: the number was true and the place was a
+           lie. It counts ROWS throughout — the noun the flag marks and the noun the trace reports. */
+        flagBanner={(inView, elsewhere) => (
+          <>
+            <AlertTriangle size={15} />
+            {inView > 0 ? (
+              <>
+                {inView} {inView === 1 ? 'record' : 'records'} here may be the same customer entered
+                more than once — matched on a shared email, a shared phone number, or the same name.
+                {' '}<b>Check before you merge.</b> Fix them in QuickBooks and read your books again;
+                nothing on this screen merges anything.
+                {elsewhere > 0 && <> {elsewhere} more {elsewhere === 1 ? 'is' : 'are'} outside this filter.</>}
+              </>
+            ) : (
+              <>
+                {elsewhere} flagged {elsewhere === 1 ? 'record' : 'records'} <b>elsewhere</b> in your
+                customer list may be duplicates — nothing on this screen is affected. Clear the
+                search or the filters to see {elsewhere === 1 ? 'it' : 'them'}.
+              </>
+            )}
+          </>
+        )}
+        /* Biggest cluster first (R-66's shape): the merge with the most records behind it is the
+           one worth opening. Clean rows sort below every flagged one, then the grid is hers. */
+        defaultSortKey="dup"
         defaultSortDir="desc"
         itemNoun="customers"
         totalRows={customerTotal}

@@ -149,5 +149,114 @@ const body = (rows: unknown[]) => JSON.stringify({ QueryResponse: { Customer: ro
   ok(previewCustomers(many)[0].id === '1', 'the preview is the FIRST rows, in the order the books returned them — not a sample somebody has to reason about');
 }
 
+// ══ §F 🔴 THE NEW FIELDS — READ FROM INTUIT'S OWN NESTING, AND THE PROSE ONE DROPPED ══════
+{
+  const r = parseCustomerList(body([{
+    Id: '9', DisplayName: 'Terry', GivenName: 'Terry', FamilyName: null,
+    CompanyName: null, Taxable: false, TaxExemptionReasonId: '5', ResaleNum: 'TX-1234',
+    CustomerTypeRef: { value: '3', name: 'Contractor' },
+    Notes: 'Gate code 4417. Dog in the yard. Ring before 8am.',
+    BillAddr: { Line1: '400 Honeycomb Mesa', City: 'Leander', PostalCode: '78641' },
+  }]));
+  const c = r.customers[0];
+  ok(c.givenName === 'Terry' && c.familyName === null,
+    '🔴 A GIVEN NAME AND NO FAMILY NAME IS A REAL STATE, READ AS ITSELF. `DisplayName` collapses a person, a company and a bookkeeping row into one string, so "how many of these are people" cannot be asked of it');
+  ok(c.addressLine1 === '400 Honeycomb Mesa' && c.postalCode === '78641',
+    'the line and the postcode are separate, because routing needs one and distance pricing needs the other');
+  ok(c.taxable === false && c.taxExemptionReason === '5' && c.resaleNum === 'TX-1234',
+    'the three tax facts are three fields — what the invoice does, why somebody switched it off, and the only one an auditor accepts');
+  ok(c.customerType === 'Contractor', 'the customer type is read by NAME where Intuit gives one');
+  ok(c.hasNotes === true,
+    'the note is detected…');
+  ok(!JSON.stringify(c).includes('Gate code') && !JSON.stringify(c).includes('Dog'),
+    '🔴 …AND THE PROSE NEVER REACHES THE ROW. `Notes` is free text somebody typed about a real person\'s property — read once, tested, DROPPED, the same treatment `discountInDescription` gets on an invoice line');
+
+  const bare = parseCustomerList(body([{ Id: '10', DisplayName: 'X' }])).customers[0];
+  ok(bare.taxable === null,
+    '🔴 AN ABSENT `Taxable` IS NULL, NOT FALSE. The field is missing on records that predate its use, and "we do not know" is not "this customer is exempt" (D-9 / A9)');
+  ok(bare.hasNotes === false && bare.postalCode === null && bare.customerType === null,
+    'and every other new field is absent rather than fabricated');
+
+  // 🔴 THE ADDRESS PARTS DO NOT FALL THROUGH FIELD BY FIELD.
+  const split = parseCustomerList(body([{
+    Id: '11', DisplayName: 'Y',
+    BillAddr: { Line1: '1 Bill St' },
+    ShipAddr: { Line1: '2 Ship Rd', PostalCode: '78702' },
+  }]))?.customers[0];
+  ok(split.addressLine1 === '1 Bill St' && split.postalCode === null,
+    '🔴 A BILLING LINE AND A SHIPPING POSTCODE ARE NOT ONE ADDRESS. Reaching into ShipAddr for the missing half would report a place that does not exist — the address block is chosen once, exactly as `addressOf` chooses it');
+  const shipOnly = parseCustomerList(body([{ Id: '12', DisplayName: 'Z', ShipAddr: { Line1: '2 Ship Rd', PostalCode: '78702' } }])).customers[0];
+  ok(shipOnly.addressLine1 === '2 Ship Rd' && shipOnly.postalCode === '78702',
+    '…and with no BillAddr at all, ShipAddr is read whole');
+}
+
+// ══ §G 🔴 THE CENSUS — CAPABILITIES, AND THE TWO COUNTS THAT MUST NOT MERGE ═══════════════
+{
+  const rows = parseCustomerList(body([
+    { Id: '1', DisplayName: 'Both',      PrimaryEmailAddr: { Address: 'a@x.com' }, PrimaryPhone: { FreeFormNumber: '5551110000' }, BillAddr: { Line1: '1 A St', PostalCode: '78641' } },
+    { Id: '2', DisplayName: 'EmailOnly', PrimaryEmailAddr: { Address: 'b@x.com' }, BillAddr: { Line1: '2 B St' } },
+    { Id: '3', DisplayName: 'PhoneOnly', PrimaryPhone: { FreeFormNumber: '5552220000' } },
+    { Id: '4', DisplayName: 'Neither',   BillAddr: { Line1: '4 D St', PostalCode: '78641' } },
+    { Id: '5', DisplayName: 'Nothing' },
+  ])).customers;
+  const b = summariseCustomers(rows);
+  const r = b.census.reach;
+  ok(r.withBoth === 1 && r.emailOnly === 1 && r.phoneOnly === 1 && r.withNeither === 2,
+    'the four contact states partition the list');
+  ok(r.withEither === 3 && r.withEither + r.withNeither === b.total,
+    '🔴 EITHER AND NEITHER ADD UP TO THE WHOLE LIST. That is the pair the finding leads with — "1,828 of your customers can be reached" — and if they do not sum, the headline is a number nobody can check');
+  ok(r.withEither === b.withEmail + b.withPhone - r.withBoth,
+    'and the union is consistent with the two single-axis counts, which OVERLAP and must never simply be added');
+  ok(b.withNoContactAtAll === 1 && r.withNeither === 2,
+    '🔴 `withNoContactAtAll` (1) AND `reach.withNeither` (2) DISAGREE ON PURPOSE. The first needs no email, no phone AND no address; the second is about being CONTACTABLE and ignores the address. Two different questions — naming them the same thing is how one silently becomes the answer to the other');
+  ok(r.withAddressLine1 === 3 && r.withPostalCode === 2 && r.addressWithoutPostalCode === 1 && r.withoutAddress === 2,
+    'and the address rungs are separate: somewhere to drive to, and something to measure from');
+  ok(r.withAddressLine1 + r.withoutAddress === b.total,
+    'those two also partition the list, so neither can drift without the other showing it');
+}
+
+// ══ §H 🔴 THE NAME SHAPES — A CUSTOMER LIST IS NOT A LIST OF PEOPLE ═══════════════════════
+{
+  const rows = parseCustomerList(body([
+    { Id: '1', DisplayName: 'Terry',            GivenName: 'Terry' },
+    { Id: '2', DisplayName: 'Lauren Bishop',    GivenName: 'Lauren', FamilyName: 'Bishop' },
+    { Id: '3', DisplayName: 'Turnstile Ranch',  CompanyName: 'Turnstile Ranch' },
+    { Id: '4', DisplayName: 'KBB Tree Farm',    CompanyName: 'KBB Tree Farm', GivenName: 'KBB Tree Farm' },
+    { Id: '5', DisplayName: 'Deposit' },
+  ])).customers;
+  const n = summariseCustomers(rows).census.names;
+  ok(n.givenNameOnly === 2,
+    '🔴 A GIVEN NAME AND NO FAMILY NAME — a mononym, or half a name somebody meant to finish. Two here, including the row whose company name was typed into the person field');
+  ok(n.pureOrganisations === 1, 'a company name and no person parts at all is an organisation, unambiguously');
+  ok(n.companyEqualsGivenName === 1,
+    'and a record whose CompanyName EQUALS its GivenName is the company typed into the person field — a different shape from an organisation, and it needs a different fix');
+  ok(n.noNameAtAll === 1,
+    '🔴 `Deposit` HAS NO NAME AT ALL — no given, no family, no company. It is a bookkeeping row sitting in a list of people, and counting it as a customer is how a customer count stops meaning anything');
+
+  // 🔴 THE FOUR OVERLAP AND ARE NOT A PARTITION — ASSERTED ON ONE RECORD, NOT BY A SUM.
+  // A sum over the fixture above happens to equal five, which is the row count, and an assertion
+  // resting on that coincidence would have said the opposite of the truth while passing.
+  const oneRow = summariseCustomers(parseCustomerList(body([
+    { Id: '1', DisplayName: 'KBB Tree Farm', GivenName: 'KBB Tree Farm', CompanyName: 'KBB Tree Farm' },
+  ])).customers).census.names;
+  ok(oneRow.givenNameOnly === 1 && oneRow.companyEqualsGivenName === 1,
+    '\u26a0\ufe0f ONE RECORD LANDS IN TWO BUCKETS. Each count answers its own question over the whole list; forcing them into one partition would mean deciding which shape a record really is, which is an inference about somebody else\'s records (R-50)');
+}
+
+// ══ §J 🔴 THE PAPERWORK COUNTS ════════════════════════════════════════════════════════════
+{
+  const rows = parseCustomerList(body([
+    { Id: '1', DisplayName: 'A', Taxable: false, TaxExemptionReasonId: '5', ResaleNum: 'TX-1' },
+    { Id: '2', DisplayName: 'B', Taxable: false, TaxExemptionReasonId: '5' },
+    { Id: '3', DisplayName: 'C', Taxable: true },
+    { Id: '4', DisplayName: 'D' },
+  ])).customers;
+  const pw = summariseCustomers(rows).census.paperwork;
+  ok(pw.nonTaxable === 2 && pw.withExemptionReason === 2 && pw.withResaleNumber === 1,
+    '🔴 TWO EXEMPT, TWO WITH A REASON, ONE WITH EVIDENCE. The gap between the second and the third is the finding — a reason is a note somebody typed, a resale number is a document');
+  ok(pw.nonTaxable === 2,
+    'and the record with no `Taxable` field at all is NOT counted as exempt — absent is not false');
+}
+
 console.log(`\ncustomerList: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }

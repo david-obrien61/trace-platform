@@ -630,3 +630,251 @@ are on the OAuth path — and every read payload carries `stored: false`. That i
 code, not a measurement of the database, and this card is the difference.
 
 ---
+
+### CARD 19 — 🔴 THE PRINTED REPORT NAMES NOT ONE CUSTOMER
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · David's names-on-paper ruling (2026-09-08)
+SIGNAL: the duplicate-customer finding's line on the PDF ends with *"the records themselves are on your Customers screen in Cultivar"* and no name follows it.
+
+**As the OWNER**, read your QuickBooks (all three walks), press **Visualize**, and read the printed
+report from top to bottom — including the *"What we checked, and found nothing wrong with"*
+section. Then use your browser's find (Ctrl-F / Cmd-F) and search for a customer name you know is a
+duplicate.
+
+- **PASS:** the report says how many records look like duplicates, says the records are on the
+  Customers screen, and says what to do — *fix them in QuickBooks and read your books again*.
+  **Ctrl-F finds no customer name anywhere on the page.**
+- 🔴 **FAIL:** any customer name appears, in any section — an example, a list, a "such as". This is
+  a document that gets emailed to an accountant; a list of that customer's customers inside it is a
+  data export nobody asked for.
+- 🔴 **FAIL:** the report gives the count and does NOT say where to go. A number with no next step
+  is a task handed over with the instructions missing.
+
+⚠️ **THE SCREEN IS THE OPPOSITE AND THAT IS DELIBERATE** — see CARD 20. If both the screen and the
+paper are bare, the ruling has been half-applied and the finding is unusable.
+
+---
+
+### CARD 20 — 🔴 AND THE SCREEN THE REPORT SENDS HER TO CAN ACTUALLY ANSWER IT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · `ui-control-standards.md` G12
+SIGNAL: `[TRACE:customers] possible duplicates` in the console with `groups` and `rows`, and an amber banner above the grid.
+
+**As the OWNER**, open **/customers**. Do not sort or filter anything first.
+
+- **PASS:** an amber banner at the top says how many records may be the same customer entered more
+  than once, and the flagged rows are **already at the top of the grid** — you did not have to
+  sort. A *"Needs a look"* column reads **possible duplicate** on each one, and hovering it says
+  which axis matched (a shared email, a shared phone number, or the same name).
+- **PASS:** the **duplicates** filter shows only those records, and clearing it brings the rest back.
+- 🔴 **FAIL:** the mark is there but the flagged rows are NOT at the top. On 1,953 customers a mark
+  on row 900 is a mark nobody will ever reach, and the printed report has just promised she would
+  find them.
+- 🔴 **FAIL:** anything on this screen offers to merge them. It marks; it never merges. A duplicate
+  is fixable and a wrong merge is not.
+- ⚠️ **EXPECTED, NOT A FAIL:** `Nicholas` and `Nicolas` are NOT flagged as each other. The name axis
+  is exact — a one-letter difference is a different name — and widening it is David's decision, not
+  a default. **If you want those found, say so; it is a ruling, not a bug.**
+
+---
+
+### CARD 21 — 🔴 THE DUPLICATE COUNT IS THE UNION, AND IT IS BIGGER THAN IT WAS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284
+SIGNAL: the review panel's duplicate finding shows records grouped, each group naming its axis.
+
+**As the OWNER**, read your books and look at the duplicate-customer line on the **review panel**
+(the screen, not the report).
+
+- **PASS:** it reports a count, and beneath it a handful of grouped records — each group on one line
+  with the axis that matched it. It says the full list is on the Customers screen.
+- 🔴 **FAIL:** the count equals either the shared-email count or the shared-phone count exactly.
+  That is `max()`, the arithmetic this build replaced: it discards every record the other axis
+  found. **The union must be larger than either.**
+- 🔴 **FAIL:** more than a dozen or so groups are painted here. This panel shows a handful and
+  points at the grid; a screen that paints 1,900 people is a screen somebody screenshots.
+
+---
+
+### CARD 22 — 🔴 A CLEAN RESULT IS AS LOUD AS A FAULT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · property ⑤
+SIGNAL: a green-bordered section headed *"What we checked, and found nothing wrong with"*.
+
+**As the OWNER**, read all three walks and look at the bottom of the review panel, then at the
+printed report.
+
+- **PASS:** there is a section headed **"What we checked, and found nothing wrong with"**, in green,
+  ABOVE *"What we could not work out"*, and each row in it carries a POPULATION — *"checked 1,480
+  invoices we could compare"*.
+- 🔴 **FAIL:** clean results are missing entirely. A review that shows only problems teaches you to
+  read every line as a problem — and *"no two invoices record the same job twice"* is a real result
+  over your whole history.
+- 🔴 **FAIL:** a clean row appears among the faults, or in grey. Grey on this panel means *we did
+  not look*, which is the opposite of what this section says.
+- 🔴 **FAIL:** a clean row prints *"What this switches off:"*. Nothing is switched off by a finding
+  that found nothing.
+
+---
+
+### CARD 23 — 🔴 THE 33 UNREADABLE SIZES READ AS 15, AND THE OTHER 18 ARE NAMED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · fix A
+SIGNAL: the *sizes we could not read* finding names products, then names the non-products separately.
+
+**As the OWNER**, read your products & services and find the size finding on the review panel.
+
+- **PASS:** it reports a number of **products** whose size could not be read, out of the product
+  count — and then says separately that a further N rows also carry no readable size, naming how
+  many are services, discounts and bookkeeping, and says outright **there is nothing to fix on
+  them**.
+- 🔴 **FAIL:** one undifferentiated number (33). A discount has no size and neither does a trip
+  charge; asking you to fix eighteen rows that are already correct means the count can never reach
+  zero, and the next run cannot show an improvement.
+- ⚠️ **NOT A FAIL:** the catalogue IMPORT screen still says 33. It is answering a different question
+  over a different population — every row it is about to create — and both numbers are honest.
+  Neither should be edited to match the other.
+
+---
+
+### CARD 24 — 🔴 EVERY FIGURE SAYS WHAT PERIOD IT COVERS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · property ③
+SIGNAL: *"Measured over your invoice history, YYYY-MM-DD to YYYY-MM-DD"* under a finding.
+
+**As the OWNER**, read your invoice history and look at any finding computed from it, on the panel
+and on the report.
+
+- **PASS:** a line beneath it names the period, and the dates are the FIRST and LAST transaction
+  dates in your own invoices — not today, and not the day you pressed the button.
+- **PASS:** the *customers with no purchase* finding says **"in the period we read"** and explicitly
+  says that is not the same as never having bought.
+- 🔴 **FAIL:** any finding says a customer **never** bought. Your books before the period we read
+  were not read, and that claim covers years nobody measured.
+- 🔴 **FAIL:** a customer-only finding (duplicates, contact reach) carries a period. A duplicate is a
+  duplicate whatever the dates say; a period on it implies the finding expires.
+
+---
+
+### CARD 25 — 🔴 CONTACT DATA READS AS A CAPABILITY, NOT A FAULT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · property ④
+SIGNAL: the reach finding's first clause is a count of customers who CAN be reached.
+
+**As the OWNER**, read your customers and find the contact and address findings on the panel.
+
+- **PASS:** the first thing the contact finding says is **how many of your customers can be
+  reached**, then how many by email and how many by phone, then — last — how many have neither and
+  what that switches off. The words *"What this switches off: Campaigns · Review requests"* appear,
+  naming the capabilities and never the fault.
+- **PASS:** the address finding is SEPARATE, and distinguishes a street address (what a delivery
+  route needs) from an address with a postcode (what pricing by distance needs).
+- 🔴 **FAIL:** the finding leads with the unreachable count. Same numbers, opposite meaning — and
+  your contact data is good, so the page should say so first.
+
+---
+
+### CARD 26 — 🔴 THE WARRANTY GIVEAWAYS ARE COUNTED AND NOT PRICED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · fix C
+SIGNAL: the giveaway finding names how many ways the same decision is written down.
+
+**As the OWNER**, read your items and your invoice history, and find the giveaway finding.
+
+- **PASS:** it says how many lines were charged nothing, on how many invoices, over what period, and
+  **how many different ways they are recorded** — and then says that because there is no single way,
+  no report you or your accountant can run will ever add them up.
+- **PASS:** it either states a figure **at what those items cost you**, saying so in those words, or
+  it says it cannot tell you and names how many lines have no recorded cost.
+- 🔴 **FAIL:** a figure appears that is the RETAIL value of those trees. That overstates what the
+  warranty costs by your whole markup, and it is the overstatement Lauren caught once already.
+- **PASS:** if any line is recorded in a way we could not read at all, the finding says so and asks
+  whether there is another way you write these down. **If you know of one, that is the answer we
+  want** — it is not a defect in the report.
+
+---
+
+### CARD 27 — 🔴 REPEATED INVOICE NUMBERS ARE NO LONGER A FINDING
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · fix B
+SIGNAL: the same-document finding names the four fields it compares.
+
+**As the OWNER**, read your invoice history and look under *"Worth checking"*.
+
+- **PASS:** there is no finding saying *"44 invoices share an invoice number"*. What there is
+  instead names the customer, the day, the items and the total, and reports only where **all four**
+  agree — which on your books should be about **one pair**, not forty-four invoices.
+- **PASS:** the same sentence still mentions the repeated numbers and says why they are not counted:
+  a number reused on two invoices is how a renumbering looks.
+- 🔴 **FAIL:** the old count is back. Your bookkeeper created those numbers deliberately, and
+  reporting them as a risk is an accusation about work that was done correctly.
+
+---
+
+### CARD 28 — 🔴 COLLECTIONS ARE NOT MISSING DELIVERY DATES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · fix to the dispatch rule
+SIGNAL: the dispatch finding splits the undated invoices into two groups and prices both.
+
+**As the OWNER**, read your invoice history and find the delivery-date finding.
+
+- **PASS:** it says how many invoices record no date for going out, then splits them: the ones
+  **nobody delivered** — no delivery charge, no planting — which are a correct record, with what
+  they are worth; and the ones that **did** go out and do not say when, which is the actual finding.
+- **PASS:** it says **"That is at least"** and explains the one way it can be wrong: a delivery made
+  as a favour with nothing charged reads here as a collection.
+- 🔴 **FAIL:** one number covering all of them. On your books that reports the majority of your
+  history as broken when it is right, and it is the fastest way to stop believing the rest of the
+  page.
+
+---
+
+### CARD 29 — 🔴 A SECOND RUN IS RECORDED, AND THAT IS THE WHOLE POINT
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #284 · ruling ③
+🔧 **NEEDS SETUP — the migration must be applied first, and it needs a database console to verify.**
+**Marked `needs-test` for those two reasons and no other.**
+
+🔴 **THIS CARD CANNOT PASS UNTIL `20260908_books_report_runs.sql` HAS BEEN APPLIED.** Nothing in the
+build that wrote it touched the live database: `SUPABASE_SERVICE_KEY` was empty, so **not one
+statement in that file has been run and not one of its VERIFY queries has been executed.** Until it
+is applied, the honest expected result of the first half below is the RED note.
+
+**What to do, in order:**
+1. Apply the migration in the Supabase **SQL editor** (never the table editor — §6 r17), then run
+   its V1–V6 verify block.
+2. Read your books and press **Visualize**.
+   - **PASS:** a green line appears saying *"This run was recorded — N checks saved."*
+   - 🔴 **BEFORE THE MIGRATION, EXPECT RED:** *"The report was produced, but this run was not
+     recorded…"* — and the report itself must still open and be complete. **A refused save must
+     never cost you the document.**
+3. Fix something in QuickBooks, read your books again, press Visualize again.
+4. Run the migration's **V7** query.
+   - **PASS:** two rows for the same rule, with the same version, and the `matched` count has
+     changed. **That is 33 → 13, and it is the one number that proves this product does anything.**
+   - 🔴 **FAIL:** one row, or two rows whose `rule_version` differs. A rule whose definition changed
+     between the runs cannot be compared across them, which is exactly why both are stored.
+
+---

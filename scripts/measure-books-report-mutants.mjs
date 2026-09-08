@@ -46,8 +46,8 @@ const MUTANTS = [
     from: '    input.walks.filter(w => w.read && w.queriedAt).map(w => (w.queriedAt as string).slice(0, 10)),',
     to:   '    input.walks.filter(w => w.read && w.queriedAt).map(w => (w.queriedAt as string)),' },
   { id: 'R4', why: '🔴 a count loses its denominator — "9" alone reads as a verdict rather than a proportion',
-    from: '    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p></li>`;',
-    to:   '    <p class="p">${f.population.matched.toLocaleString()} ${esc(f.population.noun)}</p></li>`;' },
+    from: '    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>',
+    to:   '    <p class="p">${f.population.matched.toLocaleString()} ${esc(f.population.noun)}</p>' },
   { id: 'R5', why: '🔴 escaping is removed — an item name with a bracket breaks the document they are about to hand someone',
     from: "  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')",
     to:   "  return s; return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')" },
@@ -82,8 +82,8 @@ const MUTANTS = [
   // exact line that printed "$32,934 owed" directly above "CONFIRMED — $30,736" in a document
   // handed to a customer.
   { id: 'R12', why: '🔴 THE DRIFT LINE RETURNS TO THE CUSTOMER DOCUMENT — two numbers for one fact, disagreeing, on the page Terry is handed',
-    from: "    <p class=\"p\">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p></li>`;",
-    to:   "    <p class=\"p\">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>${f.remeasured ? `<p class=\"p\">Re-measured 3 September 2026: ${esc(f.remeasured)}</p>` : ''}</li>`;" },
+    from: "    ${windowLine(f)}${blocksLine(f)}${elsewhere}</li>`;",
+    to:   "    ${windowLine(f)}${blocksLine(f)}${elsewhere}${f.remeasured ? `<p class=\"p\">Re-measured 3 September 2026: ${esc(f.remeasured)}</p>` : ''}</li>`;" },
   { id: 'R13', why: '🔴 the working notes return on the could-not-work-out page — "41 is not derivable from any of the three reads" is us talking to ourselves',
     from: "     <ul class=\"f\">${r.notComputed.map(f => `<li><p class=\"s\">${esc(f.notMeasured ?? '')}</p></li>`).join('')}</ul>`;",
     to:   "     <ul class=\"f\">${r.notComputed.map(f => `<li><p class=\"s\">${esc(f.notMeasured ?? '')}</p>${f.remeasured ? `<p class=\"p\">Re-measured 3 September 2026: ${esc(f.remeasured)}</p>` : ''}</li>`).join('')}</ul>`;" },
@@ -94,6 +94,36 @@ const MUTANTS = [
     from: "    : { kind: 'span', earliest: dates[0], latest: dates[dates.length - 1] };",
     to:   "    : { kind: 'one', date: dates[dates.length - 1] };" },
 
+
+  // ── 2026-09-08: THE NAMES-ON-PAPER RULING, AND THE CLEAN SECTION. Every mutant here makes the
+  //    document either MORE revealing than David ruled or LESS honest about what it checked.
+  { id: 'R16', why: '🔴 A CUSTOMER NAME REACHES THE PRINTED PAGE — the one thing David ruled the PDF must never carry, arriving through an "examples" line that reads perfectly reasonably',
+    from: '    ${windowLine(f)}${blocksLine(f)}${elsewhere}</li>`;',
+    to:   '    ${windowLine(f)}${blocksLine(f)}${elsewhere}<p class="p">${(f.rows ?? []).map(r => esc(r.label)).join(", ")}</p></li>`;' },
+  { id: 'R17', why: '🔴 the pointer to the Customers screen is dropped, so the paper says "4 potential duplicates" and never says where to look or what to do',
+    from: "  const elsewhere = f.rowsTotal > 0 ? `<p class=\"p\">${esc(REVIEW_ELSEWHERE)}</p>` : '';",
+    to:   "  const elsewhere = '';" },
+  { id: 'R18', why: '🔴 the pointer prints on EVERY finding, including the ones with no records to look at — a document sending a reader to a screen for a count of income accounts',
+    from: '  const elsewhere = f.rowsTotal > 0 ?',
+    to:   '  const elsewhere = true ?' },
+  { id: 'R19', why: '🔴 CLEAN FINDINGS ARE FILTERED OUT — a review that shows only problems, where "no two invoices record the same job twice" is invisible and the second run has nothing to be better than',
+    from: '    clean: measured.filter(f => f.clean),',
+    to:   '    clean: [],' },
+  { id: 'R20', why: '🔴 clean findings are mixed in among the faults, so an owner reads an earned result as one more thing wrong with her books',
+    from: '    measured: measured.filter(f => !f.clean),',
+    to:   '    measured,' },
+  { id: 'R21', why: '🔴 the clean section drops its POPULATION — "nothing found" over 1,480 records and over three become the same sentence, and only the denominator ever told them apart',
+    from: '    <p class="p">checked ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>',
+    to:   '    <p class="p">nothing found</p>' },
+  { id: 'R22', why: '🔴 the WINDOW stops printing, so every figure reads as covering the whole of the business\'s history rather than the span that was actually read',
+    from: '  return `<p class="p">Measured over ${esc(f.window.of)}, ${esc(f.window.from)} to ${esc(f.window.to)}</p>`;',
+    to:   "  return '';" },
+  { id: 'R23', why: '🔴 the blocked capabilities print unconditionally, so a finding that blocks nothing prints an empty "What this switches off:" line',
+    from: '  if (f.blocks.length === 0) return \'\';',
+    to:   '  if (false) return \'\';' },
+  { id: 'R24', why: '🔴 a row LABEL escapes through the clean renderer instead of the fault one — the same leak, one function over, which is exactly how a rule enforced in one place gets around it',
+    from: '  return `<li><p class="s">${esc(f.sentence)}</p>\n    <p class="p">checked',
+    to:   '  return `<li><p class="s">${esc(f.sentence)}${(f.rows ?? []).map(r => esc(r.label)).join(", ")}</p>\n    <p class="p">checked' },
 ];
 
 const original = readFileSync(TARGET, 'utf8');

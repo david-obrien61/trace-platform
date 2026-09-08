@@ -7,6 +7,7 @@
 //               shared with the /discounts review) · ../quickbooks/invoiceList (BUNDLE_ITEM_NAMES).
 //               PURE — no client, no fetch, no React. Every probe runs it without a network.
 // OUTPUTS:      buildServiceReview · buildServiceRows · classifyDestination · readPriceEvidence
+//               · isCarriageAccount (the carriage-account axis, shared with the books review)
 //               · readUnitEvidence · buildPlacementLadder · SERVICE_REFUSALS · the thresholds.
 //
 // Run: node scripts/run-tests.mjs serviceReview
@@ -156,6 +157,20 @@ const ACCOUNT_STOCK = /nursery\s+stock|plant\s+sales/i;
 const ACCOUNT_GOODS = /product\s+income|merchandise/i;
 /** An account name that books money as carriage. */
 const ACCOUNT_DELIVERY = /delivery|freight|shipping/i;
+
+/**
+ * Does this account name book money as CARRIAGE? Exported 2026-09-08 so the books review can ask
+ * *"did anything actually leave the yard on this invoice"* without a second copy of the vocabulary.
+ *
+ * 🔴 IT IS THE ACCOUNT, NEVER THE ITEM NAME, AND THAT DISTINCTION IS R-112. An item's NAME is the
+ * shorthand an office types (`TC`, `DF`, `BPJ30REP`); its INCOME ACCOUNT is the owner's own word
+ * for what the money is. Guessing which item means "delivery" from its name is the
+ * retro-classification R-50 forbids — and it is precisely why `trip-charge-missing` refuses to
+ * compute rather than inferring a rate from five delivery-shaped names.
+ */
+export function isCarriageAccount(accountName: string | null | undefined): boolean {
+  return typeof accountName === 'string' && ACCOUNT_DELIVERY.test(accountName);
+}
 /** An account name that books money as work done. */
 const ACCOUNT_LABOUR = /install|landscap|labor|labour|service/i;
 

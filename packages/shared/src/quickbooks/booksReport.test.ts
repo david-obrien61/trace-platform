@@ -22,7 +22,7 @@
  *     --bundle --platform=node --format=cjs | node
  */
 import { buildBooksReport, renderBooksReportHtml, REPORT_TITLE,
-         type WalkState, type ReportInput } from './booksReport';
+         CLEAN_HEADING, type WalkState, type ReportInput } from './booksReport';
 import type { Finding } from './booksFindings';
 
 let passed = 0, failed = 0;
@@ -42,7 +42,10 @@ const finding = (o: Partial<Finding> = {}): Finding => ({
   // The drift record the REPORT must never print. It stays on `Finding` because the SCREEN
   // still shows it — the audience changed, not the data.
   remeasured: 'CONFIRMED — $30,736 across 14 invoices. 41 is not derivable from any of the three reads.',
-  recommendation: null, needsAnswer: null, ...o,
+  recommendation: null, needsAnswer: null,
+  // The five properties, 2026-09-08. A fixture that omits them is a fixture that cannot provoke
+  // the renderer reading them, which is #182's shape — a probe that never reaches its target.
+  version: 1, rows: null, rowsTotal: 0, window: null, blocks: [], clean: false, ...o,
 });
 
 const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
@@ -289,6 +292,100 @@ const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
     '🔴 NEGATIVE CONTROL — a walk that never RAN contributes no date, even carrying one: a read that did not happen did not happen on a day');
 }
 
+
+// ══ §G 🔴 THE PDF CARRIES NO CUSTOMER NAMES — DAVID'S RULING, ENFORCED HERE AND NOT IN PROSE ══
+//
+// `Finding` now carries the RECORDS behind a count, because a union of three duplicate axes cannot
+// be computed from tallies. Every one of those rows is a real person's name. The screen shows them;
+// the document an accountant keeps does not, and the only thing that can hold that line as the
+// renderer grows is a probe that fails when a name reaches the page.
+{
+  const NAMES = ['Rebeca Cedillos', 'Rebecca Cedillos', 'Turnstile Ranch', 'Turnstyle Ranch'];
+  const withRows = finding({
+    id: 'customers-entered-more-than-once', tier: 'risk', shape: 'reused-unique-value', value: null,
+    sentence: '4 customer records look like the same person or company entered more than once.',
+    population: { matched: 4, of: 1953, noun: 'customer records' },
+    rows: NAMES.map((label, i) => ({ id: `c${i}`, label, group: 'g1', note: 'a shared email address' })),
+    rowsTotal: 4,
+  });
+  const html = renderBooksReportHtml(build({ findings: [withRows] }));
+
+  for (const name of NAMES) {
+    ok(!html.includes(name),
+      `🔴 "${name}" DOES NOT REACH THE PAGE. The finding carries it, the screen renders it, and the document a customer emails to their accountant must not — a list of their customers in that document is a data export nobody asked for`);
+  }
+  ok(!html.includes('c0') || !html.includes('"c0"'),
+    'and neither does the record id — an identifier is not a name and is still their data');
+  ok(html.includes('4 of 1,953'),
+    '🔴 THE COUNT DOES REACH IT. Withholding the rows is not withholding the finding: "we identified 4 potential duplicates" is exactly what the ruling says the paper carries');
+  ok(html.includes('Customers screen in Cultivar'),
+    '🔴 AND IT NAMES WHERE TO GO. A document that says "review your customers" and stops has handed somebody a task with no next step');
+  ok(/fix them in QuickBooks and read your books again/.test(html),
+    'including what to do when she gets there, which is the reason the finding exists at all');
+
+  // NEGATIVE CONTROL — the probe must be able to FAIL. A finding with NO rows must not print the
+  // pointer, or the assertion above would pass on a renderer that printed it unconditionally.
+  const noRows = renderBooksReportHtml(build({ findings: [finding()] }));
+  ok(!noRows.includes('Customers screen in Cultivar'),
+    'a finding with no records to look at does not send the reader anywhere — the pointer is conditional, so the assertion above is a real one');
+
+  // 🔴 THE SAME RULE THROUGH THE OTHER RENDERER, AND MUTANT R24 IS WHY IT IS HERE.
+  // The clean section has its own renderer, and a leak added there passed every assertion above —
+  // which is exactly how a rule enforced in ONE place gets around itself. A clean finding does not
+  // carry rows today (matched 0 means no groups), so this is a REACHABLE-BUT-UNREACHED state: the
+  // moment a future rule reports clean while carrying context rows, the ruling must still hold.
+  const cleanWithRows = renderBooksReportHtml(build({ findings: [finding({
+    clean: true, value: null,
+    sentence: 'No two of your customer records share an email address, a phone number or a name.',
+    population: { matched: 0, of: 1953, noun: 'customer records' },
+    rows: [{ id: 'c1', label: 'Turnstile Ranch', group: 'g1', note: 'a shared email address' }],
+    rowsTotal: 1,
+  })] }));
+  ok(!cleanWithRows.includes('Turnstile Ranch'),
+    '🔴 AND NO NAME REACHES THE PAGE THROUGH THE CLEAN SECTION EITHER. The rule is "no customer name on the paper", not "no customer name in one function" — and a second renderer is where the first one\'s rule quietly stops applying');
+}
+
+// ══ §H 🔴 A CLEAN RESULT IS RENDERED AS LOUDLY AS A FAULT ══════════════════════════════════
+{
+  const clean = finding({
+    id: 'same-document-recorded-twice', tier: 'risk', clean: true, value: null,
+    sentence: 'No two invoices record the same customer, the same day, the same items AND the same total.',
+    population: { matched: 0, of: 1480, noun: 'invoices we could compare' },
+  });
+  const r = build({ findings: [finding(), clean] });
+  ok(r.clean.length === 1 && r.measured.length === 1,
+    '🔴 CLEAN AND NOT-CLEAN ARE SPLIT, NOT FILTERED. Both halves reach the page; a clean finding dropped here is indistinguishable from a rule nobody ever wrote');
+  const html = renderBooksReportHtml(r);
+  ok(html.includes(CLEAN_HEADING),
+    'the clean section has its own heading, phrased as a result — "what we checked and found nothing wrong with", never "nothing to report"');
+  ok(html.includes('checked 1,480 invoices we could compare'),
+    '🔴 AND THE POPULATION IS THE POINT. "Nothing found" over 1,480 records is a different statement from "nothing found" over three, and only the denominator tells them apart');
+  ok(html.indexOf(CLEAN_HEADING) < html.indexOf('What we could not work out')
+     || !html.includes('What we could not work out'),
+    'the clean results sit ABOVE what could not be worked out — a result is a result, and "we could not check" is not one');
+
+  // the clean finding is NOT in the fault tiers
+  const faultSection = html.slice(html.indexOf('Where there is money in this'), html.indexOf(CLEAN_HEADING));
+  ok(!faultSection.includes('No two invoices record the same'),
+    'and it does not also appear among the faults, which would say the same thing twice with opposite meanings');
+}
+
+// ══ §J 🔴 THE WINDOW AND THE BLOCKED CAPABILITIES ══════════════════════════════════════════
+{
+  const windowed = finding({
+    window: { from: '2025-04-30', to: '2026-09-03', of: 'your invoice history' },
+    blocks: ['Campaigns', 'Review requests'],
+  });
+  const html = renderBooksReportHtml(build({ findings: [windowed] }));
+  ok(html.includes('Measured over your invoice history, 2025-04-30 to 2026-09-03'),
+    '🔴 THE PERIOD IS PRINTED BESIDE THE FINDING, and it is NOT the read date. The page already says when the books were read; this says what span of trading the figure covers, and a reader will otherwise assume they are one fact');
+  ok(html.includes('What this switches off: Campaigns · Review requests'),
+    '🔴 CAPABILITY NAMES, NEVER FAULT DESCRIPTIONS. "Campaigns", not "125 customers have no contact details" — the sentence already says what is true, this says what she cannot do until it changes');
+
+  const bare = renderBooksReportHtml(build({ findings: [finding()] }));
+  ok(!bare.includes('Measured over') && !bare.includes('What this switches off'),
+    'a finding with no window and nothing blocked prints neither line — so both assertions above are real rather than matching boilerplate');
+}
 
 console.log(`\n  booksReport — ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

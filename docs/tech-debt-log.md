@@ -1085,3 +1085,129 @@ DIFFERENT screen, made from inside a services build, and it deserves its own own
 
 **TRIGGER:** before `/discounts` is run on any tenant whose config carries `pricingTiers`. Check
 first: `select config ? 'pricingTiers', config ? 'discountTypes' from business_pricing_config;`
+
+---
+
+## #223 — 🟡 FOUR OF THE 685 QUOTED FIGURES IN THIS BUILD ARE **[STATED]** AND NOT ONE OF THEM WAS RE-MEASURED (NEW 2026-09-08)
+
+**`SUPABASE_SERVICE_KEY` IS EMPTY IN BOTH ENV FILES — #183's blocker, third recurrence in five
+days** (#283 flagged it as (e), and so did the pass before it). So every figure this build reasons
+about — **72 duplicate records · 69 given-name-only · 639 collections worth $722,526 · 249 genuinely
+undated · 49 giveaway lines across 29 invoices · 15 unreadable product sizes · 27/27/9 tax
+paperwork · 34 customer types · 9 notes · 853 of 1,953** — is a PRIOR SESSION'S measurement against
+a capture file that does not live in this repository.
+
+🔴 **THE CODE DOES NOT HARDCODE ANY OF THEM, AND THAT IS THE ONLY REASON THIS IS AMBER RATHER THAN
+RED.** Every one is computed from the walk at runtime; the numbers appear in the corpus solely as
+`quoted` / `remeasured` provenance strings, which is what that pair of fields exists for. The rules
+were proven against synthetic fixtures that provoke each shape, and 109 mutants prove the fixtures
+can disagree. **What is NOT proven is that LAWNS's real books produce the figures above** — and
+`#283` recorded the identical hazard one day earlier, where running against her real books found
+six defects that 77 green fixtures did not.
+
+**FIX:** re-run the review against the 2026-09-03 capture through the file door and compare every
+`[STATED]` figure with what the screen prints. That needs no service key — it needs the capture
+file, which is on David's machine and outside version control by construction (R-23 clause c).
+
+**TRIGGER:** before any of these figures is quoted to Terry or Lauren as a fact.
+
+---
+
+## #224 — 🟡 FOUR OF THE SIX DUPLICATE PAIRS DAVID FOUND BY EYE ARE INVISIBLE TO THE NAME AXIS, AND WIDENING IT IS A RULING NOBODY HAS MADE (NEW 2026-09-08)
+
+✏️ **AND IT CORRECTS A PROMPT PREMISE.** The build prompt said *"They need name-similarity.
+`personNamesMatch` finds 6 pairs that axis misses."* **`personNamesMatch` is EXACT token-set
+equality, not similarity** — it elides apostrophes, ignores order and drops middle initials, then
+compares the sets. So of the six examples named:
+
+| pair | found by the name axis? | why |
+|---|---|---|
+| `Spannaus` ×2 · `Sarah Wilson` ×2 | ✅ yes | identical token sets, and no shared email or phone — invisible to the other two axes, which is the point |
+| `Nicholas` / `Nicolas` Servin | ❌ no | one letter — a different token |
+| `Zach` / `Zack` Mcgrath | ❌ no | same |
+| `Rebeca` / `Rebecca` Cedillos | ❌ no | same |
+| `Turnstile` / `Turnstyle` | ❌ no | same |
+
+**The two claims in the prompt are both true and are about different things:** six pairs are
+invisible to email/phone, and the name axis finds *some* of them. Which ones is what this row
+records, so nobody reads "name-similarity" and assumes fuzzy matching shipped.
+
+🔴 **NO FUZZY MATCHER WAS ADDED, DELIBERATELY, AND THE REASON IS ASYMMETRIC.** Edit distance would
+find all four — and would also merge `Sarah Wilson` with `Sara Wilson`, who may be two people.
+*"It never merges two firms on its own, because a duplicate is fixable and a wrong merge is not"*
+(`user_stories.md`). Widening the identity rule that D-47 was built for — after email-alone matching
+cross-billed nine real invoices (tech-debt #53) — is **David's ruling, not a helper's default**.
+
+**WHAT IS BUILT INSTEAD:** the limit is declared in `duplicateParties.ts`'s header, asserted as
+BEHAVIOUR in `duplicateParties.test.ts` §B (a 13-pair table, every one of the four near-misses
+asserted NOT matched), stated on owner-test CARD 20 as *expected, not a fail*, and each group
+reports the axis that found it — so a reader can see the name axis is exact and ask for more.
+
+**THE QUESTION FOR DAVID:** should a near-name pair be SURFACED as a weaker, separately-labelled
+class — *"these two names are one letter apart"* — that is never auto-merged and never counted in
+the duplicate total? That keeps the identity rule where it is and still shows him the four.
+
+**TRIGGER:** David answers, or the first customer merge tool is built.
+
+---
+
+## #225 — 🟡 `booksFindings.ts` IS NOW 1,350 LINES AND THE CONTEXT-BUDGET RULE SAYS FLAG IT (NEW 2026-09-08)
+
+CLAUDE.md's context-budget check flags any working file over ~800 lines. `booksFindings.ts` was 873
+before this build and is now **~1,350** — twenty-three rules in one array.
+
+🔴 **THE MEASUREMENT WAS KEPT OUT OF IT, WHICH IS WHY THIS IS AMBER AND NOT RED.** Six new pure
+modules carry the arithmetic (`duplicateParties` · `giveawayLines` · `sameDocument` ·
+`catalogueCensus` · `dispatchCensus` · `booksRunStore`); what is in this file is one rule per
+finding — the sentence, the population and the declaration. Splitting it further has a real cost
+that is worth naming: **the rule list is the one place a reader can see the whole review in order**,
+and money → risk → tidiness is a property of that order. Two rule files would make "what does this
+review actually ask" a question you answer by opening two things.
+
+**FIX (proposed, not taken):** keep ONE `BOOKS_RULES` array and move each rule's `run` body to its
+census module, so the array becomes a manifest. That is a mechanical change over twenty-three rules
+and it is not the kind of thing to do inside the build that added nine of them.
+
+**TRIGGER:** the next build that adds a rule, or the first session that reports auto-compaction
+while reading it.
+
+---
+
+## #226 — 🟡 THE MUTANT HARNESS HAS DUPLICATE IDS — `M19`, `M20` AND `M21` EACH APPEAR TWICE (NEW 2026-09-08)
+
+`scripts/measure-books-findings-mutants.mjs` declares `M19` at two sites (the wording rule, and the
+withdrawn price-card rule coming back to life), `M20` at two (the markup formula, and the shortfall
+multiplied by quantity), and `M21` beside `M21b`.
+
+⚠️ **NOT A FALSE GREEN, AND THE DISTINCTION IS THE WHOLE ENTRY.** `MUTANTS.length` counts every
+element, so the summary arithmetic is right and no mutant is skipped — the failure mode is purely
+that a SURVIVED line names an id that matches two different defects, and the reader fixes the wrong
+one. Found while adding twenty mutants to the same file; **not renumbered in this pass**, because
+renumbering ids other sessions may have cited in a close-out is the same class of breakage §6 r18
+records (a rule inserted at 16 silently broke a live citation of *"§6 r17"*).
+
+**FIX:** append-only ids, and a one-line assertion at the top of every measure script that the id
+set is unique — cheap, and it would have caught this the day it happened.
+
+**TRIGGER:** the next edit to that file.
+
+---
+
+## #227 — 🟡 `20260908_books_report_runs.sql` IS WRITTEN AND NOT APPLIED, SO THE COMPARISON THAT JUSTIFIES IT HAS NEVER RUN (NEW 2026-09-08)
+
+The two tables that make *"33 last month, 13 today"* possible exist as a FILE. **Not one statement
+in it has been run, and not one of its seven VERIFY queries has been executed** — this build could
+not reach the live database (#223).
+
+⚠️ **THE FAILURE IS SILENT BY DEFAULT AND THAT IS WHY IT IS BUILT THE WAY IT IS.** Through PostgREST,
+inserting into a table that does not exist returns **zero rows with `error: null`** — the same shape
+as an RLS refusal (tech-debt #216), and indistinguishable from success unless somebody reads the
+count. `saveBooksRun` reads it and the screen says *"The report was produced, but this run was not
+recorded"* in red. **So the honest expected state today is that red line**, and owner-test CARD 29
+says so in those words rather than presenting a pass nobody can reach yet.
+
+**FIX:** David applies it in the SQL editor (never the table editor — §6 r17), runs V1–V6, then runs
+the review twice and runs V7.
+
+**TRIGGER:** before CARD 29 can pass, and before the first time anyone claims the review remembers
+anything.

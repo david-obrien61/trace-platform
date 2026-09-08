@@ -32,10 +32,27 @@
 //   The quoted figure is never edited: overwriting it would erase the drift and leave a
 //   corrected number nobody could tell had ever been wrong.
 //
-// ⚠️ NOTHING HERE NAMES A PERSON. The findings carry counts and nouns only — `evaluateBooks`
-//   receives parsed invoice rows that have no customer NAME on them at all (invoiceList.ts
-//   drops the field structurally) and a customer BREAKDOWN rather than customer records. R-24
-//   clause (b) holds by construction, not by care.
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔴 THIS PANEL NAMES PEOPLE, AND THE PRINTED REPORT DOES NOT. THAT SPLIT IS THE RULING.
+// ══════════════════════════════════════════════════════════════════════════════
+//   It used to be true that nothing here named a person, because the duplicate rule read a
+//   BREAKDOWN. It now reads the RECORDS — a union across three axes cannot be computed from two
+//   counts — so a handful of names appear on this screen, deliberately.
+//
+//   David, 2026-09-08: *"THE PDF CARRIES NO CUSTOMER NAMES… The SCREEN carries the rows."* A count
+//   in a document that gets emailed to an accountant is analysis; a list of that customer's
+//   customers in the same document is a data export nobody asked for. On a screen the owner is
+//   already looking at, in her own account, the names are the only thing that makes the finding
+//   actionable.
+//
+//   ⚠️ AND IT IS STILL A HANDFUL, NEVER A ROSTER. `FINDING_ROW_LIMIT` caps what reaches the
+//   finding at all, and this panel shows fewer still, then points at `/customers` — where the same
+//   duplicates are marked, sorted to the top and filterable. A screen that paints 1,900 people is
+//   a screen somebody screenshots (`customerList.ts` rule ①).
+//
+//   ⚠️ THE INVOICE HALF IS UNCHANGED AND STILL HOLDS BY CONSTRUCTION: `QboInvoiceRow` has no
+//   customer NAME field at all, so no invoice-side finding can name a person even if a future rule
+//   tried (R-24 clause b).
 // ─────────────────────────────────────────────────────────────────────────────
 import type { Finding, FindingTier, Recommendation } from '../quickbooks/booksFindings';
 
@@ -92,9 +109,88 @@ function RecommendationBlock({ r }: { r: Recommendation }) {
   );
 }
 
+/**
+ * 🔴 THE PERIOD THE FINDING IS A FACT ABOUT — computed from the walk, never typed.
+ * It is NOT the date the books were read. Every figure covers a span of trading, and a reader who
+ * is not told the span will assume the figure covers everything.
+ */
+function WindowLine({ f }: { f: Finding }) {
+  if (f.window === null) return null;
+  return (
+    <p style={{ fontSize: '0.75rem', color: GRAY, margin: '4px 0 0' }}>
+      Measured over {f.window.of}, {f.window.from} to {f.window.to}
+    </p>
+  );
+}
+
+/** What this finding switches off. CAPABILITY NAMES, never fault descriptions. */
+function BlocksLine({ f }: { f: Finding }) {
+  if (f.blocks.length === 0) return null;
+  return (
+    <p style={{ fontSize: '0.75rem', color: AMBER, margin: '4px 0 0', fontStyle: 'italic' }}>
+      What this switches off: {f.blocks.join(' · ')}
+    </p>
+  );
+}
+
+/**
+ * How many rows this panel will paint before it stops and points at the grid.
+ *
+ * ⚠️ IT IS NOT `FINDING_ROW_LIMIT`. That cap governs what travels on the finding at all; this one
+ * governs what a REVIEW PANEL paints, and the review panel is not the place to work through two
+ * hundred merge decisions. Two different limits with two different jobs, both named.
+ */
+const ROWS_SHOWN_HERE = 12;
+
+/**
+ * 🔴 THE RECORDS BEHIND A COUNT, GROUPED — AND GROUPED IS THE POINT.
+ *
+ * An owner deciding whether to merge needs the whole cluster in front of her. Showing A+B and
+ * separately B+C asks her to make one decision twice with half the evidence each time, and the
+ * second time against a record the first decision may already have removed.
+ */
+function FindingRows({ f }: { f: Finding }) {
+  if (!f.rows || f.rows.length === 0) return null;
+  const groups: { key: string; rows: NonNullable<Finding['rows']> }[] = [];
+  for (const r of f.rows) {
+    const key = r.group ?? r.id;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.rows.push(r);
+    else groups.push({ key, rows: [r] });
+  }
+  const shown = groups.slice(0, ROWS_SHOWN_HERE);
+  const hiddenGroups = groups.length - shown.length;
+  return (
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
+      {shown.map(g => (
+        <p key={g.key} style={{ fontSize: '0.8125rem', color: DARK, margin: '0 0 4px', lineHeight: 1.5 }}>
+          {g.rows.map(r => r.label).join('  ·  ')}
+          {g.rows[0].note && <span style={{ color: GRAY }}> — {g.rows[0].note}</span>}
+        </p>
+      ))}
+      {/* 🔴 WHAT IS NOT SHOWN SAYS SO. A truncated list presented as a whole one is the invoice-grid
+          defect — a reader concluding "that is all of them" — arriving on a different screen. */}
+      {(hiddenGroups > 0 || f.rowsTotal > f.rows.length) && (
+        <p style={{ fontSize: '0.75rem', color: GRAY, margin: '4px 0 0', lineHeight: 1.5 }}>
+          {hiddenGroups > 0 && <>and {hiddenGroups.toLocaleString()} more {hiddenGroups === 1 ? 'set' : 'sets'} not shown here. </>}
+          {f.rowsTotal > f.rows.length && <>({f.rowsTotal.toLocaleString()} records matched in total.) </>}
+          The full list is on your <strong>Customers</strong> screen, marked and sorted to the top.
+        </p>
+      )}
+      {hiddenGroups === 0 && f.rowsTotal <= f.rows.length && (
+        <p style={{ fontSize: '0.75rem', color: GRAY, margin: '4px 0 0', lineHeight: 1.5 }}>
+          These are marked on your <strong>Customers</strong> screen too, sorted to the top.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function BooksReview({ findings }: { findings: Finding[] }) {
   if (findings.length === 0) return null;
   const measuredCount = findings.filter(f => f.measured).length;
+  // 🔴 CLEAN IS SPLIT OUT OF THE TIERS, NOT FILTERED AWAY. See the section at the foot.
+  const cleanRows = findings.filter(f => f.clean);
 
   return (
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
@@ -114,7 +210,10 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
         // section below rather than trailing each tier in grey, because it is not a weaker
         // finding about her money — it is the list of questions her books cannot answer, and
         // that is where the next conversation starts.
-        const rows = findings.filter(f => f.tier === tier && f.measured);
+        // 🔴 AND NOT `clean`. A finding that ran and found nothing is a RESULT, and mixing it in
+        // among the faults means an owner reads "no duplicate invoices" as one more thing wrong
+        // with her books. It gets its own section, below, in its own colour.
+        const rows = findings.filter(f => f.tier === tier && f.measured && !f.clean);
         if (rows.length === 0) return null;
         return (
           <div key={tier} style={{ marginBottom: 14 }}>
@@ -159,6 +258,9 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
                         {money(f.value)} at stake
                       </p>
                     )}
+                    <WindowLine f={f} />
+                    <BlocksLine f={f} />
+                    <FindingRows f={f} />
                     {f.recommendation && <RecommendationBlock r={f.recommendation} />}
                     {f.needsAnswer && (
                       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
@@ -198,6 +300,39 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
           </div>
         );
       })}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          🔴 WHAT WE CHECKED AND FOUND NOTHING WRONG WITH — AS LOUD AS THE FAULTS.
+          ══════════════════════════════════════════════════════════════════════
+          A review that shows only problems teaches its reader that every line is a problem, and
+          then "no two invoices record the same job twice" — a real, checked, earned result over
+          1,480 records — is invisible. It is also the only thing that makes a SECOND run mean
+          anything: a finding that fired last month and is clean today is the product working.
+          Green, not grey: grey is what this panel uses for "we did not look". */}
+      {cleanRows.length > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+          <p style={{ fontSize: '0.8125rem', color: GREEN, fontWeight: 700, margin: '0 0 2px' }}>
+            What we checked, and found nothing wrong with
+          </p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 8px', lineHeight: 1.5 }}>
+            Each of these was checked against every record we read. They are here because if any of
+            them ever stops being clean, you will want to have seen it here first.
+          </p>
+          {cleanRows.map(f => (
+            <div key={f.id} style={{ padding: '10px 12px', borderRadius: 9, marginBottom: 8,
+                                     background: '#f0fdf4', border: `1px solid ${GREEN}` }}>
+              <p style={{ fontSize: '0.8125rem', color: DARK, margin: 0, lineHeight: 1.55 }}>{f.sentence}</p>
+              {/* 🔴 THE POPULATION IS THE POINT ON A CLEAN ROW. "Nothing found" over 1,480 records
+                  and "nothing found" over three are different statements, and only the denominator
+                  tells them apart. */}
+              <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0' }}>
+                checked <strong style={{ color: DARK }}>{f.population.of.toLocaleString()}</strong> {f.population.noun}
+              </p>
+              <WindowLine f={f} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           🔴 WHAT WE COULD NOT WORK OUT — AND IT IS DELIBERATELY LAST AND PRESENT.

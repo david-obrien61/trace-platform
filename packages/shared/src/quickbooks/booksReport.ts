@@ -6,7 +6,7 @@
 // DEPENDENCIES: ./booksFindings (Finding · FindingTier · Recommendation) · ./qboRead (QboEntity).
 //   Pure: no db, no network, no env, no DOM, and no clock it was not handed.
 // OUTPUTS: WalkState · ReportCorrection · ReportInput · BooksReport · buildBooksReport ·
-//   renderBooksReportHtml.
+//   renderBooksReportHtml · CLEAN_HEADING · REVIEW_ELSEWHERE.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 THE HTML IS A PURE STRING FUNCTION, AND THAT IS THE WHOLE REASON THIS FILE EXISTS.
@@ -27,6 +27,35 @@
 // ⚠️ NO CUSTOMER NAMES, EVER. Findings carry counts and populations; the one place a person's
 // name could reach paper is an "example", so there are none. Who the seven customers were
 // belongs on a screen, not in a document that gets emailed to an accountant.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 RE-RULED AND TIGHTENED 2026-09-08, BECAUSE `Finding` NOW CARRIES THE ROWS.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// The duplicate-customer rule returns the RECORDS — it has to, because a union cannot be computed
+// from two counts — and every one of those rows carries a real person's name. David's ruling:
+// *"THE PDF CARRIES NO CUSTOMER NAMES. It says: 'We identified X potential duplicates — review
+// your customers in Cultivar to see whether they are truly duplicates, and if so fix them in
+// QuickBooks and reimport.' The SCREEN carries the rows."*
+//
+// So `renderBooksReportHtml` **never reads `Finding.rows`**, and there is a probe that fails if a
+// row label ever reaches the HTML — including through a sentence, a limits clause or a
+// recommendation. The rule is enforced by a test rather than by this paragraph, because a
+// paragraph does not survive the next person adding an "examples" section for good reasons.
+//
+// ⚠️ THE DEPENDENCY THAT SHIPS WITH THE RULING: the report tells its reader to go and look at the
+// customer screen, so **that screen must be able to answer the question** — the duplicates are
+// marked, sorted to the top and filterable on `/customers` (derived, never stored), exactly as the
+// catalogue collisions are on `/inventory`. Without it the paper sends Lauren somewhere that
+// cannot help her, which is worse than not sending her at all.
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 A CLEAN RESULT IS RENDERED AS LOUDLY AS A FAULT, IN ITS OWN SECTION, WITH ITS OWN HEADING.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// A review that shows only problems teaches its reader that every line is a problem — and then
+// *"no two invoices record the same job twice"*, which is a real, checked, earned result over
+// 1,480 records, is invisible. It is also the only thing that makes a SECOND run mean anything: a
+// finding that fired last month and is clean today is the product working, and it cannot be seen
+// at all if clean findings are filtered out of the page.
 //
 // ⚠️ AND IT ESCAPES. Item names come from the customer's own catalogue, and a catalogue is free
 // text — an item called `3" Caliper <B&B>` would otherwise silently break the document or, on
@@ -97,8 +126,16 @@ export interface BooksReport {
   /** Present and honest even when empty — see ② in the header. */
   corrections: ReportCorrection[];
   walks: WalkState[];
-  /** Measured, already ordered by the engine: money → risk → tidiness, by money at stake. */
+  /**
+   * Measured AND not clean — the findings that found something. Ordered by the engine: money →
+   * risk → tidiness, by money at stake.
+   */
   measured: Finding[];
+  /**
+   * 🔴 MEASURED AND CLEAN — ran, looked, found nothing. Its own list, so it can be rendered as
+   * loudly as the faults instead of being mixed in among them or quietly dropped. See the header.
+   */
+  clean: Finding[];
   /** Every finding carrying a computed four-part recommendation. */
   recommendations: { finding: Finding; recommendation: Recommendation }[];
   /** 🔴 The most valuable page: what the business itself cannot answer today. */
@@ -139,7 +176,10 @@ export function buildBooksReport(input: ReportInput): BooksReport {
     readOn,
     corrections: input.corrections,
     walks: input.walks,
-    measured,
+    measured: measured.filter(f => !f.clean),
+    // 🔴 SPLIT, NOT FILTERED. Both halves reach the page; only their headings differ. A clean
+    // finding dropped here would be indistinguishable from a rule that was never written.
+    clean: measured.filter(f => f.clean),
     recommendations: measured
       .filter(f => f.recommendation !== null)
       .map(f => ({ finding: f, recommendation: f.recommendation as Recommendation })),
@@ -192,10 +232,61 @@ function walkLine(w: WalkState): string {
 // 1,936. HER BOOKS GREW. That is time passing, not drift — which is the other half of why a
 // report carrying both numbers misleads rather than informs.
 
+/**
+ * 🔴 THE HEADING FOR THE CLEAN SECTION, AND IT IS PHRASED AS A RESULT RATHER THAN AS AN ABSENCE.
+ * *"Nothing to report"* reads as a page that ran out of things to say. *"What we checked and
+ * found nothing wrong with"* reads as work done — which it is, over every record they have.
+ */
+export const CLEAN_HEADING = 'What we checked, and found nothing wrong with';
+
+/**
+ * 🔴 THE ONE SENTENCE THAT REPLACES A LIST OF PEOPLE (David's ruling, 2026-09-08).
+ *
+ * A finding that carries rows says HOW MANY on paper and sends the reader to the screen. It names
+ * the screen, and it names what to do there — *"fix them in QuickBooks and reimport"* — because a
+ * document that says *"review your customers"* and stops has handed somebody a task with no next
+ * step, and the next step is the whole reason the finding exists.
+ */
+export const REVIEW_ELSEWHERE =
+  'The records themselves are on your Customers screen in Cultivar, marked and sorted to the top. '
+  + 'Check whether they really are the same customer, and if they are, fix them in QuickBooks and read your books again.';
+
+/**
+ * The period a finding is a fact about, printed beside it.
+ *
+ * ⚠️ IT IS NOT THE READ DATE. The page already says when the books were read; this says what span
+ * of their trading the figure covers, and the two are different facts that a reader will otherwise
+ * assume are the same one.
+ */
+function windowLine(f: Finding): string {
+  if (f.window === null) return '';
+  return `<p class="p">Measured over ${esc(f.window.of)}, ${esc(f.window.from)} to ${esc(f.window.to)}</p>`;
+}
+
+/** What the finding switches off, when it switches anything off. Capability names only. */
+function blocksLine(f: Finding): string {
+  if (f.blocks.length === 0) return '';
+  return `<p class="p blk">What this switches off: ${f.blocks.map(esc).join(' · ')}</p>`;
+}
+
 function findingLine(f: Finding): string {
   const worth = f.value === null ? '' : ` <span class="worth">${esc(money(f.value))} at stake</span>`;
+  // 🔴 `f.rows` IS NEVER READ HERE AND MUST NEVER BE. The count goes on the paper and the records
+  // go on the screen — see the ruling in the header. What the reader gets instead is where to go.
+  const elsewhere = f.rowsTotal > 0 ? `<p class="p">${esc(REVIEW_ELSEWHERE)}</p>` : '';
   return `<li><p class="s">${esc(f.sentence)}${worth}</p>
-    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p></li>`;
+    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>
+    ${windowLine(f)}${blocksLine(f)}${elsewhere}</li>`;
+}
+
+/**
+ * A clean result. Same shape, no money, no blocked capabilities — and the POPULATION is the point:
+ * *"nothing found"* over 1,480 records is a different statement from *"nothing found"* over 3.
+ */
+function cleanLine(f: Finding): string {
+  return `<li><p class="s">${esc(f.sentence)}</p>
+    <p class="p">checked ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>
+    ${windowLine(f)}</li>`;
 }
 
 function recBlock(r: Recommendation, f: Finding): string {
@@ -252,6 +343,17 @@ export function renderBooksReportHtml(r: BooksReport): string {
   const recs = r.recommendations.length === 0 ? '' :
     `<h2>What we would do about it</h2>${r.recommendations.map(x => recBlock(x.recommendation, x.finding)).join('')}`;
 
+  // 🔴 ITS OWN SECTION, ITS OWN HEADING, ABOVE the things we could not work out — because a clean
+  // result is a RESULT and "we could not check" is not. Rendering them together would collapse the
+  // difference this whole platform is built to preserve.
+  const clean = r.clean.length === 0 ? '' :
+    `<h2>${esc(CLEAN_HEADING)}</h2>
+     <p class="note">These were checked against every record we read, and there was nothing wrong
+     with them. They are here because a review that only lists problems teaches you to read every
+     line as one — and because if any of them ever stops being clean, you will want to have seen it
+     here first.</p>
+     <ul class="f">${r.clean.map(cleanLine).join('')}</ul>`;
+
   const notComputed = r.notComputed.length === 0 ? '' :
     `<h2>What we could not work out</h2>
      <p class="note">These are not problems we found. They are questions we could not answer from
@@ -283,6 +385,10 @@ export function renderBooksReportHtml(r: BooksReport): string {
   table.four td { padding: 3px 0; font-size: 10pt; vertical-align: top; }
   table.four td:first-child { color: #6b7280; width: 42%; }
   .lim { font-size: 9.5pt; color: #6b7280; margin: 4px 0 0; }
+  /* What a finding switches off. Set in the SAME grey as the population line rather than in a
+     warning colour: it is a statement of consequence, not an alarm, and an owner reading a page
+     of red concludes the page is an audit. */
+  p.p.blk { font-style: italic; }
   ul.w { font-size: 10pt; }
   /* ══════════════════════════════════════════════════════════════════════════════
      🔴 THE SAVE BAR — AND IT IS THE ONLY THING ON THE PAGE THAT DOES NOT PRINT.
@@ -312,6 +418,7 @@ export function renderBooksReportHtml(r: BooksReport): string {
   <ul class="f w">${r.walks.map(walkLine).join('')}</ul>
   ${tiers}
   ${recs}
+  ${clean}
   ${notComputed}
 </body></html>`;
 }
