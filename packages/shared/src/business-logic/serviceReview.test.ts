@@ -24,6 +24,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseItemList } from '../quickbooks/itemList';
 import { parseInvoiceList, mentionsInstall, INSTALL_WORDING } from '../quickbooks/invoiceList';
 import {
   buildServiceReview, buildServiceRows, classifyDestination, readPriceEvidence, readUnitEvidence,
@@ -692,6 +693,58 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
   const missing = toExistingOffering({ id: 'y' });
   ok(missing.price === null && missing.priceUnit === null && missing.isActive === false,
     '🔴 an absent price reads as NULL, never as $0 — absent is not empty (A9)');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// §O — THE FIELD THE ENDPOINT ACTUALLY RETURNS. [[#182]] AGAIN, AND IT REACHED A CUSTOMER SCREEN.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 EVERY § ABOVE HANDS `classifyDestination` AN OBJECT THIS FILE BUILT. Not one of them asked
+// `/api/qbo/items` what its rows are shaped like — so when the screen read `i.incomeAccountName`
+// and the endpoint returns `i.incomeAccount`, **125 green assertions and 48 caught mutants had
+// nothing to say about it.** The account was `undefined` on all 685 of LAWNS's items, the
+// classification axis was dead, and the screen offered her own trees back to her as services.
+// The probes could not reach the seam; mutant C1 guards the module, and the module was fine.
+//
+// This § starts from an Intuit body, runs it through the REAL parser, and asserts on the field
+// name the parser actually produces — so a rename on either side fails here instead of on screen.
+{
+  const body = JSON.stringify({ QueryResponse: { Item: [
+    { Id: '76',  Name: 'Lacey Oak 45G', Description: 'Lacey Oak 45 Gallon', Type: 'Service',
+      UnitPrice: 375, IncomeAccountRef: { value: '94', name: 'Sales of Nursery Stock' } },
+    { Id: '186', Name: 'TC', Description: 'Trip Charge', Type: 'Service',
+      UnitPrice: 50, IncomeAccountRef: { value: '93', name: 'Delivery Income' } },
+    { Id: '1116', Name: 'Late fee', Type: 'Service',
+      UnitPrice: 0, IncomeAccountRef: { value: '118', name: 'Late Fee Income' } },
+  ] } });
+  const parsed = parseItemList(body).items;
+  ok(parsed.length === 3, 'the parser reads the three rows');
+
+  // 🔴 THE ASSERTION THAT WOULD HAVE CAUGHT IT: the account arrives under the name the ENDPOINT
+  // uses, and `incomeAccountName` is NOT that name. Both directions, so a rename either way fails.
+  const first = parsed[0] as unknown as Record<string, unknown>;
+  ok(first.incomeAccount === 'Sales of Nursery Stock',
+    '🔴 the endpoint returns the account as `incomeAccount` — this is the field a caller must read');
+  ok(!('incomeAccountName' in first),
+    '🔴 and it does NOT return `incomeAccountName` — the name the screen read for a day');
+
+  // The mapping the screen performs, written the way the screen writes it, then classified.
+  const mapped: ServiceItemFact[] = parsed.map(i => ({
+    id: i.id, name: i.name, description: i.description,
+    unitPrice: i.unitPrice, type: i.type,
+    incomeAccountName: (i as unknown as { incomeAccount: string | null }).incomeAccount ?? null,
+  }));
+  ok(mapped.every(m => m.incomeAccountName !== null),
+    '🔴 EVERY mapped row carries an account — a null here is the defect, and it was null on 685 of 685');
+
+  const d = mapped.map(classifyDestination);
+  ok(d[0].destination === DESTINATIONS.product,
+    '🔴 the tree routes to PRODUCTS through the real parser — not just through a hand-built fixture');
+  ok(d[1].destination === DESTINATIONS.service, 'the trip charge routes to SERVICES');
+  ok(d[2].destination === DESTINATIONS.notASale, '🔴 the late fee routes to BOOKKEEPING — the counter that read 0');
+
+  const census = buildServiceReview({ items: mapped, tallies: [], existing: [], placement: [], siteServices: [] }).census;
+  ok(census.products === 1 && census.services === 1 && census.notASale === 1,
+    '🔴 and the CENSUS is right end to end — the line that printed "0 are bookkeeping" above two bookkeeping rows');
 }
 
 console.log(`\n  serviceReview — ${passed} passed, ${failed} failed`);

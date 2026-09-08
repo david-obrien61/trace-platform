@@ -163,7 +163,14 @@ export function ServicesReview({ supabase, onWritten }:
         description: (i.description as string | null) ?? null,
         unitPrice: typeof i.unitPrice === 'number' ? i.unitPrice : null,
         type: (i.type as string | null) ?? null,
-        incomeAccountName: (i.incomeAccountName as string | null) ?? null,
+        // 🔴 `incomeAccount`, NOT `incomeAccountName` — THE ENDPOINT'S NAME, NOT OURS.
+        // `/api/qbo/items` returns `QboItemRow`, whose field is `incomeAccount` (itemList.ts:37).
+        // Reading `incomeAccountName` here returned `undefined` on ALL 685 of LAWNS's items, so
+        // the classification axis was null on every row and the screen offered her 17 of her own
+        // TREES as services, printed "0 are bookkeeping" above two bookkeeping rows, and split
+        // 500·140·7·0·38 where her books say 564·73·8·2·38. Every other consumer in the repo
+        // (`booksFindings.ts:571`, `QboBooksReader.tsx:1035`) already reads `incomeAccount`.
+        incomeAccountName: (i.incomeAccount as string | null) ?? null,
       }));
 
       // What is ALREADY on her menu. Read now, and read AGAIN immediately before the write — a
