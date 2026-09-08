@@ -6,8 +6,12 @@
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 >
-> ⚠️ **THIS BUILD IS ON A BRANCH: `thunder/report-fidelity` (`81e0477`).** It is not on `main` and
-> therefore **not deployed**. Nothing on this board can be run until it is merged.
+> ✅ **MERGED TO `main` 2026-09-08 and DEPLOYED — confirmed, not assumed.** The work landed as
+> `592a039`; the live bundle was then polled until it carried the SHA of main's HEAD, observed
+> moving `ac90ec9` → `592a039` → the current head. ⚠️ **Match the stamp to
+> `git log --oneline origin/main -1`, NEVER to a SHA written here** — every push to `main`, docs
+> included, rebuilds the tree and moves the stamp, so a SHA typed into a file goes stale the next
+> time anyone commits.
 
 **Capability:** checkout · customers roster · catalogue import · person-name display
 **Ledger:** #282 · **Rulings:** [[R-110]], [[R-111]]
