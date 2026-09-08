@@ -187,6 +187,23 @@ export type {
   AcceptedTier, PatchResult, ReviewRefusal,
 } from './discountReview';
 
+// The SERVICES half of the same review — same shape, same voice, pointed at `service_offerings`
+// instead of the pricing config. It shares `isDiscountItem` with the file above rather than
+// re-deriving "this is a discount", so a discount can never appear on the services screen.
+export {
+  buildServiceReview, buildServiceRows, readServiceEvidence, classifyDestination,
+  readPriceEvidence, readUnitEvidence, buildPlacementLadder, suggestCategory,
+  DESTINATIONS, SERVICE_REFUSALS, SERVICE_CATEGORIES, PRICE_UNITS,
+  SERVICE_OFFERING_SELECT, toExistingOffering,
+  PRICE_MAJORITY, MIN_AGREEING_LINES, UNIT_ORDER_SHARE, UNIT_PLANT_SHARE, BUNDLE_DISTINCT_SHARE,
+} from './serviceReview';
+export type {
+  ServiceReview, ServiceRow, ServiceItemFact, ServiceLineTally, ExistingOffering,
+  AcceptedService, ServiceWriteResult, PlacementObservation, PlacementLadder, LadderRung,
+  PriceEvidence, UnitEvidence, DestinationRead, Destination, ServiceRefusal,
+  PriceConfidence, ServiceCategory, PriceUnit,
+} from './serviceReview';
+
 // The module seed — its sibling, one table over, and the one whose missing row is MONEY.
 export { seedBusinessModules, warnOnShortModuleSeed } from './seedBusinessModules';
 export type { ModuleSeedRow, ModuleSeedResult } from './seedBusinessModules';

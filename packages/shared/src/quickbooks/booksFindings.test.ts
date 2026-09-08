@@ -33,7 +33,13 @@ const item = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow
 const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1,
               discountInDescription = false) =>
   ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice, discountInDescription,
-     percentBased: null as boolean | null, discountPercent: null as number | null });
+     percentBased: null as boolean | null, discountPercent: null as number | null,
+     // Added 2026-09-08 with the services review — the parser now also carries whether the line's
+     // wording said the price included planting, the line's own income account, and the size read
+     // out of the description. None of them is read by `booksFindings`; they are here so a fixture
+     // is a whole line rather than a subset that happens to compile.
+     installInDescription: false, itemAccountName: null as string | null,
+     sizeFromDescription: null as string | null });
 const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[],
              o: Partial<QboInvoiceRow> = {}): QboInvoiceRow =>
   ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, balance: 0, dueDate: null,

@@ -88,6 +88,42 @@ const ALLOWED_DIVERGENCE = {
   //    customer can map to two QuickBooks ids and `qb_customer_id` is single-valued). It is
   //    declared now because an undo that knows about only one of the two tables it will eventually
   //    have to clean is an undo somebody will trust past the point where it is complete.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // DECLARED 2026-09-08 (the services review, ledger #283). ONE table, ONE file.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE REVIEW MAY ONLY EVER INSERT; THE EDITOR MAY ONLY EVER UPDATE — AND THAT IS DAVID'S
+  //    RULING, NOT A CONVENIENCE. *"Correction, not undo… nothing to reverse because nothing was
+  //    decided for her."* The review adds services her books evidence and can never change one
+  //    that already exists; correcting a price is the Services editor's job, one card below it on
+  //    the same page. Folding the two into one writer would hand the review an UPDATE capability
+  //    it is deliberately built without, and the ruling would then rest on a caller remembering
+  //    not to call it.
+  //
+  // 🔴 AND THE TWO OPERATIONS DIFFER IN THE THING THAT MATTERS: this write is ALL-OR-NOTHING
+  //    ACROSS A BATCH. One unpriced row refuses the whole press, because a partial write leaves
+  //    her looking at a screen that says one thing and a menu that says another. The editor's
+  //    save is one row, typed by hand, and a batch refusal semantic on it would be wrong.
+  //
+  // ⚠️ WHAT THIS DEFERS, SAID PLAINLY: the fuller answer is ONE module owning every
+  //    `service_offerings` write — insert, update and delete — with `Settings.tsx` calling it
+  //    rather than holding three write sites of its own. That is the right end state and it was
+  //    NOT taken here, because it means rewriting three live sites on an owner-proven editor
+  //    inside a build that adds a read-and-review surface. Filed as tech-debt #218.
+  //
+  // ⚠️ THE COLUMN SETS CANNOT COLLIDE. This path writes only INSERTs, and only the columns
+  //    `buildServiceRows` produces; it never touches a row it did not create in that press, and
+  //    it REFUSES a name already on the menu (case-insensitively, against a list re-read
+  //    immediately before the write) rather than overwriting one.
+  'service_offerings': {
+    reason: 'The services review INSERTS the offerings an owner accepted from her own books, and '
+          + 'is deliberately built WITHOUT the ability to update one. David\'s ruling is '
+          + '"correction, not undo": a wrong price is fixed in the Services editor directly below '
+          + 'it, on the same page. Its write is also ALL-OR-NOTHING across a batch (one unpriced '
+          + 'row refuses the whole press), which is not the single-row semantic the editor needs. '
+          + 'The fuller consolidation — one module owning insert, update and delete, with '
+          + 'Settings.tsx calling it — is the right end state and is filed as tech-debt #218.',
+    paths: ['packages/shared/src/components/services/ServicesReview.tsx'],
+  },
   'business_inventory': {
     reason: 'The QuickBooks catalogue import writes with a PLAIN INSERT and a retirement UPDATE, '
           + 'deliberately NOT through importWrites.ts/the D-50 RPCs (R-93): those emit immutable '

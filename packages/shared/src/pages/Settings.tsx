@@ -21,6 +21,7 @@ import { QboWriteSwitch } from '../components/QboWriteSwitch';
 import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
 import { QboOrderIngest } from '../components/QboOrderIngest';
 import { QboCatalogueImport } from '../components/QboCatalogueImport';
+import { ServicesReview } from '../components/services/ServicesReview';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -764,6 +765,12 @@ export function Settings({
           <p style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 14, lineHeight: 1.5 }}>
             Everything you offer at checkout — transport options, add-ons, and future recurring services. Toggle off to hide from customers without deleting.
           </p>
+
+          {/* 🔴 THE REVIEW SITS ABOVE THE EDITOR BECAUSE CORRECTION IS THE UNDO (David's ruling).
+              Nothing it reads is written until a row is pressed, and a price it gets wrong is
+              fixed in the list directly below it — same page, same card, no navigation. It
+              reloads the offerings on write so the editor beneath is never stale. */}
+          <ServicesReview supabase={supabase} onWritten={() => { void loadOfferings(); }} />
 
           {offeringsLoading ? (
             <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading…</p>

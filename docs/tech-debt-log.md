@@ -872,3 +872,174 @@ and returns true counts) and is **never** valid for testing EXISTENCE. Any probe
 that way is [[R-33]] by construction. **OWED:** a sweep for `head: true` used as an existence check
 across `scripts/` and `packages/`. Not swept this pass — named, with the measurement, so the next
 probe author does not rediscover it the same way.
+
+---
+
+## #217 — 🔴 `seedServiceOfferings` WRITES A CATEGORY THE DATABASE REFUSES, AND THE CALLER SWALLOWS IT (NEW 2026-09-08)
+
+`packages/shared/src/discovery/seed.ts:20` — `classifyCategory` returns `'uncategorized'` for any
+category it does not recognise. Its own comment explains why, and the reasoning is right:
+
+> *"The previous `toCategory()` mapped any unrecognized category to `'addon'` — a quiet LIE… D-9:
+> surface uncertainty, never coerce it into a confident-looking value."*
+
+🔴 **`service_offerings.category` CARRIES A CHECK OVER FIVE VALUES AND `uncategorized` IS NOT ONE
+OF THEM.** `20260529_businesses_f_service_offerings.sql:17-18` —
+`CHECK (category IN ('transport','addon','maintenance','inspection','subscription'))` — and
+**grepped across the whole migration corpus, that constraint has never been altered.** So the
+INSERT is rejected outright by Postgres, and the sole caller (`api/discovery/ingest.ts:191`)
+catches it as `seed (non-fatal)` and continues:
+
+```ts
+} catch (seedErr: any) {
+  console.error('[discovery/ingest] seed (non-fatal):', seedErr.message);
+}
+```
+
+**A D-9 fix the schema refuses is not a fix — it is a silent drop**, and it drops the whole batch,
+not just the unrecognised row, because `seedServiceOfferings` inserts the rows as one array. One
+unclassifiable offering discards every offering discovery found for that business.
+
+⚠️ **The same function also writes `price: 0` deliberately** (`is_active: false`, flagged in
+`service_note`), which is the pattern `buildServiceRows` refuses outright — see #220.
+
+**FIX:** either add `'uncategorized'` to the CHECK (a migration, David applies), or have
+`classifyCategory` return `null` and `seedServiceOfferings` **hold the row back and report it**
+rather than sending a value the database will not take. The second needs no SQL. **Found while
+measuring destinations for the services review; not fixed in that pass** — repairing a discovery
+seed path inside a review build is the scope creep the pre-flight gate exists to catch.
+`buildServiceRows` refuses the value before it reaches the database and mutant **W5** guards it, so
+the NEW writer cannot join this defect.
+
+---
+
+## #218 — 🟡 `service_offerings` NOW HAS A THIRD WRITE FILE; ONE MODULE SHOULD OWN ALL OF THEM (NEW 2026-09-08)
+
+Declared in `verify-write-paths.mjs` `ALLOWED_DIVERGENCE` with its reason, so the ratchet is clean
+and the debt is visible rather than silent.
+
+The three files that write `service_offerings` today:
+
+| File | Verbs | Why it exists |
+|---|---|---|
+| `pages/Settings.tsx` | INSERT · UPDATE · DELETE | the owner's own editor — add, correct, toggle |
+| `discovery/seed.ts` | INSERT | the website-discovery seed (and see #217) |
+| `components/services/ServicesReview.tsx` | INSERT | **NEW** — the books review's accept |
+
+🔴 **THE DECLARED REASON IS TRUE AND IT IS ALSO NOT THE END STATE.** The review may only ever
+INSERT — David's ruling is *"correction, not undo"*, and a shared writer would hand it an UPDATE
+capability it is deliberately built without, leaving the ruling resting on a caller remembering not
+to call something. Its write is also **all-or-nothing across a batch**, which is not the single-row
+semantic the editor needs. Both true.
+
+**But the drift is the ordinary kind and it will happen:** the next column `service_offerings`
+gains, or the next default it needs, lands in one file and not the others, and the three surfaces
+disagree with nobody being told. This is #109's exact shape one table over.
+
+**FIX:** one module — `serviceOfferingWrites.ts` — owning insert, update and delete as three named
+functions with their own semantics, with `Settings.tsx` and this review each calling the one they
+are allowed to. The table then returns to **two** app write paths and the baseline SHRINKS.
+**Not taken here:** it means rewriting three live write sites on an owner-proven editor inside a
+build that adds a read-and-review surface.
+
+**TRIGGER:** the next change to what a `service_offerings` row carries — a column, a default, a
+normalisation. Best landed with #217, which is a fourth caller of the same table.
+
+---
+
+## #219 — 🔴 ONE QUICKBOOKS ITEM CAN BECOME A SERVICE **AND** A PRODUCT, AND NOTHING DETECTS IT (NEW 2026-09-08)
+
+Accept `Tree Bubbler` on the services review → one `service_offerings` row at $65. Run the
+catalogue import → item `185` also lands in `business_inventory` as a **product priced $65 with a
+scannable SKU**. Two live records for one QuickBooks item, **each unaware of the other**, and the
+same $65 reachable on an order by two different mechanisms.
+
+🔴 **NOTHING PREVENTS IT AND NOTHING CAN, BECAUSE THE LINK DOES NOT EXIST.**
+`business_inventory` carries `qb_item_id` and `20260906c_qb_identity_unique_indexes.sql:77` puts a
+unique index on `(business_id, qb_item_id)` — but that index is **scoped to one table**.
+**`service_offerings` carries no QuickBooks reference of any kind**; measured against the migration
+corpus, its columns are `business_id · name · description · category · timing · price_type ·
+price_unit · price · transport_mode · trigger_transport_mode · recurrence_days · requires_address ·
+pre_selected · is_active · sort_order · created_at` plus `compliance_title · compliance_body ·
+service_note`. No `qb_item_id`, and the column set has not changed since 2026-05-29.
+
+⚠️ **IT IS NOT RARE.** Of the 73 items the review classifies as services on LAWNS's capture,
+**35 sit on `Sales of Product Income`** — precisely the ones the catalogue import is most confident
+about. The tree bubbler is the clearest case: her books call it a product, the review offers it as
+a service, and **both readings are defensible**, which is exactly why both will happen.
+
+**FIX (a migration — David applies all SQL):**
+1. `ALTER TABLE service_offerings ADD COLUMN qb_item_id text;`
+2. A partial unique index `(business_id, qb_item_id) WHERE qb_item_id IS NOT NULL`.
+   ⚠️ **#54/#58's blocker applies — it cannot land until the live rows are known clean**, and this
+   session could not read them (`SUPABASE_SERVICE_KEY` empty, #183's blocker recurring).
+3. The review writes `qb_item_id` on accept — it already holds Intuit's id on every row.
+4. `adaptQboItems` excludes ids already present in `service_offerings` and **reports the exclusion**
+   rather than dropping it silently.
+
+**TRIGGER:** before the catalogue import is run again on a tenant that has accepted any service.
+
+---
+
+## #220 — 🟡 THE PLACEMENT LADDER IS MEASURED AND HAS NOWHERE TO LIVE — `service_offerings.price` IS ONE COLUMN (NEW 2026-09-08)
+
+MEASURED from LAWNS's 1,481-invoice capture, by comparing the same plant sold planted against sold
+bare — **193 plants have been sold both ways** across **909 planted lines**, and a planted tree
+costs a median of **2.00×** a collected one:
+
+| Pot | What planting adds | Evidence |
+|---|---:|---|
+| 7 Gallon | $101 | 5 lines, 3 plants |
+| 15 Gallon | $214 | 137 lines, 48 plants |
+| 30 Gallon | $418 | 259 lines, 48 plants |
+| 45 Gallon | $529 | 208 lines, 37 plants |
+| 65 Gallon | $650 | 55 lines, 11 plants |
+| 95 Gallon | $906 | 69 lines, 11 plants |
+
+`service_offerings.price` is a single `numeric(10,2)`. **Six prices for one service have no home.**
+The review therefore REPORTS the ladder and writes none of it, and says so on the screen.
+
+**THE THREE SHAPES, none chosen — this is David's call:**
+**(a)** six rows, one per pot size — zero migration, ships today, and nothing joins them so
+checkout has to pick by the plant's size with no declared relationship.
+**(b)** a `price_by_size jsonb` column — one additive `ALTER`, but a second pricing vocabulary
+beside `price` and two writers of one number.
+**(c)** a `service_offering_prices` child table keyed `(offering_id, size)` — a migration and a
+join on every checkout read, and the only one that survives *"per size AND per tier AND per season"*.
+
+⚠️ **The money makes it urgent rather than tidy.** If LAWNS's placement is configured at $125 a
+plant (STATED, not measured — the service key would not load), that is roughly **$300 a plant under
+on anything 30 gallon and up.**
+
+---
+
+## #221 — 🟡 A `Type: 'Service'` ITEM IS NOT A SERVICE — 99 OF LAWNS'S 147 ARE PLANTS OR GOODS (NEW 2026-09-08)
+
+Reported, not fixed, per the build's own instruction. `qboItemAdapter.ts:272` filters
+`Type: 'Category'` and nothing else, so the import writes all 647 non-folder items to
+`business_inventory` and the button says **647 products**.
+
+🔴 **BUT THE ANSWER IS NOT 500 EITHER**, which is the finding. MEASURED across the 147
+`Type: 'Service'` items by their `IncomeAccountRef.name`:
+
+```
+64 → Sales of Nursery Stock         TREES: Lacey Oak 45G, Shumard Red Oak 45, Mexican Sycamore 65g…
+35 → Sales of Product Income        compost, fertiliser, containers — AND the bubbler and staking kits
+22 → Landscaping/Installation       the real services
+ 8 → Discounts given                the /discounts population
+ 6 → Delivery Income                trip charge, tailgate, DIW, FDIW — and NZCM30, a crape myrtle
+ 7 → Income                         Backyard Delivery ($125), a bundle, four catch-alls
+ 5 → Refund · Late Fee · Warranty COGS · Services · Add-On
+```
+
+**Filtering on `Type` alone would move 99 real products OUT of the catalogue.** The classification
+that works is the income account — HER word for what the money is, matched by NAME and never by id.
+It is implemented, exported and mutation-tested as `classifyDestination`, and on the same capture
+it splits **564 products · 73 services · 8 discounts · 2 bookkeeping · 38 folders = 685**.
+
+**FIX:** `AdaptedItem` gains `incomeAccountName` (already parsed, currently dropped);
+`adaptQboItems` calls `classifyDestination` and keeps only `destination === 'product'`;
+`AdaptedItemList.counts` gains the other four so the screen prints the census, not one number.
+**Not made:** the import is a WRITE path that has already run twice against LAWNS, and the 64
+misfiled trees are exactly the rows R-70's retire-and-replace is about — a data question, not a
+filter. Full working: `docs/decisions/2026-09-08-services-review-four-reports.md` §①.

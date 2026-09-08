@@ -36,6 +36,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { parseRows } from './qboRead';
 import { QBO_DETAIL_TYPE } from './invoiceLineShapes';
+import { readProductFromDescription } from './qboItemAdapter';
 
 /**
  * One line of one invoice, reduced to what the questions need.
@@ -95,6 +96,27 @@ export interface QboInvoiceLine {
    */
   percentBased: boolean | null;
   discountPercent: number | null;
+  /**
+   * 🔴 DID THIS LINE'S PRICE INCLUDE PUTTING THE PLANT IN THE GROUND? A BOOLEAN, PROSE DROPPED.
+   * The services review measures the placement premium by comparing the same plant sold with
+   * this flag and without it; there is no installation ITEM to tally, because these books weld
+   * the work into the tree price. Same read-once-and-discard treatment as
+   * `discountInDescription` — see `mentionsInstall`.
+   */
+  installInDescription: boolean;
+  /**
+   * The line's own `ItemAccountRef.name` — QuickBooks' word for WHAT THE MONEY IS. Not personal,
+   * and it is the axis the services review classifies on: an item Intuit types `Service` while
+   * booking it to *Sales of Nursery Stock* is a TREE, and must never reach a services menu.
+   */
+  itemAccountName: string | null;
+  /**
+   * The SIZE read out of this line's description, e.g. `45 Gallon` — the plant's own words, and
+   * nothing else from the prose. Needed because the placement premium is a LADDER: a 15-gallon
+   * redbud and a 95-gallon oak do not carry the same one, and pooling them would print a figure
+   * neither of them ever charged.
+   */
+  sizeFromDescription: string | null;
 }
 
 /** One invoice. 🔴 `customerId` and NO customer name — see the file header. */
@@ -190,6 +212,30 @@ export function mentionsDiscount(description: string | null | undefined): boolea
   return typeof description === 'string' && DISCOUNT_WORDING.test(description);
 }
 
+/**
+ * Wording that says this line's price INCLUDED putting the plant in the ground.
+ *
+ * 🔴 THIS EXISTS BECAUSE PLACEMENT IS NOT A LINE ON ANY INVOICE. MEASURED on LAWNS's
+ * 1,481-invoice export: **976 lines announce it in prose** — *"(Install & Warranty)"*,
+ * *"Installation"*, *"Installed"* — and charge ONE figure covering the tree and the work. There
+ * is no installation item to tally, so the only way to see what placement is worth is to compare
+ * the same plant sold both ways, and the only thing that says which is which is this wording.
+ *
+ * ⚠️ SAME TREATMENT AS `mentionsDiscount`, AND FOR THE SAME REASON: read once, tested, and the
+ * prose DROPPED. What survives is a boolean, which is all the comparison needs (R-24).
+ *
+ * ⚠️ `warranty` ALONE IS NOT ENOUGH and is deliberately absent. A warranty is sold on trees that
+ * were collected, so counting it would mark bare sales as installed and CRUSH the measured
+ * premium toward zero — an error that would read as *"placement is worth nothing"*, which is the
+ * opposite of what these books say.
+ */
+export const INSTALL_WORDING = /\binstall(?:ed|ation|s)?\b|\bplanted\b|\bDIW\b|\bFDIW\b/i;
+
+/** Did this line's wording say the price included placement? A BOOLEAN; the prose is not kept. */
+export function mentionsInstall(description: string | null | undefined): boolean {
+  return typeof description === 'string' && INSTALL_WORDING.test(description);
+}
+
 const DISCOUNT_SET = new Set(DISCOUNT_ITEM_NAMES.map(n => n.toLowerCase()));
 const BUNDLE_SET   = new Set(BUNDLE_ITEM_NAMES.map(n => n.toLowerCase()));
 
@@ -264,6 +310,11 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
         discountPercent: num(detail?.DiscountPercent),
         // Read, tested, discarded — the string never reaches the returned row. See the field.
         discountInDescription: mentionsDiscount(str(l?.Description)),
+        installInDescription: mentionsInstall(str(l?.Description)),
+        itemAccountName: str((detail?.ItemAccountRef as { name?: unknown } | null)?.name),
+        // The SIZE only — `readProductFromDescription` returns the plant's own size string and
+        // nothing else from the prose, so no free text survives this line (R-24).
+        sizeFromDescription: readProductFromDescription(str(l?.Description)).size,
       };
     });
 
