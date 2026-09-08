@@ -756,3 +756,119 @@ on my screen* is its own question, and it was not answered by accepting this tra
 ⚠️ **On the owner-test card as a thing to LOOK AT and agree with**, not buried here alone —
 `inventory-full-surface-test.md` → *"An inline edit changes ONE row"*.
 
+
+---
+
+## #213 — 🔴 THE UNDO REPORT SAID 0 CUSTOMERS OVER A RUN THAT REMOVED 1,934 — MECHANISM NOT REPRODUCED (NEW 2026-09-07)
+
+⚠️ **NUMBERING, STATED BECAUSE IT MATTERS:** the build prompt assigned this **#211**, correcting an
+earlier note that called it #210. **Both are taken** — #210 is the test-runner pipefail bug and
+**#211 is #280's "a declarative comment about someone else's data"**, filed hours earlier the same
+day. Claimed as **#213**, the next genuinely free id. This is **#195's exact shape** (ids cited
+that do not exist / collide) and it is why the max id is read before one is claimed.
+
+**MEASURED 2026-09-07 2:05p on LAWNS.** `QboCatalogueImport` printed *"Undone. 647 imported
+products and 0 imported customers removed, 447 of your own rows brought back."* It had deleted
+**1,934**. The data was right — customers back to 30, zero rows carrying an `import_run_id`,
+fingerprint identical. Only the sentence was wrong.
+
+🔴 **THE STATED DIAGNOSIS DOES NOT HOLD, AND THE CORRECTION IS THE FINDING.** The prompt said *"the
+endpoint returns `deleted` for customers; the surface reads another key."* **It does not.**
+`QboCatalogueImport.tsx:402` read `undone.customers?.deleted ?? 0` — the right field, off the real
+imported `CustomerUndoReport` type. Every link was then verified against the tree David actually
+ran (the 12:12 commit, and he ran at 14:05):
+
+- `undoCustomerImport` returns `deleted` counted from a real `.delete()…select('id')` — not from a
+  bare delete, which would return zero rows. ✅
+- `handleBooksUndo` puts it on the envelope under `customers`, and mints **ONE run id** across both
+  halves. ✅
+- `/api/qbo/books/undo` rewrites to `_route=books-undo`; `api/` holds no file that shadows it. ✅
+- `countStamped`'s `head:true` + `count:'exact'` returns a true count against a live table (probed:
+  30 over LAWNS, 0 for a run id matching nothing). ✅
+- The unit probes covering the undo (`customerImport.test.ts` §J2–§J4) assert `deleted === 2` and
+  `deleted === 1` and they pass. ✅
+
+**So the mechanism is UNEXPLAINED and is NOT claimed fixed.** The one non-refusal path that returns
+`deleted: 0` is `mine.length === 0` — nothing carries the run id — which would ALSO make David's
+after-check ("zero rows still carrying an import_run_id") trivially true, but leaves open what
+deleted the 1,934. Reporting that honestly rather than inventing a cause is the point of this batch.
+
+**WHAT WAS FIXED (ledger #282):** the surface can no longer print a number the response did not
+contain. `?? 0` is gone — an absent customer report now says *"an unreported number of imported
+customers"* in red and tells the reader to re-run Preview. And `remainingWithThisRun` — the
+**post-delete re-read**, which is the authoritative proof — is now on the screen beside the tally,
+so a wrong count is contradicted in the next sentence instead of believed.
+
+**OWED:** reproduce it. The cheapest route is David's own loop with the browser console open —
+`[TRACE:CUSTIMPORT] undo` logs `deleted`, `blocked`, `remaining` server-side, and `[TRACE:QBITEMS] ui`
+logs the response envelope. One run answers whether `customers` arrived null or `deleted` arrived 0,
+and those are different bugs.
+
+---
+
+## #214 — 🟡 THE CUSTOMER-IMPORT TEST DOUBLE'S `range()` IS A NO-OP, SO NOTHING TESTS PAGING (NEW 2026-09-07)
+
+`customerImport.test.ts`'s `makeDb` builder defines `range() { return b; }` — it **ignores offset
+and limit entirely** and returns every matching row. So `undoCustomerImport`'s paging loop
+
+```js
+for (let from = 0; ; from += 1000) { … .range(from, from + 999); if (rows.length < 1000) break; }
+```
+
+is never exercised: every fixture is under 1,000 rows, so the loop breaks on its first pass and the
+double's blindness never shows. At real scale the double would return the same 1,934 rows forever.
+
+🔴 **WHY IT MATTERS BEYOND TIDINESS: paging is exactly the mechanism behind ledger #282 ④**, one
+table over. A 1,000-row PostgREST cap silently truncated the customers roster and the header
+asserted the cap as the total. The undo reads `customers` the same way, at the same scale, and
+**nothing in the suite could tell a correct paging loop from a broken one.**
+
+Same family as **#138** (a double more forgiving than the real system) and **#182** (a harness that
+cannot reach its target reports the same as one that passed). Fix = make `range()` slice, and add a
+fixture above 1,000 rows. **Surfaced, not fixed** — rewriting another suite's double inside a
+five-defect fix is the drift the pre-flight gate exists to catch.
+
+---
+
+## #215 — 🟡 THE UI-DIVERGENCE CAP COUNTS A CHECKOUT PAGE AS A "RECORD LIST" (NEW 2026-09-07)
+
+`verify-ui-standard-divergence.mjs`'s `isRecordList` is `(reads rows && maps) || <table`. Adding a
+**single by-id customer read** to `CartReview.tsx` — a cart, not a list — pushed it into the bespoke
+population and **failed the build at 24 against a baseline of 23.**
+
+🔴 **THE THIRD TIME A CAP HAS PUNISHED A FIX** (see #281's binding-aware rewrite of
+`verify-zero-row-writes`, and R-11's `!== 1`). It was NOT silenced with a declaration: declaring
+CartReview as a record-list surface diverging from the grid standards would be **filing a false
+statement to quiet a check**. The read was factored into `fetchAttachedCustomerTier` in
+`financialDataAccess.ts` instead — beside `fetchTaxRate`, which exists for the same reason — which
+is better architecture on its own terms and removes the false positive honestly.
+
+⚠️ **The heuristic is still over-broad**: any page that reads one row and maps anything qualifies.
+A record LIST renders many rows *of the thing it read*. Distinct from **#181** (a file absolved for
+importing `sheetStyles`) and **#187** (the cap cannot see `packages/shared`) — same cap, three
+different ways of being approximately right.
+
+---
+
+## #216 — 🟡 A SUPABASE `head: true` PROBE CANNOT DISAGREE — IT RETURNS 204 / `error: null` ON A TABLE THAT DOES NOT EXIST (NEW 2026-09-07)
+
+Measured directly, 2026-09-07:
+
+```
+db.from('a_table_that_cannot_exist').select('*', {head:true, count:'exact'})
+   → status 204 · error null · count null        ← reads as SUCCESS
+db.from('a_table_that_cannot_exist').select('*').limit(1)
+   → status 404 · error PGRST205                 ← reads as the refusal it is
+```
+
+🔴 **CAUGHT BY A NEGATIVE CONTROL PASSING**, in the first draft of
+`scripts/measure-migrations-applied.mjs`: every 2026-09 migration reported **APPLIED**, including
+`20260905_production_planning.sql`, whose three tables are absent. A whole migration census was
+wrong in the reassuring direction, and the only thing that caught it was a control asserting that a
+name which cannot exist must fail.
+
+**The trap is general:** `head: true` is correct for COUNTING (`countStamped` uses it legitimately
+and returns true counts) and is **never** valid for testing EXISTENCE. Any probe or guard using it
+that way is [[R-33]] by construction. **OWED:** a sweep for `head: true` used as an existence check
+across `scripts/` and `packages/`. Not swept this pass — named, with the measurement, so the next
+probe author does not rediscover it the same way.

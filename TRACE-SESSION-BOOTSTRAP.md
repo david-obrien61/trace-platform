@@ -78,6 +78,17 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 REPORT FIDELITY — FIVE SURFACES ASSERTED WHAT THEY NEVER MEASURED (2026-09-07, ledger #282)
+
+- 🟡 **BUILDER-COMPLETE · ON BRANCH `thunder/report-fidelity` (`81e0477`) — NOT ON `main`, NOT DEPLOYED · 11 owner-test cards, 0 COVERED** (10 `owed` · 1 `needs-test`) · `verify` exit 0 ZERO NET-NEW · **86/86 files, 4696 assertions** · **13 mutants, 13 caught, 0 survived** · **NO MIGRATION · api/ 12/12 · no new permission string** → `docs/owner-tests/report-fidelity-full-surface-test.md`
+- 🔴 **THE BUTTON THE CUSTOMER PRESSES QUOTED $974.25 ON AN $876.83 ORDER.** Review resolved the tier from an **EMAIL lookup**; `submit.ts:451` resolves it from the customer **ROW by id**. LAWNS's one contractor has **`email = NULL`** (measured), so Review priced at retail. ✏️ **A RECURRENCE — the July handover carried it as must-fix #1**, and the first patch fixed the config half then re-derived the tier from the weakest key available instead of the one already in hand. Now `fetchAttachedCustomerTier`, by id, beside `fetchTaxRate`. **The covering copy is DELETED: Review IS checkout.**
+- 🔴 **"INVOICE SENT TO <email>" WAS NEVER TRUE IN ANY STATE.** Unconditional, and rendered directly above a badge reading *"invoice NOT sent to QuickBooks"*. ⚠️ **A premise corrected: a Resend sender DOES exist** — but nothing in checkout invokes it for the customer, no key is set, and **the push sets `BillEmail` and never calls QuickBooks' send endpoint.**
+- 🔴 **`1000 of 1000` OVER 1,964 ROWS — THE LIST REPORTED ITS OWN CAP AS THE TRUTH.** `/inventory` was honest in the same session (`647 of 647`) **only because 647 is under the cap.** Read now pages with `count:'exact'`; the pill arithmetic left the JSX into `countPill.ts` (tech-debt #134's shape). **CARD 9 is the non-regression: inventory must still read `647 of 647 items`.**
+- ⚠️ **ONE OF THE FIVE IS NOT FIXED, AND THE STATED DIAGNOSIS WAS WRONG.** The undo surface already read `deleted` off the real type; every link verified and each carries the right number, so the **0-over-1,934 mechanism is unexplained (tech-debt #213)**. What shipped: the surface can no longer print a number it was not given, and the post-delete **re-read** is on screen beside the tally.
+- ✅ **39 PEOPLE RENDERED "Terry null" — ONE helper, twelve call sites**, plus a corpus probe against the thirteenth. Template literals stringify NULL; JSX does not, which is why it looked intermittent.
+- 🔴 **MY OWN MUTANT CAUGHT MY OWN PROBE:** A1 — the shipped defect itself — **survived the first run**, because the assertion checked that the tokens appeared in the file and the mutant leaves them all there. Harness fixed, not the mutant.
+- ⚠️ **FILED:** tech-debt **#213** (the unreproduced undo) · **#214** (the customer-import double's `range()` is a **no-op**, so nothing tests paging — the mechanism behind ④, one table over) · **#215** (the divergence cap counts a checkout page as a record list; **NOT** silenced with a false declaration) · **#216** (a Supabase **`head:true` probe returns 204/`error:null` on a missing table** — it cannot disagree, and it made a whole migration census read as APPLIED).
+
 ### 🔴 THE GRID STANDARD — G11: ACTIONS · NAME · DATA (2026-09-07, ledger #281)
 
 - 🟡 **BUILDER-COMPLETE · 4 owner-test cards, ✅ 1 COVERED (2026-09-07)** · `verify` exit 0 ZERO NET-NEW · **85/85 files, 4654 assertions** · **22 mutants, 22 caught, 0 survived** · **NO MIGRATION · api/ 12/12 · no new permission string** · `build:cultivar` 7.09s.
@@ -210,83 +221,67 @@
 - 📄 **The report: `docs/decisions/2026-09-03-ui-standard-divergence-report.md`** — filed as a document, not reported in chat (#264's own finding).
 
 
-### 🔴 MIGRATIONS — WHAT DAVID CAN APPLY, IN ORDER (measured 2026-09-03, ledger #262)
+### 🔴 MIGRATIONS — DERIVED FROM THE CATALOG, NOT FROM A LABEL (re-measured 2026-09-07, ledger #282)
 
-**What is visible in a `main` checkout, dated 2026-09:** exactly three, and **all three belong to
-`thunder/vendor-identity`** (merged). Reported here, not coordinated across the branch — [[R-62]];
-David relays.
+🔴 **THE OLD BLOCK WAS WRONG ON THREE FILES IN THE SAME DIRECTION, AND THAT IS WHY THIS ONE IS
+DERIVED.** It carried `20260902_business_qbo_writes_switch.sql` as ⏳ **NOT APPLIED — APPLY FIRST**
+with the warning *"until it lands every order is written as a test order"*; it is **applied, and
+has been since 2026-09-04** (owner-verified). `20260903_inventory_retire_lifecycle.sql` and
+`20260903b_display_standards.sql` carried the same stale ⏳ and are **both applied**.
+**THIS IS THE THIRD INSTANCE** — `20260831d` and `20260902` were also filed GATED / NOT APPLIED
+while already in the database. **A LABEL IS NOT EVIDENCE.** Every row below was probed against the
+live catalog by an object the migration CREATES.
 
-| # | File | State | Apply |
-|---|---|---|---|
-| 1 | `20260902_receipt_line_edit_and_vendor_preference.sql` | ✅ **APPLIED 2026-09-02**, catalog-confirmed | done |
-| 2 | `20260902_vendor_identity_and_preference.sql` | ✅ **APPLIED 2026-09-03**, catalog-confirmed | done |
-| 3 | `20260902b_vendor_preferences_join_on_vendor_id.sql` | ✅ **APPLIED 2026-09-03**, catalog-confirmed | done |
-| 4 | `20260904_receipts_receipt_number_original.sql` | ✅ **APPLIED 2026-09-04** (#273); `with_original` 0 = the pass, nothing backfilled | done — CARDS 16-18 unblocked |
+**Re-measure at any time — it writes nothing:** `node scripts/measure-migrations-applied.mjs`
+**Re-paste safety, per file, from the SQL:** `node scripts/measure-migration-repaste-safety.mjs`
 
-**WHY THAT ORDER, from the files rather than from habit:** #3 opens with a `DO $preflight$` block
-that requires **both** `vendors` (created by #2) and `vendor_preferences` (created by #1). Paste #3
-first and it stops with a **named refusal**, not a crash:
-`consolidation pre-flight FAILED — 'vendors' does not exist. Apply 20260902_vendor_identity_and_preference.sql first.`
-🔴 **That refusal is the feature working.** Expect it if the order slips; it is better evidence than
-a row count, because it names the missing prerequisite instead of leaving a bare `42P01`.
+| File | State (catalog-probed 2026-09-07) | Safe to paste twice? |
+|---|---|---|
+| `20260902_business_qbo_writes_switch.sql` | ✅ **APPLIED** — `businesses.qbo_writes_enabled` readable | ✅ yes — one `ADD COLUMN IF NOT EXISTS` |
+| `20260902_receipt_line_edit_and_vendor_preference.sql` | ✅ APPLIED — `vendor_preferences` present | 🔴 **NO** — 4 `CREATE POLICY`, 0 drops |
+| `20260902_vendor_identity_and_preference.sql` | ✅ APPLIED — `vendors` present | 🔴 **NO** — 7 `CREATE POLICY`, 0 drops |
+| `20260902b_vendor_preferences_join_on_vendor_id.sql` | ✅ APPLIED — `vendor_preferences.vendor_id` readable | ✅ yes |
+| `20260903_inventory_retire_lifecycle.sql` | ✅ **APPLIED** — `business_inventory.retired_at` readable | ✅ yes |
+| `20260903b_display_standards.sql` | ✅ **APPLIED** — `business_display_standards` present | 🔴 **NO** — 2 `CREATE POLICY`, 0 drops |
+| `20260903c_receipts_receipt_number.sql` | ✅ APPLIED — `receipts.receipt_number` readable | ✅ yes |
+| `20260904_receipts_receipt_number_original.sql` | ✅ APPLIED | ✅ yes |
+| `20260904b_reset_invitation_expiry.sql` | ⚠️ **UNVERIFIED** — creates only a FUNCTION | ✅ yes — `CREATE OR REPLACE` |
+| `20260905_production_planning.sql` | ⛔ **NOT APPLIED** — all three tables absent | 🔴 **NO** — 12 `CREATE POLICY`, 0 drops |
+| `20260906_inventory_import_run_provenance.sql` | ✅ APPLIED | ✅ yes |
+| `20260906b_customers_import_run.sql` | ✅ APPLIED | ✅ yes |
+| `20260906c_qb_identity_unique_indexes.sql` | ✅ APPLIED (#277, catalog-verified) | ✅ yes |
+| `20260907_customers_last_name_nullable.sql` | ✅ **APPLIED 2026-09-07** (owner) | ✅ yes |
+| `20260907b_customers_nullable_sweep.sql` | ✅ **APPLIED 2026-09-07** (owner) | ✅ yes |
 
-**WHAT EACH UNBLOCKS:** #2 creates `vendors` + `vendor_aliases` and adds `receipts.vendor_id` — the
-consolidated vendor store ([[R-65]]) the receipt detail view resolves against. #3 adds
-`vendor_preferences.vendor_id`, the `vendor_preferences_resolved` view and `link_vendor_preference`,
-which is what lets the billing-unit answer be read through the vendor rather than through a
-name-key. Together they close tech-debt **#151** (two stores answering one question).
+🔴 **ONE MIGRATION IS OUTSTANDING: `20260905_production_planning.sql`** — all three of its tables
+(`production_plans`, `production_plan_lines`, `business_operations_config`) return **PGRST205,
+absent**. It blocks uppot-planning owner-test **CARDS 8–17** (ledger #276). ⚠️ **It is NOT
+re-paste safe** — 12 `CREATE POLICY` with no `DROP POLICY IF EXISTS`, so a second paste errors
+`42710` and rolls the whole thing back. That is the vendor-chain shape again, and **it was never
+recorded anywhere before this pass** because the old block only measured three files.
 
-**🔴 DID APPLYING #1 BEFORE #2 CAUSE A PROBLEM? NO — AND HERE IS THE MEASUREMENT, NOT A REASSURANCE.**
-`20260902_vendor_identity_and_preference.sql` contains **zero occurrences of the string
-`vendor_preferences`** (grepped, whole file). The two touch **disjoint objects**: #1 creates
-`vendor_preferences` and the receipt-line guards; #2 creates `vendors`, `vendor_aliases` and
-`receipts.vendor_id`. Neither alters the other's tables, so there is no ordering between them.
-⚠️ **THE FAILURE THAT WOULD HAVE MATTERED, AND WHY IT DOES NOT APPLY:** if #2 had *also* created
-`vendor_preferences`, its `CREATE TABLE IF NOT EXISTS` would have **silently skipped** the existing
-one and left a table with #1's shape under #2's assumptions — a silent wrong-shape, not an error.
-It does not name the table at all, so that cannot happen.
-⚠️ **THIS IS MEASURED FROM THE FILES, NOT FROM THE LIVE CATALOG — I have no database access.**
-Prove it in the SQL editor before trusting it:
+⚠️ **`20260904b_reset_invitation_expiry.sql` IS REPORTED UNVERIFIED, NOT ASSUMED.** It creates a
+function and nothing else; a function is invisible to a `.select()`, and calling it would WRITE.
+Reported as unknown rather than promoted to applied — which is the discipline the three wrong
+labels above existed for lack of.
+
+🔴 **THE PROBE ITSELF HAD TO BE FIXED BEFORE IT COULD BE BELIEVED, AND THIS IS REUSABLE:** the
+first draft used `.select('*', { head: true, count: 'exact' })` and **its negative control PASSED**
+— a table that cannot exist returns **HTTP 204 with `error: null`**, so every migration read as
+APPLIED, including the one that is not. A head-only existence probe **cannot disagree** ([[R-33]]).
+`.limit(1)` returns `PGRST205` for a missing table and `42703` for a missing column, and both
+controls are asserted on every run.
+
+**HOW TO CONFIRM IN THE SQL EDITOR** (the catalog, not the client):
 ```sql
 SELECT table_name, count(*) AS cols
   FROM information_schema.columns
- WHERE table_schema='public' AND table_name IN ('vendor_preferences','vendors','vendor_aliases')
+ WHERE table_schema='public'
+   AND table_name IN ('production_plans','production_plan_lines','business_operations_config')
  GROUP BY table_name ORDER BY table_name;
 ```
-**A pass looks like:** `vendor_preferences` present **now**; `vendors` and `vendor_aliases`
-**absent until #2 runs**, present after. If `vendors` already exists before you run #2, stop — the
-order assumption is wrong and #2 needs re-reading.
-
-### ✅ THE THREE TRAPPED MIGRATIONS ARE ON `main` — MERGED 2026-09-03 (`d6d4f0f`)
-
-**`thunder/qbo-review-test-mode` is MERGED.** All six 2026-09 migrations now render in
-`supabase/migrations/` on a `main` checkout, confirmed by name after the merge:
-
-| File | State | Notes |
-|---|---|---|
-| `20260902_receipt_line_edit_and_vendor_preference.sql` | ✅ applied 2026-09-02 | — |
-| `20260902_vendor_identity_and_preference.sql` | ✅ applied (#263) | vendor chain step 1 |
-| `20260902b_vendor_preferences_join_on_vendor_id.sql` | ✅ applied (#263) | vendor chain step 3 |
-| **`20260902_business_qbo_writes_switch.sql`** | ⏳ **NOT APPLIED — APPLY FIRST** | 🔴 until it lands **every order is written as a test order** |
-| **`20260903_inventory_retire_lifecycle.sql`** | ⏳ not applied | unblocks owner-test **CARD 21** |
-| **`20260903b_display_standards.sql`** | ⏳ not applied | unblocks owner-test **CARD 22** (the card with the stop) |
-
-🔴 **APPLY ORDER: the writes switch FIRST, then `20260903b`, then `20260903`.** The writes switch is
-the only one that is actively wrong today; the other two are independent of each other and of it
-(different tables, no shared objects), so their order between themselves does not matter — but
-**CARD 22 runs before CARD 21**, so applying `20260903b` first keeps the card order and the apply
-order the same and removes a chance to mix them up.
-
-⚠️ **CAN THEY BE PASTED TWICE? MEASURED PER FILE, NOT ASSUMED.**
-- **`20260902_business_qbo_writes_switch.sql` — YES, safe.** One `ADD COLUMN IF NOT EXISTS` and
-  nothing else: no policy, no table, no index, no trigger.
-- **`20260903_inventory_retire_lifecycle.sql` — YES, safe.** Two `ADD COLUMN IF NOT EXISTS` and one
-  `CREATE INDEX IF NOT EXISTS`.
-- 🔴 **`20260903b_display_standards.sql` — NO.** It has **2 `CREATE POLICY` and 0 `DROP POLICY IF
-  EXISTS`**, so a second paste errors **`42710` and rolls back the whole thing**. Harmless but
-  alarming, and it is **the same shape that bit the vendor chain** (7 policies, no drops). If you
-  see `42710` on a re-paste, it already applied — go straight to the verification queries.
-
+**A pass looks like:** three rows AFTER `20260905` is applied; **zero rows before it** — which is
+what it returns today.
 
 ## 🧵 ARC MAP — the platform as FLOWS, not tiles (integration / drift / landmines live here)
 
