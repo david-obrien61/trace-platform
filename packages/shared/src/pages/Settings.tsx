@@ -18,8 +18,6 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 // Accounting card once a connection exists — it has nothing to read before then.
 import { QboBooksReader } from '../components/QboBooksReader';
 import { QboWriteSwitch } from '../components/QboWriteSwitch';
-import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
-import { QboOrderIngest } from '../components/QboOrderIngest';
 import { QboCatalogueImport } from '../components/QboCatalogueImport';
 import { ServicesReview } from '../components/services/ServicesReview';
 
@@ -720,12 +718,18 @@ export function Settings({
                   QuickBooks is the fact that governs everything below it, and burying it under
                   three import panels is how somebody spends a week not knowing which mode they
                   are in. */}
+              {/* 🔴 THE PAGE IS ONE PATH: connect → preview → import → undo (David, 2026-09-08,
+                  at the customer's desk): *"the only thing is preview your books, all other data
+                  is not necessary — services and discounts are on other tabs."*
+                  ⚠️ `QboDeliveryIngest` and `QboOrderIngest` WERE MOUNTED HERE and are CUT — not
+                  gated, not hidden: scheduled deliveries and order lines are not on this path, and
+                  the panels made the page read as a console of unrelated importers. The components
+                  are LEFT IN THE TREE, unmounted, so restoring them is one line rather than a
+                  rebuild; `packages/shared` is outside knip's scope (§6 r9) so they raise nothing.
+                  If they are ever remounted, note their `isOwner` gate was widened by the same
+                  commit that widened the server — they are consistent, just not rendered. */}
               <QboWriteSwitch businessId={businessId} />
               <QboBooksReader businessId={businessId} />
-              <QboDeliveryIngest businessId={businessId} />
-              {/* BELOW the delivery ingest, and the order is the dependency: a stop must
-                  exist before it can have a load. */}
-              <QboOrderIngest businessId={businessId} />
               <QboCatalogueImport businessId={businessId} />
             </div>
           ) : (

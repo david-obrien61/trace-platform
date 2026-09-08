@@ -50,7 +50,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
-import { useBusinessContext } from '../context';
+import { useDevSurface } from '../devtools';
 import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
@@ -290,12 +290,21 @@ interface ReadState {
 export function QboBooksReader({ businessId }: { businessId: string | null | undefined }) {
   // 🔴 THE REHEARSAL DOOR IS THE OWNER'S, AND ONLY THE OWNER'S (David, 2026-09-04).
   // The READ itself stays at `settings:read` — that ruling is untouched, and Lauren pressing
-  // "Read my QuickBooks data" is the entire point of this screen. What is owner-only is the
-  // FILE LOADER below: a rehearsal instrument for previewing one company's books inside
-  // another, which is a sentence that should never have to be explained to the person running
-  // the business. David: *"I said make it visibly a test facility; I never said she must not
-  // see it. My omission, corrected now."*
-  const { isOwner } = useBusinessContext();
+  // "Read my QuickBooks data" is the entire point of this screen — it stays for EVERYONE, and so
+  // does the findings review it produces (#284) and her own invoice grid below it.
+  //
+  // 🔴 THE OPERATOR MACHINERY MOVED FROM `isOwner` TO THE DEV GATE (David, 2026-09-08, at the
+  // customer's desk): *"the only thing is preview your books, all other data is not necessary."*
+  // The per-list read buttons, the file loader and the three census breakdowns are INSTRUMENTATION
+  // — and `isOwner` was the wrong gate for them in BOTH directions. It showed them to a customer
+  // who happens to be `owner_id` (which is every customer, on their own account), and it hid them
+  // from a second owner who is not. A dev surface is not an authority question at all; it is a
+  // "does the person reading this screen build the product" question, and `devSurfaces` is the one
+  // gate that already answers it (§6 r8 — it is bound to identity+role and purges on sign-out).
+  //
+  // ⚠️ THIS IS NOT AN AUTHORITY CHANGE AND MUST NOT BE READ AS ONE. The server is untouched; every
+  // route these controls call still runs its own gate. Hiding is courtesy, exactly as before.
+  const devOn = useDevSurface('debug');
   const [loading, setLoading] = useState<QboEntity | null>(null);
   const [state, setState] = useState<ReadState | null>(null);
   // ══════════════════════════════════════════════════════════════════════════════
@@ -625,6 +634,10 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         </div>
       )}
 
+      {/* 🔴 THE OPERATOR'S OWN PATH — DEV-GATED. This row's own comment above already called it
+          "the operator's own path"; it is now gated as one. Lauren presses the ONE button. */}
+      {devOn && (
+      <>
       <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px' }}>
         Or read one list at a time:
       </p>
@@ -639,6 +652,8 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           {loading === 'Invoice' ? 'Reading invoice history…' : 'Read invoice history'}
         </button>
       </div>
+      </>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           🔴 THE FILE DOOR — OWNER-ONLY, AND NO LONGER WEARING THE WARNING COLOUR.
@@ -665,7 +680,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           own first four words), no longer borrowing the vocabulary of alarm. The amber constant
           stays for the genuine warnings below — the saved-read banner and the file-holds-names
           notice — which is the point: amber means something again. */}
-      {isOwner && (
+      {devOn && (
       <div style={{
         marginTop: 14, padding: '12px 14px', borderRadius: 10,
         border: `1px dashed ${SLATE}`, background: '#f8fafc',
@@ -711,7 +726,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       {/* 🔴 VISUALIZE IS OFFERED ONLY ONCE A READ EXISTS. A report over nothing would be a
           document full of "not read", which is honest and useless — and it would teach her
           that the button does not work. */}
-      {Object.keys(reads).length > 0 && (
+      {devOn && Object.keys(reads).length > 0 && (
         <div style={{ marginTop: 14 }}>
           <button onClick={visualize} style={{ ...btn, background: DARK, color: '#fff', flex: 'none', width: '100%' }}>
             Visualize — open the first-look report
@@ -728,6 +743,63 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           RATHER THAN IN FRONT OF THEM. It has no acknowledge-to-continue and nothing on it can
           disable an ingest button: a finding that could stop Lauren is a finding that makes her
           phone David, and then the build has failed however good the finding was. */}
+
+      {/* ══════════════════════════════════════════════════════════════════════════════════
+          🔴 BEFORE THE FIRST READ THERE IS NO FINDINGS SECTION AT ALL (David, 2026-09-04).
+          ══════════════════════════════════════════════════════════════════════════════════
+          `evaluateBooks({})` returns SIXTEEN rules with ZERO measured, and every one of them
+          carries a figure quoted from the 29 August analysis. So the screen used to open — before
+          anybody pressed anything — with sixteen grey "not checked" rows reciting *"504 lines
+          carrying $614,053"* and *"881 of 1,469"*. Measured 2026-09-04: 16 rows, 0 measured,
+          16 carrying a quoted figure.
+
+          David: *"Sixteen 'not checked' rows carrying 29 August figures, before I press anything,
+          is the system explaining its internals to someone who has not started."* And: *"the 29
+          August figures must not appear on a page where nothing has been read — '$614,053' and
+          '881 of 1,469' are prose about her business shown to her before she pressed anything."*
+
+          🔴 THIS DOES NOT WEAKEN THE PANEL'S OWN HONESTY RULE, WHICH IS WHY THE GATE IS HERE AND
+          NOT INSIDE IT. `BooksReview` renders unmeasured rows deliberately — a hidden row is a
+          row the reader assumes passed. That rule is about a review THAT RAN: three outcomes —
+          fired, did not fire, could not run — are answers, and answers require a question. Before
+          the read there was no question, so there is nothing to be honest or dishonest about. A
+          "could not run" printed over a read nobody requested is not a disclosure, it is noise
+          wearing a disclosure's clothes.
+
+          ⚠️ THE READ-HAPPENED FACT IS STILL ASKED EXACTLY ONE WAY, deliberately: `reads` is the
+          single source for both this review and the Visualize button, so the two cannot drift into
+          showing a report button over an absent review, or the reverse (STD-011).
+          ✏️ CORRECTED 2026-09-08: this used to read "THE CONDITION IS THE SAME ONE THE VISUALIZE
+          BUTTON ALREADY USES". It no longer is — Visualize gained `devOn &&` in the page cut, and
+          this review deliberately did NOT, because the review is the customer-facing surface (#284)
+          and the report is instrumentation. The SHARED fact is unchanged and still single-sourced;
+          the gates on top of it now differ on purpose. Left visible rather than silently edited:
+          a comment that describes a condition its code no longer has is [[R-26]]. */}
+      {Object.keys(reads).length > 0 && <BooksReview findings={findings} />}
+
+      {/* 🔴 HER OWN INVOICES, BELOW THE FINDINGS AND BEHIND A DISCLOSURE (David, 2026-09-08).
+          The findings are the argument; a 530-row grid above them buries it. It stays on the
+          page because it is RECOGNITION — her own invoice numbers and totals are the moment the
+          screen becomes HER books — and R-77 already ruled she may see them.
+
+          🔴 THE COUNT IS ON THE LABEL, NOT INSIDE THE DRAWER (David): a closed drawer saying
+          only "Your invoices" is furniture. The number IS the recognition, so it must survive
+          the collapse. It reads `total`, never `rows.length` — those differ the moment the
+          grid is capped, and a label asserting the shown count as the real one is #282 exactly.
+
+          ⚠️ STANDARD NAMED (§6 r16): this is the native HTML disclosure (`<details>/<summary>`,
+          the WAI-ARIA Disclosure pattern) — keyboard-operable and open-by-default-able with no
+          JS and no focus management. G10 is NOT this clause: G10 governs PER-ROW expansion
+          INSIDE a grid. A SECTION-level disclosure has no clause in ui-control-standards.md yet;
+          flagged for one rather than quietly minting a second pattern. */}
+      {invoiceGrid && (
+        <details style={{ marginTop: 16 }}>
+          <summary style={{
+            minHeight: 48, display: 'flex', alignItems: 'center', cursor: 'pointer',
+            fontSize: '0.875rem', fontWeight: 700, color: DARK,
+          }}>
+            Your invoices ({invoiceGrid.total.toLocaleString()})
+          </summary>
       {/* ══════════════════════════════════════════════════════════════════════════════════
           🔴 HER OWN INVOICES — ON THE PLATFORM'S GRID, NOT A TABLE THIS FILE WROTE.
           ══════════════════════════════════════════════════════════════════════════════════
@@ -873,34 +945,9 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           />
         </div>
       )}
+        </details>
+      )}
 
-      {/* ══════════════════════════════════════════════════════════════════════════════════
-          🔴 BEFORE THE FIRST READ THERE IS NO FINDINGS SECTION AT ALL (David, 2026-09-04).
-          ══════════════════════════════════════════════════════════════════════════════════
-          `evaluateBooks({})` returns SIXTEEN rules with ZERO measured, and every one of them
-          carries a figure quoted from the 29 August analysis. So the screen used to open — before
-          anybody pressed anything — with sixteen grey "not checked" rows reciting *"504 lines
-          carrying $614,053"* and *"881 of 1,469"*. Measured 2026-09-04: 16 rows, 0 measured,
-          16 carrying a quoted figure.
-
-          David: *"Sixteen 'not checked' rows carrying 29 August figures, before I press anything,
-          is the system explaining its internals to someone who has not started."* And: *"the 29
-          August figures must not appear on a page where nothing has been read — '$614,053' and
-          '881 of 1,469' are prose about her business shown to her before she pressed anything."*
-
-          🔴 THIS DOES NOT WEAKEN THE PANEL'S OWN HONESTY RULE, WHICH IS WHY THE GATE IS HERE AND
-          NOT INSIDE IT. `BooksReview` renders unmeasured rows deliberately — a hidden row is a
-          row the reader assumes passed. That rule is about a review THAT RAN: three outcomes —
-          fired, did not fire, could not run — are answers, and answers require a question. Before
-          the read there was no question, so there is nothing to be honest or dishonest about. A
-          "could not run" printed over a read nobody requested is not a disclosure, it is noise
-          wearing a disclosure's clothes.
-
-          ⚠️ THE CONDITION IS THE SAME ONE THE VISUALIZE BUTTON ALREADY USES, deliberately: one
-          fact — has anything been read — must not be asked two ways on one screen (STD-011), or
-          the two answers drift and the page shows a report button over an absent review, or the
-          reverse. */}
-      {Object.keys(reads).length > 0 && <BooksReview findings={findings} />}
 
       {state?.savedAs && (
         <p style={{ fontSize: '0.8125rem', color: GREEN, margin: '10px 0 0', wordBreak: 'break-all' }}>
@@ -957,7 +1004,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       )}
 
       {/* ── ITEMS: the breakdown, then the full table ─────────────────────────── */}
-      {itemBreak && (
+      {devOn && itemBreak && (
         <div style={{ marginTop: 12 }}>
           {/* 🔴 THE HEADLINE ANSWER. Twelve invoice lines assert ItemRef.value === '1'. */}
           <div style={{
@@ -1009,7 +1056,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         </div>
       )}
 
-      {state?.entity === 'Item' && b?.ok && (b.items?.length ?? 0) === 0 && (
+      {devOn && state?.entity === 'Item' && b?.ok && (b.items?.length ?? 0) === 0 && (
         // EMPTY is its own surface and it says which of the two empties it is: the read
         // succeeded and the company has no items. It is never the rendering of a failed read.
         <p style={{ fontSize: '0.8125rem', color: GRAY, marginTop: 12 }}>
@@ -1017,7 +1064,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         </p>
       )}
 
-      {state?.entity === 'Item' && b?.items && b.items.length > 0 && (
+      {devOn && state?.entity === 'Item' && b?.items && b.items.length > 0 && (
         // Bounded scroll box so both scrollbars live on the box, not the page (§6 r14).
         <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 360, border: '1px solid #e5e7eb', borderRadius: 9 }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
@@ -1044,7 +1091,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       )}
 
       {/* ── CUSTOMERS: counts, coverage, duplicate sizing, five example rows. NEVER a list. ── */}
-      {custBreak && (
+      {devOn && custBreak && (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             <Stat label="customers" value={custBreak.total} />
@@ -1116,7 +1163,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       )}
 
       {/* ══ INVOICES: the date range FIRST, then what sold. NEVER a record. ══════ */}
-      {invBreak && invBreak.invoices > 0 && (
+      {devOn && invBreak && invBreak.invoices > 0 && (
         <div style={{ marginTop: 12 }}>
           {/* 🔴 THE DATE RANGE IS THE HEADLINE AND IT IS DELIBERATELY ABOVE EVERY OTHER NUMBER.
               Every figure below is meaningless without the span it covers — "412 Shumard oaks"
