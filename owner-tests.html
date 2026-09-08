@@ -6,10 +6,21 @@
 <title>TRACE — Owner Test Board</title>
 <!--
   PURE RENDERER. Holds ZERO test data of its own.
-  The ONLY source of truth is docs/owner-tests/*-full-surface-test.md (its ## SURFACE: sections).
+  The ONLY source of truth is docs/owner-tests/*-full-surface-test.md — ALL 30 BOARDS, not one.
   This file PARSES that markdown at open-time and renders it — it never duplicates or hardcodes a
-  check. Delete the .md and this shows "no data", never a stale board.
-  Open: double-click → "Open .md" (or drag-drop the test file).
+  check. Delete a .md and its board disappears; it is never a stale board.
+
+  🔴 THIS HEADER USED TO BE FALSE, AND THAT IS WHY THE FIX EXISTS (2026-09-08).
+  It claimed to parse the directory. It fetched ONE file (inventory) and its parser read only
+  "## SURFACE:" bands — six boards carry those. MEASURED before the fix: 24 of 30 boards parsed
+  to ZERO, inventory lost 13 of its own 118 cards, authority-model 6 of 36. A board rendering no
+  cards is indistinguishable from a board that has none, so nothing on this page could show it.
+  The BOARDS manifest below is asserted against the directory, both directions, by
+  `npm run verify:owner-boards` — a list nobody re-derives is how this happens again (#73, #185).
+
+  Open: serve the repo (`python3 -m http.server`) and open http://localhost:8000/owner-tests.html
+  to get every board. Double-click (file://) makes the browser refuse every fetch — the page
+  says so, and you can still drop a single .md on it.
 
   Third sibling of status.html / stories.html — same load/render pattern, mirrored styling.
     status.html      = what's BUILT           (capabilities: green/amber/red)
@@ -139,15 +150,34 @@
   .drop{border:2px dashed #cbd5e1;border-radius:10px;padding:26px;margin:14px 0;color:var(--muted)}
   .drop.over{border-color:var(--accent);background:#eef4e6}
   .hint{font-size:.8rem;color:var(--muted)}
+  /* board strip + load report */
+  .bstrip{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 12px;margin:0 0 12px}
+  .bstrip h3{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .brow{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:.84rem;
+    border-top:1px solid #f1f5f0;cursor:pointer}
+  .brow:first-of-type{border-top:none}
+  .brow:hover{background:#f8faf6}
+  .brow .bn{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .brow .bbar{width:110px;height:7px;border-radius:4px;background:#eef1ec;overflow:hidden;display:flex;flex:none}
+  .brow .bbar span{display:block;height:100%}
+  .brow .bnum{width:96px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+  .brow .bwarn{color:var(--needstest);font-size:.76rem;font-weight:700;flex:none}
+  .loadfail{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;
+    padding:10px 12px;margin:0 0 12px;font-size:.84rem;line-height:1.45}
+  .loadok{font-size:.78rem;color:var(--muted);margin:0 0 10px}
 </style>
 </head>
 <body>
 <header>
   <div>
     <h1>TRACE — Owner Test Board</h1>
-    <div class="sub">Is it PROVEN, or just claimed? · pure renderer of <code>docs/owner-tests/*.md</code></div>
+    <div class="sub">Is it PROVEN, or just claimed? · pure renderer of all <code>docs/owner-tests/*-full-surface-test.md</code></div>
   </div>
   <div class="spacer"></div>
+  <span class="fgroup" style="color:#fff;font-size:.78rem;font-weight:700">Board
+    <select id="boardPicker" style="max-width:260px"><option value="__all__">all boards</option></select>
+  </span>
   <span class="tally" id="tally"></span>
   <button class="btn" id="openBtn">Open .md</button>
   <button class="btn ghost" id="reloadBtn">Reload</button>
@@ -159,7 +189,8 @@
   <div id="emptyState" class="empty">
     <h2>No data — open a test source</h2>
     <p>This board holds no checks of its own. It renders only what it reads from
-       <code>docs/owner-tests/…-full-surface-test.md</code>.</p>
+       <code>docs/owner-tests/…-full-surface-test.md</code> — all 30 of them when served over
+       <code>http://</code>.</p>
     <div class="drop" id="drop">
       <strong>Drop a *-full-surface-test.md here</strong>
       <div class="hint">or click “Open .md” above and pick it.</div>
@@ -169,7 +200,9 @@
 
   <!-- BOARD -->
   <div id="board" class="hide">
+    <div id="loadReport"></div>
     <div id="trust" class="trust"></div>
+    <div id="boardStrip"></div>
     <div class="tabs">
       <button class="tab active" data-view="unproven">⚠ Not proven</button>
       <button class="tab" data-view="holes">🔴 No test written</button>
@@ -183,6 +216,7 @@
           <option value="owed">owed</option>
           <option value="needs-test">needs-test</option>
           <option value="blocked">blocked</option>
+          <option value="failed">failed</option>
         </select>
       </span>
       <span class="fgroup">Surface <select id="surfaceFilter"><option value="all">all</option></select></span>
@@ -195,6 +229,7 @@
       <span class="k"><span class="dot d-owed"></span>owed — written, never run since the change (NOT proven)</span>
       <span class="k"><span class="dot d-needstest"></span>needs-test — the surface exists, no test (a known hole)</span>
       <span class="k"><span class="dot d-blocked"></span>blocked — can't run yet</span>
+      <span class="k"><span class="dot d-needstest"></span>failed — it was RUN and it did not pass</span>
     </div>
     <div class="legend"><span class="srcline" id="srcline"></span></div>
     <div id="view"></div>
@@ -207,9 +242,31 @@
 /* ───────────── status vocab ─────────────
    PROVEN = trustworthy today.  UNPROVEN = everything else, and the default view. */
 const PROVEN     = ["covered"];
-const UNPROVEN   = ["owed","needs-test","blocked"];
+const UNPROVEN   = ["owed","needs-test","blocked","failed"];
 const RECOGNIZED = [...PROVEN, ...UNPROVEN];
-const CLS = { "covered":"covered", "owed":"owed", "needs-test":"needstest", "blocked":"blocked" };
+/* "failed" is not decoration — a live inventory card carries it. It was previously unrecognized
+   and therefore rendered as "owed", which understates a card that was RUN and DID NOT PASS. */
+const CLS = { "covered":"covered", "owed":"owed", "needs-test":"needstest",
+              "blocked":"blocked", "failed":"needstest" };
+
+/* ───────────── the boards ─────────────
+   One entry per docs/owner-tests/*-full-surface-test.md. THIS LIST IS NOT THE AUTHORITY —
+   a static page cannot list a directory, so the list is asserted against the directory by
+   `npm run verify:owner-boards`, which FAILS BOTH WAYS: a board on disk and not here, or here
+   and not on disk. That is the #73 lesson (a hardcoded gap list nobody re-derives) answered by
+   a check rather than by a promise. A board that fails to load is NAMED in red below — it is
+   never silently dropped, because a missing board reads exactly like a board with no cards. */
+const BOARDS = [
+  "authority-model","businesses-write-paths","checkout-delivery-scheduling",
+  "customer-edit-surface","delivery-fulfilment","discount-config","history-orders",
+  "inventory","manager-visibility","offline-store-and-forward","operations-calendar",
+  "orders-roster","owner-role-authority","positions","qb-catalogue-import",
+  "qb-customer-import","qb-delivery-ingest","qb-order-ingest","qb-test-mode",
+  "quickbooks-books-read","quickbooks-invoice","rbac-resource-action","receipt-detail",
+  "receipts-view","report-fidelity","services-review","social-campaign","team-permissions",
+  "uppot-planning","vendors",
+];
+const boardPath = k => `./docs/owner-tests/${k}-full-surface-test.md`;
 
 /* Surface display order + one-line definitions. A surface seen in the .md but not listed here
    still renders (appended, undefined) — the .md is the authority, this is only presentation. */
@@ -254,44 +311,118 @@ function blockMd(raw){
   return html;
 }
 
-/* ───────────── parse the test .md ─────────────
-   Bands: "## SURFACE: <slug>"   Cards: "### <title>" + TAG: lines + body.
-   Any other "## " section (HOW TO READ, GATE 0, SETUP, RESULTS, APPENDIX…) closes the band and
-   is NOT parsed as checks — those are prose for the human running it, not board data. */
-function parseTests(mdText){
-  const lines = mdText.split(/\r?\n/);
+/* ───────────── parse a board .md ─────────────
+   THE 30 BOARDS DO NOT SHARE ONE CARD SHAPE, AND ALL OF THEM ARE READ HERE.
+   Before 2026-09-08 this parser read only "## SURFACE:" bands — SIX boards carry those, so
+   24 boards parsed to ZERO and inventory itself lost 13 cards that sit outside a band.
+
+   A heading (## / ### / ####) opens a CANDIDATE. It becomes a card ONLY if a STATUS tag is
+   found before the next heading. That one rule is what keeps prose sections (HOW TO READ,
+   GATE 0, WHAT THIS BOARD DOES NOT COVER) off the board without naming any of them.
+
+     A   ### Title                    then a line   STATUS: owed
+     B   ## CARD 3 — Title            then a line   **STATUS:** owed · **DEVICE:** desktop
+     C   ### CARD 3 — Title           then a line   `STATUS: owed` · `DEVICE: desktop`
+     D   ## CARD 3 — Title · `STATUS: owed` · `DEVICE: desktop`     (tags IN the heading)
+
+   NEVER read as a card:
+     · table rows — the legend is `| `STATUS: covered` | 🟢 a test exists… |`
+     · bullet lines — a "does not cover" list names a status in prose
+     · the h1 preamble — a board's own "Board: 0 of 33" is a CLAIM, parsed separately below
+       and COMPARED to the cards, never trusted as the count.
+   First tag wins inside a card, so preserved prior wording (a "WAS" / "Original card:" block
+   quoting the status it used to hold) cannot overwrite the status the card carries today. */
+
+const TAG = {
+  status:     /STATUS[`*]*\s*:[`*]*\s*`?\s*([A-Za-z-]+)/i,
+  device:     /DEVICE[`*]*\s*:[`*]*\s*`?\s*([A-Za-z]+)/i,
+  lastProven: /LAST-PROVEN[`*]*\s*:[`*]*\s*`?\s*([^`·|*]+)/i,
+  covers:     /COVERS[`*]*\s*:[`*]*\s*`?\s*([^`·|*]+)/i,
+  signal:     /SIGNAL[`*]*\s*:[`*]*\s*`?\s*(.+)$/i,
+};
+const stripComments = t => t.replace(/<!--[\s\S]*?-->/g, " ");
+/* A tag must OWN its line — after an optional ** or ` the line begins with the tag name.
+   This is what stops "- **PMI on the calendar** — `STATUS: needs-test`, and the reason…"
+   (a bullet in a prose section) from minting a phantom card. */
+const TAGLINE = /^(?:\*\*|`)?\s*(STATUS|DEVICE|LAST-PROVEN|COVERS|SIGNAL)[`*]*\s*:/i;
+
+function readTags(into, text){
+  for(const k of ["status","device","lastProven","covers","signal"]){
+    if(into["_got_"+k]) continue;
+    const m = text.match(TAG[k]);
+    if(!m) continue;
+    let v = m[1].trim().replace(/[`*]+$/,"").trim();
+    if(!v) continue;
+    into["_got_"+k] = true;
+    if(k === "covers")      into.covers = v.split(",").map(x=>x.trim()).filter(Boolean);
+    else if(k === "status") into.status = v.toLowerCase();
+    else if(k === "device") into.device = v.toLowerCase();
+    else                    into[k] = v;
+  }
+}
+
+/* The board's own header claim — "Board: 0 of 18 covered", "Proven: 0 of 19".
+   Rendered BESIDE the counted figure so a header that disagrees with its own cards is
+   visible rather than authoritative. Seven boards disagree today. */
+function parseClaim(mdText){
+  const head = mdText.split(/\n##\s/)[0];
+  let m = head.match(/Board:\s*\*{0,2}\s*(\d+)\s*of\s*(\d+)/i)
+       || head.match(/\*\*Proven:\*\*\s*(\d+)\s*of\s*(\d+)/i);
+  return m ? { covered:+m[1], total:+m[2] } : null;
+}
+
+function parseTests(mdText, boardKey, boardName){
+  const lines = stripComments(mdText).split(/\r?\n/);
   const checks = [];
-  let curSurface = null, cur = null;
+  let curSurface = null, curSection = null, pendingSection = null, cur = null;
+
+  /* A card is grouped under the section IN EFFECT BEFORE ITS OWN HEADING. Boards differ: some
+     write "### CARD 3" under "## PART TWO" (group = PART TWO), others write "## CARD 3" directly
+     (group = whatever preceded them). Promoting a heading to a section before knowing whether it
+     is itself a card gave qb-test-mode 23 bands of one card each. So a level-2 heading's section
+     is PENDING until the heading turns out to be prose rather than a card. */
   const push = () => {
-    if(cur){ cur.body = cur.bodyLines.join("\n").trim(); delete cur.bodyLines; checks.push(cur); cur = null; }
+    if(cur){
+      if(cur.status){                                  // no STATUS ⇒ it was prose, not a card
+        cur.body = cur.bodyLines.join("\n").trim();
+        delete cur.bodyLines;
+        for(const k of Object.keys(cur)) if(k.startsWith("_got_")) delete cur[k];
+        delete cur._level2;
+        checks.push(cur);
+      } else if(cur._level2){
+        curSection = pendingSection;                   // it was prose — it IS the section
+      }
+      pendingSection = null;
+      cur = null;
+    }
   };
+
   for(const raw of lines){
     const t = raw.replace(/\s+$/,"").trim();
 
-    if(/^##\s/.test(t) && !/^###/.test(t)){
+    if(/^#\s/.test(t)){ push(); continue; }                        // h1 title — never a card
+    if(/^#{2,4}\s/.test(t)){
       push();
-      const m = t.match(/^##\s*SURFACE:\s*([a-z0-9-]+)/i);
-      curSurface = m ? m[1].toLowerCase() : null;
-      continue;
-    }
-    if(/^###\s/.test(t)){
-      push();
-      if(!curSurface) continue;                       // a ### outside a SURFACE band is not a check
-      cur = { title:t.replace(/^###\s*/,""), surface:curSurface, status:"", device:"",
-              covers:[], lastProven:"", signal:"", bodyLines:[] };
+      const level2 = /^##\s/.test(t) && !/^###/.test(t);
+      const title  = t.replace(/^#{2,4}\s*/,"");
+      if(level2){
+        const m = t.match(/^##\s*SURFACE:\s*([a-z0-9-]+)/i);
+        if(m){ curSurface = m[1].toLowerCase(); curSection = null; continue; }
+        curSurface = null;
+        pendingSection = title.replace(/[⛔🔴⚠️✅📄🆕🚧📋]/g,"").trim();
+      }
+      cur = { title, board:boardKey, boardName, _level2: level2,
+              surface: curSurface || (curSection || boardName),
+              status:"", device:"", covers:[], lastProven:"", signal:"", bodyLines:[] };
+      readTags(cur, title);                                        // shape D — tags in the heading
       continue;
     }
     if(!cur) continue;
-
-    let m;
-    if((m = t.match(/^STATUS:\s*(.+)$/i)))      { cur.status = m[1].trim().toLowerCase(); continue; }
-    if((m = t.match(/^DEVICE:\s*(.+)$/i)))      { cur.device = m[1].trim().toLowerCase(); continue; }
-    if((m = t.match(/^LAST-PROVEN:\s*(.+)$/i))) { cur.lastProven = m[1].trim(); continue; }
-    if((m = t.match(/^SIGNAL:\s*(.+)$/i)))      { cur.signal = m[1].trim().replace(/^`|`$/g,""); continue; }
-    if((m = t.match(/^COVERS:\s*(.+)$/i))){
-      cur.covers = m[1].split(",").map(x=>x.trim()).filter(Boolean);
-      continue;
-    }
+    /* Table rows never reach the BODY. Tag detection already refuses them (TAGLINE anchors on
+       the tag name), so no card COUNT can observe this line — a mutant removing it survives by
+       construction. It is here for rendering: without it a card's table renders as loose prose. */
+    if(/^\|/.test(t)) continue;
+    if(TAGLINE.test(t)){ readTags(cur, t); continue; }
     cur.bodyLines.push(raw);
   }
   push();
@@ -339,9 +470,82 @@ function trustPanel(all){
 }
 
 let currentView="unproven", statusFilter="all", surfaceFilter="all", deviceFilter="all", coversFilter="all";
+let boardFilter="__all__";
+let LOADED = [];          // [{key,name,checks,claim}] — every board that parsed
+let FAILED = [];          // [{key,why}]  — every board that did NOT. NAMED, never dropped.
 
-function renderView(all){
+const visibleBoards = () =>
+  boardFilter === "__all__" ? LOADED : LOADED.filter(b => b.key === boardFilter);
+const visibleChecks = () => visibleBoards().flatMap(b => b.checks);
+
+/* ── the load report. A board that failed to fetch is indistinguishable from a board with no
+      cards unless it SAYS SO — that is the whole reason this page was wrong before. ── */
+function loadReport(){
+  const el = document.getElementById("loadReport");
+  if(FAILED.length){
+    el.innerHTML = `<div class="loadfail">🔴 <b>${FAILED.length} of ${BOARDS.length} boards did not load.</b>
+      Everything below is a count of ${LOADED.length} boards, not ${BOARDS.length} — do not read it as the whole picture.
+      <br>${FAILED.map(f=>`<code>${esc(f.key)}</code> — ${esc(f.why)}`).join("<br>")}</div>`;
+  } else {
+    el.innerHTML = `<p class="loadok">${LOADED.length} of ${BOARDS.length} boards loaded ·
+      ${LOADED.reduce((n,b)=>n+b.checks.length,0)} cards.</p>`;
+  }
+}
+
+/* ── per-board summary. The point of the picker: which boards have proofs on them, at a glance. ── */
+function boardStrip(){
+  const el = document.getElementById("boardStrip");
+  if(boardFilter !== "__all__" || LOADED.length < 2){ el.innerHTML = ""; return; }
+  const rows = LOADED.map(b => {
+    const n = b.checks.length || 1;
+    const by = st => b.checks.filter(c=>c.status===st).length;
+    const cov = by("covered");
+    const seg = (k,v) => v ? `<span class="b-${k}" style="width:${(v/n)*100}%"></span>` : "";
+    const claimOff = b.claim && b.claim.total !== b.checks.length
+      ? `<span class="bwarn" title="the board's own header claims a different total">⚠ header says ${b.claim.covered} of ${b.claim.total}</span>` : "";
+    return `<div class="brow" data-board="${esc(b.key)}">
+      <span class="bn">${esc(b.name)}</span>
+      ${claimOff}
+      <span class="bbar">${seg("covered",cov)}${seg("owed",by("owed"))}${seg("needstest",by("needs-test")+by("failed"))}${seg("blocked",by("blocked"))}</span>
+      <span class="bnum">${cov} / ${b.checks.length}</span>
+    </div>`;
+  }).join("");
+  el.innerHTML = `<div class="bstrip"><h3>Boards — proven / total</h3>${rows}</div>`;
+  el.querySelectorAll(".brow").forEach(r => r.onclick = () => {
+    boardFilter = r.dataset.board;
+    document.getElementById("boardPicker").value = boardFilter;
+    refresh();
+  });
+}
+
+function trustPanel(all){
+  const n = all.length || 1;
+  const by = s => all.filter(c=>c.status===s).length;
+  const cov = by("covered"), owed = by("owed"), hole = by("needs-test"), blk = by("blocked"), fail = by("failed");
+  const pct = Math.round((cov/n)*100);
+  const seg = (k,v)=> v ? `<span class="b-${k}" style="width:${(v/n)*100}%"></span>` : "";
+  const scope = boardFilter === "__all__"
+    ? `across ${LOADED.length} board${LOADED.length===1?"":"s"}` : `on this board`;
+  /* Every true statement is said. Ranking them and showing only the top one understates the
+     board: one failed card must not silence 48 surfaces that ship with no test at all. */
+  const parts = [];
+  if(fail) parts.push(`<b>${fail} check${fail===1?" was":"s were"} RUN and did not pass.</b> A failed card is not a hole — it is a known defect with a witness.`);
+  if(hole) parts.push(`<b>${hole} surface${hole===1?"":"s"} ship with NO test</b> ${scope}. Those are known holes, not oversights — each one is a place a fix could be “verified” and still be wrong.`);
+  if(owed) parts.push(`<b>${owed} check${owed===1?" is":"s are"} written but unrun.</b> Written ≠ proven. Nothing here is trustworthy until someone drove it through the real UI.`);
+  if(blk)  parts.push(`<b>${blk} cannot be run yet</b> — each names its blocker on the card.`);
+  const verdict = parts.length ? parts.join(" ")
+    : `<b>Every check is covered.</b> Re-run after the next change to this capability — a covered check goes stale the moment its surface moves.`;
+  return `
+    <div class="cap">Proven ${esc(scope)}</div>
+    <div class="big">${cov} / ${all.length} checks &nbsp;<span style="font-size:1rem;color:var(--muted)">(${pct}%)</span></div>
+    <div class="bar">${seg("covered",cov)}${seg("owed",owed)}${seg("needstest",hole+fail)}${seg("blocked",blk)}</div>
+    <div class="note">${verdict}</div>`;
+}
+
+function renderView(){
+  const all = visibleChecks();
   document.getElementById("trust").innerHTML = trustPanel(all);
+  boardStrip();
 
   let rows = all.slice();
   if(currentView==="unproven") rows = rows.filter(c=>UNPROVEN.includes(c.status));
@@ -351,16 +555,22 @@ function renderView(all){
   if(deviceFilter!=="all")  rows = rows.filter(c=>c.device===deviceFilter);
   if(coversFilter!=="all")  rows = rows.filter(c=>c.covers.includes(coversFilter));
 
-  const seen = [...new Set(rows.map(c=>c.surface))];
-  const order = [...S_ORDER.filter(s=>seen.includes(s)), ...seen.filter(s=>!S_ORDER.includes(s))];
+  /* Across boards, the band is the BOARD — otherwise 30 boards' sections collide into one
+     meaningless list. Inside one board it is the SURFACE band the .md declares. */
+  const groupBy = (boardFilter === "__all__" && LOADED.length > 1) ? "board" : "surface";
+  const seen = [...new Set(rows.map(c=>c[groupBy]))];
+  const order = groupBy === "board"
+    ? BOARDS.filter(b => seen.includes(b))
+    : [...S_ORDER.filter(x=>seen.includes(x)), ...seen.filter(x=>!S_ORDER.includes(x))];
 
   let html = "";
-  for(const s of order){
-    const group = rows.filter(c=>c.surface===s);
+  for(const g of order){
+    const group = rows.filter(c=>c[groupBy]===g);
     if(!group.length) continue;
-    html += `<div class="band">${esc(S_NAME[s]||s)}
+    const label = groupBy === "board" ? (LOADED.find(b=>b.key===g)||{name:g}).name : (S_NAME[g]||g);
+    html += `<div class="band">${esc(label)}
       <span class="scount">${group.length}</span>
-      <span class="sdef">${esc(S_DEF[s]||"")}</span></div>`;
+      <span class="sdef">${esc(groupBy==="board" ? "" : (S_DEF[g]||""))}</span></div>`;
     html += `<div class="grid">${group.map(card).join("")}</div>`;
   }
   if(!html){
@@ -375,23 +585,23 @@ function renderView(all){
   document.getElementById("tally").innerHTML =
     `<span style="color:#bbf7d0">${by("covered")} covered</span>
      <span style="color:#fde68a">${by("owed")} owed</span>
-     <span style="color:#fecaca">${by("needs-test")} no-test</span>`;
+     <span style="color:#fecaca">${by("needs-test")+by("failed")} no-test/failed</span>`;
 }
 
-function render(text, label){
-  const all = parseTests(text);
-  window.__checks = all;
-  if(!all.length){ showEmpty("No checks found — is that a *-full-surface-test.md?"); return; }
-  document.getElementById("emptyState").classList.add("hide");
-  document.getElementById("board").classList.remove("hide");
-
-  // populate filters FROM THE DATA (never a hardcoded list — the .md is the authority)
+/* repopulate the filters from whatever is currently visible, then draw */
+function refresh(){
+  const all = visibleChecks();
   const fill = (id, vals) => {
     const sel = document.getElementById(id);
     const keep = sel.value;
     sel.innerHTML = `<option value="all">all</option>` +
       vals.map(v=>`<option value="${esc(v)}">${esc(S_NAME[v]||v)}</option>`).join("");
     sel.value = vals.includes(keep) ? keep : "all";
+    if(sel.value === "all"){
+      if(id==="surfaceFilter") surfaceFilter="all";
+      if(id==="deviceFilter")  deviceFilter="all";
+      if(id==="coversFilter")  coversFilter="all";
+    }
   };
   const surfaces = [...new Set(all.map(c=>c.surface))]
     .sort((a,b)=>(S_ORDER.indexOf(a)+1||99)-(S_ORDER.indexOf(b)+1||99));
@@ -400,10 +610,29 @@ function render(text, label){
   fill("coversFilter", [...new Set(all.flatMap(c=>c.covers))].sort());
 
   const unknown = all.filter(c=>!RECOGNIZED.includes(c.status));
+  const b = boardFilter === "__all__" ? null : LOADED.find(x=>x.key===boardFilter);
+  const claim = b && b.claim
+    ? ` · the board's own header claims ${b.claim.covered} of ${b.claim.total}` +
+      (b.claim.total !== b.checks.length ? ` ⚠ which is not what its cards say` : ``)
+    : "";
   document.getElementById("srcline").textContent =
-    `source: ${label} · ${all.length} checks · ${surfaces.length} surfaces` +
+    `source: ${b ? boardPath(b.key) : `${LOADED.length} boards in ./docs/owner-tests/`} · ` +
+    `${all.length} checks · ${surfaces.length} ${boardFilter==="__all__"?"sections":"surfaces"}${claim}` +
     (unknown.length ? ` · ⚠ ${unknown.length} card(s) have an unrecognized STATUS — shown as "owed"` : "");
-  renderView(all);
+
+  loadReport();
+  renderView();
+}
+
+function showBoard(){
+  document.getElementById("emptyState").classList.add("hide");
+  document.getElementById("board").classList.remove("hide");
+  const sel = document.getElementById("boardPicker");
+  sel.innerHTML = `<option value="__all__">all boards (${LOADED.length})</option>` +
+    LOADED.map(b=>`<option value="${esc(b.key)}">${esc(b.name)} — ${b.checks.filter(c=>c.status==="covered").length}/${b.checks.length}</option>`).join("");
+  sel.value = LOADED.some(b=>b.key===boardFilter) ? boardFilter : "__all__";
+  boardFilter = sel.value;
+  refresh();
 }
 
 /* ───────────── loading / events ───────────── */
@@ -414,21 +643,36 @@ function showEmpty(msg){
   if(msg) e.querySelector("h2").textContent = msg;
   document.getElementById("tally").textContent="";
 }
+function addBoard(key, name, text){
+  const checks = parseTests(text, key, name);
+  const i = LOADED.findIndex(b=>b.key===key);
+  const rec = { key, name, checks, claim: parseClaim(text) };
+  if(i>=0) LOADED[i] = rec; else LOADED.push(rec);
+  LOADED.sort((a,b)=>BOARDS.indexOf(a.key)-BOARDS.indexOf(b.key));
+}
 function readFile(file){
   const r=new FileReader();
-  r.onload=()=>render(String(r.result), file.name);
+  r.onload=()=>{
+    const key = file.name.replace(/-full-surface-test\.md$/,"").replace(/\.md$/,"");
+    addBoard(key, key, String(r.result));
+    const n = LOADED.find(b=>b.key===key);
+    if(!n.checks.length){ showEmpty(`No cards found in ${file.name} — is that a *-full-surface-test.md?`); return; }
+    boardFilter = key;
+    showBoard();
+  };
   r.onerror=()=>showEmpty("Couldn't read that file.");
   r.readAsText(file);
 }
 document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
-document.getElementById("reloadBtn").onclick=()=>tryAutoFetch(true);
+document.getElementById("reloadBtn").onclick=()=>loadAllBoards(true);
+document.getElementById("boardPicker").onchange=e=>{ boardFilter=e.target.value; refresh(); };
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   currentView=t.dataset.view;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===currentView));
-  if(window.__checks) renderView(window.__checks);
+  if(LOADED.length) renderView();
 });
-const onFilter = (id, set) => document.getElementById(id).onchange = e => { set(e.target.value); if(window.__checks) renderView(window.__checks); };
+const onFilter = (id, set) => document.getElementById(id).onchange = e => { set(e.target.value); if(LOADED.length) renderView(); };
 onFilter("statusFilter",  v=>statusFilter=v);
 onFilter("surfaceFilter", v=>surfaceFilter=v);
 onFilter("deviceFilter",  v=>deviceFilter=v);
@@ -436,7 +680,7 @@ onFilter("coversFilter",  v=>coversFilter=v);
 document.getElementById("clearFilters").onclick=()=>{
   statusFilter=surfaceFilter=deviceFilter=coversFilter="all";
   ["statusFilter","surfaceFilter","deviceFilter","coversFilter"].forEach(id=>document.getElementById(id).value="all");
-  if(window.__checks) renderView(window.__checks);
+  if(LOADED.length) renderView();
 };
 
 // drag-drop
@@ -445,18 +689,30 @@ const drop=document.getElementById("drop");
 ["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("over");}));
 document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) readFile(f);});
 
-/* auto-fetch (works when served; file:// will throw → picker) */
-function tryAutoFetch(manual){
-  fetch("./docs/owner-tests/inventory-full-surface-test.md",{cache:"no-store"})
-    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
-    .then(t=>render(t,"./docs/owner-tests/inventory-full-surface-test.md (auto)"))
-    .catch(()=>{
-      document.getElementById("autoNote").textContent =
-        "Auto-load blocked by the browser for local files — pick or drop the .md (this is normal for double-click open).";
+/* ── auto-load ALL boards. Served over http:// this fills the picker with every board.
+      Opened by double-click (file://) the browser refuses every fetch — so the page says the
+      whole reason it is empty, and how to get all 30, instead of quietly showing one. ── */
+function loadAllBoards(manual){
+  LOADED = []; FAILED = [];
+  Promise.all(BOARDS.map(key =>
+    fetch(boardPath(key), {cache:"no-store"})
+      .then(r => { if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
+      .then(t => addBoard(key, key, t))
+      .catch(e => FAILED.push({ key, why: String(e.message||e) }))
+  )).then(() => {
+    if(!LOADED.length){
+      document.getElementById("autoNote").innerHTML =
+        "Auto-load was blocked for local files — that is normal when this page is opened by double-click " +
+        "(<code>file://</code>), and it is why only one board used to show.<br>" +
+        "<b>To get all " + BOARDS.length + " boards:</b> run <code>python3 -m http.server</code> in the repo root " +
+        "and open <code>http://localhost:8000/owner-tests.html</code>. Otherwise drop a single .md below.";
       if(manual) showEmpty("No data — open a test source");
-    });
+      return;
+    }
+    showBoard();
+  });
 }
-tryAutoFetch(false);
+loadAllBoards(false);
 </script>
 </body>
 </html>
