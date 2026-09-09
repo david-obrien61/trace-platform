@@ -63,6 +63,9 @@ import {
   readPricingConfig,
   writePricingConfig,
 } from '../business-logic/financialDataAccess';
+// The clobber-safe payload builder for this column — see pricingConfigMerge.ts for why the panel
+// names the keys it OWNS rather than the keys it will preserve.
+import { mergeOwnedOverConfig, describeCarry } from '../business-logic/pricingConfigMerge';
 
 const MODULE_KEY = 'cost_to_produce';
 
@@ -207,7 +210,8 @@ export function CostToProduceSettings() {
   const [loadError, setLoadError] = useState('');
   // Customer pricing tiers were RELOCATED out of here into the standalone Discounts screen
   // (/discounts, THUNDER · 2026-07-10). This panel no longer reads or writes the discount config —
-  // it PRESERVES those jsonb keys on save (below) so it can't clobber what /discounts owns.
+  // on save it writes ONLY the keys it owns and CARRIES every other top-level key through (below),
+  // so it can't clobber what /discounts, the tax field, or production planning own.
 
   // Single editable location for config-side knobs (overhead); persisted in locations[].
   const loc: CostLocation = config.locations[0] ?? deepClone(EMPTY_COST_CONFIG.locations[0]);
@@ -427,18 +431,26 @@ export function CostToProduceSettings() {
       : config;
     let cfgErr: { message: string } | null = null;
     if (!err) {
-      // CLOBBER-SAFETY: the discount config (discountTypes / legacy pricingTiers) and the AI-advisory
-      // toggle (aiBiEnabled) live in this SAME jsonb but are owned by OTHER screens (/discounts, the
-      // customer surface). parseConfig drops those unknown keys, so we re-read the LATEST config and
-      // PRESERVE them, writing only our cost keys over the top. A stale cost-panel load can never wipe
-      // what /discounts saved (money-safety on shared config).
+      // 🔴 CLOBBER-SAFETY, INVERTED (2026-09-09). `business_pricing_config.config` is ONE jsonb
+      // column with several owners — /discounts owns discountTypes + aiBiEnabled, the tax field
+      // owns taxRate, production planning owns `production` — and this write REPLACES THE WHOLE
+      // COLUMN. It used to name the keys it would PRESERVE, which is a claim about every other
+      // screen's data that no author here can make correctly: `taxRate` was never on that list,
+      // so a Save pressed for an unrelated reason could delete the sales-tax rate that prints on
+      // every invoice. Now the panel names the keys it OWNS and everything else is carried
+      // through untouched — see pricingConfigMerge.ts for why that is the only safe default.
+      //
+      // ⚠️ The previous comment here claimed "parseConfig drops those unknown keys". It does not —
+      // it is a CAST, so the stored keys ride along in memory and were being preserved BY ACCIDENT.
+      // That accident is what kept LAWNS's rate alive; it is not a mechanism anyone chose, and it
+      // fails the moment the panel falls back to EMPTY_COST_CONFIG (an unparseable config), which
+      // is the wipe reproduced in scripts/rls/pricing-config-clobber.rls.mjs §C.
       const { data: latestCfg } = await readPricingConfig(supabase, businessId);
-      const lc = (latestCfg?.config && typeof latestCfg.config === 'object' ? latestCfg.config : {}) as Record<string, unknown>;
-      const preserved: Record<string, unknown> = {};
-      for (const k of ['discountTypes', 'pricingTiers', 'aiBiEnabled'] as const) {
-        if (lc[k] !== undefined) preserved[k] = lc[k];
-      }
-      const configToWrite = { ...baseConfig, ...preserved };
+      const configToWrite = mergeOwnedOverConfig(latestCfg?.config, baseConfig as unknown as Record<string, unknown>);
+      const carry = describeCarry(latestCfg?.config, configToWrite);
+      console.log('[TRACE:COST] config write — top-level keys', {
+        businessId, carried: carry.carried, dropped: carry.dropped, ownedMissing: carry.ownedMissing,
+      });
       // Phase 2 wall: pricing config → the gated business_pricing_config table (legacy fallback
       // pre-migration). writePricingConfig also keeps the business_modules enablement flags set.
       const { error } = await writePricingConfig(supabase, businessId, configToWrite);

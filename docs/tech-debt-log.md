@@ -1316,3 +1316,78 @@ it trades an unknown cap for a known LOWER one). Full options with costs:
 
 **TRIGGER:** the next delivery day with more than 3 stops — i.e. **41% of days**, so effectively now.
 Story piece `waypoint_cap_decision` on *What the driver receives is what the manager saw*.
+
+---
+
+## #231 — 🔴 THE COST PANEL RENDERS FABRICATED DEFAULTS TO ANYONE WHO CANNOT READ THE CONFIG (NEW 2026-09-09)
+
+**Measured live 2026-09-09 under real RLS** (`scripts/rls/pricing-config-clobber.rls.mjs` §A,
+assertions A1–A3), not inferred.
+
+`packages/cultivar-os/src/pages/Settings.tsx:788` renders `<CostToProduceSettings />` with **no
+permission gate at all**. Its sibling one line above gets
+`<OperationsSettings … canReadMoney={can('pricing_recipe:read')} />`. The cost panel gets nothing.
+
+A manager holds no `pricing_recipe:*` — LAWNS's live manager permission array was read the same day
+and contains neither `pricing_recipe:read` nor `pricing_recipe:update`. So `readPricingConfig`
+returns **no row and no error** (an RLS filter is not an error), `parseConfig(undefined)` returns
+null, and the panel falls back to `EMPTY_COST_CONFIG` — **rendering built-in defaults as though they
+were the business's configuration**: a 40% margin baseline, an N-list of `1, 5, 20, 100`, a location
+named "Primary".
+
+🔴 **PROVEN, NOT ARGUED: on a tenant whose stored `unitLabel` is `'tree'`, the manager's panel
+renders `unit`.** Pressing Save then fails with a raw
+`new row violates row-level security policy for table "business_pricing_config"` — the panel offers
+a control that cannot work and explains nothing (§1.6 item 5, dead affordance).
+
+**THE ARCHITECTURE:** D-9 Surface Honesty, in the form the 2026-07-30 six-surface-states ruling
+generalised — *withheld data ANNOUNCES its redaction; never an empty list, never a zero*, and never
+a plausible default. The same class as `1000 of 1000` (#282) and as `api/dashboard.ts:72-73`, which
+returns `null` rather than `0` for a caller without `costs:read` *"because a redaction must not read
+as a real figure (D-9)."*
+
+**THE FIX** is small and known: pass `canReadRecipe={can('pricing_recipe:read')}` the way the
+sibling already does, and render a locked card naming what is withheld and why (§6 r13's
+locked-with-explanation, applied to a whole panel).
+
+**TRIGGER / WHY NOT FIXED HERE:** it changes what Lauren sees on a live customer tenant in the week
+of a demo, and that is David's call rather than a builder's. Surfaced from inside the tax-rate
+clobber fix (ledger #287), which deliberately did not touch what renders. Owner-test card:
+`docs/owner-tests/pricing-config-integrity-full-surface-test.md` CARD 6, `needs-test` **with this
+reason**.
+
+---
+
+## #232 — 🟡 `pricing_recipe:update` GRANTS NOTHING: EVERY WRITER OF THAT COLUMN UPSERTS, AND MEMBERS HAVE NO INSERT POLICY (NEW 2026-09-09)
+
+**Measured live 2026-09-09** (`pricing-config-clobber.rls.mjs` §B3), found while proving the
+clobber fix.
+
+`writePricingConfig` and therefore `mergePricingConfig` — the write path behind the Cost-to-Produce
+panel, `/discounts`, and the discount review — issue a PostgREST **`.upsert()`**, which is
+`INSERT … ON CONFLICT DO UPDATE`. Postgres requires the **INSERT** policy's `WITH CHECK` to pass on
+that statement. `20260727_rbac_flip_corrections.sql:85` **DROPPED `bpc_member_insert`** deliberately,
+on the reasoning that *"a pricing-config row is created ONCE, at onboarding, by the owner… a manager
+editing a recipe never needs to create one."*
+
+🔴 **THE REASONING IS SOUND AND THE CONSEQUENCE WAS NOT FORESEEN:** because the writer upserts
+rather than updates, a member holding `pricing_recipe:update` **cannot write the column at all**.
+Proven: a session granted `pricing_recipe:read` + `pricing_recipe:update` got
+`new row violates row-level security policy`. Only `businesses.owner_id` can save, via
+`bpc_owner_all`.
+
+So `pricing_recipe:update` is a permission that currently admits nobody through the app — **#85/#86's
+class** (a client gate that admitted nobody), one layer down, in the policy rather than the client.
+And `permissionManifest.ts:867` states *"The /discounts surface is why `pricing_recipe:update` is in
+this split"* — a surface that, for a member, cannot save.
+
+**THE ARCHITECTURE:** the write should be an `UPDATE` when the row exists (it always does after
+`seedPricingConfig`) with the INSERT reserved to onboarding — i.e. `writePricingConfig` reads,
+then updates or inserts, rather than upserting. Alternatively restore a member INSERT policy, which
+the correction migration argues against.
+
+**TRIGGER:** the first time a manager is expected to edit discounts or the cost recipe — or the
+first grant of `pricing_recipe:update` to a real person. ⚠️ **Not fixed in the clobber pass:
+re-shaping the write verb for four surfaces inside a fix for one is the scope creep that makes a
+diff unreviewable.** ⚠️ **It is also the reason the reported "one Save deletes their tax rate"
+could not have been Lauren's** — see ledger #287.

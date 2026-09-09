@@ -179,6 +179,15 @@ export { PRICING_RECIPE_PROTECTED_PATHS, TAX_RATE_PATH, jsonbPath } from './pric
 // seed a FULL pricing-config row at business creation — the missing row, not just the rate
 export { seedPricingConfig } from './seedPricingConfig';
 
+// The clobber-safe payload builder for a WHOLE-COLUMN write to business_pricing_config.config:
+// a screen names the keys it OWNS and every other key is carried through. See the module header
+// for why the enumeration runs this way round and not the other.
+export {
+  COST_PANEL_OWNED_KEYS,
+  mergeOwnedOverConfig,
+  describeCarry,
+} from './pricingConfigMerge';
+
 // The REVIEW that fills that row for a business already past creation — where seedPricingConfig
 // cannot reach (ignoreDuplicates:true makes it a silent no-op on an existing tenant). Pure.
 export { buildDiscountReview, buildAcceptancePatch, suggestTypeName, itemPercentOf, isDiscountItem, REVIEW_REFUSALS, PERCENT_CEILING } from './discountReview';

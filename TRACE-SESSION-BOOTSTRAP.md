@@ -79,6 +79,18 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 THE TAX-RATE WIPE ON COST-TO-PRODUCE SAVE — REAL, REPRODUCED, NOT REACHABLE BY LAUREN (2026-09-09, ledger #287)
+
+- 🟡 **BUILDER-COMPLETE on `main` · 6 owner-test cards, 0 COVERED** · `verify` exit 0 ZERO NET-NEW · **90/90 files, 4926 assertions** · **14 mutants, 14 caught** · **26 live RLS assertions** · **NO MIGRATION · api/ 12/12 · no new permission string** → `docs/owner-tests/pricing-config-integrity-full-surface-test.md`
+- 🔴 **`business_pricing_config.config` IS ONE JSONB COLUMN WITH FOUR OWNERS AND EVERY WRITER REPLACES THE WHOLE THING.** The cost panel named the three keys it would **PRESERVE**; `taxRate` and `production` were on no list. **FIX = the inversion:** a screen names the keys it **OWNS** and carries every other top-level key through — owned keys replaced **wholesale** so a deleted location stays deleted. Owned set is `Object.keys(EMPTY_COST_CONFIG)`, **derived, never typed out** (#179's lesson).
+- ⚠️ **TWO PROMPT PREMISES CORRECTED BY MEASUREMENT, NOT ARGUMENT.** ① **Lauren cannot reach it** — no `pricing_recipe:*` in her live array; her Save returns `new row violates row-level security policy`. ② **The panel does not load her real numbers** — the read is RLS-filtered to no-row-no-error and it renders `EMPTY_COST_CONFIG` as if it were her data (on a tenant storing `unitLabel:'tree'` her screen says `unit`).
+- 🔴 **THE WIPE IS REAL AND WAS REPRODUCED** on the `EMPTY_COST_CONFIG` fallback path. On a parseable config the rate survived **by accident** — `parseConfig` is a **cast, not a strip** — and the comment above the preserve list claimed the opposite. **LAWNS is not on that path today; one parsing change would put it there.**
+- 🔴 **NEW CLASS CAP `npm run verify:pricing-writers`** — DERIVES every whole-column writer from the corpus (**#73's lesson**), fails the build if one enumerates what it preserves. **Red-first against the pre-fix file**, and carries a **`--self-test` proving each check can refuse** (§6 r19).
+- ⚠️ **3 of 14 mutants survived the first run**, one aimed at the guard itself. **All three fixed in the harness, never by weakening a mutant.** ✏️ And `verify` caught two type errors **38 green probes structurally could not see** — the suite greps text, esbuild does not type-check.
+- ⚠️ **FILED:** **#231** (🔴 the panel is rendered with **no permission gate** while its sibling gets `canReadMoney` — a manager sees fabricated defaults presented as her data; **not fixed, it changes what a customer sees in demo week, David's call**) · **#232** (🟡 **`pricing_recipe:update` admits NOBODY** — every writer upserts, `bpc_member_insert` was dropped on purpose, so only `businesses.owner_id` can save the cost panel **or `/discounts`**; #85/#86's class one layer down).
+- 🔴 **RUN CARD 1 — IT NEEDS NO CONSOLE AND IT IS THE WHOLE DEFECT.** Test Dave's: note the tax rate → edit the Cost-to-Produce card → Save → **reload** → read it again. Then **CARD 3** (remove an N-list number, Save, reload, confirm it stays gone — the overcorrection check). **CARD 5 repeats it on LAWNS, only after Card 1 passes.**
+
+
 ### 🔴 SERVICES REVIEW — 147 ITEMS CALLED PRODUCTS, AND A LADDER INSIDE THE TREE PRICE (2026-09-08, ledger #283)
 
 - 🟡 **BUILDER-COMPLETE · `dc162bc` on `thunder/services-review` — NOT MERGED, NOTHING DEPLOYED · 18 owner-test cards, 0 COVERED** · `verify` exit 0 ZERO NET-NEW · **87/87 files, 4821 assertions** · **48 mutants, 48 caught** · **NO MIGRATION · api/ 12/12 · no new permission string** → `docs/owner-tests/services-review-full-surface-test.md`

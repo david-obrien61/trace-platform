@@ -76,6 +76,12 @@ const UNDO_REREAD_REASON =
 + 'still carry this run id in import_run_id or retired_by_run_id. That separates a refused write '
 + 'from an empty one, which a row count cannot do on these three sites.';
 
+const CLOBBER_PROBE_REASON =
+  'The pricing-config clobber probe. Two of its writes are ASSERTED TO BE REFUSED under RLS, so '
++ '`length === 0` cannot be the failure condition without inverting the probe\'s own result. '
++ 'Checked instead by a service-key RE-READ of the stored jsonb after each write, asserting which '
++ 'top-level keys survived — a stronger claim than "a row changed", and the one the file is for.';
+
 const ALLOWED_UNCHECKED = {
   // (Was empty by design — the 84 known sites are held by the BASELINE, which says "known today",
   //  not by declarations, which would say "correct forever". Different claims. The three entries
@@ -111,6 +117,28 @@ const ALLOWED_UNCHECKED = {
   'packages/shared/src/quickbooks/itemImportWriter.ts::cust#customers.delete': UNDO_REREAD_REASON,
   'packages/shared/src/quickbooks/itemImportWriter.ts::inv#business_inventory.delete': UNDO_REREAD_REASON,
   'packages/shared/src/quickbooks/itemImportWriter.ts::un#business_inventory.update': UNDO_REREAD_REASON,
+
+  // ── DECLARED 2026-09-09 — the pricing-config clobber probe (ledger #287) ──────────────────────
+  // 🔴 A ROW COUNT IS THE WRONG CHECK HERE, AND ON TWO OF THESE IT IS THE WRONG CHECK BACKWARDS.
+  //    `pricing-config-clobber.rls.mjs` exists to measure what a Save DOES to a shared jsonb column
+  //    under real RLS, and two of its four writes are asserted to be REFUSED — a manager's Save
+  //    (§A5) and a pricing_recipe:update holder's (§B3). Treating "zero rows affected" as failure
+  //    would turn the probe's two most important PASSES into errors.
+  //
+  // 🔴 WHAT IS IN PLACE INSTEAD IS STRICTLY STRONGER, AND IT IS THE WHOLE POINT OF THE FILE: after
+  //    every one of these writes the probe RE-READS the row with the service key and asserts on the
+  //    stored jsonb itself — which key survived, which was lost, and whether the top-level key set
+  //    shrank (§C7, §D3, §D6). A row count says a write landed; this says WHAT IT DID TO THE DATA,
+  //    which is the only thing a clobber probe can be about. `.select()` on these sites would add a
+  //    weaker check beside a stronger one and change nothing about what the file can catch.
+  //
+  // ⚠️ THE TEARDOWN IS NOT DECLARED AND MUST NOT BE. Its delete is CHECKED (`.select()` + a count
+  //    of 1, reported loudly rather than thrown from a `finally`) because a config row that
+  //    survives the run corrupts the next one — tech-debt #79's exact lesson.
+  'scripts/rls/pricing-config-clobber.rls.mjs::res#business_pricing_config.upsert': CLOBBER_PROBE_REASON,
+  'scripts/rls/pricing-config-clobber.rls.mjs::a1#business_pricing_config.update': CLOBBER_PROBE_REASON,
+  'scripts/rls/pricing-config-clobber.rls.mjs::owner#business_pricing_config.update': CLOBBER_PROBE_REASON,
+  'scripts/rls/pricing-config-clobber.rls.mjs::w#business_pricing_config.upsert': CLOBBER_PROBE_REASON,
 };
 
 function stripComments(src) {
