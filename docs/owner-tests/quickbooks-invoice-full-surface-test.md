@@ -79,7 +79,13 @@ David's live run flips it, with a date. **Changing a surface flips its card back
 ---
 
 ### CARD 1 — 🔴 THE OVERRIDE REASON DOES NOT REACH THE CUSTOMER'S INVOICE
-STATUS: owed
+STATUS: covered
+LAST-PROVEN: 2026-08-25 (David, live)
+
+✅ **COVERED — David, live, 2026-08-25, build `64a799a`.** Run as BLOCK C of that session's proof.
+The override reason did not reach the customer's invoice; the line read `<Service> — price adjusted`
+with the typed text nowhere on it. **Reported to chat and never filed — reconciled 2026-09-09.**
+
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: tech-debt #104 · ledger #215 · the invoice-surface half only
@@ -101,7 +107,17 @@ different surfaces and **only one of them was fixed** — see CARD 3.
 ---
 
 ### CARD 2 — 🔴 THE CONCESSION IS STILL FULLY VISIBLE — BOTH LINES, RIGHT AMOUNTS
-STATUS: owed
+STATUS: covered
+LAST-PROVEN: 2026-08-25 (David, live)
+
+✅ **COVERED — David, live, 2026-08-25, build `64a799a`.** All four conditions read off the
+QuickBooks invoice, with the arithmetic checked line by line:
+**820 + 384 + 125 + 1,575 − 575 = 2,329**, tax at **7.6% = 177.00**, **BALANCE DUE $2,506.00.**
+The full-retail line and the separate negative `— price adjusted` line both present, netting to what
+Cultivar charged, and **no QBO error 6070** — the failure D-48 was built to end.
+🔴 **This is the card that guards what already worked**, and withholding the reason did not cost the
+record. **Reported to chat and never filed — reconciled 2026-09-09.**
+
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: D-48 · the negative-adjustment shape · the QBO 6070 scar

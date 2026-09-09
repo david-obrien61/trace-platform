@@ -221,7 +221,7 @@ NAMED GAP = honest shell intended to fill on a stated horizon. Don't conflate th
 | 124 | 🔴 **EIGHTEEN WRITE-CAPABLE POLICIES GATE ON `is_active_member` ALONE, WITH NO PERMISSION STRING — ANY ACTIVE MEMBER INCLUDING STAFF CAN WRITE.** 🔴 **`business_inventory` IS THE ONE TO LOOK AT FIRST:** `business_inventory_member_all`, no `FOR` clause (Postgres defaults to ALL), so a STAFF session can insert, update and delete inventory rows with no permission gate whatsoever. **THE FULL SET, from the migration corpus:** `business_inventory` · `business_inventory_ledger` · `business_pmi_schedule` · `business_service_log` · `business_modules` · `business_discovery_profiles` · `cost_objects` · `cost_object_edges` · `cost_object_assignments` · `labor_resources` · `deliveries` · `receipts` · `inventory_counts` · `inventory_count_sessions` · `audit_log` (INSERT) · `storage.objects` (INSERT). ⚠️ **THREE PROBABLE FALSE POSITIVES, named rather than silently filtered:** `md_self` on `member_devices` is self-scoped (`user_id = auth.uid()`), `cultivar_plants_owner_all` is the fused owner-OR-member shape, and `audit_log`'s INSERT is very likely deliberate — an audit row must be writable by whoever is being audited. **Confirm each before treating it as a finding.** 🔴 **WHY THIS IS A CLASS AND NOT A LIST: it is the exact mirror of what Pass 2 (#228) just spent a build fixing.** That pass widened three surfaces that were too NARROW — an OWNER-role member refused by policies fencing on `owner_id`. This is eighteen tables that are too WIDE, in the same schema, at the same time. **We were measuring one direction of a two-directional problem**, and the query that found this was owed since the 2026-08-29 permissions audit precisely because the audit's third query filtered on `has_permission` and therefore could not see a policy that never mentions it. ⚠️ **tech-debt #123 (`business_pmi_schedule`, the last un-flipped DUAL_TABLES row) IS ONE ROW OF THIS CLASS** — and is itself cited by number in several places while NOT EXISTING in this log (see the #122/#123 drift note below). | 2026-08-29 (LAWNS discovery) | Every write-capable policy either names a permission string via `has_permission`, or is a DECLARED exception carrying its reason — the shape `select-policy-declarations.json` already uses for deny-all tables. The mechanisable form is the Part-1 fix named in the discovery doc: **a check that the three authority sources agree** — manifest status, live policy, and declared exception. | 🔴 **BEFORE ANY FIX OR ANY CANCELLATION: CONFIRM AGAINST THE LIVE CATALOG.** This was measured from the MIGRATION CORPUS, and repo ≠ catalog is the limit that produced instances #2, #3 and #9 of the same pattern. `SELECT tablename, policyname, cmd, qual, with_check FROM pg_policies WHERE schemaname='public' ORDER BY tablename;` — David runs it. **Not to be fixed in the pass that found it** (David's instruction: file as a class, do not fix). |
 | 123 | 🔴 **AN ACTIVE STAFF MEMBER CAN WRITE THE PMI SCHEDULE, AND IT IS A HOLE RATHER THAN A CONVENIENCE.** `business_pmi_schedule_member_all` is a **`FOR ALL` policy keyed on `is_active_member(business_id)` with NO permission string** ([`20260622_is_active_member_canonical_rls.sql:141-144`](../supabase/migrations/20260622_is_active_member_canonical_rls.sql#L141-L144)). It is the **last un-flipped row in `verify-universals.mjs`'s `DUAL_TABLES`** — the 2026-07-27 RBAC flip verb-split every neighbouring table (`cost_objects`, `deliveries`, `business_inventory`, `receipts`, `business_service_log` …) and this one was left as it was. So a STAFF member who holds **none** of `pmi:read` / `pmi:update` can nonetheless SELECT, INSERT, UPDATE and DELETE maintenance schedules — including deleting the cadence that says a machine is due. ⚠️ **The permission strings exist and are held correctly** (MANAGER has both, STAFF has neither): the manifest and the policy simply disagree, and `verify-authority-checks` already reports it as known-gap **P5** — *"resource 'pmi': no policy on business_pmi_schedule checks any string that resolves to pmi:\*"*. **The gap has been visible in every verify run and nothing acted on it.** ⚠️ **NOT FIXED HERE, on instruction**: surfaced by the operations-calendar Stage 0 recon (whose G2 premise was that this table was owner-only — it is the opposite), and a policy change belongs to the permissions pass, not a calendar build. ⚠️ **REPO-CORPUS EVIDENCE, NOT CATALOG:** `SUPABASE_PAT` was absent that session, so this is what the migrations say, not what the live catalog was observed to hold. Confirm against `pg_policies` before writing the fix. | 2026-06-22 (found 2026-08-28, ledger #233) | The verb-split every sibling already has: `business_pmi_schedule_member_select` on `pmi:read`, and insert/update/delete on `pmi:update`. `20260828_business_operating_days.sql` deliberately ships in that shape rather than copying this one. Closing it also closes capP's P5. | **The next permissions pass** — it is a live authority hole, not a latent one, and R-23's *"Juan logs his own PMI"* build will touch these exact policies. Do not close it inside an unrelated build. |
 | 122 | 🟡 **`orders.delivery_date` AND `deliveries.delivery_date` ARE TWO RECORDS OF ONE FACT, AND THE ASYMMETRY BETWEEN TENANTS IS NOW MEASURED.** This is **[[#108]]'s no-natural-key problem carrying a second consumer**, filed with evidence rather than restated. Measured live 2026-08-28: **LAWNS — 9 orders with a `delivery_date`, 9 `deliveries` rows, all 9 linked by `order_id`** (the 2026-08-27 history-order backfill set them). **Test Dave's — 18 orders with a `delivery_date`, 15 `deliveries` rows, and `order_id` populated on ZERO of them.** So on Test Dave's the two tables describe overlapping-but-unjoinable work: 2026-09-04 carries 2 delivery rows and 3 dated orders, and nothing can say whether that is 3 stops or 5. **The operations calendar reads `deliveries` ONLY and says so on the screen** — a deliberate, named absence rather than a dedupe rule invented inside a calendar build, which is how the calendar would have become where the duplicate-delivery bug lives. | 2026-08-25 (checkout delivery path); measured + filed 2026-08-28 (ledger #233) | ONE record of a scheduled stop. Either the checkout path always creates a `deliveries` row carrying its `order_id` (and `orders.delivery_date` becomes derived or retired), or a real key joins them. **The backfill for existing rows is the hard half** — Test Dave's 15 unlinked rows have no field that identifies which order made them. | Before ANY consumer unions the two — a booking/slot screen, a capacity readout, or a driver manifest. The calendar is the first consumer to want to and the first to refuse. |
-| 121 | 🟡 **PARTIAL 2026-08-31 (ledger #247) — THE CONTROL EXISTS; THE ROW STAYS OPEN UNTIL THE MIGRATION IS APPLIED AND DAVID HAS TAPPED IT.** A crew member marks a stop done from `/delivery-schedule` on a phone: `status='fulfilled'` plus `started_at`/`completed_at`, written as a plain RLS UPDATE under their own session (`deliveries:update`, held by all three bundles). ✅ **The prediction in this row's own FIX column held exactly** — `historyOrder.ts`'s `DELIVERY_COMPLETE` already accepted `fulfilled`, so the order status follows with no second rule, and a test now reads that list out of the real source file so the two cannot drift apart silently. 🔴 **STILL OPEN, and these are why:** `20260831d` is **GATED and UNAPPLIED** (four nullable columns — until David runs it the screen honestly says the control is unavailable rather than showing buttons that cannot write); **nothing has been owner-proven**; and **Lauren Frazier's 2026-08-26 install, and Saturday 2026-08-29's six real stops, are still unmarked** — that is David's to run, not a builder's. ⚠️ **And the half that is not built at all: a RESCHEDULE still cannot say where it went or why** — the `why` vocabulary is owed by David, so a day still cannot be read back as *"six completed · one moved to the 5th"*. | 2026-08-27 (ledger #224) | A **mark-delivered** control on the delivery surfaces, writing a complete-state value. `historyOrder.ts`'s `DELIVERY_COMPLETE` list already accepts `complete`/`completed`/`delivered`/`fulfilled`/`done`, so the order status follows automatically the day one lands — no second rule to rediscover. | Before any owner asks *"which of this week's installs are done?"* — i.e. the first Monday after a real delivery Saturday. **2026-08-31 is the natural trigger**, the Monday after the five 08-29 stops. |
+| 121 | 🟡 ✏️ **CORRECTED 2026-09-09 BY DAVID — THIS ROW SAID MORE WAS MISSING THAN IS. THE START/DONE TAPS ARE BUILT AND LIVE:** `/delivery-schedule` renders **Start this stop** on every row and **Mark done** on one, and **`started_at` IS SET on delivery `57c31e32`** (Paul Christ, 2026-09-04 21:50) — so the migration is applied and the control writes. 🔴 **WHAT REMAINS TRUE, AND ONLY THIS: `completed_at` is NULL on all 56 rows and `status` is `scheduled` on all 56.** Nothing has been carried through to done. ⚠️ **The reschedule half is unchanged and now has its own entry — a move is not logged at all (#229).** *(Prior wording, kept because it was true when written:)* **PARTIAL 2026-08-31 (ledger #247) — THE CONTROL EXISTS; THE ROW STAYS OPEN UNTIL THE MIGRATION IS APPLIED AND DAVID HAS TAPPED IT.** A crew member marks a stop done from `/delivery-schedule` on a phone: `status='fulfilled'` plus `started_at`/`completed_at`, written as a plain RLS UPDATE under their own session (`deliveries:update`, held by all three bundles). ✅ **The prediction in this row's own FIX column held exactly** — `historyOrder.ts`'s `DELIVERY_COMPLETE` already accepted `fulfilled`, so the order status follows with no second rule, and a test now reads that list out of the real source file so the two cannot drift apart silently. 🔴 **STILL OPEN, and these are why:** `20260831d` is **GATED and UNAPPLIED** (four nullable columns — until David runs it the screen honestly says the control is unavailable rather than showing buttons that cannot write); **nothing has been owner-proven**; and **Lauren Frazier's 2026-08-26 install, and Saturday 2026-08-29's six real stops, are still unmarked** — that is David's to run, not a builder's. ⚠️ **And the half that is not built at all: a RESCHEDULE still cannot say where it went or why** — the `why` vocabulary is owed by David, so a day still cannot be read back as *"six completed · one moved to the 5th"*. | 2026-08-27 (ledger #224) | A **mark-delivered** control on the delivery surfaces, writing a complete-state value. `historyOrder.ts`'s `DELIVERY_COMPLETE` list already accepts `complete`/`completed`/`delivered`/`fulfilled`/`done`, so the order status follows automatically the day one lands — no second rule to rediscover. | Before any owner asks *"which of this week's installs are done?"* — i.e. the first Monday after a real delivery Saturday. **2026-08-31 is the natural trigger**, the Monday after the five 08-29 stops. |
 | 120 | 🟡 `receipts` has no field registry. `customers` is the only entity with a declarative one (`customerFieldRegistry.ts`); every other entity restates its column set by hand at each read site. This build added one more — `customers/create.ts` selects `id, business_id, date, amount, ocr_raw, line_items_original` from `receipts` to build a history order — and had to be **DECLARED** in `verify-field-lists.mjs` rather than derived. Filed rather than fixed because minting a registry inside an unrelated build is exactly the drift these caps exist to catch (same call as #73's `OWNER_ONLY_PENDING` and #119's comment-stripper). | 2026-08-27 (ledger #223) | A `receiptFieldRegistry.ts` on the `customerFieldRegistry` pattern, with the select derived from it and a coverage check asserting in BOTH directions. R-19's shape: a field list that claims to cover a record must cover it, and a check must say so. | ⚠️ **`cost_objects` outranks this one and should go first** — `verify-field-lists.mjs`'s own header already counts it as read through FOUR hand-written select strings in four files; `receipts` is at two. Take them as one pass when the next build touches either surface. |
 | 1 | 🟢 Cultivar OS dashboard tiles — handleNavigate() was an empty stub. Fixed 2026-05-29: qr_checkout → /orders, qb_invoicing → scroll to #qb-section, social_media → /social/setup, delivery → /deliveries. All active tiles now navigate correctly. | Resolved 2026-05-29 | n/a | — |
 | 2 | QB integration is hardcoded with `IGNITION_OS_DATA` reference | Pre-2026-05-23 (per Session 1a audit findings) | AccountingAdapter interface per PLATFORM_STRATEGY.md target architecture; vertical-agnostic | When second vertical (KINNA-OS Phase 1) needs QB or alternative accounting connector |
@@ -588,6 +588,34 @@ build needs its own red-first proof, and a cap changed without one is the thing 
 ---
 
 ## #208 — 🔴 ONE PRESS OF SAVE ON THE COST PANEL DELETES LAWNS'S SALES-TAX RATE (NEW 2026-09-07)
+
+> 🔴 **RE-CHECKED 2026-09-09 AT DAVID'S INSTRUCTION — *"check #208 rather than assuming."* IT IS
+> STILL ARMED, AND POPULATING THE CONFIG MADE IT MORE DANGEROUS, NOT LESS.**
+>
+> **What changed:** `business_pricing_config` is now populated on LAWNS (`updated_at`
+> 2026-09-08 21:12 — `discountTypes` Military/CD10%/CD15%, `margin`, `locations`, `denominators`).
+> **`locations` is present**, so step 1 of the chain above — `parseConfig` returning `null` — no
+> longer fires.
+>
+> 🔴 **BUT STEP 1 WAS NEVER THE MECHANISM. THE PRESERVE LIST IS, AND IT IS UNCHANGED — READ TODAY AT
+> `packages/shared/src/components/CostToProduceSettings.tsx:438`:**
+> ```ts
+> for (const k of ['discountTypes', 'pricingTiers', 'aiBiEnabled'] as const) {
+> ```
+> **Three names. `taxRate` is still not one of them.** `parseConfig` drops unknown keys, so `taxRate`
+> is absent from `baseConfig`; it is absent from `preserved`; and `writePricingConfig`
+> (`financialDataAccess.ts:230`) is `.upsert({ business_id, config })` — **a whole-column replace,
+> not a merge.** `taxRate` does not exist anywhere in the cost-config shape
+> (`business-logic/CostToProduce.ts`: zero occurrences). **One press of Save still deletes it.**
+>
+> 🔴 **AND THIS IS THE PART TO SIT WITH: THE FIX MADE IT LOOK SAFE.** Before, the panel refused to
+> parse and showed platform defaults — a visible oddity that might have made someone stop. Now it
+> loads LAWNS's real numbers and **looks entirely trustworthy**, and the Save still wipes the tax
+> rate. **The warning sign was removed and the defect was not.**
+>
+> ⚠️ **`discountTypes` IS in the preserve list, so the new discount config survives a cost-panel
+> Save. It is `taxRate` alone that does not.** REPORTED, NOT CHANGED, per instruction.
+
 
 **FILED, NOT FIXED — David's instruction: *"it wants its own ledger row and its own fix."***
 
@@ -1085,6 +1113,162 @@ DIFFERENT screen, made from inside a services build, and it deserves its own own
 
 **TRIGGER:** before `/discounts` is run on any tenant whose config carries `pricingTiers`. Check
 first: `select config ? 'pricingTiers', config ? 'discountTypes' from business_pricing_config;`
+
+---
+
+## #226 — 🔴 THE OPTIMISER SILENTLY ROUTES THROUGH A PHANTOM WHEN AN ADDRESS DOES NOT RESOLVE (NEW 2026-09-09)
+
+**MEASURED live on LAWNS, build `f5f40e3`, David.** With **`104 Long Wedge Lane`** in place — a
+string Google cannot resolve — Cultivar reported, without hesitation or warning:
+
+```
+Route ready — 8 stops · 104.5 miles · 2h 31m · optimized order
+```
+
+With the same stop corrected to **`104 Longwedge Ln`**: **97.5 miles · 2h 21m**, and **the stop
+order materially reshuffled** — Rajendran moved **8 → 2**, Pelleg moved **5 → 8**.
+
+🔴 **SO `DirectionsService` RESOLVED THE BAD STRING TO SOMEWHERE ELSE AND OPTIMISED THE WHOLE DAY
+AROUND IT.** Not a dropped stop, not an error — a **phantom location** that silently reordered seven
+other people's deliveries and added seven miles. The driver would have been sent on it. **Nothing on
+the screen said anything was wrong**, and the summary read `optimized order` exactly as it does on a
+good day.
+
+🔴 **THIS UPGRADES OPEN DEFECT #11, AND MOVES IT.** The check does not belong beside the link button —
+by then the damage is in the route. **It belongs UPSTREAM OF THE ROUTE BUILD:** an address that does
+not resolve must stop the build and name itself, because a route built on a phantom is worse than no
+route.
+
+**TRIGGER:** before Lauren builds another route she does not personally verify. ⚠️ **NOT FIXED IN
+THIS PASS, BY INSTRUCTION — filed and stopped.** Recon first; see #227, which constrains the fix.
+
+---
+
+## #227 — 🔴 THE TWO GOOGLE SURFACES DISAGREE ON THE SAME STRING, AND THE PERMISSIVE ONE IS OURS (NEW 2026-09-09)
+
+**MEASURED live 2026-09-09, David, on the same two addresses.** `DirectionsService` — **the call
+Cultivar makes** — **accepted both bad addresses.** The consumer Maps URL — **the artefact the
+driver receives** — **refused both by name**: *"Google Maps can't find 321 Logan Randy Rd…"*.
+
+🔴 **THE PERMISSIVE SURFACE IS THE ONE WE BUILD THE ROUTE WITH, AND THE STRICT ONE IS THE ONE THE
+CUSTOMER-FACING ARTEFACT USES.** That is the wrong way round: we optimise confidently on a string the
+thing we hand over will reject.
+
+🔴 **THE COROLLARY IS THE EXPENSIVE PART, AND IT IS WHY THIS IS ITS OWN ENTRY: A VALIDITY CHECK
+CANNOT RIDE THE EXISTING `DirectionsService` CALL.** It cannot — that call is precisely the one that
+says yes. Closing #226 needs **Geocoding or Address Validation: a different request, a different
+quota, and a cost per call.** Anyone estimating #226 as "add a guard to the existing call" is
+estimating something that cannot work.
+
+**TRIGGER:** with #226. ⚠️ **NOT FIXED IN THIS PASS, BY INSTRUCTION.**
+
+---
+
+## #228 — 🔴 THE STOP CARD IS DATED A DAY EARLY, AND R-25 ALREADY FIXED THIS SHAPE ONCE (NEW 2026-09-09)
+
+**Observed live 2026-09-09, LAWNS.** On one card, three renderings of one day disagree:
+
+| where | reads |
+|---|---|
+| the stop card summary | **`No items · Sep 11`** |
+| the date field on that same card | `Sep 12, 2026` |
+| the day header above it | `Saturday, Sep 12, 2026` |
+
+🔴 **UTC-PARSE CLASS.** `new Date('2026-09-12')` parses as **midnight UTC** and renders as the
+**previous day** everywhere west of Greenwich — which is everywhere LAWNS operates.
+
+✏️ **AND WE HAVE ALREADY RULED ON IT: R-25 fixed this exact shape on the QuickBooks invoice read by
+slicing the day out of the STRING rather than constructing a `Date`. The fix never reached this
+card.** A ruling that lives in one reader and not in the others is [[R-26]]'s shape inside our own
+corpus — the third instance this fortnight.
+
+⚠️ **IT IS COSMETIC ONLY UNTIL SOMEBODY ACTS ON IT**, and this is a card a crew member reads to
+decide which day they are driving. **TRIGGER:** the next touch of the delivery-schedule card.
+**NOT FIXED IN THIS PASS.**
+
+---
+
+## #229 — 🔴 A DELIVERY DATE CAN BE MOVED AND NOTHING RECORDS WHO MOVED IT, WHEN, OR FROM WHAT (NEW 2026-09-09)
+
+**Normal working, not a defect in itself:** Lauren uses the inline date editor to move stops from the
+imported **ShipDate** to the **actual install date**. That is the job.
+
+🔴 **NOTHING LOGS IT.** No actor, no timestamp, no previous value. And **`notes` still asserts the
+original ship date**, so after an edit **the row contradicts itself** — one field says the stop moved,
+another still says it did not.
+
+🔴 **THE LOG IS NOT AUDIT THEATRE — IT IS WHAT PROTECTS HER EDITS FROM THE NEXT RE-INGEST.** On a
+re-ingest a **deliberately moved row is indistinguishable from one that came in wrong**, so a
+correction she made on purpose gets silently reverted to QuickBooks' ShipDate. The absence of the log
+is what makes the re-ingest unsafe.
+
+**LIKELY SEAM: `audit_log`** — members may INSERT. 🔴 **DO NOT force it into
+`business_inventory_ledger`: a reschedule is not inventory movement**, and that table is append-only
+with a trigger that rejects even `postgres`. **RECON BEFORE BUILDING. NOT BUILT IN THIS PASS, BY
+INSTRUCTION.**
+
+---
+
+## #230 — 🟡 THE STOP PICKER AND THE ROUTE PUT DIFFERENT ORDERS BEHIND THE SAME NUMBERED BADGE (NEW 2026-09-09)
+
+**Observed live 2026-09-09.** The picker numbers stops **1–8 in query order**; the route **renumbers
+them into the optimised order**. Same badge, same visual language, two different meanings on two
+screens a person moves between in one task.
+
+🔴 **ANYONE READING THE PICKER'S NUMBERS AS THE DRIVING SEQUENCE IS WRONG**, and nothing on either
+screen says which is which. This is §6 r18's class — a control asserting one thing while the state
+means another — in a numeral rather than a header.
+
+**FIX:** either the picker stops numbering (a checkbox does not need an ordinal), or the badge says
+what it counts. **TRIGGER:** next touch of `/deliveries`. **NOT FIXED IN THIS PASS.**
+
+---
+
+## #224 — 🔴 THE COLLISION DETECTOR DOES NOT KEY ON THE PARSED SIZE, SO "22 COLLIDING ITEMS" IS A FLOOR AND A PASSING CARD SAYS OTHERWISE (NEW 2026-09-09)
+
+**David's finding, reconciling the catalogue-import run.** The import's collision detector compares
+the **raw size TEXT**. It does not key on the parsed-size projection — `unit_kind` / `unit_value` /
+`unit_name` — so two rows with the **same name and the same parsed size but different size text**
+(`15 gal` against `15 Gallon`) are **not detected as colliding**.
+
+🔴 **THE COST IS NOT THE MISS, IT IS THAT A CARD REPORTS GREEN OVER IT.** `qb-catalogue-import`
+**CARD 2** asserts *"22 colliding items, 6 with a price difference"* and the screen agrees with it.
+**Both numbers are a FLOOR, not a count.** Lauren's review list is short by an unknown number, and
+the card that exists to prove *nothing was silently dropped* would pass while something was. **A
+passing card over a wrong number is worse than a failing one** — which is why CARD 2 now carries a
+blocking DO-NOT-TICK note rather than a `failed` flip: its procedure is sound, its expected values
+are not yet knowable.
+
+✏️ **THIS IS TECH-DEBT #56'S FAMILY AT A NEW ADDRESS.** Six spellings of three sizes are already
+known to be live in this catalogue, and the one shared `normalizeSize` was imported into the services
+review for exactly this reason on 2026-09-08. The detector never got it.
+
+**CORRECT ARCHITECTURE:** key the comparison on **R-27's projection**, which exists to close exactly
+this and is already computed. Then **re-measure both numbers** and rewrite CARD 2's expected values.
+
+**TRIGGER:** before Lauren reviews a collision list she is expected to act on. **NOT FIXED IN THIS
+PASS, BY INSTRUCTION** — filed and stopped.
+
+---
+
+## #225 — 🟡 THE ROLES PAGE RENDERS 39 PILLS AGAINST A MEMBER-ROW ARRAY OF 40 (NEW 2026-09-09)
+
+**Checked live at Lauren's desk 2026-09-08 on `6b2f881`.** STAFF renders **10**, which matches.
+**MANAGER renders 39 against an array of 40 — one string is held and not rendered.**
+
+✅ **THE LARGER HALF WENT THE RIGHT WAY AND SHOULD BE SAID:** the legacy pills are gone and the
+**un-removable class went 29 → 1.** That is the bulk of `6b2f881`'s purpose and it landed.
+
+🔴 **IT IS REDUCED, NOT CLOSED, AND IT MUST NOT BE FILED AS A PASS** (David's instruction).
+`team-permissions` **card 5** asserts precisely *"after any save, the count on screen equals the
+member row's array length"* — which is currently **false**. It is left `owed` rather than flipped to
+`failed`, because the observation was made while checking the perms module and did **not** walk that
+card's own steps (save a role, then compare). **Re-running card 5 as written is what settles which it
+is.** `rbac` **N-3** is likewise partial: a card asserting *"no `declared-unwired` string renders"*
+cannot be ticked while one does.
+
+**WHICH STRING IS HELD IS NOT YET KNOWN** — that is the first question, and it decides whether this is
+a render bug or a manifest classification that is doing its job.
 
 ---
 

@@ -31,7 +31,8 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 2 of 34 covered** (30 `owed` · 2 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
+**Board: 7 of 35 covered** (25 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
+⚠️ **THE TOTAL WAS WRONG IN THIS HEADER AND IN THE SESSION REPORTS — corrected 2026-09-09.** It has been stated as **24**, as **34**, and the file holds **35**: CARD 14 was split into 14a/14b and the header was never re-added up. The counted figure is now derived on every `npm run verify` by `verify:owner-boards`, which prints a board whose header disagrees with its own cards. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
@@ -192,6 +193,20 @@ should be re-derived rather than compared. `categories ≠ 38` means the folder 
 
 ## CARD 2 — 🔴 THE ONE THAT WOULD HAVE COST THE MOST: nothing was silently dropped
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+> 🔴 **DO NOT TICK THIS CARD. IT PASSES OVER A NUMBER THAT IS WRONG — filed 2026-09-09 as
+> tech-debt #224, on David's finding.** The card asserts **"22 colliding items, 6 with a price
+> difference"** and the screen will agree with it. **Both are a FLOOR, not a count.** The collision
+> detector keys on the raw size TEXT, not on the parsed-size projection
+> (`unit_kind` / `unit_value` / `unit_name`), so two rows with the **same name and the same parsed
+> size but different size text** — `15 gal` against `15 Gallon` — are not seen as colliding.
+> Lauren's review list is therefore **short by an unknown number**, and the card would report green
+> while she reviews an incomplete list. R-27's projection exists to close exactly this.
+>
+> **A passing card over a wrong number is worse than a failing one**, which is why this is a
+> blocking note rather than a `failed` flip: the card's *procedure* is sound, its *expected values*
+> are not yet knowable. It becomes tickable when the detector keys on the projection and the two
+> counts are re-measured. **Not fixed in this pass, by instruction.**
 On the same response, read `adapted.collisions`.
 
 1. `adapted.counts.collidingItems` is **22** (eleven pairs).
@@ -464,7 +479,10 @@ purpose of doing this here first.
 > is the correct answer; the undo surfaces it in `leftovers` rather than swallowing it.
 
 ## CARD 6 — the import runs on LAWNS and reports what it did
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** **created 647 · retired 447 · ledger 456 unchanged.** The retire reported complete (0 unreached). Both counted rows retired with their qty intact. The screen showed **647, not 1,094** — and the 1,094 is explained rather than waved away: 647 new + 447 old, with **three-way agreement on the 447** (`no_qb_id` / `no_run_id` / `retired_at IS NOT NULL` all return the same set). 🔴 **647 rows landed in the single un-batched `INSERT` the card flagged as never run at this size.** That question is now answered: it holds.
+
 
 > 🔴 **STEP ZERO — TAKE A FINGERPRINT BASELINE. DAVID'S ADDITION, 2026-09-07, AND THE BOARD WAS
 > WRONG NOT TO ASK FOR IT.** CARD 10 verified the wipe by counting rows and eyeballing one variety.
@@ -522,7 +540,10 @@ live — 1,094 rows; the undo removes the 647 it made).
 ---
 
 ## CARD 7 — 🔴 THE ONE QUERY THAT PROVES THE RETIRE WAS COMPLETE
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** the query returned **0**. R-94 in one line — nothing that is not this run's own work was left live.
+
 SQL editor:
 
 ```sql
@@ -545,7 +566,10 @@ added in between.
 ---
 
 ## CARD 8 — the two counted rows retired too, and that was the ruling
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** both counted rows **retired with qty intact**, and both were **back after the wipe with a matching fingerprint**. Hidden, not destroyed — R-94 retires them, R-70 ① still forbids deleting them.
+
 
 ```sql
 SELECT name, size, qty, retired_at IS NOT NULL AS retired
@@ -587,7 +611,12 @@ for you. **If you would rather see one, that is a decision — say which, and it
 ---
 
 ## CARD 10 — 🔴 THE WIPE. This is the promise, and it must be exact.
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** the wipe ran and **step 8 — the fingerprint — was the step that closed it.** Baseline re-verified at the close: **447 · 2 · 0 · `c3be3f88c52cf3a601d950408a1b1ec1`**, ledger **456**. The rows came back *unchanged*, not merely back — which counting alone cannot see. 
+
+⚠️ **RECORDED LIMIT — THE UNDO WAS RUN FROM THE BROWSER CONSOLE, NOT FROM A BUTTON.** This card's steps are written as a console `fetch` and that is what was performed. **CARD 30 (the wipe *through the button*) and CARD 29 (the Undo surviving a refresh) are NOT proven by this run** and stay `owed`. A card that claims the surface is not satisfied by a card that exercised the endpoint.
+
 🔴 **Count the receipts and the deliveries BEFORE you press it**, so the after-numbers are compared
 against something you read rather than something this file claims:
 
@@ -843,7 +872,10 @@ can see the row count change.**
 ---
 
 ## CARD 20 — nothing wrote to the ledger
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** **ledger count identical before and after: 456.** R-93 holds — in test mode this import writes no ledger rows, so the undo has nothing it cannot reach.
+
 🔴 **Read the ledger count BEFORE CARD 6 and again after.**
 
 ```sql

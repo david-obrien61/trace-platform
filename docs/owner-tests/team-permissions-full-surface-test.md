@@ -65,7 +65,14 @@ funnel closes that; card 1 is the live proof.
 ---
 
 ### 1. Owner grants a permission on /team → the MEMBER ROW changes → the manager's next action succeeds
-STATUS: owed
+STATUS: covered
+LAST-PROVEN: 2026-07-24 (David, live)
+
+✅ **COVERED — David, live, 2026-07-24.** The permission funnel proven end to end through `/team`:
+owner grants → the **member row** changes → the manager's next action succeeds. This card's `COVERS`
+already names *"card 18 (the live `import_pricing` case)"*, which is the id David reported it under.
+**Reported to chat and never filed — reconciled 2026-09-09.**
+
 DEVICE: desktop
 COVERS: card 18 (the live import_pricing case), ledger #149, R4, the whole defect
 LAST-PROVEN: never
@@ -107,6 +114,16 @@ SIGNAL: none — visual
 
 ### 5. After any save, the count on screen equals the member row's array length
 STATUS: owed
+
+> 🔴 **CHECKED LIVE 2026-09-08 ON `6b2f881` AND IT DOES NOT HOLD — FILED, NOT FLIPPED.** **MANAGER
+> reads 39 on screen against a member-row array of 40.** One string is held and not rendered. This is
+> exactly the assertion this card makes, and it is currently **false**.
+>
+> ⚠️ **NOT marked `failed`, on David's instruction that this is a PARTIAL and must not be filed as a
+> pass either way** — the run did not walk this card's own steps (save a role, then compare), it
+> observed the mismatch while checking the perms module. **Re-run this card as written to settle
+> whether it is `failed` or whether the count is stale for a different reason.** Filed as
+> tech-debt **#225**.
 DEVICE: desktop
 COVERS: R3 (one number, one source — the screen read RD while the gate read BM)
 LAST-PROVEN: never

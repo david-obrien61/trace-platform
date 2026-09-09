@@ -11,7 +11,8 @@
 **Story:** `user_stories.md` → *What the driver receives is what the manager saw* (PIECES `handoff_order_parity`, `one_derived_route_url`, `stop_count_parity`)
 **Surface:** `/deliveries` — and, for every card below, **the artefact that leaves it**.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 8 covered** (7 `owed` · 1 `needs-test`).
+**Board: 3 of 8 covered** (4 `owed` · 1 `needs-test`) — **CARDS 1, 2 and 7 proven live 2026-09-09 on LAWNS, build `f5f40e3`, the first run in this feature's history.** **CARD 2 is `covered` WITH A NAMED LIMIT** (Cultivar on the phone, Google's render on desktop — the mobile half is unevidenced). CARD 8 carries a partial desktop finding and a rewritten method; it stays `needs-test`.
+⚠️ **THE ROUTE COULD NOT BE BUILT UNTIL TWO LIVE ADDRESSES WERE CORRECTED** — see CARD 2 and tech-debt #226/#227.
 **DEVICE:** CARDS 1–3 and 5–6 are `DEVICE: desktop` (Lauren builds the route at a desk). **CARD 4 is `DEVICE: phone` and is the one that matters most** — it reads what actually landed on the installer's handset, and it is provable **without a console**.
 
 ---
@@ -34,7 +35,29 @@ error that produced this board.
 ---
 
 ## CARD 1 — the link carries the order the screen shows
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS: covered · **DEVICE:** desktop · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-09, LAWNS, build `f5f40e3`. THE FIRST RUN IN THIS FEATURE'S
+HISTORY.** Saturday 09-12, **8 stops**. Google's own panel returned:
+
+`400 Honey Comb Mesa → 348 Blue Oasis Ln → 2020 Saco St → 3809 Alpine Rdg Cv → 602 Hereford Lp →
+405 Captain Grumbles Dr → 104 Longwedge Ln → 321 Logan Ranch Rd → 280 Whitney Woods Cir →
+400 Honey Comb Mesa`
+
+— **identical to the on-screen optimised list, in order, round trip.** Independent corroboration:
+**Google 2h 22m against Cultivar's 2h 21m.** The reported defect — the link carrying rung-up order —
+is dead.
+
+⚠️ **TWO LIMITS RECORDED, because the card is only worth what its conditions were:**
+① **it required two address corrections first** — the route could not be built until they were made,
+so this is a proof of the handoff, not of address quality; ② **Google's render was read on DESKTOP.**
+
+✏️ **I FILED THIS RUN ON CARD 1 ALONE AND DAVID OVERRODE IT — CORRECTED 2026-09-09.** My call was
+that a desktop read could not touch CARD 2. **Cultivar's screen was on the PHONE**; only Google's own
+render was read on desktop. **CARD 2 is now `covered` with its unevidenced half named on the card.**
+Both cards are satisfied by this one run — CARD 1 is the desktop link, CARD 2 is what the driver
+receives — and they are recorded separately because they assert different things.
+
 
 1. Open `/deliveries`. Select **4 or more** stops at spread-out addresses — you want a set whose
    shortest-path order is genuinely different from the list order. *(The list is newest-order-first,
@@ -52,7 +75,34 @@ this card fails, nothing else on this board matters.**
 ---
 
 ## CARD 2 — 🔴 the text the installer receives
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS: covered · **DEVICE:** phone · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS) — PASSED WITH ONE LIMIT
+
+✅ **COVERED — PASSED WITH A NAMED LIMIT. David, live, 2026-09-09, LAWNS, build `f5f40e3`. THE FIRST
+RUN IN THIS FEATURE'S HISTORY, and this is the card the whole build was for.**
+
+**Method:** Saturday **2026-09-12**, 8 stops → **Route this day** → link opened in Google Maps.
+Google's own directions panel returned, in this order:
+
+`400 Honey Comb Mesa → 348 Blue Oasis Ln → 2020 Saco St → 3809 Alpine Rdg Cv → 602 Hereford Lp →
+405 Captain Grumbles Dr → 104 Longwedge Ln → 321 Logan Ranch Rd → 280 Whitney Woods Cir →
+400 Honey Comb Mesa`
+
+**Byte-identical to the on-screen optimised list, round trip from the farm.** Independent
+corroboration: **Google 2h 22m against Cultivar's 2h 21m.** The reported defect — the link carrying
+the order things were rung up in — is dead.
+
+🔴 **WHICH HALF IS EVIDENCED, AND WHICH IS NOT — STATED RATHER THAN LEFT TO THE TICK:**
+✅ **Cultivar's screen was read ON A PHONE.** ❌ **Google's own render was read on DESKTOP.**
+So the **order parity** is proven and the **mobile waypoint behaviour is not** — and mobile is where
+the documented cap drops from 9 to 3 (CARD 8, tech-debt #223). At 8 stops nothing truncated on
+desktop; whether the same link truncates when Google opens it in a phone browser is **the open half**,
+and it is the same question CARD 8 asks.
+
+⚠️ **SECOND LIMIT: THE RUN REQUIRED TWO ADDRESS CORRECTIONS BEFORE IT COULD BE BUILT AT ALL** —
+`321 Logan Randy Rd` → `321 Logan Ranch Rd` and `104 Long Wedge Lane` → `104 Longwedge Ln`. **Either
+one alone blocked the whole route.** This is a proof of the handoff, not of address quality — and the
+defects that fell out of it are tech-debt **#226** and **#227**.
+
 
 **This is the card the whole build is for.** Lauren texts the route; nobody has ever checked what
 arrives.
@@ -130,7 +180,12 @@ the farm.
 ---
 
 ## CARD 7 — the farm is at both ends
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS: covered · **DEVICE:** desktop · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS)
+
+✅ **COVERED — David, live, 2026-09-09, LAWNS, build `f5f40e3`.** The same Google panel read
+**`400 Honey Comb Mesa` first and last** — the driver leaves the farm and returns to it. Settled by
+the CARD 1 run; recorded separately because it is a separate assertion.
+
 
 1. Open any built route's Google Maps link.
 
@@ -142,6 +197,23 @@ leaves from the farm and comes back to it.
 
 ## CARD 8 — ⚠️ the waypoint cap on a long day
 **STATUS:** needs-test · **DEVICE:** phone · **LAST-PROVEN:** —
+
+> ⚠️ **PARTIALLY ANSWERED 2026-09-09 — AND IT STAYS `needs-test`, BECAUSE WHAT WAS MEASURED IS NOT
+> WHAT THIS CARD ASKS.** On the 8-stop Saturday route, **Google accepted 10 waypoints (origin + 8 +
+> destination) with no truncation and no cap warning.**
+>
+> 🔴 **THAT DOES NOT TEST THE CAP, AND SAYING SO IS THE POINT.** Eight intermediate stops is **below**
+> Google's documented desktop cap of 9, and it was read **on desktop**. This card is `DEVICE: phone`,
+> where the documented cap is **3**. The run is real evidence that nothing truncates at 8 on desktop;
+> it is not evidence about the surface Lauren actually texts to.
+>
+> 🔴 **THE METHOD IS REWRITTEN, ON DAVID'S INSTRUCTION, BECAUSE THE OLD ONE COULD NOT BE RUN.** It
+> said "build a 12-stop route" — **no LAWNS day has 10 or more stops** (measured: 1–14 per day, mean
+> 3.6, but the 14 is not a single deliverable day), and the only way to manufacture one on LAWNS is to
+> **re-date live delivery rows, which is forbidden.** Instead, do **either**:
+> **(a)** select stops across **multiple days** in one route build — the selection is not date-bound; **or**
+> **(b)** seed 12 stops on **Test Dave's** and build the route there.
+> Then text it, **open it on a phone**, and count the destinations that actually arrive.
 
 🔴 **DELIBERATELY NOT TESTED HERE, AND THE REASON IS THE POINT.** Google's documented URL form caps
 waypoints at **9 (desktop) / 3 (mobile browser)** and **ignores the excess silently**. We emit an

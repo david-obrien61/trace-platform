@@ -354,6 +354,12 @@ LAST-PROVEN: never
 
 ### N-3 — Only manifest-`enforced` strings render as pills
 STATUS: owed
+
+> ⚠️ **PARTIAL 2026-09-08, `6b2f881`. THE PILL HALF PASSED; THE CARD DOES NOT CLOSE ON IT.**
+> **The legacy pills are gone and the un-removable class went 29 → 1** — a real and large reduction,
+> and STAFF renders **10**, which matches. 🔴 **It is REDUCED, NOT CLOSED: one string survives, and
+> MANAGER renders 39 against an array of 40** (`team-permissions` card 5, tech-debt #225). A card
+> asserting *"no `declared-unwired` string renders"* cannot be ticked while one does. **Stays `owed`.**
 PHASE: 0
 DEVICE: desktop
 COVERS: spec §7.1 · **replaces retired `team-permissions` card 6**

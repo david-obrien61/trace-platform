@@ -68,6 +68,34 @@ Then run **V1–V9 in the migration footer and paste the output**, not a sentenc
 ### CARD 1 — an OWNER-role member who is not the account holder can edit a service
 STATUS: owed · LAST-PROVEN: — · DEVICE: desktop · COVERS: #228
 
+> 🔴 **PROVEN IN PART 2026-09-08 — AND DELIBERATELY NOT FLIPPED TO `covered`. READ THIS BEFORE
+> RE-RUNNING IT; MOST OF IT IS ALREADY DONE.**
+>
+> ✅ **R-22's ACCESS CLAIM IS OWNER-PROVEN, AND IT IS THE FIRST PROOF SINCE 2026-08-29.** Lauren — an
+> **OWNER-role member who is NOT `businesses.owner_id`** — **wrote `Trip Charge` at $50 into
+> `service_offerings` on her own login, 2026-09-08 20:39 UTC.** A non-account-holder OWNER can write
+> services. That is Pass 2 / Stage 1, and it held.
+>
+> 🔴 **WHY THE CARD IS STILL `owed`: IT ASKS FOR THREE WRITES AND ONE WAS PERFORMED.** The **+ Add
+> service** path is proven. **On/Off flipping and surviving a reload** is not, and **Edit → change
+> price → Save → reload** is not. Flipping this card would assert two proofs nobody performed —
+> OP-14 clause 3, and the exact failure this board exists to make visible.
+>
+> ⚠️ **AND THE TENANT DIFFERS FROM THE CARD.** The card is written for **Test Dave's**; the run was on
+> **Lauren's own login against LAWNS**, which is the stronger tenant and the one that matters — but it
+> is a different fence, so the Test Dave's run is not implied by it.
+>
+> **TO CLOSE IT:** the two remaining bullets, either tenant, one sitting. Ten minutes.
+>
+> ✅ **AND THE BLOCKING DEFECT THIS BOARD WAS WAITING ON IS CLOSED — 2026-09-09.** David and Lauren
+> populated `business_pricing_config` on LAWNS (`updated_at` 2026-09-08 21:12: `discountTypes`
+> Military / CD10% / CD15%, plus `margin`, `locations`, `denominators`). **Lauren can read AND add
+> both discounts and services on her own login.** Blocking defect ① is closed, and **defect ② — the
+> raw Postgres string — goes with it**, no longer reachable by that path.
+> ⚠️ **This does NOT disarm tech-debt #208** — re-checked the same day, the cost panel's preserve
+> list is still three names and still omits `taxRate`. Populating the config removed the warning
+> sign, not the wipe.
+
 Sign in as the **OWNER-role member who is NOT `businesses.owner_id`** on Test Dave's. Open **Settings → Services**.
 
 - Press **On/Off** on any add-on. **It flips and stays flipped after a reload.**

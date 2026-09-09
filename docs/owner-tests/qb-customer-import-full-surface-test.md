@@ -13,6 +13,11 @@ the catalogue import. **Recorded OPEN rather than papered over** (§9 story gate
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
 **Board: 0 of 22 covered** (20 `owed` · 2 `needs-test`).
+⚠️ **THE IMPORT IS CURRENTLY LANDED ON LAWNS AND WAS NOT UNDONE — DELIBERATE, 2026-09-09**, so Lauren
+can work the findings report. **Assume ~1,972 customers carrying an `import_run_id`, NOT the 30-row
+baseline this board's cards describe.** Every count on every card below was written against that
+baseline and is now wrong; read them as shapes, not as numbers, until they are re-measured.
+🔴 **DO NOT RUN THE UNDO TO "reset" for a card.** The run is landed on purpose.
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. The ingest is
 owner-gated (R-80) **and** requires `customers:create` + `customers:update` — an AND, not an OR.

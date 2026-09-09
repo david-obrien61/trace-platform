@@ -7,7 +7,7 @@
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 
 **Capability:** discounts / pricing config · **Ledger:** #279, corrected by **#280**
-**Board: 0 of 25 covered** (24 `owed` · 1 `needs-test`).
+**Board: 2 of 25 covered** (22 `owed` · 1 `needs-test`) — **CARD 12 and CARD 15 proven live 2026-09-08.**
 
 > 🔴 **EVERY CARD BELOW WAS WRITTEN AGAINST `2f94fbb`, WHICH RENDERED DOLLARS AS PERCENTAGES.**
 > David owner-proved it 2026-09-07 15:53 and the screen read *"Military Discount · used on 9
@@ -155,7 +155,12 @@ Untick a row.
 it reads *Nothing selected*. **FAIL:** the button offers to add rows you unticked.
 
 ### CARD 12 — 🔴 THE TAX RATE SURVIVES. RUN THIS ONE CAREFULLY.
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live)`
+
+✅ **COVERED — David, live, 2026-09-08.** `taxRate` held at **0.0825** across the config write. The
+STOP condition on this card did not fire: `mergePricingConfig` did not fail open, and no invoice was
+left charging $0 tax under a redline.
+
 **BEFORE**, in the Supabase SQL editor:
 ```sql
 SELECT config->'taxRate' AS tax, config ? 'discountTypes' AS has_discounts,
@@ -186,7 +191,17 @@ FROM business_pricing_config WHERE business_id = '<tenant>';
 and tier(s), each with its percent, all editable as normal. **FAIL:** you have to refresh to see them.
 
 ### CARD 15 — 🔴 THE DISCOUNT AT THE TILL, ON THE TREES ONLY
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+
+✅ **COVERED — David, live, 2026-09-08, Test Dave's.** The percent-discount defect (#280 — *the
+percents were dollar amounts*) is **owner-proved fixed**. Review renders the three-line goods block
+with **services untouched**, and **the button quotes the same total the confirmation charges**:
+**$900 → −$90 → $810 → tax $61.56 → $871.56, on both screens.**
+🔴 **The second half of that sentence is R-110 ① — the button quotes the order — proven here for the
+first time on any tenant.** ⚠️ **It does NOT close `report-fidelity` CARD 1**, which is a different
+tenant, a different customer and a different defect: LAWNS, `LEANDER AREA WHLS NRSY SPLY` on `CD10%`,
+`DEVICE: phone`. That card stays `owed` and it is the one that matters for Tuesday.
+
 Tag a customer with one of the new tiers on the Customers page — **copy the name exactly**. Ring up
 an order with a tree AND a delivery or placement service. Reach the confirmation screen.
 **PASS:** the totals read `Goods subtotal (retail)` → `<your tier> −$X` → `Goods after discount`,

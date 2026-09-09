@@ -7,7 +7,7 @@
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 
 **Capability:** services / `service_offerings` · **Ledger:** #283
-**Board: 0 of 18 covered** (18 `owed`).
+**Board: 6 of 18 covered** (12 `owed`) — **CARDS 1, 12, 13 and 15 proven live 2026-09-08 on Test Dave's; CARD 10 on LAWNS; CARD 3 FAILED and then PASSED the same day**, both runs recorded on the card.
 
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. The review is mounted at
@@ -44,7 +44,10 @@ than papered over. **A story is owed for this surface.**
 ## PART ONE — THE READ
 
 ### CARD 1 — nothing has been read, and nothing has been written
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+
+✅ **COVERED — David, live, 2026-09-08, Test Dave's.** the review card rendered above the Services list with one button, no rows and no numbers, and the `service_offerings` count was unchanged before and after opening the page. Nothing is written until a row is pressed.
+
 Open `/settings/services` as the owner on **Test Dave's**. Before pressing anything, run in SQL:
 `select count(*) from service_offerings where business_id = '<Test Dave's>';`
 **PASS:** a card headed **"Find the services you already charge for"** sits above the existing
@@ -60,7 +63,28 @@ Press **Find my services**.
 state change, or an error appears that does not say which read failed.
 
 ### CARD 3 — the read on LAWNS, and the census line
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08` · David, live, LAWNS, after `bd94598`
+
+🔴 **FAILED 2026-09-08, THEN PASSED 2026-09-08 AFTER `bd94598`. BOTH RUNS ARE RECORDED, IN ORDER —
+this card is not collapsed to "covered", because a card that failed and was then fixed is a stronger
+record than one that only ever passed.**
+
+**RUN 1 — FAILED.** David, live, LAWNS, on a 30-page print of the screen. The census read
+**500 · 140 · 7 · 0 · 38** against the required **564 · 73 · 8 · 2 · 38**, and **all 81 items printed
+*"This item has no income account in QuickBooks."*** Two symptoms, **one root cause**: the
+`IncomeAccountRef` read returned nothing, so `classifyDestination` had no axis to sort on and **trees
+appeared on the services menu** — the precise failure R-112 was written to prevent.
+
+**THE FIX — `bd94598`,** *"the item income account was never read — one word, and the axis was dead"*:
+`incomeAccountName` → `incomeAccount`. The axis existed, was correct, and was being read off a field
+name that did not exist. ✏️ *Nothing in the build could have caught it: 125 probes and 48 mutants all
+built their observations from fixtures that spelled the field the way the parser expected. It took
+her real books. This is #182's shape — the harness could not reach the thing.*
+
+**RUN 2 — PASSED.** Census read **564 · 73 · 8 · 2 · 38**, summing to 685, with **0 no-account rows**.
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS, on `bd94598`.**
+
 Same, on LAWNS. This is the real capture: 685 items, 1,481 invoices.
 **PASS:** it completes, and the green box at the top reads **"Your QuickBooks holds 685 items, and
 they are not all products"** followed by a split. On the 2026-09-04 capture that split is
@@ -121,7 +145,15 @@ That is what this costs you, not something you sell"* — with **no checkbox and
 missing, or a reason is absent.
 
 ### CARD 10 — the placement ladder, offered without touching what you have
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, LAWNS)`
+
+✅ **COVERED — David, live, 2026-09-08, LAWNS, `bd94598`.** After the press: **3 rows unchanged ·
+tree placement still $125 · `default_install_price` still null · no placement row written · the
+ladder wrote nothing.** Byte-identical before and after. 🔴 **This is the card that proves the
+ladder is REPORTED and never SAVED** (tech-debt #220) — the section offers six rungs and the button
+below it does not write one of them, which is the whole reason the ladder was allowed to ship as a
+suggestion.
+
 🔴 **Before pressing anything, write down what your placement price is today** — the Services list
 below, and `nursery_profiles.default_install_price`.
 **PASS:** a section **PUTTING THE TREE IN THE GROUND** says planting is not a line on any invoice,
@@ -145,7 +177,10 @@ it would put a **negative-priced row** on your checkout.
 ## PART THREE — THE WRITE
 
 ### CARD 12 — 🔴 A $0 SERVICE CANNOT BE SAVED
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+
+✅ **COVERED — David, live, 2026-09-08, Test Dave's.** a $0 price was refused and **the whole press was refused with it** — no partial write, no good row landing beside the bad one. R-113 holds at the till.
+
 Tick a row under **WE CAN'T TELL YOU THE PRICE** and leave its price box empty. Then type `0` into it.
 **PASS:** an amber line appears above the button — *"a service saved at $0 tells a customer it is
 free"* — and pressing the button saves **nothing** and says so. Then run
@@ -154,7 +189,10 @@ and confirm no new row. **FAIL:** anything is written, or a $0 row lands, or a g
 the bad one *(the write is all-or-nothing on purpose)*.
 
 ### CARD 13 — the first pass writes what you ticked, and only that
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+
+✅ **COVERED — David, live, 2026-09-08, Test Dave's.** exactly one ticked service landed, at the price shown, `is_active = true`, and the Services list below reloaded to show it.
+
 On **Test Dave's**, tick exactly ONE priced service, set its Charged and Kind, and press the button.
 **PASS:** the confirmation names the count and how many services you already had, the Services list
 below **reloads and shows the new row**, and the SQL shows exactly one new row with the price you
@@ -171,7 +209,10 @@ run this again. **FAIL:** the first service is offered a second time, or its pri
 second row with the same name appears.
 
 ### CARD 15 — the same name is refused, not overwritten
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+
+✅ **COVERED — David, live, 2026-09-08, Test Dave's.** a renamed row matching an existing service was **refused by name, case-insensitively**, and nothing was written.
+
 Rename a suggested row in its **Name on the menu** box so it matches a service already on your list
 (try a different capitalisation — `tc` against `TC`). Tick it and press.
 **PASS:** it refuses by name — *"already on your services list… edit the existing one on the Services
