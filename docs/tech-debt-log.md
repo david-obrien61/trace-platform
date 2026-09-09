@@ -1085,3 +1085,50 @@ DIFFERENT screen, made from inside a services build, and it deserves its own own
 
 **TRIGGER:** before `/discounts` is run on any tenant whose config carries `pricingTiers`. Check
 first: `select config ? 'pricingTiers', config ? 'discountTypes' from business_pricing_config;`
+
+---
+
+## #223 — 🔴 THE MAPS URL FORM WE EMIT MAY SILENTLY TRUNCATE A LONG DAY, AND NOBODY KNOWS AT WHAT COUNT (NEW 2026-09-08)
+
+**WHERE:** `packages/cultivar-os/src/lib/routeHandoff.ts` → `buildMapsUrl` — the path form
+`https://www.google.com/maps/dir/<addr>/<addr>/…/`.
+
+**WHAT.** Google's **documented** Maps URLs API caps waypoints at **9**, or **3 on a mobile
+browser**, and states that excess waypoints *"will be ignored"* — silently, with no error and no
+mark on the map. **We do not emit the documented form.** We emit an undocumented path form that
+appears nowhere in Google's URL documentation, so its cap is **unknown to us**. Community reports
+put it near 10 total stops; that is **[STATED]**, has no primary source, and must not be treated as
+a finding.
+
+🔴 **THE EXPOSURE IS MEASURED EVEN THOUGH THE CAP IS NOT.** From LAWNS's own invoice export over the
+ShipDate year (Lightning, 2026-09-08): stops per delivery day run **1–14, mean 3.6** — **69 of 167
+days (41%) exceed 3** and **7 of 167 (4%) exceed 9**. Busiest day **14**. **Lauren texts this link
+to a driver's phone**, which is the platform carrying the lowest documented ceiling.
+
+**WHY IT IS WORSE THAN THE DEFECT IT WAS FOUND BESIDE.** #286 fixed a route arriving in the wrong
+ORDER — loud once someone looked. Truncation is quiet in a way the wrong order is not: Google draws
+a normal-looking route, the missing stops are the LAST ones (end of day, nobody comparing), and the
+driver has no list to check against because **the full stop count exists only on Lauren's screen**.
+✏️ **One thing does now contradict it:** post-#286 the SMS honestly reports the number of stops in
+the link we built, so the message would say *"(12 stops)"* while the phone shows four. The
+disagreement is at least visible — **if someone counts.**
+
+**WHY IT IS NOT FIXED HERE.** David's ruling, 2026-09-08: *"DO NOT FOLD IT INTO THE BUILD — it is
+truncation, not mis-sorting, and it needs its own decision."* Folding a URL-form change into an
+ordering fix would put two defects in one diff on the one capability the customer uses daily, and
+would mean the ordering fix could not be owner-proven on its own.
+
+⚠️ **NO THRESHOLD IS HARDCODED ANYWHERE IN THE SHIPPED CODE, DELIBERATELY.** A cap written from a
+forum post is a hardcoded literal sourced from a guess, and the next reader would take it as
+measured. `routeHandoff.ts` names the risk in its header and holds no number.
+
+**FIX — MEASURE BEFORE CHOOSING.** The cap is a property of Google's servers and the handset, not of
+our code, so no amount of reading settles it. Run **CARD 8** of
+`docs/owner-tests/delivery-route-handoff-full-surface-test.md`: build a 12-stop route, text it, open
+it on a phone, count what arrives. Then choose among **warn above the cap** · **split a long day
+into two links** · **move to the documented `?api=1` form together with the split** (never alone —
+it trades an unknown cap for a known LOWER one). Full options with costs:
+`docs/decisions/2026-09-08-maps-url-waypoint-cap-report.md`.
+
+**TRIGGER:** the next delivery day with more than 3 stops — i.e. **41% of days**, so effectively now.
+Story piece `waypoint_cap_decision` on *What the driver receives is what the manager saw*.

@@ -10,6 +10,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
+import { buildRouteHandoff, driverSmsBody, type HandoffStop } from '../lib/routeHandoff';
 
 interface DeliveryOrder {
   id: string;
@@ -43,11 +44,6 @@ function fullAddress(c: DeliveryOrder['customers']): string {
   const parts = [c.billing_line1 ?? c.address_line1, c.billing_city ?? c.city,
                  c.billing_state ?? c.state, c.billing_zip ?? c.zip].filter(Boolean);
   return parts.join(', ');
-}
-
-function buildMapsUrl(addresses: string[]): string {
-  const stops = addresses.map(a => encodeURIComponent(a)).join('/');
-  return `https://www.google.com/maps/dir/${stops}/`;
 }
 
 // "1h 5m" / "45m" from a minutes value (Directions legs sum).
@@ -121,7 +117,9 @@ function loadGoogleMaps(apiKey: string): Promise<any> {
   return Promise.resolve(w.google.maps);
 }
 
-interface RouteStop { label: string; address: string; }
+// The stop shape is `HandoffStop` — the SAME type the driver-facing derivation consumes, so a stop
+// cannot be shaped one way for the screen and another way for the link (§6 r8).
+type RouteStop = HandoffStop;
 
 // Result reported by RouteMap back to the parent after a route renders: drive
 // distance/time (null when Directions was skipped/failed) + the stops in optimized
@@ -355,12 +353,16 @@ export function DeliveryRoute() {
   // Address overrides for orders missing customer address
   const [overrides, setOverrides] = useState<Record<string, string>>({});
 
-  // Route result state
-  const [routeUrl, setRouteUrl] = useState<string | null>(null);
+  // Route result state.
+  // 🔴 `routeUrl` IS NOT STATE AND MUST NOT BECOME STATE AGAIN. It is DERIVED below from the exact
+  // array the numbered list renders, so the link cannot disagree with the screen (David's ruling,
+  // 2026-09-08 — option B). A stored copy is what shipped the un-optimised route to the driver for
+  // fourteen months: it was frozen in buildRoute() before the optimiser had run, and never revisited.
   const [copied, setCopied]     = useState(false);
 
-  // Structured route model for the embedded map — ordered stops + origin anchor,
-  // set alongside routeUrl in buildRoute() so the map + the URL share one source.
+  // The route model: ordered stops + origin anchor, published by buildRoute(). It is the ONLY
+  // route state — the map optimises it, the list renders it, and the driver's URL is derived
+  // from it. There is no second copy to keep in step, which is the point.
   const [routeStops, setRouteStops]   = useState<RouteStop[]>([]);
   const [routeOrigin, setRouteOrigin] = useState<string>('');
 
@@ -389,7 +391,7 @@ export function DeliveryRoute() {
     // ── SCHEDULED-DELIVERIES MODE (?date=) — the OCR-invoice loop close ──
     // Loads the `deliveries` table for the day and maps each row into the existing
     // DeliveryOrder shape (address lives on the delivery row, surfaced via the synthetic
-    // `customers` object) so the route UI + buildMapsUrl below are reused verbatim.
+    // `customers` object) so the route UI and the driver handoff are reused verbatim.
     if (dateParam) {
       const { data, error: err } = await supabase
         .from('deliveries')
@@ -461,7 +463,7 @@ export function DeliveryRoute() {
       return next;
     });
     // Clear route when selection changes
-    setRouteUrl(null);
+    clearRoute();
   }
 
   function getAddress(order: DeliveryOrder): string {
@@ -469,43 +471,47 @@ export function DeliveryRoute() {
   }
 
   function buildRoute() {
-    const stops = orders
-      .filter(o => selected.has(o.id))
-      .map(o => getAddress(o))
-      .filter(Boolean);
-
-    if (stops.length === 0) return;
-
-    // Anchor the route at the business address. DEFAULT = round-trip (farm → stops → farm):
-    // origin injected as BOTH start and end; customer stops stay in their entered order between.
-    //
-    // SEAM (AC-4 — settle once, encode as variable; DEFERRED, do NOT build here):
-    //   • endpointMode — future settable option: 'round_trip' (default) | 'one_way' | 'custom_end'
-    //   • stop-order OPTIMIZATION (reorder stops for shortest path) — deferred
-    // Encoded as a variable so round-trip is the default, never welded as the only possibility.
-    const endpointMode: 'round_trip' | 'one_way' | 'custom_end' = 'round_trip';
-    const origin = originAddress.trim();
-    const ordered = [...stops];
-    if (origin) {
-      ordered.unshift(origin);                               // start at the farm
-      if (endpointMode === 'round_trip') ordered.push(origin); // …and return to it
-      if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] anchor injected', { endpointMode, origin, stops: stops.length, total: ordered.length });
-    } else if (TRACE_DELIVERY) {
-      console.warn('[TRACE:ROUTE] no business address — route built without anchor', { stops: stops.length });
-    }
-    setRouteUrl(buildMapsUrl(ordered));
-
-    // Same ordered set, structured for the embedded map (label = customer name).
+    // The ordered set, structured for the embedded map AND for the driver handoff (label = customer
+    // name). ONE array, built ONCE: the map optimises it, the list renders it, the link is derived
+    // from it. (It was previously assembled twice — a bare address list for the URL and this model
+    // for the map — which is precisely the parallel-copy shape that let the two drift apart.)
     const stopModels: RouteStop[] = selectedOrders
       .map(o => ({
         label: customerDisplayName(o.customers, 'Customer'),
         address: getAddress(o),
       }))
       .filter(s => s.address.length > 0);
+
+    if (stopModels.length === 0) return;
+
+    // Anchor the route at the business address (round-trip: farm → stops → farm). The bookending
+    // and the URL itself now live in `buildRouteHandoff` — this function's ONLY job is to publish
+    // the stop MODEL. It deliberately builds no URL: at this instant the optimised order does not
+    // exist yet (RouteMap has not mounted, let alone called Directions), which is exactly how the
+    // stale link was minted before.
+    //
+    // SEAM (AC-4 — settle once, encode as variable; DEFERRED, do NOT build here):
+    //   • endpointMode — future settable option: 'round_trip' (default) | 'one_way' | 'custom_end',
+    //     carried as a parameter of buildRouteHandoff so round-trip is a default, never a weld.
+    const origin = originAddress.trim();
+    if (TRACE_DELIVERY && !origin) {
+      console.warn('[TRACE:ROUTE] no business address — route built without anchor', { stops: stopModels.length });
+    }
+
     setRouteSummary(null);           // cleared until RouteMap reports the new Directions result
     setRouteStops(stopModels);
     setRouteOrigin(origin);
     if (TRACE_DELIVERY) console.log('[TRACE:MAP] route model set', { origin: !!origin, stops: stopModels.length, keyPresent: !!MAPS_KEY });
+  }
+
+  // Discard the built route. ONE operation, three callers (selection changed · address typed ·
+  // Rebuild pressed) — previously three inline `setRouteUrl(null)` calls, which is the shape that
+  // lets one caller forget a field (§6 r8). Clearing the stops is what retracts the route now:
+  // the URL is derived, so it disappears with the array it is made of.
+  function clearRoute() {
+    setRouteStops([]);
+    setRouteOrigin('');
+    setRouteSummary(null);
   }
 
   function copyLink() {
@@ -516,9 +522,12 @@ export function DeliveryRoute() {
   }
 
   function textDriver() {
-    if (!routeUrl) return;
-    const count = selectedOrders.length;
-    const body  = `Today's delivery route (${count} stop${count !== 1 ? 's' : ''}):\n${routeUrl}`;
+    // Body and count come from the SAME handoff object as the link — never a count computed here.
+    // It used to read `selectedOrders.length`, so five selected orders with two blank addresses
+    // texted "(5 stops)" above a three-stop link.
+    const body = driverSmsBody(handoff);
+    if (!body) return;
+    if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] texting driver', { stops: handoff.stopCount, optimized: routeSummary?.orderedStops != null });
     window.open(`sms:?body=${encodeURIComponent(body)}`);
   }
 
@@ -528,7 +537,33 @@ export function DeliveryRoute() {
   // Stops shown on the route-ready card: optimized driving order when Directions resolved,
   // else the built order. Keeps pins + list + route in agreement.
   const displayStops = routeSummary?.orderedStops ?? routeStops;
-  const routeStopCount = displayStops.length;
+
+  // 🔴 THE ONE DERIVATION. Link, SMS body, clipboard and the "Route ready — N stops" header all
+  // read this object, and it is built from `displayStops` — the very array the numbered list below
+  // renders. Optimised when Directions resolved, built order when it did not; either way the
+  // driver receives what the manager saw, because there is only one array to receive.
+  const handoff = React.useMemo(
+    () => buildRouteHandoff(displayStops, routeOrigin),
+    [displayStops, routeOrigin],
+  );
+  const routeUrl = handoff.url;
+  const routeStopCount = handoff.stopCount;
+  // `routeStops` (not the URL) is what says a route has been built — cleared by clearRoute().
+  const routeBuilt = routeStops.length > 0;
+
+  // [TRACE:ROUTE] STD-003 — the handoff trail, ON until owner-proven. Emitted in an effect rather
+  // than in render so it fires once per real change, not once per paint: `optimized` flipping
+  // false→true with a changed `first` IS the fix working, and that is the line to read on the card.
+  useEffect(() => {
+    if (!TRACE_DELIVERY || !handoff.url) return;
+    console.log('[TRACE:ROUTE] handoff derived', {
+      stops: handoff.stopCount,
+      optimized: routeSummary?.orderedStops != null,
+      first: displayStops[0]?.label ?? null,
+      last: displayStops[displayStops.length - 1]?.label ?? null,
+      url: handoff.url,
+    });
+  }, [handoff, displayStops, routeSummary]);
 
   const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -639,7 +674,7 @@ export function DeliveryRoute() {
                               value={overrides[order.id] ?? ''}
                               onChange={e => {
                                 setOverrides(o => ({ ...o, [order.id]: e.target.value }));
-                                setRouteUrl(null);
+                                clearRoute();
                               }}
                               style={{
                                 flex: 1, border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px',
@@ -664,7 +699,10 @@ export function DeliveryRoute() {
             </div>
 
             {/* Build route button */}
-            {!routeUrl ? (
+            {/* A route exists only when stops were built AND at least one carries a drivable
+                address. Naming both halves in the condition also narrows `routeUrl` to a string
+                for the link below — the card can never render a null href. */}
+            {!routeBuilt || routeUrl === null ? (
               <button
                 onClick={buildRoute}
                 disabled={!canBuild}
@@ -757,7 +795,7 @@ export function DeliveryRoute() {
                   </button>
 
                   <button
-                    onClick={() => setRouteUrl(null)}
+                    onClick={clearRoute}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: GRAY, fontSize: '0.8125rem', fontWeight: 600, padding: '4px 0',

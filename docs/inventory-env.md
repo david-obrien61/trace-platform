@@ -15,6 +15,33 @@
 
 ---
 
+## 🔴 LOCAL FILES — WHICH `.env` A SCRIPT ACTUALLY READS (added 2026-09-08, MEASURED)
+
+**Read this before reporting that a key is missing.** There are **seven** local env files and they do
+NOT agree. Three sessions in one day (2026-09-08) reported *"`SUPABASE_SERVICE_KEY` is EMPTY in both
+env files"* and each lost a live measurement to it — the claim was true of the two ROOT files and
+false of the one every script actually reads. **[[R-26]] in the place it costs the most: a
+declaration about our own tooling, unchecked, steering a session to give up.**
+
+| File | `SUPABASE_SERVICE_KEY` | Verdict |
+|---|---|---|
+| **`packages/cultivar-os/.env.local`** | **219 chars — POPULATED** | 🔴 **THIS IS THE ONE. Read it.** |
+| `.env.local` (repo root) | 2 chars — empty (`""`) | ⚠️ the file that produced the false claim |
+| `.env.prod.local`, `.env.vercel.local`, `.env.vercel.prod`, `.env.vercel.pulled` (root) | — | Vercel pulls, not the dev source |
+| `packages/cultivar-os/.env.example` | — | template, never values |
+
+**PROVEN WORKING 2026-09-08**, not assumed — a live REST read against
+`https://bgobkjcopcxusjsetfob.supabase.co/rest/v1/deliveries?select=id&limit=1` with that key
+returned **HTTP 200** and a row. **There is no credential blocker.** Tech-debt **#183**'s recorded
+blocker (*"service key would not load, HTTP 000"*) and CLAUDE.md §3 #283 (e) are **both stale on this
+point** and are corrected as of this date.
+
+⚠️ **`SUPABASE_URL` is not set in that file either — read `VITE_SUPABASE_URL`** and fall back. A script
+that reads only the unprefixed name gets `undefined` and reports the same false blocker by a
+different route.
+
+---
+
 ## Source of truth
 
 Vercel dashboard → cultivar-os project → Settings → Environment Variables.
