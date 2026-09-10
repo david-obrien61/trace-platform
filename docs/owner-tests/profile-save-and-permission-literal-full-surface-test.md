@@ -37,6 +37,14 @@
 > `proconfig = search_path=""`, and **`has_permission_exact` returns 0 rows — it is gone.**
 > **CARDS 5, 6 AND 7 ARE UNBLOCKED.** ⚠️ `has_permission_for` still expands aliases — deliberate
 > and narrow, filed as tech-debt **#233**, not a gate.
+>
+> 🔴 **AND A SECOND MIGRATION NOW EXISTS AND IS *NOT* APPLIED:**
+> `20260910b_owner_id_policies_become_permissions.sql` (#289) — the 49 raw-`owner_id` policies,
+> triaged. **It changes nothing this board tests** (nothing here reads `nursery_profiles`,
+> `member_devices` or the ten dropped policies), so no card here is blocked by it and none flips.
+> Its own board is **`docs/owner-tests/owner-id-policy-repoint-full-surface-test.md`**, and
+> `20260910b` §0 **refuses to apply** unless the literal merge above is already in — the two are
+> ordered, not independent.
 
 > ⚠️ **THE CONSOLE BLOCK — USE THIS ONE.** `window.supabase` **does not exist** and it is what broke
 > the last two attempts:

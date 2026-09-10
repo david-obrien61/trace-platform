@@ -267,7 +267,22 @@ const DUAL_TABLES = [
   // right shape and is NOT taken here: rewriting a checker inside a migration pass is the drift
   // the gate exists to catch (#73's own note). Flagged for David as a separate pass.
   ['business_modules', 'business_modules_member_select'],
-  ['cultivar_plants', 'cultivar_plants_owner_all'], // member branch fused (owner_id OR is_active_member)
+  // ✏️ REPOINTED 2026-09-10 (#289) — `cultivar_plants_owner_all` was a FUSED policy
+  // (`owner_id OR is_active_member`) and it is now DROPPED: 20260910b splits the table's writes
+  // per verb onto `inventory:create` / `:update` / `:delete`, because a FOR ALL policy gated on one
+  // string grants every verb on that string. The SELECT half survives under its original name and
+  // still calls `is_active_member`, so the pin moves there — **the same false-failure-on-a-rename
+  // this entry's own note predicted, arriving for the third time.**
+  //
+  // 🔴 AND THIS CAP NOW ENCODES A MODEL THE PLATFORM HAS BEGUN RETIRING, WHICH IS A BIGGER
+  // PROBLEM THAN THE PIN. "Dual RLS = an owner_id policy AND a member policy" was the right shape
+  // when every table had both; the 2026-09-10 ENTITY-vs-WORK triage replaces the owner half with a
+  // permission on 28 policies and DROPS it outright on 10. ⚠️ It keeps passing anyway, and that is
+  // the part to distrust: `tableHasOwnerPolicy` is a plain corpus grep with NO drop-tracking, so it
+  // still reports an owner policy for every table this migration removes one from. **A stale pass,
+  // not a caught defect** — tech-debt #241. NOT rewritten here, for the reason this entry already
+  // gives: rewriting a checker inside a migration pass is the drift the gate exists to catch.
+  ['cultivar_plants', 'cultivar_plants_owner_select'],
 ];
 // Documented owner-only operational tables (CLAUDE migration §"NOT TOUCHED"): member-read is a
 // pending PRODUCT decision; they fail CLOSED today (not a leak). Tracked, not a hard FAIL.

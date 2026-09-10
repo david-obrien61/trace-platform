@@ -1486,3 +1486,158 @@ shape** — the upsert becomes an UPDATE that proves it wrote, and the policy is
 `profile-save-and-permission-literal-full-surface-test.md` mints an ephemeral OWNER-role member via
 `withMemberSession` and attempts the save. **Trigger:** the permissions pass that acts on the triage,
 or sooner if the install price is needed on a customer tenant.
+
+---
+
+### 🟡 ADDRESSED IN THE MIGRATION, NOT YET IN THE DATABASE — 2026-09-10 (#289)
+
+**`supabase/migrations/20260910b_owner_id_policies_become_permissions.sql` fixes all three clauses
+and IS NOT APPLIED.** The row stays 🟡 until David applies it and CARD 4 passes.
+
+· `nursery_profiles_owner` is re-pointed at `settings:update` (clause 2), **and a NEW
+  `nursery_profiles_member_select` is added on `settings:read`** — because clause 1 is not fixed by
+  the re-point alone: a read gated on the WRITE string is a different lie, not the absence of one.
+· Clause 3 (the section is not permission-gated in the UI) is **NOT fixed** — that is a client
+  change on a customer tenant in demo week, and it is #231's sibling. **Still owed.**
+
+🔴 **CLAUSE 1 WAS PROVEN BEHAVIOURALLY BEFORE THE FIX, WHICH IT HAD NOT BEEN.** CARD 12 in
+`scripts/rls/permission-literal-and-owner-id-cards.rls.mjs` seeds a row with the service key, then
+reads it back under an ephemeral OWNER-role session holding `settings:read`/`settings:update`:
+**service key sees 1 row, the member sees 0, and there is NO ERROR.** The row is seeded first
+precisely so a zero-row result cannot be confused with an empty table (#182 — a probe that cannot
+reach its target reports the same as one that passed). ✏️ **And LAWNS has a `nursery_profiles` row —
+measured 2026-09-10** — so Lauren's blank field today is a live false empty, not a missing record.
+
+
+## #237 — 🟡 `get_my_permissions` CARRIES THE POSTGRES DEFAULT ACL, SO `anon` HOLDS EXECUTE (NEW 2026-09-10)
+
+David applied `get_my_permissions(uuid)` **by hand** on 2026-09-10; `20260910c` captures it into
+version control byte-identical to `pg_get_functiondef`. It gets the conventions right where its
+predecessor did not — `SET search_path = ''` is pinned, SECURITY DEFINER, STABLE, owner `postgres`
+(**verified against `pg_proc`, not assumed**). ✏️ *`has_permission_exact`, applied by hand one day
+earlier, is the one that dropped `search_path`.*
+
+**What it does not have is the REVOKE/GRANT pair every other SECURITY DEFINER function here
+carries.** Its ACL is `=X/postgres` — the postgres default — which means **PUBLIC, and therefore
+`anon`, holds EXECUTE.**
+
+🔴 **IT IS A CONVENTION GAP, NOT A HOLE, AND THE DIFFERENCE IS WHY IT IS FILED RATHER THAN FIXED.**
+The body filters on `bm.user_id = auth.uid()`, and `auth.uid()` is NULL for an anon caller.
+**MEASURED 2026-09-10:** with no claims set it returns `('[]'::jsonb, false)` — it cannot name a
+member, a business, or a string. ✅ **And AC-3 holds under a real principal:** Lauren asking about a
+tenant she is not in gets the same `[]`/false a stranger gets, not an error and not another tenant's
+array.
+
+⚠️ **NOT FIXED HERE BECAUSE TIGHTENING A LIVE GRANT IS A BEHAVIOURAL CHANGE and the instruction was
+to MATCH.** The two lines are written out, COMMENTED, at the foot of `20260910c`. **David's one-line
+decision.** ✏️ *Incidentally it is what made the verification possible at all: the read-only PAT role
+can call `get_my_permissions` and is refused `has_permission`, which 20260910 correctly locked down.*
+
+**Trigger:** the pass that WIRES this RPC into the client — at which point an anon-callable
+authority function stops being merely unconventional.
+
+## #238 — 🟡 THE CLIENT COMPUTES AN OWNER'S AUTHORITY AND THE SERVER NEVER GAVE IT ONE OF THE STRINGS (NEW 2026-09-10)
+
+`[TRACE:PERM]` reports `source: 'OWNER_LOCKED_SET (computed from the manifest)'` with **58** entries.
+Measured against the catalog the same night: **Lauren 57 · David 57 · Joel 25.** The 58th is the
+`owner-only` SENTINEL — **a string that exists in no array, is checked by 0 policies and 0
+functions**, appended to the computed set in the browser.
+
+🔴 **SO THE CLIENT CAN RENDER A SURFACE THE NOW-LITERAL `has_permission` REFUSES.** Client and server
+derive authority from two different places, which is the 2026-07-30 defect's exact class. Nothing is
+broken *today* — `owner-only` gates two routes (`/costs`, `/add-business`) that no policy tests — but
+it is a divergence held together by the fact that nobody has looked.
+
+⚠️ **AND THIS BUILD WIDENS IT BY TWO BEFORE NARROWING IT.** `OWNER_LOCKED_SET` is derived, so
+minting `accounting:connect` and `devices:manage` takes it 58 → **60** at the next page load, with no
+migration involved. Until `20260910b` is applied the stored arrays stay at 57. **No surface changes**
+— nothing client-side gates on either string, checked — but the gap is 1 today and 3 between deploy
+and apply.
+
+**THE FIX IS `get_my_permissions` (#237, `20260910c`), AND IT IS DELIBERATELY UNWIRED.** When wired:
+`can(x)` becomes `array.includes(x)`, `OWNER_LOCKED_SET` is **deleted**, and the `owner-only`
+sentinel becomes the `is_account_holder` boolean that call already returns.
+
+🔴 **ONE RULING BLOCKS IT AND IT IS DAVID'S: CAN AN OWNER REMOVE A PERMISSION FROM THEMSELVES?** It
+is the reason the locked set exists. If the stored array is the only truth and an owner drops their
+own `settings:update`, **they cannot grant it back.** Lightning's read is NO — the grant surface
+refuses to remove a string from the account holder's own row, and a new business seeds the owner's
+array complete — which puts the guard at the **WRITE**, not a computed set at the **READ**. Wiring
+before that ruling trades a client that over-claims for an owner who can lock themselves out, and
+only the second is unrecoverable from the UI.
+
+**Trigger:** David's ruling on self-removal. Not before.
+
+## #239 — 🟡 EIGHT OF THE TEN UNDOCUMENTED POLICIES ARE STILL UNCAPTURED (NEW 2026-09-10)
+
+`docs/decisions/2026-09-10-policy-reconciliation.md` found ten live policies created by nothing in
+the corpus. **#289 captured two of them** — `business_voice_samples_owner` and
+`cost_objects_owner_all`, transcribed verbatim into `20260910b` §1 before they were touched, one of
+them immediately dropped (so without the capture its definition would have left the database having
+never been written down anywhere).
+
+**The other eight are untouched and uncaptured:** `addons_select_public` ·
+`cultivar_plants.anon_select_plants` · `losses_all_owner` · `modules readable by authenticated
+users` · `nurseries_select_public` · `nurseries_update_owner` · `plant_events.anon_select_plant_events`
+· `plant_events_select_public`.
+
+⚠️ **Five of those are the open `USING(true)` public-QR grants and several are DUPLICATES of each
+other** (`anon_select_plant_events` *and* `plant_events_select_public`; `addons_select_public` *and*
+`anon_select_addons`; two on `modules`). Two spellings of one grant, and the redundant copy is the
+one that drifts. ✏️ *`modules readable by authenticated users` contains SPACES — the Supabase
+dashboard's default naming, i.e. it was typed into the UI by hand.*
+
+**Deliberately out of scope of #289** (David: the open policies are their own decision).
+**Trigger:** the open-policy pass.
+
+## #240 — 🟡 THE V-BLOCK IMPERSONATION FORM THIS REPO KEEPS WRITING HAS NEVER BEEN RUN (NEW 2026-09-10)
+
+`SET LOCAL role authenticated;` appears in three V-blocks (`20260828` V7/V8/V9) as the way to prove a
+policy under a real principal. **It failed on first use, 2026-09-10:** `ERROR: 42501: permission
+denied to set role "authenticated"`.
+
+**Setting the CLAIMS GUC ALONE is sufficient** for anything reading `auth.uid()` — no role
+membership required — and it is proven, not reasoned: three different real answers came out of
+`get_my_permissions` under three different `sub` values. The role switch is needed **only** to make
+RLS actually filter rows, which is a different test.
+
+🔴 **THE CLASS IS [[R-33]]'s: a check nobody has ever run is indistinguishable from one that passes.**
+`owner-role-authority` is a 16-card board at **0 covered**, and three of its cards carry a SQL block
+that may simply refuse. Whether it refuses in the *dashboard* editor specifically is **UNKNOWN** —
+the Management API PAT runs as `supabase_read_only_user` (measured), which is not a member of
+`authenticated`; the dashboard runs as `postgres`, which probably is. **I could not test the
+surface David actually uses, and I am not going to assert it either way.**
+
+**Fixed forward in #289's own V-blocks and board** (claims-only, with an escape hatch on the one
+check that genuinely needs the role). **Trigger:** the next time an older board's SQL card is run —
+if it errors, this row is the explanation and the three cards need the same rewrite.
+
+## #241 — 🟡 THE DUAL-RLS CAP ENCODES THE MODEL THE `owner_id` TRIAGE RETIRES, AND IT KEEPS PASSING ANYWAY (NEW 2026-09-10)
+
+`verify-universals` capability **#3** asserts *"dual RLS (owner + `is_active_member`) on every tenant
+table"* — an owner policy **and** a member policy. That was the right shape when every table had
+both. **The 2026-09-10 ENTITY-vs-WORK triage replaces the owner half with a permission on 28
+policies and DROPS it outright on 10**, so on those tables "dual" is no longer the target.
+
+🔴 **THE PART TO DISTRUST IS THAT IT STILL PASSES.** `tableHasOwnerPolicy` (`verify-universals.mjs:105`)
+is a plain corpus grep — `CREATE POLICY … ON <table> … owner_id = auth.uid()` — with **no
+drop-tracking**. So after `20260910b` it will keep reporting an owner policy for `receipts`,
+`business_inventory`, `cost_objects`, `labor_resources` and the rest, off `CREATE` statements the
+same migration removes. **A stale pass, not a caught defect** — #73's class, in the cap that is
+supposed to be catching that class. ✏️ *Its sibling `effectivePolicy` (`:90`) DOES track drops, which
+is the only reason anything surfaced at all: the pinned `cultivar_plants_owner_all` went null and
+failed the build.*
+
+⚠️ **AND THE PIN BROKE FOR THE THIRD TIME.** `DUAL_TABLES` names a policy BY HAND, and this entry's
+own comment already predicted it: *"a legitimate rename reports the policy as MISSING — a FALSE
+FAILURE, not a caught defect."* It happened to `business_modules` on 2026-08-01 and to
+`cultivar_plants` here. **Repointed to `cultivar_plants_owner_select`, not re-derived** — rewriting a
+checker inside a migration pass is the drift the gate exists to catch, which is the reason its own
+note gives for not doing it.
+
+**THE FIX IS ONE QUESTION, NOT ONE FUNCTION: what does this cap assert AFTER the triage?** Most
+likely *"every tenant table is reachable by a permission or a membership predicate, and by nothing
+that compares `owner_id` unless it is one of the eight declared ENTITY/authority-store policies"* —
+which is a different check with a different declaration, self-pruning the way
+`r-b2-wired-since-declarations.json` is. **Trigger:** after `20260910b` is applied, or the next time
+this cap reports a false failure.

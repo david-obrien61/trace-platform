@@ -654,6 +654,52 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
       'checks has_permission_for on the PASSED actor (20260723). Bulk write requires ' +
       'single write (Rule 2 in spirit).',
   },
+  'accounting:connect': {
+    category: 'financial',
+    permission: 'accounting:connect',
+    // MINTED 2026-09-10 (David's ruling) IN THE SAME COMMIT THAT GATES A POLICY ON IT — the
+    // 20260910b migration repoints `bas_owner_all` on `business_accounting_secrets` from raw
+    // `businesses.owner_id` to this string. STATUS IS SPELT OUT rather than left to buildManifest's
+    // `?? 'enforced'` default (:722-725): that default is how a false `enforced` claim became
+    // invisible on `pricing_recipe:update`, and a minted string is exactly where it would happen
+    // again.
+    status: 'enforced',
+    // `owner-only`, so it is NOT a grantable Roles-page chip. Connecting the books writes to a
+    // customer's REAL QuickBooks company and the secret row holds the OAuth tokens. The OWNER role
+    // holds it; delegating it to a manager is a ruling David has not made, and this sensitivity is
+    // what stops the chip appearing before he makes one.
+    sensitivity: 'owner-only',
+    structural: [],
+    content: [],
+    inheritance: [],
+    note:
+      'connect and hold the accounting integration credentials (QuickBooks OAuth). ENFORCED at ' +
+      'the table: business_accounting_secrets carries ONE policy and it now tests this string. ' +
+      'SERVER-SIDE TODAY — secrets.ts is imported only by api/qbo/*, which runs on the service ' +
+      'key and bypasses RLS, so no client surface depends on it yet. It is minted anyway because ' +
+      'the policy has to say SOMETHING, and a raw owner_id comparison is the thing being retired.',
+  },
+  'devices:manage': {
+    category: 'admin',
+    permission: 'devices:manage',
+    // MINTED 2026-09-10 (David's ruling), same commit as the two policies that gate on it:
+    // `md_owner_all` on member_devices and `mdh_owner_all` on member_device_handoffs.
+    status: 'enforced',
+    // `operational`, NOT `owner-only`: whether a manager should be able to register and hand off a
+    // shared device is a genuine per-business preference, so the chip exists and is grantable. It
+    // is in NO bundle but OWNER's today — granting it to MANAGER is one funnel call, not a code
+    // change. Stated because "not granted" and "not grantable" are different facts.
+    sensitivity: 'operational',
+    structural: [],
+    content: [],
+    inheritance: [],
+    note:
+      'register, revoke and hand off the shared devices a business issues to its people. ' +
+      'ENFORCED at the table: member_devices.md_owner_all and ' +
+      'member_device_handoffs.mdh_owner_all test this string (20260910b). A person\'s OWN device ' +
+      'rows remain reachable without it, via md_self / mdh_self_select — this string is about ' +
+      'managing OTHER people\'s devices, which is why it is a capability verb and not devices:update.',
+  },
   'tax_exempt:apply': {
     category: 'checkout',
     permission: 'tax_exempt:apply',
@@ -1335,6 +1381,12 @@ export const STAFF_DEFAULT_BUNDLE: string[] = [
  *     against `OWNER_LOCKED_SET`), and the sentence is true for the first time.
  */
 export const OWNER_DEFAULT_BUNDLE: string[] = [
+  // GROWN 57 → 59 on 2026-09-10 (#289): accounting:connect and devices:manage, minted in the same
+  // commit as the three policies that gate on them (20260910b). A minted string that reaches no
+  // permission array grants nothing — and the three tables it gates would then be reachable by
+  // NOBODY, which is a lock-out, not a tighten. The migration carries the COMPLETE 59, because
+  // capA assertion 3 compares FULL EQUALITY against the newest $OWNER$ carrier.
+  'accounting:connect',
   'audit_log:read',
   'campaigns:read',
   'campaigns:update',
@@ -1349,6 +1401,7 @@ export const OWNER_DEFAULT_BUNDLE: string[] = [
   'deliveries:create',
   'deliveries:read',
   'deliveries:update',
+  'devices:manage',
   'inventory:create',
   'inventory:delete',
   'inventory:import_price',

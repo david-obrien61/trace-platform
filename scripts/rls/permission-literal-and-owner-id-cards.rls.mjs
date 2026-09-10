@@ -55,9 +55,15 @@ await withMemberSession(
     const probe = { ...before.config, __harness_card6: new Date().toISOString() };
     const { data: wrote, error: wErr } = await client.from('business_pricing_config')
       .update({ config: probe }).eq('business_id', TEST_DAVES.id).select('business_id');
-    check('UPDATE returns one row (bpc_member_update admits the string)', (wrote ?? []).length, 1);
+    check('UPDATE returns one row (bpc_member_update admits the string)', (wrote ?? []).length === 1, true);
     if (wErr) console.log(`      error: ${wErr.message}`);
-    await admin.from('business_pricing_config').update({ config: before.config }).eq('business_id', TEST_DAVES.id);
+    // 🔴 THE RESTORE REPORTS ITS OWN ROW COUNT (A8, #289). It used to fire and return nothing, so a
+    // teardown that silently affected ZERO rows would have left the harness's probe key on a real
+    // tenant's config with the run still printing green — the exact silent-success shape the
+    // zero-row cap exists for, in the one statement whose whole job is to leave no residue.
+    const { data: restoredRows } = await admin.from('business_pricing_config')
+      .update({ config: before.config }).eq('business_id', TEST_DAVES.id).select('business_id');
+    check('the restore itself affected one row', (restoredRows ?? []).length === 1, true);
     const { data: restored } = await admin.from('business_pricing_config').select('config').eq('business_id', TEST_DAVES.id).single();
     check('original config restored (no residue)', JSON.stringify(restored.config) === JSON.stringify(before.config), true);
   },
@@ -80,6 +86,53 @@ await withMemberSession(
   },
 );
 
-console.log(`\n${fails === 0 ? '✅ ALL THREE CARDS BEHAVED AS THE BOARD PREDICTS' : `🔴 ${fails} EXPECTATION(S) FAILED`}`);
+// ── CARD 12 — 🔴 THE FALSE EMPTY, PROVEN FROM THE READ SIDE (#236 / #289) ──────────────
+// Card 8 proves the WRITE is refused. This proves the READ returns ZERO ROWS WHILE A ROW EXISTS —
+// which is the worse half, because a refusal at least says something and a false empty renders as
+// "not set". The row is SEEDED by the service key first, so a zero-row result cannot be confused
+// with an empty table (#182: a probe that cannot reach its target reports the same as one that
+// passed). Mint-and-delete, on Test Dave's, never LAWNS.
+console.log('\nCARD 12 — nursery_profiles: the read is a FALSE EMPTY, not a refusal (#236)');
+await withMemberSession(
+  { businessId: TEST_DAVES.id, role: 'OWNER', permissions: ['settings:read', 'settings:update'], label: 'Card12 read probe' },
+  async ({ client, admin }) => {
+    const { data: pre } = await admin.from('nursery_profiles').select('id').eq('business_id', TEST_DAVES.id);
+    const seeded = (pre ?? []).length === 0;
+    if (seeded) {
+      const { data: made, error } = await admin.from('nursery_profiles')
+        .insert({ business_id: TEST_DAVES.id, default_install_price: 225 }).select('id');
+      check('SETUP — the service key seeded exactly one row (so a zero-row read means REFUSED, not EMPTY)',
+        (made ?? []).length === 1, true);
+      if (error) console.log(`      seed error: ${error.message}`);
+    } else {
+      console.log(`   (a row already existed for this tenant — not seeding, not deleting)`);
+    }
+    const { data: admin_sees } = await admin.from('nursery_profiles').select('id').eq('business_id', TEST_DAVES.id);
+    check('the row DOES exist (service key, bypassing RLS)', (admin_sees ?? []).length === 1, true);
+
+    const { data: member_sees, error: rErr } = await client.from('nursery_profiles')
+      .select('id, default_install_price').eq('business_id', TEST_DAVES.id);
+    console.log(`      member read → rows=${(member_sees ?? []).length}  error=${rErr ? rErr.message : 'none'}`);
+    // 🔴 THE EXPECTATION IS STATED FOR BOTH WORLDS, and which one applies is decided by the
+    // MIGRATION, not by the result. BEFORE 20260910b: 0 rows and NO error — the false empty.
+    // AFTER: 1 row. Set OWNER_ID_REPOINT_APPLIED=1 once David has applied it and this card flips
+    // to asserting the fix instead of the defect.
+    const applied = process.env.OWNER_ID_REPOINT_APPLIED === '1';
+    if (applied) {
+      check('AFTER 20260910b — the OWNER-ROLE member READS the row via settings:read', (member_sees ?? []).length === 1, true);
+    } else {
+      check('BEFORE 20260910b — the read is a SILENT ZERO (no error, no row) = the false empty', (member_sees ?? []).length === 0 && !rErr, true);
+    }
+    if (seeded) {
+      // TEARDOWN REPORTS ITS OWN ROW COUNT (A8). A delete that silently affects zero rows leaves
+      // the harness's seeded row on a real tenant with the run still printing green.
+      const { data: gone } = await admin.from('nursery_profiles')
+        .delete().eq('business_id', TEST_DAVES.id).select('id');
+      check('TEARDOWN — the seeded row was deleted (no residue)', (gone ?? []).length === 1, true);
+    }
+  },
+);
+
+console.log(`\n${fails === 0 ? '✅ EVERY CARD IN THIS FILE BEHAVED AS THE BOARD PREDICTS' : `🔴 ${fails} EXPECTATION(S) FAILED`}`);
 console.log('⚠️  BUILDER VERIFICATION ONLY — no card is marked `covered` by this run (OP-14).');
 process.exit(fails === 0 ? 0 : 1);

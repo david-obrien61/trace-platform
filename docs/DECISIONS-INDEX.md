@@ -1,5 +1,7 @@
 # TRACE — DECISIONS INDEX (read first)
 
+> ✅ Drift watch (2026-09-10 · #289): **No drift** — abided by *DAVID APPLIES ALL SQL* (two migrations written, **neither applied**; LAWNS read-only, every live read via a role that is literally `supabase_read_only_user`), by the ENTITY-vs-WORK test as the disposition rule, and by §6 r1 (nothing edited in an applied migration — `20260828`'s owner literal is superseded by a new carrier, not rewritten). ⚠️ **ONE DELIBERATE, RECORDED DIVERGENCE from the build instruction (§6 r10, never silent):** ten of the 46 WORK policies were **DROPPED rather than repointed**, because a `FOR ALL` policy gated on one string grants every verb on that string and those ten sit on tables whose per-verb member set already separates `read`/`create`/`update`/`delete`. Repointing them would have WIDENED. Named in the migration header, in `2026-09-10-owner-id-repoint-plan.md`, and asserted by capR2.
+>
 > ✅ Drift watch (2026-09-10 · #288): **No drift** — abided by David's literal-permissions ruling (`has_permission` merged, `has_permission_exact` retired as its replacement rather than a seventh authority site) and by *DAVID APPLIES ALL SQL* (migration written, not applied). ✅ **commit-and-push honoured** — the first `git push` was refused by the harness classifier; the retry succeeded (`9f81a11`).
 
 **Purpose:** ONE map of every decision-bearing doc so nobody re-derives what's already
