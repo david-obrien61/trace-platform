@@ -225,9 +225,74 @@ export async function writePricingConfig(
   businessId: string,
   config: any,
 ): Promise<{ error: { message: string } | null }> {
+  // 🔴 UPDATE + .select(), NOT upsert — AND THE UPSERT WAS THE DEFECT, NOT A STYLE CHOICE.
+  // PostgREST compiles `.upsert()` to `INSERT … ON CONFLICT`, so it needs an INSERT policy even
+  // when every live row already exists and nothing is being inserted. `bpc_member_insert` was
+  // DROPPED ON PURPOSE (20260727_rbac_flip_corrections.sql:85 — "a permission named `update`
+  // granting a create"), so an OWNER-ROLE member holding `pricing_recipe:update` was refused by
+  // the INSERT half of a statement whose UPDATE half she is explicitly permitted to run.
+  // MEASURED 2026-09-10: Lauren Bishop holds `pricing_recipe:update` and is NOT
+  // `businesses.owner_id`, so `bpc_owner_all` does not cover her either — which is precisely why
+  // "new row violates row-level security policy" reached a customer's screen.
+  //
+  // A8 / R-12 — A WRITE MUST PROVE IT WROTE. `.select()` returns the affected rows, so a
+  // refusal that RLS expresses as ZERO ROWS AND NO ERROR becomes a refusal we can see. Without
+  // it this function reported success for a write that never happened; it had neither the
+  // returning clause nor the count check.
   const gated = await supabase
     .from('business_pricing_config')
-    .upsert({ business_id: businessId, config }, { onConflict: 'business_id' });
+    .update({ config })
+    .eq('business_id', businessId)
+    .select('business_id');
+
+  if (gated.error && isMissingRelation(gated.error)) {
+    // pre-migration: config lives on business_modules (with the setup flag)
+    const preActor = (await supabase.auth.getUser()).data.user?.id ?? null;
+    const r = await setBusinessModuleState(supabase, businessId, 'cost_to_produce',
+      { configured: true, config }, preActor);
+    return { error: r.error ?? (r.applied ? null : { message: r.reason ?? 'module write refused' }) };
+  }
+  if (gated.error) return { error: gated.error };
+
+  // ── THE WRITE IS INSPECTED IMMEDIATELY, BEFORE ANY OTHER WORK ────────────────────────────────
+  // Deliberately the very next thing after the statement, and written as `.length === 0` rather
+  // than `(x?.length ?? 0) === 0`. Both are the same inspection; only one is one the
+  // zero-row-writes cap can read, and it flagged the first form as NEEDS_CHECK. The cap was right
+  // to: the check had drifted ~600 characters and three branches away from the write it guards,
+  // which is exactly how a check stops guarding anything. Fixed by moving it, not by declaring it.
+  //
+  // ZERO ROWS IS TWO DIFFERENT FACTS AND THEY ARE TOLD APART, NOT GUESSED. Either (a) the tenant
+  // has no config row yet — genuinely a first save, which the old upsert's INSERT half covered —
+  // or (b) RLS refused. Reading the row back under the SAME session settles it: row absent ⇒ (a);
+  // row present but unmatched by the update ⇒ (b), a refusal, reported and never returned as a
+  // silent success (D-9 — an honest refusal beats a fabricated one).
+  if ((gated.data ?? []).length === 0) {
+    const { data: existing } = await supabase
+      .from('business_pricing_config')
+      .select('business_id')
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (existing) {
+      return { error: { message:
+        'Your pricing settings were not saved — this account does not have permission to change ' +
+        'them. Nothing was written. (Needs pricing_recipe:update, or the account holder.)' } };
+    }
+
+    // (a) no row yet — create it. The INSERT is owner-only by design (bpc_member_insert was
+    // dropped deliberately), so a member hitting a first-ever save is refused HERE, loudly, with
+    // the reason — not silently, and not by a statement that looked like an update.
+    const ins = await supabase
+      .from('business_pricing_config')
+      .insert({ business_id: businessId, config })
+      .select('business_id');
+    if (ins.error) return { error: ins.error };
+    if ((ins.data ?? []).length === 0) {
+      return { error: { message:
+        'Your pricing settings were not saved — creating the first pricing record is an ' +
+        'account-holder action. Nothing was written.' } };
+    }
+  }
 
   // 🔴 `enabled: true` IS GONE FROM BOTH BRANCHES (2026-08-01). Saving a cost model SILENTLY
   // SUBSCRIBED THE BUSINESS TO A MODULE — the pricing panel was the only thing that ever set
@@ -238,14 +303,6 @@ export async function writePricingConfig(
   // PROVEN SAFE BEFORE REMOVING IT, not assumed: nothing reads `cost_to_produce.enabled`. The tile
   // is `placement:'admin'` and `useModules` maps dashboard tiles only, so no surface changes state.
   const actor = (await supabase.auth.getUser()).data.user?.id ?? null;
-
-  if (gated.error && isMissingRelation(gated.error)) {
-    // pre-migration: config lives on business_modules (with the setup flag)
-    const r = await setBusinessModuleState(supabase, businessId, 'cost_to_produce',
-      { configured: true, config }, actor);
-    return { error: r.error ?? (r.applied ? null : { message: r.reason ?? 'module write refused' }) };
-  }
-  if (gated.error) return { error: gated.error };
 
   // post-migration: config is in the gated table; mark the module set up (config stays '{}' here)
   const r = await setBusinessModuleState(supabase, businessId, 'cost_to_produce',

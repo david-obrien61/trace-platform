@@ -3,12 +3,23 @@ import type { Addon } from '../../types/plant';
 interface Props {
   addon: Addon;
   selected: boolean;
+  /**
+   * The NETTED quantity — what this offering actually multiplies by (nettedQuantity), NOT the
+   * cart's plant count. A flat/per-order charge passes 1. Callers must not pass plantCount blind:
+   * that is the defect fixed 2026-09-10, where a $50 per-ORDER trip charge rendered as $100 on a
+   * two-plant order while the subtotal correctly showed $50.
+   */
   quantity: number;
+  /** What ONE unit is, from the offering's own price_unit — 'plant', 'order', 'visit'. */
+  unitLabel?: string;
   onToggle: () => void;
 }
 
-export function AddonCard({ addon, selected, quantity, onToggle }: Props) {
+export function AddonCard({ addon, selected, quantity, unitLabel = 'plant', onToggle }: Props) {
   const lineTotal = addon.price_per_plant * quantity;
+  // A charge that applies ONCE says its price and stops. "× 1 order" is noise, and "× 1 plants"
+  // was wrong twice over. The multiplier renders only when there is a multiplication.
+  const showMultiplier = quantity !== 1;
 
   return (
     <button
@@ -63,7 +74,10 @@ export function AddonCard({ addon, selected, quantity, onToggle }: Props) {
           )}
 
           <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 4 }}>
-            ${addon.price_per_plant.toFixed(2)} × {quantity} plant{quantity !== 1 ? 's' : ''}
+            ${addon.price_per_plant.toFixed(2)}
+            {showMultiplier
+              ? ` × ${quantity} ${unitLabel}${quantity !== 1 ? 's' : ''}`
+              : ` per ${unitLabel}`}
           </p>
         </div>
       </div>

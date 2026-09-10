@@ -243,7 +243,18 @@ export function AddOns() {
                   sort_order:      sel.offering.sort_order,
                 }}
                 selected={sel.selected}
-                quantity={plantCount}
+                // 🔴 THE ATTACH RULE, NOT THE PLANT COUNT. This passed `plantCount`
+                // unconditionally, so a FLAT/per-order charge rendered "$50.00 × 2 plants =
+                // $100.00" on a two-plant order — while `addonAmount` above, which already calls
+                // nettedQuantity, put $50.00 in the subtotal. The card contradicted the total on
+                // its own screen, and at ten trees it read $500 for a $50 charge.
+                // This is the general fix and not a Trip Charge special case: the money and the
+                // label now come from ONE rule, which is exactly what netting.ts promises in its
+                // own header — "display and charge cannot drift (§6.8)". Any flat offering shows
+                // ×1; any per_unit offering still scales. Trip Charge's stored price is UNTOUCHED
+                // ($50 is Ring 1, and the ring map is an open ruling).
+                quantity={nettedQuantity(sel.offering, plantCount)}
+                unitLabel={sel.offering.price_unit === 'plant' ? 'plant' : 'order'}
                 onToggle={() => toggleService(sel.offering.id)}
               />
             ))}

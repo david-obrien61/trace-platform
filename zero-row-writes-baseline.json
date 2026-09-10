@@ -1,6 +1,6 @@
 {
   "_comment": "Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline",
-  "stamped": "2026-09-07",
+  "stamped": "2026-09-10",
   "unchecked": [
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update",
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update@2",
@@ -45,7 +45,6 @@
     "packages/shared/src/auth/pinReset.ts::pinHash#business_members.update",
     "packages/shared/src/business-logic/financialDataAccess.ts::childUpsert#labor_resource_wages.upsert",
     "packages/shared/src/business-logic/financialDataAccess.ts::childUpsert#labor_resources.update",
-    "packages/shared/src/business-logic/financialDataAccess.ts::gated#business_pricing_config.upsert",
     "packages/shared/src/business-logic/financialDataAccess.ts::id#labor_resources.update",
     "packages/shared/src/business-logic/seedPricingConfig.ts::config#business_pricing_config.upsert",
     "packages/shared/src/components/CostToProduceSettings.tsx::costPayload#cost_objects.delete",

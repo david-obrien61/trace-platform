@@ -2,6 +2,10 @@ node_modules/
 .env.local
 .env.*.local
 .env*.local
+# A BARE `.env` IS NOT COVERED BY THE THREE RULES ABOVE — every one of them requires `.local`.
+# Nothing writes one today, but a tool (or `vercel env pull`) that did would leave a committable
+# file full of secrets. Added 2026-09-10 alongside SUPABASE_PAT.
+.env
 dist/
 .DS_Store
 *.log

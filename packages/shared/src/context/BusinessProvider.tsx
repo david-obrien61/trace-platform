@@ -803,7 +803,34 @@ export function BusinessProvider({
       effectivePermissions: applyPermissionDependencies(activePermissions ?? []),
       count: applyPermissionDependencies(activePermissions ?? []).length,
     });
-  }, [activeResolved, isOwnerActive, activePermissions]);
+
+    // 🔴 [TRACE:IDENTITY] — WHO THE HEADER IS ABOUT TO NAME, AND WHERE THAT NAME CAME FROM.
+    // Filed 2026-09-10 after a report that Lauren's session showed "David OBrien OWNER". The
+    // header renders `userName`, which is `activeName` below, which is sourced from the SESSION's
+    // own auth metadata — there is NO code path anywhere that resolves a name from
+    // `businesses.owner_id` (grepped). And the live data for BOTH candidate fields was measured
+    // correct on the day: Lauren's `auth.users.raw_user_meta_data.full_name` and her
+    // `business_members.name` are both "Lauren Bishop".
+    //
+    // So the defect could not be reproduced from code or from data, and NOTHING WAS CHANGED on a
+    // guess. What was missing is the ability to answer it in one glance, which is what this emits:
+    // every candidate name source side by side, plus the OWNER-ROLE / owner_id split that makes
+    // the badge look right while the name looks wrong (R-22 — an OWNER-role member who is not
+    // `businesses.owner_id`, which is exactly what Lauren is).
+    console.log('[TRACE:IDENTITY] header identity — every candidate source, side by side', {
+      renders:            activeName,
+      'auth.full_name':   authName,
+      'auth.email':       userEmail,
+      'business_members.name': activeResolved.memberName,
+      role:               activeResolved.role ?? '(none)',
+      isAccountHolder:    isOwnerActive,   // businesses.owner_id === me
+      businessId:         activeResolved.business.id,
+      businessName:       activeResolved.business.name,
+      // If `renders` is not this person, the disagreeing source above is the defect — and if
+      // every source agrees while the screen does not, the bundle is stale (GATE 0 / OP-15).
+      note: 'renders === auth.full_name ?? business_members.name ?? email',
+    });
+  }, [activeResolved, isOwnerActive, activePermissions, activeName, authName, userEmail]);
 
   // ─── Device spine gate (Fix 2 enrollment + Fix 3 is_active lockout) ──────────
   // FLAG-GATED: the entire effect early-returns when deviceEnrollment is false, so

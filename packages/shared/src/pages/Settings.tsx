@@ -238,6 +238,12 @@ export function Settings({
   });
   const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  // 🔴 THE TAX RATE AS LOADED — the baseline Save compares against so an UNCHANGED rate is not
+  // rewritten. Two tables sit behind one Save button and there is no transaction across them, so
+  // every table this button touches unnecessarily is a table that can refuse and take the whole
+  // message down with it. `null` until the config read lands (below); a Save before then writes
+  // no tax, which is correct — nothing was edited.
+  const [loadedTaxRate, setLoadedTaxRate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!business) return;
@@ -260,7 +266,11 @@ export function Settings({
     void (async () => {
       const { data } = await readPricingConfig(supabase, businessId);
       const rate = resolveTaxRate((data?.config ?? {}) as Record<string, unknown>);
-      setForm(f => ({ ...f, tax_rate: rate == null ? '' : String(rate) }));
+      const asText = rate == null ? '' : String(rate);
+      setForm(f => ({ ...f, tax_rate: asText }));
+      // The LOADED rate, kept verbatim so Save can tell "she edited the rate" from "she edited a
+      // phone number and the rate came along for the ride". See saveProfile.
+      setLoadedTaxRate(asText);
     })();
   }, [businessId]);
 
@@ -295,14 +305,46 @@ export function Settings({
     const raw = form.tax_rate.trim();
     const parsed = parseFloat(raw);
     const rateNum: number | null = raw !== '' && Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-    const { error: cfgErr } = await mergePricingConfig(supabase, businessId, { taxRate: rateNum });
-    console.log('[TRACE:TAX] business tax rate saved', { businessId, taxRate: rateNum, source: 'config.taxRate' });
+
+    // 🔴 WRITE ONLY WHAT CHANGED. This Save spans TWO TABLES WITH NO TRANSACTION — `businesses`
+    // (via set_business_profile) and `business_pricing_config` — and until 2026-09-10 it wrote the
+    // tax rate on EVERY save, including saves that never touched it. Lauren edited a phone number
+    // on LAWNS, which already held 0.0825; the identity write SUCCEEDED, the pricing write was
+    // refused by RLS, and the one message described the whole save by its failing half. That is
+    // the import's "0 customers created" while 1,934 were deleted, at a smaller scale.
+    //
+    // The comparison is on the TRIMMED TEXT, not the parsed number, and deliberately: it is the
+    // same string the field was loaded with, so "0.0825" → "0.0825" is unchanged while
+    // "0.0825" → "0.08250" is a real edit the owner made and gets written. Parsing first would
+    // silently swallow a keystroke. `loadedTaxRate === null` means the config read has not landed,
+    // and nothing was edited, so nothing is written.
+    const taxChanged = loadedTaxRate !== null && raw !== loadedTaxRate;
+    const cfgErr = taxChanged
+      ? (await mergePricingConfig(supabase, businessId, { taxRate: rateNum })).error
+      : null;
+    console.log('[TRACE:TAX] business profile save — per-table outcome', {
+      businessId,
+      profile: error ? 'REFUSED: ' + error.message : 'written',
+      taxRate: taxChanged
+        ? (cfgErr ? 'REFUSED: ' + cfgErr.message : 'written (' + String(rateNum) + ')')
+        : 'not written — unchanged (' + String(loadedTaxRate) + ')',
+      source: 'config.taxRate',
+    });
 
     setSaving(false);
-    if (error || cfgErr) {
-      setSaveMsg('Error: ' + (error?.message ?? cfgErr?.message));
+    // PER TABLE, NEVER ONE VERDICT FOR TWO WRITES. Each half reports its own outcome, and a
+    // partial save SAYS which half landed — because it did land, and it cannot be rolled back.
+    if (error && cfgErr) {
+      setSaveMsg('Error: nothing was saved — ' + error.message);
+    } else if (error) {
+      setSaveMsg('Error: your business details were not saved (' + error.message +
+                 '). The tax rate was saved.');
+    } else if (cfgErr) {
+      setSaveMsg('Saved your business details. The TAX RATE was not saved — ' + cfgErr.message);
+      reload();
     } else {
       setSaveMsg('Saved');
+      if (taxChanged) setLoadedTaxRate(raw);
       reload();
       setTimeout(() => setSaveMsg(''), 2000);
     }
