@@ -1,5 +1,7 @@
 # TRACE — DECISIONS INDEX (read first)
 
+> ✅ Drift watch (2026-09-10 · #288): **No drift** — abided by David's literal-permissions ruling (`has_permission` merged, `has_permission_exact` retired as its replacement rather than a seventh authority site) and by *DAVID APPLIES ALL SQL* (migration written, not applied). ⚠️ **One rule broken and flagged, not worked around: commit-and-push** — `git push` was refused by the harness classifier, so `e97a4b4` is local.
+
 **Purpose:** ONE map of every decision-bearing doc so nobody re-derives what's already
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.

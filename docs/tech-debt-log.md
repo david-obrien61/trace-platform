@@ -1391,3 +1391,71 @@ first grant of `pricing_recipe:update` to a real person. ⚠️ **Not fixed in t
 re-shaping the write verb for four surfaces inside a fix for one is the scope creep that makes a
 diff unreviewable.** ⚠️ **It is also the reason the reported "one Save deletes their tax rate"
 could not have been Lauren's** — see ledger #287.
+
+---
+
+## #233 — 🟡 TWO AUTHORISATION FUNCTIONS, TWO SEMANTICS. `has_permission` IS LITERAL; `has_permission_for` STILL EXPANDS ALIASES (NEW 2026-09-10)
+
+`20260910_permission_literal_merge.sql` rewrites the **2-arg** `has_permission` to a literal
+`permissions ? p_perm` and drops `has_permission_exact`. The **3-arg** `has_permission_for(business,
+user, perm)` — used by `create_invitation`, `import_write_price`, `set_business_tax_rate`,
+`set_business_profile`, `set_business_module_state`, `seed_business_modules`, `start_module_trial`
+and `reset_invitation_expiry` — was **deliberately not touched**: changing it was not part of
+David's ruling, and a permission function is the wrong place to take unauthorised scope.
+
+⚠️ **NOT A LIVE DIVERGENCE TODAY, and that is measured rather than assumed.** The catalog check on
+2026-09-10 found **zero legacy strings held by any member row in any tenant** (57 distinct strings,
+all `resource:verb`), zero in `role_definitions`, and zero legacy literals in any policy or function
+body. So the alias join in `has_permission_for` resolves nothing, and the two functions agree on
+every live input.
+
+🔴 **BUT THE SHAPE IS THE 2026-07-30 DEFECT'S EXACT CLASS** — that ruling's own words: *"Two
+authorisation functions disagreeing about the same person is not a design."* The moment anyone
+writes a legacy string into an array, the RPC layer and the policy layer answer differently, and
+nothing would say so. **Filed so it is a decision on a board rather than a difference nobody wrote
+down.** Fix: the same one-line body change, or delete the alias join from both. **Trigger:** the
+next permissions pass, or any migration that seeds a non-`resource:verb` string.
+
+---
+
+## #234 — 🔴 EIGHTEEN POLICIES EXIST IN THE REPO AND NOT IN THE DATABASE — TWO MIGRATIONS ARE UNAPPLIED (NEW 2026-09-10)
+
+**MEASURED against `pg_policies` with the PAT, 2026-09-10.** The live catalog holds **142** public
+policies; the migration corpus derives **162**. Reconciled by name, the split is:
+
+| Cause | Count | What |
+|---|---|---|
+| **UNAPPLIED MIGRATION** | **18** | `20260905_production_planning.sql` (12 — `production_plans`, `production_plan_lines`, `business_operations_config`, none of whose tables exist live) · `20260727c_campaigns_member_and_plant_events_scope.sql` (6 — `campaigns` ×3, `campaign_posts` ×3; **the tables DO exist, the member policies do not**) |
+| Table no longer exists | 8 | `plants` ×2, `business_assets` ×2, `pmi_assets`, `pmi_service_logs`, `nursery_modules`, `campaign_tone_samples` |
+| My own drop-tracking | 4 | 3 × `storage.objects` (live, but in schema `storage` — the parser assumed `public`) · `bpc_member_insert` (the filename-sort ordering error, already corrected) |
+
+🔴 **THE CAMPAIGNS SIX ARE THE DANGEROUS HALF.** Those tables are live and carry only their
+`_owner` policy, so **campaign reads and writes are owner-only in the database while the manifest
+says `campaigns:read` / `campaigns:update` are `enforced` and MANAGER holds both.** A manager who
+opens campaigns gets zero rows, not an error. **This is the `assets:read` defect (#153) at a new
+address.**
+
+⚠️ **DAVID APPLIES ALL SQL — neither was applied by this pass.** `20260905` would ALSO create three
+tables; `20260727c` is policy-only. **Applying `20260727c` changes the policy count and grants a
+manager access she is supposed to have.** Both are listed with their effects in
+`docs/decisions/2026-09-10-policy-reconciliation.md`.
+
+---
+
+## #235 — 🟡 TEN LIVE POLICIES EXIST IN NO MIGRATION, AND `Tree Tarp` CARRIES A CONTRADICTORY PRICE PAIR (NEW 2026-09-10)
+
+**(a) Undocumented change history — 10 policies.** Live in `public` and created by nothing in the
+corpus: `addons_select_public` · `business_voice_samples_owner` · `cost_objects_owner_all` ·
+`cultivar_plants.anon_select_plants` · `losses_all_owner` · `modules readable by authenticated
+users` (note the spaces — a dashboard-created name) · `nurseries_select_public` ·
+`nurseries_update_owner` · `plant_events.anon_select_plant_events` · `plant_events_select_public`.
+They are legacy/pre-migration or hand-applied. **Five of them are `USING(true)`**, which is why the
+live open count is **8** and not the 3 the corpus reports. Each needs a decision: capture in a
+migration, or drop.
+
+**(b) `Tree Tarp` is `price_type: 'per_unit'` with `price_unit: 'order'`** — a contradictory pair on
+a live LAWNS row. `nettedQuantity` keys on `price_type` alone, so the tarp scales per plant, which
+is what David says is correct — but the row *says* it is priced per order. Nothing reads
+`price_unit` for money today, so this is a label that will mislead the next reader rather than a
+money defect. **Surfaced during #288's trip-charge fix and deliberately not changed** — it is
+customer data on a read-only tenant, and altering a price field to fix a label is the wrong trade.
