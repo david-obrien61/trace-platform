@@ -1459,3 +1459,30 @@ is what David says is correct — but the row *says* it is priced per order. Not
 `price_unit` for money today, so this is a label that will mislead the next reader rather than a
 money defect. **Surfaced during #288's trip-charge fix and deliberately not changed** — it is
 customer data on a read-only tenant, and altering a price field to fix a label is the wrong trade.
+
+---
+
+## #236 — 🔴 THE INSTALL-PRICE SAVE IS B.1's DEFECT AT A SECOND ADDRESS, ON THE SAME PAGE (NEW 2026-09-10)
+
+`Settings.tsx:67` reads `nursery_profiles` and `:83` **upserts** it (the default install price).
+`nursery_profiles` has **exactly one policy** — `nursery_profiles_owner`, keyed on the raw
+`owner_id` column, **not** the widened `is_business_owner()`. So for an OWNER-ROLE member who is not
+the account holder — **Lauren, measured 2026-09-10** — three things happen and all three are wrong:
+
+1. **The read returns zero rows** through `.maybeSingle()`, so the field renders **blank**, which is
+   indistinguishable from *"no install price is set"*. A false empty, not a refusal (D-9 / A9 —
+   *absent is not empty*).
+2. **The save is refused**, and `:34` surfaces `'Error: ' + error.message` — the **raw RLS string**,
+   the same sentence that started the 2026-09-10 thread.
+3. **The section is not permission-gated at all.** No `can()` anywhere near it. It renders for her,
+   then fails.
+
+⚠️ **NOT FIXED in #288, deliberately:** that prompt scoped B.1 to the profile save, and fixing a
+second surface inside it is the scope creep that makes a diff unreviewable. **The fix is the same
+shape** — the upsert becomes an UPDATE that proves it wrote, and the policy is re-pointed at
+`settings:update` (triage bucket ③, `docs/decisions/2026-09-10-owner-id-policy-triage.md` row 36).
+
+✅ **PROVABLE WITHOUT LAUREN AND WITHOUT A SITE VISIT** — CARD 8 on
+`profile-save-and-permission-literal-full-surface-test.md` mints an ephemeral OWNER-role member via
+`withMemberSession` and attempts the save. **Trigger:** the permissions pass that acts on the triage,
+or sooner if the install price is needed on a customer tenant.
