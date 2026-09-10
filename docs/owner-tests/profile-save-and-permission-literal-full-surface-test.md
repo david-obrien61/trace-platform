@@ -20,18 +20,23 @@
 >
 > The line is not "how hard" — it is **what the card proves**, and `scripts/lib/memberSession.mjs`
 > states it exactly: *"a machine proves the POLICY is correct; a human proves a REAL MEMBER is
-> configured correctly."* **`withMemberSession` mints an EPHEMERAL member with any permission set
-> and asserts under real RLS on the anon key — no real person's password is needed**, which is why
-> the refusal cards (the ones carrying the proof value) sit in Section A.
+> configured correctly."* So the refusal cards sit in Section A **as SQL-editor queries** — the
+> policy half is catalog-readable and needs nobody's password. ⚠️ **The behavioural half runs on a
+> harness THUNDER operates, never David** (corrected 2026-09-10 — see the Section A note): a write
+> under a member's own JWT cannot be done from the SQL editor, which runs as `postgres` and so
+> cannot test RLS on itself. **That harness marks nothing `covered`.**
 >
 > **🔴 RUN THIS FIRST: CARD 1.** Acceptance clause, no migration, your own login only.
 > *(The previous draft said "run CARD 1 first" when CARD 1 named Lauren. That was the mistake this
 > split exists to stop.)*
 
-> 🔴 **MIGRATION GATE — CARDS 5–7 ARE BLOCKED UNTIL DAVID APPLIES IT.**
-> `supabase/migrations/20260910_permission_literal_merge.sql` is **WRITTEN, NOT APPLIED.**
-> Everything else runs on the deploy alone. Apply in the **SQL editor, never the table editor**
-> (§6 r17), then run V1–V5 at the foot of the file.
+> ✅ **MIGRATION GATE — LIFTED 2026-09-10. `20260910_permission_literal_merge.sql` IS APPLIED.**
+> David applied it in the SQL editor and measured `is_literal = true`, `still_expands = false`,
+> `search_path` pinned, 59 policies. **Independently re-measured off the catalog the same day:**
+> `has_permission` body is `bm.permissions ? p_perm` with no `permission_aliases` reference,
+> `proconfig = search_path=""`, and **`has_permission_exact` returns 0 rows — it is gone.**
+> **CARDS 5, 6 AND 7 ARE UNBLOCKED.** ⚠️ `has_permission_for` still expands aliases — deliberate
+> and narrow, filed as tech-debt **#233**, not a gate.
 
 > ⚠️ **THE CONSOLE BLOCK — USE THIS ONE.** `window.supabase` **does not exist** and it is what broke
 > the last two attempts:
@@ -44,7 +49,18 @@
 ---
 
 # ═══ SECTION A — DAVID CAN RUN THESE NOW ═══
-*Your own login, or an ephemeral principal via `withMemberSession`. Nobody else required.*
+*Your own login, or the SQL editor. Nobody else required, and **no terminal**.*
+
+> 🔴 **CORRECTED 2026-09-10 — CARDS 5, 6 AND 8 SAID `DEVICE: desktop (terminal)` AND THAT WAS THE
+> SAME MISTAKE AS A CARD NAMING LAUREN.** David has not run terminal commands since July; all data
+> interaction is the Supabase SQL editor or the UI. A card David cannot run does not belong in a
+> David-can-run-now section, whoever it names. **Those three are now SQL-editor form**, and the
+> behavioural halves that genuinely cannot be done from the SQL editor — a write under a member's
+> own JWT — were **RUN BY THUNDER** and are recorded as builder verification on each card.
+> `scripts/rls/permission-literal-and-owner-id-cards.rls.mjs`, against **Test Dave's only**,
+> ephemeral principals, minted and deleted, teardown clean. **Per OP-14 that run marks NOTHING
+> `covered`** — `memberSession.mjs`'s own header says so: *"a machine proves the POLICY is correct;
+> a human proves a REAL MEMBER is configured correctly."* The human half of Card 6 is **CARD 11**.
 
 ### CARD 1 — 🔴 THE ACCEPTANCE CLAUSE: a profile edit that does not touch tax writes NOTHING to `business_pricing_config`
 **STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, your own login** · **TENANT:** Test Dave's
@@ -73,35 +89,91 @@ Same cart: **tree placement** ($125 `per_unit`) and **Tree Bubbler** ($65 `per_u
 - 🔴 **FAIL:** either shows ×1.
 > ⚠️ **`Tree Tarp` is `price_type: per_unit` with `price_unit: order`** — a contradictory pair in the DATA (tech-debt #235). It will read `× 2 orders`. That is the data, not this fix.
 
-### CARD 5 — 🔴 PROVE THE REFUSAL AGAINST AN EPHEMERAL PRINCIPAL *(blocked on the migration)*
-**STATUS:** owed · **DEVICE:** desktop (terminal) · **WHO:** **David, service key** · **TENANT:** Test Dave's
-**This is the card that proves the gate, and it needs nobody's password.** Write a short probe under
-`scripts/rls/` using `withMemberSession` — mint a member holding `inventory:read` **and not**
-`costs:read` or `pricing_recipe:update` — then call `has_permission` for each.
-- ✅ **PASS:** `inventory:read → true`; **`costs:read → false`, `pricing_recipe:update → false`, `view_costs → false`.**
-- 🔴 **FAIL:** `view_costs → true` — the alias expansion is still live and the migration did not take.
-> **A permission function that has only ever admitted is not a proven gate.**
+### CARD 5 — 🔴 PROVE THE REFUSAL: `has_permission` IS LITERAL
+**STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, SQL editor** · **TENANT:** all
+Two queries. No terminal, no `EXECUTE` grant needed, no password.
 
-### CARD 6 — the ephemeral principal WITH the string can save the pricing config *(blocked on the migration)*
-**STATUS:** owed · **DEVICE:** desktop (terminal) · **WHO:** **David, service key** · **TENANT:** Test Dave's
-Same harness: mint a member holding `pricing_recipe:update`, call `writePricingConfig`'s UPDATE path.
-- ✅ **PASS:** the write lands and `.select()` returns one row. **This is Lauren's case, proven without Lauren.**
-- 🔴 **FAIL:** zero rows — `bpc_member_update` is not admitting the string, and B.1's fix is incomplete.
+```sql
+-- (a) THE FUNCTION BODY — containment, not expansion.
+SELECT prosrc LIKE '%permissions ? p_perm%'        AS is_literal,      -- EXPECT true
+       prosrc LIKE '%permission_aliases%'          AS still_expands,   -- EXPECT false
+       proconfig::text                             AS search_path      -- EXPECT {"search_path=\"\""}
+  FROM pg_proc WHERE proname = 'has_permission';
 
-### CARD 7 — the second authority site is gone *(blocked on the migration)*
+-- (b) NOBODY HOLDS THE LEGACY STRING, so literal semantics cannot lock anyone out by surprise.
+SELECT bm.name, b.name AS tenant, bm.role,
+       bm.permissions ? 'view_costs'      AS holds_legacy,   -- EXPECT false on EVERY row
+       bm.permissions ? 'costs:read'      AS holds_modern
+  FROM business_members bm JOIN businesses b ON b.id = bm.business_id
+ ORDER BY b.name, bm.name;
+```
+- ✅ **PASS:** `is_literal = true`, `still_expands = false`, and **`holds_legacy = false` on all 8 rows.**
+- 🔴 **FAIL:** `still_expands = true` → the migration did not take. A `holds_legacy = true` row → that person just lost an access they had.
+
+> ✅ **BUILDER-VERIFIED BEHAVIOURALLY, 2026-09-10 — and this is the half the SQL above cannot reach.**
+> An ephemeral STAFF principal holding **only `inventory:read`**, signed in with the ANON key
+> (a real JWT, real `auth.uid()`, exactly what the browser holds), called `has_permission` five times:
+> `inventory:read → true` · `costs:read → false` · `pricing_recipe:update → false` ·
+> **`view_costs → false`** · `manage_settings → false`. **The legacy alias is refused by the live
+> function, measured, not reasoned.** ⚠️ *An SQL-editor version of this call was attempted first and
+> could not run from here: the read-only PAT is `supabase_read_only_user`, which is not granted
+> `EXECUTE` on `has_permission`. David's editor runs as `postgres`, which is — but I will not put a
+> block on this board that I have not watched run (§6 r19), so the SQL above proves it from the
+> catalog instead and the harness proves the call.*
+
+### CARD 6 — THE POLICY ADMITS THE STRING (the member-write path)
+**STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, SQL editor** · **TENANT:** all
+```sql
+SELECT policyname, cmd, qual, with_check
+  FROM pg_policies WHERE tablename = 'business_pricing_config' ORDER BY policyname;
+```
+- ✅ **PASS:** `bpc_member_update` exists, `cmd = UPDATE`, and BOTH `qual` and `with_check` read
+  `is_active_member(business_id) AND has_permission(business_id, 'pricing_recipe:update')`.
+- 🔴 **FAIL:** the policy is absent, or names a legacy string.
+- ⚠️ **EXPECT `bpc_member_insert` TO BE ABSENT — that is deliberate** (#232). It is why an upsert
+  refuses a member, and why `writePricingConfig` had to stop upserting.
+
+> ✅ **BUILDER-VERIFIED, 2026-09-10 — the write, under a member's own JWT.** The SQL editor runs as
+> `postgres` and therefore cannot test RLS on itself, so this half is not SQL-editor-provable at all.
+> An ephemeral STAFF principal holding `pricing_recipe:read` + `pricing_recipe:update`, ANON session:
+> **read returned 1 row** (`bpc_member_select`), **UPDATE returned 1 row** (`bpc_member_update`
+> admits the string), and the original config was restored with the service key — **no residue,
+> verified by re-read.** *This is Lauren's case, proven without Lauren.*
+> 🔴 **THE OWNER PROOF OF THIS CARD IS CARD 11 — Lauren saving on LAWNS.** A harness proves the
+> policy; only she proves her own row is configured to reach it.
+
+### CARD 7 — the second authority site is gone
 **STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, SQL editor**
 ```sql
 SELECT proname FROM pg_proc WHERE proname = 'has_permission_exact';   -- EXPECT 0 rows
 SELECT prosrc LIKE '%permission_aliases%' AS still_expands FROM pg_proc WHERE proname='has_permission';  -- EXPECT false
 ```
+> ✅ **RE-MEASURED OFF THE CATALOG 2026-09-10 (Thunder, read-only):** `has_permission_exact`
+> returns **0 rows**; `has_permission` → `still_expands = false`. Both as expected. **Still `owed`,
+> because a builder read is not your run** — but if it disagrees when you run it, something changed
+> after the migration and that is the finding.
 
 ### CARD 8 — 🔴 THE OTHER `nursery_profiles` SAVE IS THE SAME DEFECT, UNFIXED
-**STATUS:** owed · **DEVICE:** desktop (terminal) · **WHO:** **David, service key** · **TENANT:** Test Dave's
-`Settings.tsx:83` upserts `nursery_profiles` (the default install price). That table has **exactly one
-policy, keyed on raw `owner_id`** — so an OWNER-ROLE member who is not the account holder is refused.
-Mint an ephemeral OWNER-role member and attempt the install-price save.
-- ✅ **PASS (expected, and it is a FAILING surface):** the write is refused. **That confirms tech-debt #236** — B.1's defect at a second address on the same page, filed and NOT fixed this pass.
-- 🔴 If it succeeds, my reading of the policy is wrong and #236 should be withdrawn.
+**STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, SQL editor** · **TENANT:** all
+`Settings.tsx:83` upserts `nursery_profiles` (the default install price). One query settles it:
+
+```sql
+SELECT policyname, cmd, qual
+  FROM pg_policies WHERE tablename = 'nursery_profiles';
+```
+- ✅ **PASS (expected — and it means the surface is BROKEN, not fixed):** exactly **one** row —
+  `nursery_profiles_owner`, `cmd = ALL`, `qual = business_id IN (SELECT id FROM businesses WHERE
+  owner_id = auth.uid())`. **No member policy and no permission string anywhere in it**, so an
+  OWNER-ROLE member who is not the account holder is refused. **That confirms tech-debt #236** —
+  B.1's defect at a second address on the same page, filed and NOT fixed this pass.
+- 🔴 If a member policy exists, my reading was wrong and **#236 should be withdrawn**.
+
+> ✅ **BUILDER-VERIFIED BEHAVIOURALLY, 2026-09-10 — the refusal is real, with its error code.**
+> An ephemeral **OWNER-ROLE** principal (`settings:read` + `settings:update`, and **not**
+> `businesses.owner_id`, which is `95c1b2e9…`) attempted the install-price upsert on Test Dave's:
+> **refused, `42501 new row violates row-level security policy for table "nursery_profiles"`.**
+> Holding the OWNER role and both settings strings bought nothing — **#236 CONFIRMED**, and the
+> refusal is at least loud rather than silent.
 
 ---
 
