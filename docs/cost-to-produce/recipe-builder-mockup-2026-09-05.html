@@ -1,0 +1,222 @@
+<!doctype html>
+<!--
+  RECIPE BUILDER — LIGHTNING MOCKUP. REFERENCE ARTIFACT, NOT APP CODE. DO NOT IMPORT OR WIRE.
+
+  PROVENANCE (the artifact carries its own — tech-debt #63's through-line):
+    Authored  2026-09-05 14:10, the same session that ruled R-84…R-92 (uppot planning, ledger #276).
+    Filed     2026-09-10. For five days it existed ONLY as a browser download on the desktop:
+              no ruling row, no story, no decision doc, nothing in version control. The nine uppot
+              rulings from that session were written down; the manufactured-item half was not.
+              That is the gap this file being here closes.
+
+  WHAT IT SPECIFIES (it IS the spec — there is no other): an item flagged as MADE carries a
+  hand-authored RECIPE; the recipe computes what the item costs. item_type as a COLUMN on
+  inventory (purchased | grown | manufactured), never a SKU parse. A BUILD RUN takes components
+  out and puts finished units in. Cost = Σ component LANDED cost + build minutes × a rate from a
+  LABOUR TABLE. Two exits from one recipe — sold in a scoop, or consumed into a tree at cost.
+
+  RULING: R-118 in docs/RULINGS.md carries the substance, the open questions and the guard.
+  Read the row before building against this page; it names what this mockup does NOT settle.
+-->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recipe builder — what a made item costs</title>
+<style>
+:root{--ink:#15201b;--forest:#1f4d3a;--soft:#e8efea;--paper:#fff;--surface:#f7f8f6;
+--rule:#dde2dc;--muted:#6d7a72;--mark:#b32418;--marksoft:#fdf1ef;--warn:#8a6d1f;--warnsoft:#fdf6e3;--ok:#2f6b4f}
+*{box-sizing:border-box}html,body{margin:0}
+body{font:14.5px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
+background:var(--surface);font-variant-numeric:tabular-nums}
+header{background:var(--paper);border-bottom:1px solid var(--rule);padding:14px 20px}
+h1{font-size:19px;margin:0;font-weight:620;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin-top:3px}
+.tabs{display:flex;gap:0;margin-top:12px}
+.tab{font:inherit;font-size:13.5px;padding:8px 15px;border:1px solid var(--rule);border-bottom:0;
+background:var(--surface);color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--paper);color:var(--ink);font-weight:620;box-shadow:inset 0 2px 0 var(--forest)}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;padding:18px 20px 50px;align-items:start}
+.card{background:var(--paper);border:1px solid var(--rule);margin-bottom:16px}
+.card h2{font-size:12.5px;color:var(--muted);font-weight:600;margin:0;padding:11px 14px;border-bottom:1px solid var(--rule)}
+.card .body{padding:13px 14px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11.5px;color:var(--muted);font-weight:600;text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule)}
+th.r,td.r{text-align:right}
+td{padding:8px 9px;border-bottom:1px solid var(--rule);font-size:13.5px;vertical-align:top}
+tr.unpriced td{background:var(--warnsoft)}
+.src{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.sku{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--forest)}
+.conv{font-size:11.5px;color:var(--muted)}
+.miss{color:var(--warn);font-weight:600}
+tfoot td{border-top:2px solid var(--rule);border-bottom:0;font-weight:620;padding-top:10px}
+.callout{border-left:3px solid var(--mark);background:var(--marksoft);padding:11px 13px;margin:0 0 16px;font-size:13.5px}
+.callout b{color:var(--mark)}
+.warnbox{border-left:3px solid var(--warn);background:var(--warnsoft);padding:10px 13px;font-size:13px;margin-top:12px}
+.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted var(--rule);font-size:13.5px}
+.kv:last-child{border:0}
+.kv.big{font-size:16px;font-weight:650;padding-top:9px;border-bottom:0}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.three div{background:var(--paper);padding:11px 12px}
+.three .lab{font-size:11.5px;color:var(--muted);display:block;line-height:1.3;min-height:30px}
+.three .val{font-size:19px;font-weight:650;display:block;margin-top:3px}
+.three .basis{font-size:11px;color:var(--muted);display:block;margin-top:3px}
+.amber .val{color:var(--warn)}
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border:1px solid;margin-left:6px;vertical-align:1px}
+.b-fact{border-color:var(--ok);color:var(--ok)}
+.b-sugg{border-color:var(--warn);color:var(--warn);background:var(--warnsoft)}
+.b-made{border-color:var(--forest);color:var(--forest);background:var(--soft)}
+.exits{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.exit{border:1px solid var(--rule);padding:11px 12px}
+.exit h3{margin:0 0 5px;font-size:13px;font-weight:620}
+.exit .n{font-size:17px;font-weight:650}
+.exit .n.sale{color:var(--ok)} .exit .n.use{color:var(--forest)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:5px}
+.spark{display:flex;align-items:flex-end;gap:4px;height:54px;margin:8px 0 4px}
+.spark i{flex:1;background:var(--soft);border-top:2px solid var(--forest);display:block}
+.spark i.hi{background:#f6dfd9;border-top-color:var(--mark)}
+.axis{display:flex;font-size:11px;color:var(--muted)}
+.axis span{flex:1}
+.line{position:relative;height:2px;background:var(--forest);margin:6px 0 2px}
+@media print{aside{display:none}.wrap{display:block}}
+</style></head><body>
+
+<header>
+  <h1>Recipe builder <span class="badge b-made">MADE ITEM</span></h1>
+  <div class="sub">An item flagged as made carries a recipe. The recipe computes what it costs. Nothing here is typed twice.</div>
+  <div class="tabs">
+    <button class="tab" aria-selected="true">Fertilizer:SFCM1 — special mix</button>
+    <button class="tab" aria-selected="false">Bubbler assembly</button>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+
+  <div class="callout">
+    <b>The one that decides whether this is right or wrong.</b> A receipt line is not the cost.
+    Bailey Bark's material line reads <b>$13.75 a yard</b>. Landed it is <b>$30.88</b>, because freight
+    (245 miles × $4.60) and fuel (14% of freight) are separate lines that have to be spread across the goods.
+    Pull the line and this recipe comes out at $23 a yard instead of $51.96 — <b>wrong by half, and it looks perfectly reasonable.</b>
+  </div>
+
+  <div class="card">
+    <h2>THE RECIPE — one batch yields 2.5 cubic yards</h2>
+    <table>
+      <thead><tr>
+        <th style="width:26%">Component</th><th style="width:15%">Uses</th>
+        <th style="width:24%">Bought as</th><th class="r" style="width:14%">Cost / use unit</th>
+        <th class="r" style="width:13%">In a batch</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Shook Out Brown<span class="src">Bailey Bark · <span class="sku">BBSOBY</span></span></td>
+            <td>2.0 yd</td><td>by the yard<span class="conv">1 : 1</span></td>
+            <td class="r">$30.88<span class="conv">landed, not the line</span></td><td class="r">$61.76</td></tr>
+        <tr><td>Compost<span class="src">Sudderth Brothers</span></td>
+            <td>0.5 yd</td><td>by the yard<span class="conv">1 : 1, haul included</span></td>
+            <td class="r">$25.00</td><td class="r">$12.50</td></tr>
+        <tr><td>Osmocote 21-4-8<span class="src">bwi · <span class="sku">OS98615</span></span></td>
+            <td>25 lb</td><td>50 lb bag<span class="conv">1 bag = 50 lb</span></td>
+            <td class="r">$1.36<span class="conv">$68.24 ÷ 50</span></td><td class="r">$34.12</td></tr>
+        <tr><td>MicroMax<span class="src">bwi</span></td>
+            <td>2 lb</td><td>50 lb bag<span class="conv">1 bag = 50 lb</span></td>
+            <td class="r">$1.68</td><td class="r">$3.37</td></tr>
+        <tr><td>Ferrous Sulfate<span class="src">bwi · <span class="sku">HE6849</span></span></td>
+            <td>2 lb</td><td>50 lb bag<span class="conv">1 bag = 50 lb</span></td>
+            <td class="r">$0.55</td><td class="r">$1.09</td></tr>
+        <tr><td>19-5-9<span class="src">bwi · <span class="sku">R190</span></span></td>
+            <td>2 lb</td><td>40 lb bag<span class="conv">1 bag = 40 lb</span></td>
+            <td class="r">$0.72<span class="conv">3 prices, 49% apart</span></td><td class="r">$1.44</td></tr>
+        <tr class="unpriced"><td>12-24-12<span class="src miss">not linked to any purchase yet</span></td>
+            <td>2 lb</td><td class="miss">—</td><td class="r miss">unpriced</td><td class="r miss">—</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4">Materials</td><td class="r">$114.28</td></tr>
+        <tr><td colspan="4">Labour — 0.63 hr at $25.00 blended, from the labour table</td><td class="r">$15.62</td></tr>
+        <tr><td colspan="4">Batch cost ÷ 2.5 yd yield</td><td class="r">$129.91</td></tr>
+      </tfoot>
+    </table>
+    <div class="body" style="padding-top:0">
+      <div class="warnbox"><b>Cost incomplete — 1 of 7 components unpriced.</b> 12-24-12 is on no invoice we hold.
+      The total below excludes it, and says so. A partial total presented as a total is the thing that
+      gets someone fired.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>THE THREE NUMBERS — and only one of them moves</h2>
+    <div class="body">
+      <div class="three">
+        <div><span class="lab">The cost you priced against<br>set once, held, dated</span>
+             <span class="val">$45.00</span><span class="basis">set 12 Aug by Terry, off the peak</span></div>
+        <div class="amber"><span class="lab">The last cost you paid<br>computed, every purchase</span>
+             <span class="val">$51.96</span><span class="basis">4 Sep — above what your card assumes</span></div>
+        <div><span class="lab">Sell price<br>½ yard scoop</span>
+             <span class="val">$30.00</span><span class="basis">21 of 29 sales at list</span></div>
+      </div>
+      <div class="warnbox">Your buy price has moved past what the price card assumes. <b>Not "you are losing money"</b> —
+      an invitation to look at the curve. Re-pricing is something a person does, with a date and a name on it.</div>
+      <div style="margin-top:14px">
+        <div style="font-size:12.5px;color:var(--muted)">COST A YARD, EVERY PURCHASE — a peak plus your margin, and the valleys take care of themselves</div>
+        <div class="spark">
+          <i style="height:52%"></i><i style="height:48%"></i><i style="height:61%"></i><i style="height:55%"></i>
+          <i style="height:70%"></i><i style="height:64%"></i><i style="height:58%"></i><i style="height:76%"></i>
+          <i class="hi" style="height:92%"></i><i style="height:81%"></i><i style="height:73%"></i><i class="hi" style="height:100%"></i>
+        </div>
+        <div class="line"></div>
+        <div class="axis"><span>Oct</span><span>Dec</span><span>Feb</span><span>Apr</span><span>Jun</span><span>Aug</span></div>
+        <div class="note">Every purchase writes a dated point. Nothing is averaged away, nothing overwritten.
+        19-5-9 alone gives three points 49% apart. Bark gives one — the Jan–Jun invoices are what fill this in.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>TWO EXITS, ONE RECIPE — the flag on the SKU decides which</h2>
+    <div class="body"><div class="exits">
+      <div class="exit"><h3>Sold in a scoop</h3>
+        <span class="n sale">$30.00</span>
+        <div class="note">½ yard at cost $25.98 → <b>cost + 40% is $36.37</b>.
+        They charge $30, so 1.15×.<br>
+        ⚠️ The setting must say which arithmetic: cost × 1.40 is $36.37;
+        40% <i>margin</i> (cost ÷ 0.60) is $43.30. A $7 difference on half a yard.</div></div>
+      <div class="exit"><h3>Used in a tree</h3>
+        <span class="n use">$5.40</span>
+        <div class="note">30 gallons into a pot — 0.104 yd, <b>transferred at cost</b>.
+        At the retail price it would book $6.24 and at cost+40% $7.56 —
+        phantom profit charged against your own tree.</div></div>
+    </div></div>
+  </div>
+
+</main>
+
+<aside>
+  <div class="card"><h2>WHAT THIS COSTS</h2><div class="body">
+    <div class="kv"><span>Materials</span><b>$114.28</b></div>
+    <div class="kv"><span>Labour</span><b>$15.62</b></div>
+    <div class="kv"><span>Batch of 2.5 yd</span><b>$129.91</b></div>
+    <div class="kv big"><span>A cubic yard</span><b>$51.96</b></div>
+    <div class="note">Bark is 48% of it. Freight on that bark is $13.70 — 26% of the yard,
+    the same share as the Osmocote, and it sits on a line nobody reads.</div>
+  </div></div>
+
+  <div class="card"><h2>WHERE EACH NUMBER COMES FROM</h2><div class="body">
+    <div class="kv"><span>Osmocote $1.36/lb</span><span class="badge b-fact">FACT</span></div>
+    <div class="kv"><span>Bark $30.88/yd landed</span><span class="badge b-fact">FACT</span></div>
+    <div class="kv"><span>Recipe quantities</span><span class="badge b-fact">FACT</span></div>
+    <div class="kv"><span>Labour $25.00/hr blended</span><span class="badge b-fact">FACT</span></div>
+    <div class="kv"><span>Mixing 0.25 hr a yard</span><span class="badge b-sugg">GUESS</span></div>
+    <div class="kv"><span>12-24-12</span><span class="badge b-sugg">MISSING</span></div>
+    <div class="note">A suggested number rendered like a measured one is what destroys trust.
+    The first correction is what makes it real — and that is the learning loop the OCR reader does not have.</div>
+  </div></div>
+
+  <div class="card"><h2>THE BUBBLER — same machinery</h2><div class="body">
+    <div class="note" style="margin-top:0">2½" 90s · 10 inches of hose · an on/off bubbler · a ½" PVC adapter.
+    Built ~100 at a time to cover a year.<br><br>
+    <b>Yield 100, not 1.</b> Hose bought by the roll and used in inches —
+    that conversion is where a recipe goes wrong by a factor of fifty and nobody notices.<br><br>
+    Consumed <b>whole</b>, where the mix is consumed <b>by fraction</b>. Same builder, different exit.<br><br>
+    ⚠️ Not a QuickBooks item. Zero matches for bubbler, hose or emitter across 1,481 invoices —
+    it has to be created by hand.</div>
+  </div></div>
+</aside>
+</div>
+</body></html>
