@@ -1489,10 +1489,14 @@ or sooner if the install price is needed on a customer tenant.
 
 ---
 
-### 🟡 ADDRESSED IN THE MIGRATION, NOT YET IN THE DATABASE — 2026-09-10 (#289)
+### ✅ CLAUSES 1 AND 2 ARE FIXED IN THE DATABASE — APPLIED 2026-09-10 (#289). CLAUSE 3 IS STILL OPEN.
 
-**`supabase/migrations/20260910b_owner_id_policies_become_permissions.sql` fixes all three clauses
-and IS NOT APPLIED.** The row stays 🟡 until David applies it and CARD 4 passes.
+**`supabase/migrations/20260910b_owner_id_policies_become_permissions.sql` WAS APPLIED by David on
+2026-09-10**, and the result was re-measured against the catalog independently of the report:
+`lauren_refusals 3 → 0`, `dead_permission_policies 31 → 0`, `surviving_dropped 10 → 0`, with
+`joel_refusals` **held at 12**. ⚠️ **The row stays 🟡 because clause 3 is untouched and because
+CARD 9 — Lauren editing the field in the actual UI — has not been run.** A database that agrees with
+itself is not a person saving a price.
 
 · `nursery_profiles_owner` is re-pointed at `settings:update` (clause 2), **and a NEW
   `nursery_profiles_member_select` is added on `settings:read`** — because clause 1 is not fixed by
@@ -1639,5 +1643,8 @@ note gives for not doing it.
 likely *"every tenant table is reachable by a permission or a membership predicate, and by nothing
 that compares `owner_id` unless it is one of the eight declared ENTITY/authority-store policies"* —
 which is a different check with a different declaration, self-pruning the way
-`r-b2-wired-since-declarations.json` is. **Trigger:** after `20260910b` is applied, or the next time
-this cap reports a false failure.
+`r-b2-wired-since-declarations.json` is. **Trigger:** ✅ **FIRED — `20260910b` was applied 2026-09-10.** The cap is now measurably describing a
+database that no longer matches its model: **raw-`owner_id` policies went 49 → 12** (the 8 declared
+ENTITY/authority-store ones, `bpc_owner_insert`, and 3 on tables pending DROP), and capability #3
+still reports dual RLS for `receipts`, `business_inventory`, `cost_objects` and `labor_resources`
+**off `CREATE` statements the applied migration removed.** It is passing on history. Next pass.

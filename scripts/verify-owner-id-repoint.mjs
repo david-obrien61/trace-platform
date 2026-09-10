@@ -34,6 +34,8 @@ const RED = '\x1b[31m', GRN = '\x1b[32m', YEL = '\x1b[33m', B = '\x1b[1m', O = '
 const PLAN = 'docs/decisions/2026-09-10-owner-id-repoint-plan.md';
 const MIG  = 'supabase/migrations/20260910b_owner_id_policies_become_permissions.sql';
 const MANIFEST = 'packages/shared/src/auth/permissionManifest.ts';
+const ACCEPT = 'docs/decisions/2026-09-10-owner-id-repoint-acceptance.sql';
+const BOARD  = 'docs/owner-tests/owner-id-policy-repoint-full-surface-test.md';
 const MINTED = ['accounting:connect', 'devices:manage'];
 
 /** Strip `--` line comments. PURE — probed. */
@@ -164,6 +166,55 @@ export function ownerLiteral(sqlText) {
   return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : null;
 }
 
+/**
+ * The runnable SQL out of the acceptance file (everything from the first `WITH plan(`). PURE — probed.
+ */
+export const runnableSql = (accText) => {
+  const i = accText.indexOf('WITH plan(');
+  return i < 0 ? null : accText.slice(i).trim();
+};
+
+/**
+ * The ```sql fence belonging to CARD 1 — ANCHORED, not positional. PURE — probed.
+ *
+ * ⚠️ THE FIRST DRAFT TOOK "the first ```sql fence in the file" AND THAT WAS WRONG IN A WAY ITS OWN
+ * MUTANT EXPOSED BY ACCIDENT. The board carries SIX sql fences; a mutation that removed the `sql`
+ * tag from CARD 1's fence did not report "no fence", it silently compared CARD 3's block instead
+ * and failed for the wrong reason. It happened to fail — but a check that lands on a DIFFERENT
+ * block than the one it names is #182's class, and the next edit that adds a query above CARD 1
+ * would have made it compare the wrong thing and pass. Anchored to the heading it is about.
+ */
+export const firstSqlFence = (mdText) => {
+  const i = mdText.indexOf('### CARD 1 —');
+  if (i < 0) return null;
+  const end = mdText.indexOf('\n### ', i + 1);
+  const card = mdText.slice(i, end < 0 ? undefined : end);
+  const m = card.match(/```sql\n([\s\S]*?)```/);
+  return m ? m[1].trim() : null;
+};
+
+/**
+ * 🔴 THE BOARD'S INLINE COPY MUST BE THE ACCEPTANCE FILE, CHARACTER FOR CHARACTER. PURE — probed.
+ *
+ * WHY THIS ASSERTION EXISTS AND WHY IT IS NOT PARANOIA (2026-09-10). The card used to say "paste
+ * `docs/decisions/…-acceptance.sql`", and David does not hunt for files — he works in the Supabase
+ * SQL editor and the app. A card he cannot act on is a card that never runs, which is the same
+ * class as the terminal cards corrected the day before. So the SQL now lives IN the card.
+ *
+ * That creates a second representation of one fact (STD-011), and the redundant copy is always the
+ * one that drifts — a card that pastes cleanly and quietly asks the WRONG question is worse than a
+ * file hunt, because it reports a number nobody can trace. This makes the two halves one document:
+ * edit either and the build fails until they agree.
+ */
+export function boardMatchesAcceptance(accText, mdText) {
+  const want = runnableSql(accText);
+  const got = firstSqlFence(mdText);
+  if (!want) return 'the acceptance file contains no `WITH plan(` — nothing to compare';
+  if (!got) return 'CARD 1 carries no ```sql fence — the query is not inline any more, so the card is a file hunt again';
+  if (want !== got) return 'the board\'s inline SQL and the acceptance file have DRIFTED — the card would paste cleanly and ask a different question than the file everyone else reads';
+  return null;
+}
+
 /** A minted string must state its status LITERALLY, never lean on buildManifest's default. PURE — probed. */
 export function mintedStatesStatus(manifestSrc, perm) {
   const i = manifestSrc.indexOf(`'${perm}': {`);
@@ -222,6 +273,18 @@ function selfTest() {
     ['S10 REPOINT_SPLIT: recreating the FOR ALL policy is rejected',
       () => run(SPLIT_PLAN, SPLIT_MIG + '\nCREATE POLICY p4 ON public.t4 FOR ALL TO authenticated USING (public.is_active_member(t4.business_id) AND public.has_permission(t4.business_id, \'res:update\'));').length > 0],
     ['S11 REPOINT_SPLIT: a clean split is ACCEPTED', () => run(SPLIT_PLAN, SPLIT_MIG).length === 0],
+    ['S12 board/acceptance: identical text is ACCEPTED',
+      () => boardMatchesAcceptance('-- hi\nWITH plan(a) AS (VALUES (1)) SELECT 1;', '### CARD 1 — x\n```sql\nWITH plan(a) AS (VALUES (1)) SELECT 1;\n```\n') === null],
+    ['S13 board/acceptance: ONE CHANGED CHARACTER is rejected',
+      () => boardMatchesAcceptance('WITH plan(a) AS (VALUES (1)) SELECT 1;', '### CARD 1 — x\n```sql\nWITH plan(a) AS (VALUES (2)) SELECT 1;\n```\n') !== null],
+    ['S14 board/acceptance: a board with NO sql fence is rejected (the file hunt is back)',
+      () => boardMatchesAcceptance('WITH plan(a) AS (VALUES (1)) SELECT 1;', 'no fence here') !== null],
+    ['S15 board/acceptance: the fence is read from CARD 1, not from whichever card comes first',
+      () => boardMatchesAcceptance('WITH plan(a) AS (VALUES (1)) SELECT 1;',
+        '### CARD 9 — decoy\n```sql\nWITH plan(a) AS (VALUES (1)) SELECT 1;\n```\n### CARD 1 — real\n```sql\nWITH plan(a) AS (VALUES (99)) SELECT 1;\n```\n') !== null],
+    ['S16 board/acceptance: CARD 1 present but carrying NO fence is rejected',
+      () => boardMatchesAcceptance('WITH plan(a) AS (VALUES (1)) SELECT 1;',
+        '### CARD 1 — real\nno sql here\n### CARD 2 — x\n```sql\nWITH plan(a) AS (VALUES (1)) SELECT 1;\n```\n') !== null],
     ['S8 PROSE ONLY does not satisfy a row — comments are stripped',
       () => run(GOOD_PLAN, GOOD_MIG.replace(/^DROP POLICY IF EXISTS p2 ON public\.t2;$/m, '-- DROP POLICY IF EXISTS p2 ON public.t2;')).length > 0],
   ];
@@ -239,7 +302,7 @@ if (dead.length) {
   console.error(`${DIM}  A checker that cannot refuse is not a checker (§6 r19). Refusing to report on the real files.${O}`);
   process.exit(1);
 }
-console.log(`  ${GRN}ok  ${O} self-test — 11 planted inputs, 11 rejected/accepted as specified`);
+console.log(`  ${GRN}ok  ${O} self-test — 16 planted inputs, 16 rejected/accepted as specified`);
 
 if (process.argv.includes('--self-test')) process.exit(0);
 
@@ -269,6 +332,14 @@ const manifestSrc = readFileSync(MANIFEST, 'utf8');
 for (const p of MINTED) {
   if (!manifestSrc.includes(`'${p}': {`)) failures.push(`minted string '${p}' is not in the manifest`);
   else if (!mintedStatesStatus(manifestSrc, p)) failures.push(`minted string '${p}' does not STATE its status — buildManifest defaults an unspecified verb to 'enforced' (:722-725), and that default is how a false claim became invisible on pricing_recipe:update`);
+}
+
+// ── THE CARD MUST CARRY THE QUERY, AND IT MUST BE THE SAME QUERY ────────────────────────────────
+if (!existsSync(ACCEPT)) failures.push(`${ACCEPT} is missing — the acceptance query is the deliverable`);
+else if (!existsSync(BOARD)) failures.push(`${BOARD} is missing`);
+else {
+  const drift = boardMatchesAcceptance(readFileSync(ACCEPT, 'utf8'), readFileSync(BOARD, 'utf8'));
+  if (drift) failures.push(drift);
 }
 
 const d = plan.reduce((a, r) => ((a[r.disposition] = (a[r.disposition] ?? 0) + 1), a), {});
