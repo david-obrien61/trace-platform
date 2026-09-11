@@ -8,7 +8,7 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-09-09 — **ledger #287 +** #286 + #283 + #281 + #280 + #279 + #278 + #277 + #276 + #275 + #274 + #273 + #254 + #255 + #258 + #259 + #260 + #262 + #263 + #265 + #268 + #271 + #272.** ⚠️ **THIS LINE IS A POINTER, NEVER A SUMMARY (STD-011 / OP-13's clause).** The drift watch lives in the `> ✅ Drift watch` blockquote list below and ONLY there; a second copy here is the one that drifts.
+**Last updated:** 2026-09-10 — **ledger #289 (R-119) +** #287 + #286 + #283 + #281 + #280 + #279 + #278 + #277 + #276 + #275 + #274 + #273 + #254 + #255 + #258 + #259 + #260 + #262 + #263 + #265 + #268 + #271 + #272.** ⚠️ **THIS LINE IS A POINTER, NEVER A SUMMARY (STD-011 / OP-13's clause).** The drift watch lives in the `> ✅ Drift watch` blockquote list below and ONLY there; a second copy here is the one that drifts.
 
 **Newest: 2026-08-25** (drift watch: **✅ NO DRIFT — checkout persists the email it uses; ledger #217; NO schema, NO migration, NO policy, NO new permission string, NO new api fn.** ZERO decisions settled, deferred, superseded or re-opened. ONE stated divergence (`email` is supplied-wins, not fill-never-clobber) and ONE cap corrected — `verify-zero-row-writes` could not recognise R-12's own `!== 1` shape and was failing builds for adopting it.)
 catalog-verified (A–E green, invariant holds), owner-proof owed.** The durable fix for the recurring "tier discount CHARGED but no discount LINE on order-detail/QBO" gap:
@@ -703,6 +703,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 
 | Decision / Topic | What it decides (one line) | Doc + path | Date | Status |
 |---|---|---|---|---|
+| **R-119** The policy test is ENTITY or WORK | A policy fencing on `businesses.owner_id` keeps it only if the operation is about the **entity** (who owns it, who is billed, who it transfers to) — with a comment saying why; anything about the **work** gets `has_permission(business_id,'<string>')`. Replaces *"could you imagine delegating this?"*, which asked about a customer's PREFERENCE instead of a property of the operation. Sub-rulings: mint `accounting:connect` + `devices:manage`, **not** `audit_log:write`; `businesses_owner_update` takes ROUTE A (`set_business_profile`'s column list IS the column-level policy); no repoint may restore a member INSERT on `business_pricing_config`. | [RULINGS.md](RULINGS.md) R-119 · [triage](decisions/2026-09-10-owner-id-policy-triage.md) · [disposition table](decisions/2026-09-10-owner-id-repoint-plan.md) | 2026-09-10 | **DECIDED — IMPLEMENTED & APPLIED** (`20260910b`; all 49 dispositioned; raw-`owner_id` policies **49 → 12**, measured; guard = capR2) |
 | **D-31** Platform DB + spine-first architecture | One platform database (80/20); Ignition retires onto the shared spine. | [docs/DECISIONS.md](DECISIONS.md) D-31 | 2026-07 | **DECIDED** |
 | **D-21** Screen real estate is sacred | Direct access over scroll (platform-wide design law). | [docs/DECISIONS.md](DECISIONS.md) D-21 | 2026-06 | **DECIDED** |
 | **D-22** Admin = business-entity config; Settings = user-self | The nav gating axis. | [docs/DECISIONS.md](DECISIONS.md) D-22 | 2026-06 | **DECIDED** |

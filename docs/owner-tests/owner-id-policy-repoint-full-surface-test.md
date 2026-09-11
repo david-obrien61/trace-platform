@@ -9,11 +9,21 @@
 
 **Capability:** 1.5 identity / roles / RBAC · 2.6 settings/profile · 3.5 team
 **Ledger:** #289 · **Branch:** `main` · **Last updated:** 2026-09-10
-**Story:** ⚠️ **NO STORY ON THE BOARD COVERS "an OWNER-ROLE member who is not the account holder
-does her job", and one is OWED.** The nearest is R-22's archived *Hand over the keys — the owner
-role outlives the person who opened the account*, which is about **transfer**, not about a second
-owner working alongside the first. **Flagged, not invented** (§9 story-reconciliation gate). This
-is the same gate the `owner-role-authority` board left open on 2026-09-04 and it is still open.
+**Story:** ✅ ***Hand over the keys — the owner role outlives the person who opened the account***
+(`user_stories.md`, `STATUS: written` · `BUILD: in-build` · `ARC: identity-roles-sec`), piece
+`owner_role_access`. **This build is the generalisation of its stage ① from three surfaces to all 49
+policies.**
+
+> 🔴 **CORRECTED 2026-09-10 — THE FIRST DRAFT OF THIS LINE SAID "NO STORY COVERS IT AND ONE IS
+> OWED", AND THAT WAS FALSE.** The story was on the board the whole time, and its own third
+> paragraph is this build's subject almost word for word: *"the database refused her on three
+> surfaces, because the fences were on `businesses.owner_id` — **a single column that names ONE
+> person and cannot describe a business with two owners, a departure, or a succession**."* I called
+> it *"about transfer, not about a second owner working alongside the first"* — the story says
+> **both**, in that sentence. 🔴 **This is [[R-26]] in the work of the session that spent itself
+> flagging R-26 in other people's**: a written declaration nobody checked against reality, steering
+> a decision. It steered this one toward "a story is owed" when the answer was "cite the one that
+> exists." **Left visible rather than quietly swapped, because the point is that it was acted on.**
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
 **Board: 0 of 11 covered · owed 9 · needs-test 2.**
 
@@ -292,16 +302,33 @@ SELECT
 > dead_permission_policies 31 · surviving_dropped 10`. **A check nobody has watched fail is a claim
 > (§6 r19)** — this card is you watching it fail.
 
-### CARD 10 — the two minted strings do not exist yet, so nothing can be holding them
+### CARD 10 — 🔴 THE TWO MINTED STRINGS REACHED THE OWNER ROLE AND NOBODY ELSE
 **STATUS:** owed · **DEVICE:** desktop (SQL editor) · **WHO:** **David** · **TENANT:** all
+> ✏️ **REWRITTEN 2026-09-10 AND ITS EXPECTATION IS INVERTED, BECAUSE THE MIGRATION LANDED FIRST.**
+> This card was written to run BEFORE the apply and read *"`holds_a_new_string` is **false on every
+> row**"* — the proof the strings came from this build and nowhere else. `20260910b` §6 then granted
+> them through the funnel, so **false-everywhere is now the FAILURE**, not the pass. Left visible
+> rather than silently swapped: a card whose expectation flips without saying so is how a green check
+> stops meaning anything.
+
 ```sql
 SELECT b.name AS business, m.role, m.name AS member,
+       jsonb_array_length(m.permissions) AS n,
        (m.permissions ?| ARRAY['accounting:connect','devices:manage']) AS holds_a_new_string
   FROM public.business_members m JOIN public.businesses b ON b.id = m.business_id
  WHERE m.active = true ORDER BY b.name, m.role, m.name;
 ```
-- ✅ **PASS:** `holds_a_new_string` is **false on every row.**
-- 🔴 **FAIL:** a true — a string is already in an array and did not come from this build.
+- ✅ **PASS:** `holds_a_new_string` is **true on exactly the OWNER-role rows and false on every
+  other one**, and every OWNER row reads `n = 59`. MANAGER and STAFF keep the counts they had.
+- 🔴 **FAIL:** a **true on a MANAGER or STAFF row** — the backfill over-granted, and whether a
+  manager may connect the books or manage devices is a ruling nobody has made.
+- 🔴 **FAIL, the other direction:** `false` on an OWNER row, or an OWNER at `n = 57` — §6's funnel
+  reset missed that tenant, and the three tables gated on those strings are unreachable there.
+> ✅ Thunder measured it after the apply: **four OWNER-role members across three tenants, all at 59,
+> all holding both** · LAWNS MANAGER 25 · Test Dave's MANAGER 40 · STAFF 10 and 1 — **none holding
+> either string.** ⚠️ Two incidentals worth your eye while you are on this screen: Test Dave's
+> MANAGER holds **40** (tech-debt #225's territory), and there is a leftover `Harness STAFF (ledger)`
+> member row carrying a single permission.
 
 ---
 

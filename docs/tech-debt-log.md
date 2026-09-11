@@ -1462,7 +1462,18 @@ customer data on a read-only tenant, and altering a price field to fix a label i
 
 ---
 
-## #236 — 🔴 THE INSTALL-PRICE SAVE IS B.1's DEFECT AT A SECOND ADDRESS, ON THE SAME PAGE (NEW 2026-09-10)
+## #236 — ✅ RESOLVED 2026-09-10 by `20260910b` — THE INSTALL-PRICE SAVE WAS B.1's DEFECT AT A SECOND ADDRESS (NEW+CLOSED same day)
+
+✅ **CLOSED THE SAME DAY IT WAS FILED, AND THE CLOSE WAS MEASURED FROM BOTH SIDES.**
+`20260910b_owner_id_policies_become_permissions.sql` repointed `nursery_profiles_owner` at
+`settings:update` and added `nursery_profiles_member_select` on `settings:read`. Verified live
+19:10: **2 policies, both permission-keyed, no raw `owner_id`.** Behavioural re-run on Test Dave's
+with an ephemeral OWNER-ROLE principal that is NOT `businesses.owner_id`: **holding
+`settings:update` → upsert SUCCEEDS (1 row); holding neither settings string → REFUSED 42501.**
+⚠️ **The filing evidence and the close evidence are two hours apart on one afternoon, and the
+board's Card 8 briefly carried the defect's `42501` against a database where it was already
+fixed** — caught by David asking which side of the apply the run fell on. A defect proof carries
+the time it was taken, or it outlives its subject.
 
 `Settings.tsx:67` reads `nursery_profiles` and `:83` **upserts** it (the default install price).
 `nursery_profiles` has **exactly one policy** — `nursery_profiles_owner`, keyed on the raw

@@ -11,7 +11,7 @@
 **Story:** ⚠️ **NO STORY COVERS THE PROFILE SAVE and one is OWED** — the nearest is the
 `settings:update` clause in the authority work. Flagged, not invented (§9 story gate).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
+**Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`). ⚠️ **Card 8 was RE-AIMED 2026-09-10 19:10** — it proved a defect that `20260910b` has since fixed; it now proves the fix, from both sides.
 
 > 🔴 **EVERY CARD NAMES WHO CAN RUN IT AND ON WHICH TENANT, AND THE BOARD IS SPLIT BY THAT.**
 > David holds `businesses.owner_id`. **Lauren has her own login he does not have; Joel has his own
@@ -161,27 +161,43 @@ SELECT prosrc LIKE '%permission_aliases%' AS still_expands FROM pg_proc WHERE pr
 > because a builder read is not your run** — but if it disagrees when you run it, something changed
 > after the migration and that is the finding.
 
-### CARD 8 — 🔴 THE OTHER `nursery_profiles` SAVE IS THE SAME DEFECT, UNFIXED
+### CARD 8 — ✅ `nursery_profiles` IS FIXED BY `20260910b` — THIS CARD NOW PROVES THE FIX, NOT THE DEFECT
 **STATUS:** owed · **DEVICE:** desktop · **WHO:** **David, SQL editor** · **TENANT:** all
-`Settings.tsx:83` upserts `nursery_profiles` (the default install price). One query settles it:
+🔴 **RE-AIMED 2026-09-10 19:10 — READ THIS BEFORE THE QUERY.** This card was written to prove
+tech-debt **#236** (a `nursery_profiles` save refused to an OWNER-ROLE member who is not the account
+holder). **`20260910b_owner_id_policies_become_permissions.sql` fixed it, and the card's earlier
+`42501` PREDATES that apply.** Left as written it would have asserted a defect against a database
+where the defect is gone — and David would have read the new, correct policy set as a regression.
+**#236 is RESOLVED.** What is worth proving now is the inverse.
 
 ```sql
-SELECT policyname, cmd, qual
-  FROM pg_policies WHERE tablename = 'nursery_profiles';
+SELECT policyname, cmd, qual FROM pg_policies WHERE tablename = 'nursery_profiles' ORDER BY policyname;
 ```
-- ✅ **PASS (expected — and it means the surface is BROKEN, not fixed):** exactly **one** row —
-  `nursery_profiles_owner`, `cmd = ALL`, `qual = business_id IN (SELECT id FROM businesses WHERE
-  owner_id = auth.uid())`. **No member policy and no permission string anywhere in it**, so an
-  OWNER-ROLE member who is not the account holder is refused. **That confirms tech-debt #236** —
-  B.1's defect at a second address on the same page, filed and NOT fixed this pass.
-- 🔴 If a member policy exists, my reading was wrong and **#236 should be withdrawn**.
+- ✅ **PASS — TWO rows, both permission-keyed, no raw `owner_id` anywhere:**
+  `nursery_profiles_member_select` `[SELECT]` → `is_active_member(business_id) AND has_permission(business_id,'settings:read')`
+  `nursery_profiles_owner` `[ALL]` → `is_active_member(business_id) AND has_permission(business_id,'settings:update')`
+- 🔴 **FAIL — one row keyed on `business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())`:**
+  `20260910b` is not applied on the database you are reading, and **#236 is live again** there.
 
-> ✅ **BUILDER-VERIFIED BEHAVIOURALLY, 2026-09-10 — the refusal is real, with its error code.**
-> An ephemeral **OWNER-ROLE** principal (`settings:read` + `settings:update`, and **not**
-> `businesses.owner_id`, which is `95c1b2e9…`) attempted the install-price upsert on Test Dave's:
-> **refused, `42501 new row violates row-level security policy for table "nursery_profiles"`.**
-> Holding the OWNER role and both settings strings bought nothing — **#236 CONFIRMED**, and the
-> refusal is at least loud rather than silent.
+> ⚠️ **AND THE POLICY TEXT IS NOT THE PROOF — YOUR OWN POINT, AND IT IS WHY THE CARD KEPT ITS
+> BEHAVIOURAL HALF.** The query above reads policy TEXT and never attempts the write, so it cannot
+> tell a policy that *names* `settings:update` from one that actually *admits* it.
+>
+> ✅ **BUILDER-VERIFIED BEHAVIOURALLY, RE-RUN 19:10 AFTER THE APPLY — and the result FLIPPED, which
+> is the evidence:**
+> **A.** OWNER-ROLE principal holding `settings:read` + `settings:update`, **not** `businesses.owner_id`
+> (`95c1b2e9…`) → install-price upsert **SUCCEEDED, 1 row.** *The same principal, on the same tenant,
+> was refused `42501` two hours earlier. That is the fix, measured from both sides of it.*
+> **B.** OWNER-ROLE principal holding **neither** settings string → **REFUSED,
+> `42501 new row violates row-level security policy`.** *So the fix did not open the table to
+> everyone — the string admits, its absence refuses.* **B is the half that makes A mean something.**
+
+> ⚠️ **RESIDUE, REPORTED LOUDLY (test tenant only).** Run A's upsert **wrote
+> `nursery_profiles.default_install_price = 225.00` on Test Dave's** and the harness tears down its
+> principal, not that row. The row pre-existed (`created_at 2026-06-26`) so this is an UPDATE, and
+> `225` is the documented seed value — **but I did not capture the prior value and will not claim it
+> was already 225.** If it was something else, say so and it goes back. **LAWNS was not touched:
+> its `default_install_price` is `NULL`, as it was.**
 
 ---
 
