@@ -101,7 +101,7 @@ LAWNS stays read-only to Thunder. ⚠️ **Blocked on #251:** trip charge and ta
 ## What I am not sure of
 
 - **Whether any half-bound row exists today.** Unmeasured (see above).
-- **Whether V3's TEMP-table proof runs as written in the Supabase SQL editor.** I have not watched it run. CARD 26 says so, and its FAIL line covers an editor that does not keep the session.
+- **Whether V3's TEMP-table proof runs as written in the Supabase SQL editor.** I have not watched it run. CARD 25 says so, and its FAIL line covers an editor that does not keep the session.
 - **Changing the mode resets `requires_address` to that mode's default.** The prompt's clause was *"a default the owner can override"*, and an override made BEFORE a mode change is lost on that change. I judged a mode change a deliberate act. It is one line to make the reset fire only while the box is untouched.
 - **No browser run.** `tsc` passes and the source probes prove the wiring, but nothing here watched the select render. Cards 20–25 do that.
 - **The migration is beyond the prompt.** Offered, not assumed.

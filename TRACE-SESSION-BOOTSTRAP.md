@@ -81,7 +81,7 @@
 
 ### 🔴 A TRANSPORT SERVICE MUST SAY WHO TRANSPORTS — R-120 (2026-09-11, ledger #293)
 
-- 🟡 **BUILDER-COMPLETE on `main` · migration WRITTEN, NOT APPLIED · services-review board 5 of 26 covered** (CARD 13 flipped to `owed`) · `verify` exit 0 ZERO NET-NEW · **93/93 files, 5,105 assertions** · **19 mutants, 19 caught** · api/ 12/12 · no permission string
+- 🟡 **BUILDER-COMPLETE on `main` · migration WRITTEN, NOT APPLIED · services-review board 5 of 25 covered** (CARD 13 flipped to `owed`) · `verify` exit 0 ZERO NET-NEW · **93/93 files, 5,105 assertions** · **19 mutants, 19 caught** · api/ 12/12 · no permission string
 - 🔴 **THE PREDICATE WAS THE MODE AND NOTHING ELSE** — a NULL-mode transport row filled no role, no flag named it, and checkout said *no transport options are set up*. Lightning's read CONFIRMED. Now collected as `unbound` and named. `docs/decisions/2026-09-11-transport-mode-required-recon.md`
 - 🔴 **THE EDITOR'S REQUIRED CHECK EXISTED AND COULD NEVER FIRE** — both forms seeded `'staff'`; opening a NULL row turned it into `'staff'`. The books review never wrote a mode. **One rule now (`serviceOfferingShape.ts`), three writers ask it, a fourth fails the build (§E).** Seed holds back → **#217 CLOSED**
 - 🔴 **THE LIVE SWEEP WAS NOT RUN** (no PAT). **CARD 19 = the sweep, SQL editor, read-only — FIRST.** Apply the migration only if it returns 0.

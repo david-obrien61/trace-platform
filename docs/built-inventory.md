@@ -1678,7 +1678,7 @@ product — nothing detects it) · #220 (the ladder has nowhere to live) · #221
 with no mode is **REFUSED on every path, never defaulted**; `requires_address` follows the mode as a
 default the owner can override (staff → yes, self → no); a transport row the checkout cannot offer is
 **named**, on the Services list and at checkout, and **never repaired**.
-**Status:** 🟡 BUILDER-COMPLETE on `main`. **Owner-proof OWED** — services-review board CARDS 19–26.
+**Status:** 🟡 BUILDER-COMPLETE — `9cc558a` on `main`, pushed. **Owner-proof OWED** — services-review board CARDS 19–25.
 **Migration WRITTEN, NOT APPLIED.**
 **Vertical:** platform | **Type:** rule + guard
 **Location:** `packages/shared/src/business-logic/serviceOfferingShape.ts` (PURE — the rule).
