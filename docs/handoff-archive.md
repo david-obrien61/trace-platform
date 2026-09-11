@@ -1,5 +1,21 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #300, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **PMI: THE ASSET TABLE THE PROMPT SAID WAS GONE WAS RENAMED, NOT DROPPED — SO NO SECOND ONE WAS WRITTEN. #297. R-139…R-142. TECH-DEBT #261–#265.** 🔴 **THE HEADLINE IS A PREMISE CORRECTED BY MEASUREMENT: `business_assets` BECAME `cost_objects` ON 2026-06-15, BOTH `asset_id` FOREIGN KEYS POINT THERE, AND ALL THREE "ORPHAN" SCHEDULES RESOLVE TO REAL EQUIPMENT IN THEIR OWN TENANT.** A catalog sweep for `%asset%` cannot see a table named `cost_objects`. Lifting `pmi_assets` into a new table would have made two stores for one fact — the defect the prompt itself warned against — so ② was **not built**, and the question it was reaching for is filed as an OWED decision.
+
+**Type:** DOCS + ONE MIGRATION RETIRED IN PLACE, on `main`. No app code, **nothing applied**, every live read via `supabase_read_only_user`. `npm run verify` exit 0, ZERO NET-NEW, unpiped. **§3 RETENTION: 1 archived verbatim (#294), 1 written — entries-in == entries-out.**
+
+✅ **① RETIRED WITH ITS REASON — R-139.** `20260529_pmi_shared.sql` keeps its path; its header records why and what replaced each piece; every statement is commented out, so it runs nothing and `--catalog` reads it **NOTHING_TO_APPLY**. The not-applied three are now `20260727d`, `20260905` and `20260911`. §6 r1 governs migrations that ran; this one never did.
+
+🔴 **② NOT WRITTEN — THE REAL PROBLEM IS A PERMISSION, NOT A TABLE.** Joel, LAWNS's manager, holds `pmi:read` and `pmi:update` but **not** `costs:read`, so `/pmi` shows him a padlock and no machine to maintain, with copy describing a schedule "above" that is not there (tech-debt #262). The proposed yard-worker set inherits it. OWED to David: a non-cost view over `cost_objects`, a separate table, or grant the string.
+
+✅ **③ THE GENERATOR HAS ITS OWN ENTRY.** It was not absent from every record — two sub-bullets, `inventory-ai.md`, slot 11 of 12 — but nothing said it had run on a live tenant. 🔴 **`/api/pmi/suggest` checks no login at all** (tech-debt #261).
+
+✅ **④ FILED, NOT BUILT:** usage recurrence required (**R-140** — 10 of 27 live tasks are hour intervals; `Kubota Hours` is priced at $45 and linked to nothing, tech-debt #264) · the interval on the task (**R-141**, tech-debt #265 — two of three stored cadences are unrecorded overrides, and every scheduled asset reads NO SCHEDULE) · **R-142** duty-generates-task, answering the OWED question #295 left open · tech-debt #263, intervals the prompt offers and the converter cannot read. Board: `docs/owner-tests/pmi-full-surface-test.md`, 10 cards, 0 covered — **CARD 1 first**.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **② was not done as written** — override if a separate asset table is what you want regardless. **(b)** **R-142 is filed on the prompt's words** (*"David has ruled the shape"*); if that was Lightning's paraphrase, strike it back to OWED. **(c)** **Capability 5.2 moved 🟢 → 🟡.** **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#265**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #299, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **R-121 IS SETTLED: NO OWNER-ROLE MEMBER CAN REMOVE THEIR OWN PERMISSIONS — NOT ONLY THE ACCOUNT HOLDER. #296.** 🔴 **THE HEADLINE IS WHY THE SCOPE HAD TO BE THE ROLE: THE GUARD EXISTS SO NOBODY CAN LOCK THEMSELVES OUT, AND LAUREN AND DAVID DIFFER ONLY BY A BOOLEAN THAT IS NOT AUTHORITY.** David: *"My read: every owner-role member. The guard exists so nobody can lock themselves out, and 'she's not the account holder' isn't a reason to let her. It also matches what you ruled today — Lauren and David hold identical arrays and differ only by a boolean."*

@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-09-11 — #299 recon: orders.install_date is never set; business_inventory.location already exists — see §3
+# Last updated: 2026-09-11 — #300 the Google review link is a Business Profile field; nothing prompts on a past stop; Follow-Up has no Turn on — see §3
 # ⚠️ THIS LINE IS A POINTER, NEVER A SUMMARY (OP-13 / STD-011) — the narrative lives in §3 and ONLY in §3. Do not restate it here.
 # Current AI: Claude Code
 
@@ -265,20 +265,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
-### 2026-09-11 — THUNDER **PMI: THE ASSET TABLE THE PROMPT SAID WAS GONE WAS RENAMED, NOT DROPPED — SO NO SECOND ONE WAS WRITTEN. #297. R-139…R-142. TECH-DEBT #261–#265.** 🔴 **THE HEADLINE IS A PREMISE CORRECTED BY MEASUREMENT: `business_assets` BECAME `cost_objects` ON 2026-06-15, BOTH `asset_id` FOREIGN KEYS POINT THERE, AND ALL THREE "ORPHAN" SCHEDULES RESOLVE TO REAL EQUIPMENT IN THEIR OWN TENANT.** A catalog sweep for `%asset%` cannot see a table named `cost_objects`. Lifting `pmi_assets` into a new table would have made two stores for one fact — the defect the prompt itself warned against — so ② was **not built**, and the question it was reaching for is filed as an OWED decision.
-
-**Type:** DOCS + ONE MIGRATION RETIRED IN PLACE, on `main`. No app code, **nothing applied**, every live read via `supabase_read_only_user`. `npm run verify` exit 0, ZERO NET-NEW, unpiped. **§3 RETENTION: 1 archived verbatim (#294), 1 written — entries-in == entries-out.**
-
-✅ **① RETIRED WITH ITS REASON — R-139.** `20260529_pmi_shared.sql` keeps its path; its header records why and what replaced each piece; every statement is commented out, so it runs nothing and `--catalog` reads it **NOTHING_TO_APPLY**. The not-applied three are now `20260727d`, `20260905` and `20260911`. §6 r1 governs migrations that ran; this one never did.
-
-🔴 **② NOT WRITTEN — THE REAL PROBLEM IS A PERMISSION, NOT A TABLE.** Joel, LAWNS's manager, holds `pmi:read` and `pmi:update` but **not** `costs:read`, so `/pmi` shows him a padlock and no machine to maintain, with copy describing a schedule "above" that is not there (tech-debt #262). The proposed yard-worker set inherits it. OWED to David: a non-cost view over `cost_objects`, a separate table, or grant the string.
-
-✅ **③ THE GENERATOR HAS ITS OWN ENTRY.** It was not absent from every record — two sub-bullets, `inventory-ai.md`, slot 11 of 12 — but nothing said it had run on a live tenant. 🔴 **`/api/pmi/suggest` checks no login at all** (tech-debt #261).
-
-✅ **④ FILED, NOT BUILT:** usage recurrence required (**R-140** — 10 of 27 live tasks are hour intervals; `Kubota Hours` is priced at $45 and linked to nothing, tech-debt #264) · the interval on the task (**R-141**, tech-debt #265 — two of three stored cadences are unrecorded overrides, and every scheduled asset reads NO SCHEDULE) · **R-142** duty-generates-task, answering the OWED question #295 left open · tech-debt #263, intervals the prompt offers and the converter cannot read. Board: `docs/owner-tests/pmi-full-surface-test.md`, 10 cards, 0 covered — **CARD 1 first**.
-
-**FLAGGED FOR DAVID:** **(a)** 🔴 **② was not done as written** — override if a separate asset table is what you want regardless. **(b)** **R-142 is filed on the prompt's words** (*"David has ruled the shape"*); if that was Lightning's paraphrase, strike it back to OWED. **(c)** **Capability 5.2 moved 🟢 → 🟡.** **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#265**.
-
 ### 2026-09-11 — THUNDER **THE ZONE WALK IS SERVED FROM A URL, AND THE PLACE ITS EXPORT IS FOR DOES NOT EXIST. #298. TECH-DEBT #266.** 🔴 **THE HEADLINE IS WHAT HOSTING IT TURNED UP: `status.html`, `owner-tests.html` AND `ui-standards.html` ARE NOT SERVED BY VERCEL — each URL on `cultivar-os.app` returns the 446-byte app shell.** Root HTML never reaches `dist/`. The tool went where Vite does copy files verbatim, `packages/cultivar-os/public/tools/` — the package's first `public/` folder.
 
 **Type:** ONE STATIC FILE + DOCS, on `main`. No app code, no route, no migration, nothing written to the database; api/ 12/12. **§3 RETENTION: 1 archived verbatim (#295), 1 written — entries-in == entries-out.**
@@ -300,6 +286,18 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 ✅ **B — THE COLUMN IS THERE AND EMPTY:** `business_inventory.location`, `cost_objects.location` and `cultivar_plants.location_zone` are free text, no constraint, 0 rows each. No zone table exists anywhere. 🔴 **Inventory is one row per QuickBooks item (unique index), so any column on it names ONE zone.** Recommendation: build the zone record, retire `location`, and let the walk data choose a column (O2′) or a join (O3). 635 of 673 export ids resolve — resolve on `item_id`, never on the tool's `sku`. 🔴 **Do not land `qty_approx` through the count path: counting applies itself to on-hand.**
 
 **FLAGGED FOR DAVID:** **(a)** retire `install_date` once you confirm the clock reads the planting stop's `completed_at` · **(b)** R-143 is filed on the prompt's words; strike it to OWED if it was a paraphrase · **(c)** infer `planting` on QuickBooks stops, or let Lauren mark it (#268) · **(d)** zones need a story before any build · **(e)** ⚠️ this session and the review-ask session claimed #299 and tech-debt #267 at the same moment; that session took #300 and #270 · **(f)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#270**.
+
+### 2026-09-11 — THUNDER **THE GOOGLE REVIEW ASK: THE LINK FIELD EXISTED, NOBODY COULD FIND IT, AND THE ASK COULD NEVER HAVE RUN ANYWAY. #300. TECH-DEBT #270.** 🔴 **THE HEADLINE IS THE PREMISE, CORRECTED BY THE RECON: three of four parts were wired AND SO WAS THE FIELD** — on `/settings/all` → *Asking for reviews*, stored in `business_modules.config.review_url`. What was actually missing was a way to turn the feature on: `followup_engine` is a `planned` tile and `/subscription` offers no Turn on for it, so the prompt could not fire on any tenant whatever David entered.
+
+**Type:** BUILD, on `main`. `f7c0e00`. **BUILDER-COMPLETE** — no migration, api/ 12/12, no permission string. `npm run verify` exit 0 ZERO NET-NEW, unpiped · 94/94 files, 5,161 assertions · 13/13 deliberate mutants caught. **§3 RETENTION: 1 archived verbatim (#297), 1 written — entries-in == entries-out.**
+
+✅ **THE FIELD IS ON BUSINESS PROFILE**, beside name, phone and tax rate — same store, no migration. The Save writes it only when it changed, proves the write by reading the value back, and reports every table through a pure `saveReport`. 🔴 **Writing that as a pure function found a defect in the code it replaced:** the two-table message said *"The tax rate was saved"* when an unchanged rate had not been written. Any `https://` address is accepted — no Google-shape check.
+
+✅ **NOTHING FIRES ON HISTORY, BY CONSTRUCTION:** a stop marked done more than a day after its own date never prompts (`not_at_the_door`). R-37's import — the thing meant to land past stops `fulfilled` — is not built, and the list reaches 30 days back, so relying on it alone would not have held. ⚠️ **Not measured live:** `SUPABASE_PAT` was absent, so the history count is board **CARD 13** for David.
+
+⚠️ **ID COLLISION, HANDLED:** another session was closing out an install-date recon as **#299** and filed tech-debt **#267–#269** while this build ran. This build took **#300** / **#270** and committed only its own hunks from the two shared files.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **how Follow-Up gets turned on** — catalog 30-day clock, by hand, or core (#270). Until then CARD 16 turns it on for Test Dave's only. **(b)** does a SKIP start the 180-day window? Today it does. **(c)** the one-day grace for a late tap is Thunder's number. **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#270**.
 
 > **§3 RETENTION — N=3 (binding; OP-13).** §3 holds the **most recent THREE entries**, no more. At every close-out, **BEFORE** writing the new entry, move every entry beyond the newest three — **verbatim, never summarized** — to [docs/handoff-archive.md](docs/handoff-archive.md) (newest-first, under a dated provenance comment). The new entry is #1. Nothing is deleted or condensed; the archive is append-and-preserve and is **NOT loaded at session start** — it holds the full history (185 entries as of 2026-07-17). Verification is arithmetic: **entries-in == entries-out**. Canonical "is X closed / owner-proof owed" state does NOT live here — it lives in `docs/CLOSE-OUT-LEDGER.md`, `docs/DECISIONS-INDEX.md`, and `docs/built-inventory.md`, each with its own gate. §3 is the narrative of the last three sessions; it was never the system of record. Full statement of force: `docs/operating-doctrine/end-of-session-protocol.md` → **GATE — CLAUDE.md §3 HANDOFF RETENTION**; close sequence step 0 (§9).
 
