@@ -1,5 +1,17 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #298, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **SEVENTEEN RULINGS DAVID HAD MADE WERE IN NO FILE, AND ONE OF THEM CONTRADICTS A RATIFIED DECISION. #295. R-122…R-138.** 🔴 **THE HEADLINE IS R-125: DAVID'S 2026-06-24 *"EVERY ACTION WRITES TO THE AUDIT LOG"* WAS NEVER FILED, AND D-51 (2026-07-21) LATER RULED THE OPPOSITE FOR ROUTINE STATE EVENTS.** The audit-redirect plan was built on D-51's narrower reading without anyone noticing a ruling said otherwise — because the ruling lived only in a recon doc. **Filed PARTIAL, with the conflict named as David's to settle, not resolved in either direction.**
+
+**Type:** DOCS ONLY, on `main`. No code, nothing applied. **§3 RETENTION: 1 archived verbatim (#292), 1 written — entries-in == entries-out.**
+
+✅ **CHECKED BEFORE FILED, against RULINGS.md, the code and the live database:** R-65 was already the vendor ruling (skipped). R-55 already said *"NO WRITE TO QUICKBOOKS, NONE"* — the backlog called that clause missing; only the sandbox-preview clause was added, and it was already in code. The D-51 row still said *docs only, nothing built* while the ledger and a 98-row audit log exist — corrected. **States are measured, not asserted:** R-126 and R-128 IMPLEMENTED (literal `has_permission`; both strings held, `audit_log:write` held by nobody), R-129 PARTIAL (Joel holds inventory read/update/create; reconcile not minted), R-130 PARTIAL (2 of 10 captured), R-133 PARTIAL (only inventory has a tombstone).
+
+⚠️ **NOT NUMBERED, DELIBERATELY:** the 8-hour rule (the backlog gives no wording) and *duty generates task* (the backlog lists it as ruled in Part 5 and as Lightning's proposal in Part 3). Both are OWED questions. The task model's five clauses got a decision doc, because a ruling that needs a paragraph is a ruling whose decision doc is missing.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **R-125 vs D-51** — does *every* action write the audit log, or only discretionary ones? The audit plan's scope depends on it. **(b)** the 8-hour rule's wording · duty-generates-task · R-121's scope. **(c)** ⚠️ **the backlog was compiled from memory, and three of its [T]-marked claims were wrong** (12-24-12's zero hits, R-55's missing QuickBooks clause, and the D-51 row's state was never checked). **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#259**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #297, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **THE OPEN-ITEMS HANDOFF WAS ALREADY STALE IN TEN PLACES AFTER ONE EVENING, AND TWENTY OF ITS ITEMS EXISTED NOWHERE IN THE REPO. #294. R-121. TECH-DEBT #253–#259.** 🔴 **THE HEADLINE IS THAT THE BEST RECORD OF WHAT IS OPEN LIVED OUTSIDE THE REPO, MAINTAINED BY HAND, AND DRIFTED THE SAME NIGHT IT WAS WRITTEN.** David pasted Lightning's 2026-09-10 handoff and asked for it to be checked and moved into the repo's own records. Item by item against code, the live database and the docs, about ten had already moved — the `'test'` screen was fixed by #291, the QR resolver since August, `20260830c` and `20260831d` are applied, the bootstrap date and the id collisions were fixed tonight, membership-only policies are 14 not 23, open policies 6 not 8, and the importer does read Mobile as a phone fallback. ✏️ *This is the open-work story's case, measured: a list nobody re-derives is wrong within hours.*

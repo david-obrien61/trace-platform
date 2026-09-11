@@ -1,4 +1,5 @@
-# Last updated: 2026-09-11 (**#297 — PMI: THE ASSET TABLE WAS NEVER MISSING, AND THE GENERATOR IS LIVE:** `business_assets` was renamed `cost_objects`, all three live schedules resolve; `20260529_pmi_shared` retired in place (R-139); `/api/pmi/suggest` gets its own entry. See the *PMI Schedule Generator* entry.) See also #293:
+# Last updated: 2026-09-11 (**#298 — THE ZONE WALK IS A HOSTED CAPTURE TOOL, NOT APP CODE:** served from `packages/cultivar-os/public/tools/`; writes nothing to the database; its import target `business_inventory.zone` does not exist (#266). See the *Field Capture Tools* entry.) See also #297:
+# (**#297 — PMI: THE ASSET TABLE WAS NEVER MISSING, AND THE GENERATOR IS LIVE:** `business_assets` was renamed `cost_objects`, all three live schedules resolve; `20260529_pmi_shared` retired in place (R-139); `/api/pmi/suggest` gets its own entry. See the *PMI Schedule Generator* entry.) See also #293:
 # (#293 — A TRANSPORT SERVICE MUST SAY WHO TRANSPORTS (R-120) — see the *Transport binding* entry.) See also #292 (migration apply-state derivable — the *Migration Apply-State* entry), #291, #290.
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
@@ -35,6 +36,30 @@
 - Reading the table: `Vertical:shared` = platform baseline. `Vertical:shared AND Type:tile` = every vertical inherits these tiles for free. See "NEEDS DAVID'S CALL" section at bottom for ambiguous entries.
 
 ---
+
+## Field Capture Tools — static pages served from `/tools/` (NOT app code)
+
+**What:** disposable, self-contained HTML forms carried on a phone to capture facts the platform has no screen for yet. Each keeps its entries in that phone's browser storage and produces a file a person hands over. **None of them writes to the database.**  
+**Status:** 🟡 **HOSTED 2026-09-11 (ledger #298), not yet used on a walk.**  
+**Vertical:** served by the `cultivar-os` Vercel project · tenant-specific content | **Type:** capture tool — not a tile, not a route, not in the router or nav
+
+- **How it is served:** Vite copies `packages/cultivar-os/public/` into `dist/` verbatim, and Vercel serves a real file before the `/(.*) → /index.html` catch-all in `vercel.json`. ✏️ **This is the package's first `public/` folder.** Measured 2026-09-11: the repo-root `status.html`, `owner-tests.html` and `ui-standards.html` are **not** served — their `cultivar-os.app` URLs return the 446-byte SPA shell. A root HTML file is local-only.
+- **Why a URL and not a file:** [STATED by David] Safari blocks `localStorage` on `file://`, so a copy opened from Files or an email attachment can save nothing while looking like it works. From `https://` it persists.
+
+### Zone walk — `https://cultivar-os.app/tools/zone-walk.html`
+
+- **Source:** `packages/cultivar-os/public/tools/zone-walk.html` — 58,970 bytes, byte-identical to the file David supplied 2026-09-11. Its own header says *"NOT app code."*
+- **Captures, per zone (88 = panels A–D × 22):** in use / no valve / switched off / broken / not sure · what's growing (picked from 553 QuickBooks items, approximate qty) · emitter type, rate and count · notes.
+- **Seeded from:** all four panels' start times and run minutes, and Panel A's handwritten zone descriptions (panel sheets photographed 2026-09-09) · the QuickBooks item export of 2026-09-10.
+- **Stores:** `localStorage` key `lawns-zone-walk-v1` — on one phone, in one browser.
+- **Output:** **Export** downloads `lawns-zone-walk-YYYY-MM-DD.json` — `{ captured_at, tenant, zones: [{ zone, panel, zone_number, run_minutes, status, emitter_type, emitter_rate, emitter_count, notes, plants: [{ label, qty_approx, item_id, sku, matched }] }] }`. `item_id` is the **QuickBooks** item id, not a `business_inventory` id; `matched` is false for anything typed that is not an exact list label.
+- ⚠️ **IT WRITES NOTHING TO THE DATABASE.** No `fetch`, no Supabase client, no external URL anywhere in the file (grepped, 0 matches). The export is a file a human hands over; until someone imports it, the platform knows nothing that was captured.
+- 🔴 **AND THE IMPORT HAS NOWHERE TO GO YET — measured live 2026-09-11 as `supabase_read_only_user`.** The file's header names `business_inventory.zone` and "the irrigation zone records". **Neither exists:** `business_inventory` has no `zone` column (control: `size` and `attributes` returned), and no public table matches `%zone%` or `%irrigat%`. The only zone-shaped column is `cultivar_plants.location_zone`, a per-plant place name (seeded in the sandbox as `Row A`) on a table holding **0 rows** — not a valve. No importer exists. Tech-debt **#266**.
+- ⚠️ **What loses entries before Export:** a different browser or a Private tab · adding it to the Home Screen part-way (a Home Screen web app keeps storage apart from Safari's) · clearing Safari website data · Safari deleting a site's script-written storage after **7 days of Safari use** with no visit to that site. Export at the end of each session, not only at the end of the walk.
+- ⚠️ **Export is unproven on an iPhone.** It calls `URL.revokeObjectURL` immediately after `a.click()`; some Safari versions cancel a blob download revoked that early. A failed Export loses nothing (the entries are still in storage), but try it on the walker's phone **before** zone 1.
+- **Tenant literal:** `LAWNS`, 553 LAWNS item names and the panel data, in a file served on every tenant's domain → `HARDCODED-REGISTER.md` **T1**, DOC.
+- **Owner-test:** no board — no route, no permission, not an app surface. `STATUS: needs-test`, recorded here with that reason. The check: on the walker's phone open the URL, fill one zone, close Safari, reopen → still there; press **Export** → a JSON file arrives.
+- **Precedent:** [[R-118]]'s recipe-builder mockup (`docs/cost-to-produce/recipe-builder-mockup-2026-09-05.html`) spent five days as an anonymous download. That one is a spec and stays under `docs/`; a tool someone must open on a phone goes here.
 
 ## AI Engine
 

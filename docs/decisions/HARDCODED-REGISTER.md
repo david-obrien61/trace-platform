@@ -23,7 +23,7 @@ placeholder carrying a tenant literal.
 [2026-07-08-receipt-qb-leakage-recon.md](2026-07-08-receipt-qb-leakage-recon.md) — this register
 tracks the literals; that recon tracks the builds. Do not duplicate the fix detail here.
 
-**Last updated:** 2026-08-31 (**P2 CLEARED, AND IT WAS FOUND BY AN OWNER MISREADING IT AS DATA — the strongest possible evidence that a tenant-shaped placeholder is not a cosmetic issue.** #240's `"…forty acres in Leander"` was grey example text in an EMPTY field, and David reported it as a wrong value on screen. Prior same day: **P1 FILED — the first OPEN item on this register in seven weeks, and it was filed by the build that created it rather than found by a sweep.** The LAWNS business-context PROPOSAL in `positions/contextProposals.ts` is one tenant's facts in platform code. It is `OPEN` and it caps the positions capability at amber, which costs nothing today — the capability is amber already at 0 of 12 owner-tests covered — and the exit is NAMED and already half-built. See the **positions** section at the foot.) · Prior: 2026-07-13 (D-40 tax build — the 3 sales-tax-rate literals T1–T3 CLEARED; rate is now per-tenant config data. Prior same day: H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
+**Last updated:** 2026-09-11 (**T1 filed as DOC — the zone walk capture tool, ledger #298.**) · prior: 2026-08-31 (**P2 CLEARED, AND IT WAS FOUND BY AN OWNER MISREADING IT AS DATA — the strongest possible evidence that a tenant-shaped placeholder is not a cosmetic issue.** #240's `"…forty acres in Leander"` was grey example text in an EMPTY field, and David reported it as a wrong value on screen. Prior same day: **P1 FILED — the first OPEN item on this register in seven weeks, and it was filed by the build that created it rather than found by a sweep.** The LAWNS business-context PROPOSAL in `positions/contextProposals.ts` is one tenant's facts in platform code. It is `OPEN` and it caps the positions capability at amber, which costs nothing today — the capability is amber already at 0 of 12 owner-tests covered — and the exit is NAMED and already half-built. See the **positions** section at the foot.) · Prior: 2026-07-13 (D-40 tax build — the 3 sales-tax-rate literals T1–T3 CLEARED; rate is now per-tenant config data. Prior same day: H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
 
 ---
 
@@ -162,3 +162,13 @@ finding, with their absence measured in both directions** (no invoice line AND n
 
 ⚠️ **THIS CAPS THE DISCOUNTS CAPABILITY AT AMBER** (§6 r12) — which costs nothing today: the
 capability is amber already at 0 of its owner-test cards covered.
+
+---
+
+## Owning capability: **field capture tools** — static pages under `packages/cultivar-os/public/tools/` (caps no tile)
+
+Filed by the build that hosted it, in the same commit (ledger #298).
+
+| id | file:line | what it is | why it is debt | now | sev | status |
+|---|---|---|---|---|---|---|
+| T1 | [`public/tools/zone-walk.html`](../../packages/cultivar-os/public/tools/zone-walk.html) | `tenant:'LAWNS'`, 553 LAWNS QuickBooks item names and SKUs, four panels' run times and Panel A's handwritten zone descriptions — embedded in the page | one tenant's facts in a file the `cultivar-os` deploy serves on every tenant's domain | a disposable capture form for one walk at one customer: not imported by the app, not in the router or nav, writes nothing to the database. **The literal is the tool** — a zone walk without the customer's panels and plants is a blank form. No prices, customers or people are in it | LOW | **DOC** — single-customer capture tool, kept deliberately; retire the file once the walk is imported (David's call) |

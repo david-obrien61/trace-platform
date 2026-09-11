@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<!--
+  LAWNS ZONE WALK — capture tool, 2026-09-10
+  NOT app code. A disposable form that produces JSON for import into
+  business_inventory.zone and the irrigation zone records.
+  Run times and Panel A descriptions are seeded from the panel sheets
+  photographed 2026-09-09. Plant list seeded from the QuickBooks item
+  export of 2026-09-10 (553 nursery-stock items).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zone walk — LAWNS</title>
+<style>
+:root{
+  --ink:#12210b;--green:#2d4a1e;--green2:#4a6b38;--green3:#7d9b68;
+  --page:#e9f0e3;--card:#fff;--line:#cfdcc5;--muted:#6b7a63;
+  --amber-bg:#fdf4e0;--amber:#8a6410;--amber-line:#e0c383;
+  --red-bg:#fbe9e7;--red:#9b2c2c;--ok:#2c5c22;--ok-bg:#e6f2e0;
+  --tap:56px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page);color:var(--ink);font-size:16px;line-height:1.45;
+  font-family:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;padding-bottom:120px}
+
+/* ── chrome ───────────────────────────────────────────────── */
+.bar{background:var(--green);color:#fff;padding:12px 16px;display:flex;
+  align-items:center;gap:12px;position:sticky;top:0;z-index:30}
+.bar b{font-size:17px}
+.bar .prog{margin-left:auto;font-size:13.5px;opacity:.92;font-variant-numeric:tabular-nums}
+.warn{background:var(--amber-bg);color:var(--amber);border-bottom:1px solid var(--amber-line);
+  padding:9px 16px;font-size:13.5px;font-weight:600}
+.wrap{max-width:1180px;margin:0 auto;padding:14px 14px 0}
+
+/* ── panel + zone pickers ─────────────────────────────────── */
+.panels{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.panels button{flex:1;min-width:72px;min-height:var(--tap);border:2px solid var(--line);
+  background:#fff;border-radius:12px;font:inherit;font-weight:700;color:var(--green);
+  cursor:pointer;font-size:17px;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;line-height:1.15}
+.panels button small{font-weight:600;font-size:11.5px;color:var(--muted)}
+.panels button[aria-pressed="true"]{border-color:var(--green);background:#e7f0e0}
+.meta{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.4}
+
+.zones{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:7px;
+  margin-bottom:16px}
+.zones button{min-height:48px;border:1.5px solid var(--line);background:#fff;border-radius:10px;
+  font:inherit;font-weight:700;cursor:pointer;color:var(--green);position:relative;font-size:15px}
+.zones button[data-done="1"]{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.zones button[data-done="1"]::after{content:"✓";position:absolute;top:2px;right:5px;font-size:10px}
+.zones button[aria-current="true"]{outline:3px solid var(--green);outline-offset:1px}
+
+/* ── the zone card ────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:16px;margin-bottom:14px}
+.zhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.zid{font-size:38px;font-weight:800;color:var(--green);line-height:1;letter-spacing:-.02em}
+.zrun{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.seeded{background:#f3f7f0;border-left:3px solid var(--green3);border-radius:8px;
+  padding:9px 12px;font-size:14px;color:var(--green2);margin:8px 0 14px}
+label{display:block;font-size:13px;font-weight:700;color:var(--green);
+  margin:16px 0 7px;letter-spacing:.01em}
+input,select,textarea{width:100%;font:inherit;font-size:16px;padding:13px;
+  border:2px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);
+  min-height:var(--tap)}
+textarea{min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:3px solid var(--green);outline-offset:1px;
+  border-color:var(--green)}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{border:2px solid var(--line);background:#fff;border-radius:11px;
+  padding:12px 14px;font:inherit;font-size:15px;cursor:pointer;min-height:var(--tap);
+  color:var(--ink);font-weight:600}
+.chips button[aria-pressed="true"]{border-color:var(--green);background:#e7f0e0;color:var(--green)}
+.chips.status button[data-v="fault"][aria-pressed="true"]{border-color:var(--red);
+  background:var(--red-bg);color:var(--red)}
+.chips.status button[data-v="none"][aria-pressed="true"],
+.chips.status button[data-v="unknown"][aria-pressed="true"]{border-color:var(--amber);
+  background:var(--amber-bg);color:var(--amber)}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.plantrow{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.plantrow .pick{flex:1}
+.plantrow .qty{width:96px;flex:0 0 auto}
+.plantrow .del{width:52px;flex:0 0 auto;min-height:var(--tap);border:2px solid var(--line);
+  background:#fff;border-radius:11px;font-size:20px;cursor:pointer;color:var(--muted)}
+.addbtn{width:100%;min-height:var(--tap);border:2px dashed var(--green3);background:#f3f7f0;
+  border-radius:11px;font:inherit;font-weight:600;color:var(--green);cursor:pointer;font-size:15px}
+.hint{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+/* ── bottom bar ───────────────────────────────────────────── */
+.foot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:9px;z-index:40}
+.foot button{flex:1;min-height:var(--tap);border:0;border-radius:12px;font:inherit;
+  font-weight:700;font-size:16px;cursor:pointer}
+.foot .nav{background:#fff;border:2px solid var(--green);color:var(--green);flex:0 0 76px}
+.foot .next{background:var(--green);color:#fff}
+.foot .exp{background:var(--amber);color:#fff;flex:0 0 auto;padding:0 18px}
+
+/* ── desktop grid (review) ────────────────────────────────── */
+.grid{display:none}
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
+th{background:#f1f6ee;text-align:left;font-size:12px;color:var(--green);padding:9px 11px;
+  border-bottom:1.5px solid var(--line);position:sticky;top:52px}
+td{padding:9px 11px;border-bottom:1px solid #edf2ea;vertical-align:top}
+td.z{font-weight:800;color:var(--green);cursor:pointer}
+tr[data-done="1"] td.z{color:var(--ok)}
+.tag{font-size:11.5px;border-radius:999px;padding:2px 9px;font-weight:700;white-space:nowrap}
+.t-inuse{background:var(--ok-bg);color:var(--ok)}
+.t-fault{background:var(--red-bg);color:var(--red)}
+.t-none,.t-unknown{background:var(--amber-bg);color:var(--amber)}
+.t-todo{background:#edf0eb;color:var(--muted)}
+
+@media (min-width:760px){
+  .wrap{padding:18px 20px 0}
+  .split{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+  .zones{grid-template-columns:repeat(auto-fill,minmax(56px,1fr))}
+  .foot{position:static;border-top:0;background:none;padding:0 0 20px;max-width:1180px;
+    margin:0 auto}
+}
+@media (min-width:1100px){
+  .split{grid-template-columns:280px 1fr}
+  .grid{display:block;margin-top:26px}
+  .grid h2{font-size:15px;color:var(--green);margin:0 0 10px}
+  .gridwrap{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b>Zone walk</b>
+  <span style="font-size:13.5px;opacity:.9">LAWNS</span>
+  <span class="prog" id="prog">0 of 88</span>
+</div>
+<div class="warn" id="warn">Saved on this device only — press <b>Export</b> before you finish, or it does not reach the system.</div>
+
+<div class="wrap">
+  <div class="panels" id="panels"></div>
+  <p class="meta" id="panelmeta"></p>
+
+  <div class="split">
+    <div><div class="zones" id="zones"></div></div>
+    <div id="detail"></div>
+  </div>
+
+  <div class="grid">
+    <h2>Everything collected so far</h2>
+    <div class="gridwrap"><table>
+      <thead><tr><th style="width:58px">Zone</th><th style="width:56px">Runs</th>
+        <th>What's growing</th><th style="width:180px">Emitters</th>
+        <th style="width:96px">Status</th><th>Notes</th></tr></thead>
+      <tbody id="gridbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="foot">
+  <button class="nav" id="prev">‹</button>
+  <button class="next" id="next">Next zone ›</button>
+  <button class="exp" id="export">Export</button>
+</div>
+
+<datalist id="plantlist"></datalist>
+
+<script>
+const PLANTS = [{"id":"46","sku":"Nutri-Star Granular Bottle","label":"4lb Bottle: Nutri-Star Granular Crape Myrtle Food"},{"id":"38","sku":"Bumper Crop 12-24-12 Bag","label":"50lb Bag: Bumper Crop General Purpose 12-24-12 Fertilizer"},{"id":"615","sku":"ACCM30UP","label":"Acoma Crape Myrtle (UNDER PRODUCTION) - 30 Gallon"},{"id":"613","sku":"ACCM15","label":"Acoma Crape Myrtle - 15 gallon"},{"id":"614","sku":"ACCM30","label":"Acoma Crape Myrtle - 30 gallon"},{"id":"616","sku":"ACCM7","label":"Acoma Crape Myrtle, 7 Gallon"},{"id":"103","sku":"AP45","label":"Afgan Black Pine, 45 Gallon"},{"id":"622","sku":"ACERB7","label":"Alley Cat (Espalier) Redbud - 7 gallon"},{"id":"1112","sku":"AS7","label":"American Sycamore - 7 Gallon"},{"id":"612","sku":"ACBI65","label":"Arizona Cypress Blue Ice - 65 Gallon"},{"id":"1120","sku":"AZBI45","label":"Arizona Cypress Blue Ice Replacement"},{"id":"609","sku":"ACBI15","label":"Arizona Cypress Blue Ice, 15 Gallon"},{"id":"611","sku":"ACBI45","label":"Arizona Cypress Blue Ice, 45 Gallon"},{"id":"621","sku":"ACCS65UP","label":"Arizona Cypress Carolina Sapphire (UNDER PRODUCTION) - 65 Gallon"},{"id":"617","sku":"ACCS15","label":"Arizona Cypress Carolina Sapphire - 15 gallon"},{"id":"618","sku":"ACCS30","label":"Arizona Cypress Carolina Sapphire - 30 gallon"},{"id":"620","sku":"ACCS65","label":"Arizona Cypress Carolina Sapphire - 65 gallon"},{"id":"100","sku":"AC15","label":"Arizona Cypress, 15 Gallon"},{"id":"29","sku":"AC30","label":"Arizona Cypress, 30 Gallon"},{"id":"30","sku":"AC45","label":"Arizona Cypress, 45 Gallon"},{"id":"610","sku":"ACBI30","label":"Arizona Cypress, Blue Ice 30 gallon"},{"id":"619","sku":"ACCS45","label":"Arizona Cypress, Carolina Sapphire - 45 gallon"},{"id":"31","sku":"ACCS2","label":"Arizona Cypress, Carolina Sapphire 2 gallon"},{"id":"623","sku":"ASVCM30","label":"Assorted Variety Crape Myrtle (Natchez + Tuscarora), 30 gallon"},{"id":"624","sku":"ASVCM95","label":"Assorted Variety Crape Myrtle, 95 gallon"},{"id":"1127","sku":"ATCM15","label":"Autauga Crape Myrtle - 15g"},{"id":"1094","sku":"ASC1","label":"Autumn Sage - Coral 1G"},{"id":"1096","sku":"ASFR1","label":"Autumn Sage - Furman's Red  1G"},{"id":"1097","sku":"ASL1","label":"Autumn Sage - Lipstick 1G"},{"id":"626","sku":"BC45","label":"Bald Cypress  45 gallon"},{"id":"625","sku":"BC200","label":"Bald Cypress - 200 gallon"},{"id":"627","sku":"BC95","label":"Bald Cypress - 95 gallon"},{"id":"1117","sku":"BC15","label":"Bald Cypress 2\""},{"id":"632","sku":"BM30","label":"Banana Magnolia - 30 Gallon"},{"id":"1082","sku":"BMSR5","label":"Banana Magnolia Stellar Ruby 5G"},{"id":"1008","sku":"BPPCM30","label":"Basham's Party Pink Crape Myrtle - 30 Gallon"},{"id":"1010","sku":"BPPCM15ST","label":"Basham's Party Pink Crape Myrtle STD - 15 Gallon"},{"id":"1011","sku":"BPPCM30ST","label":"Basham's Party Pink Crape Myrtle STD - 30 Gallon"},{"id":"1009","sku":"BPPCM45","label":"Basham's Pink Party Crape Myrtle - 45 Gallon"},{"id":"1076","sku":"BOF5","label":"Bells of Fire Esperanza - 5 gallon"},{"id":"106","sku":"BG","label":"Bermuda sod by the pallet, 450 sq. ft."},{"id":"628","sku":"BDSPCM15","label":"Black Diamond Shell Pink Crape Myrtle, 15 gallon"},{"id":"1036","sku":"BDSPCM30","label":"Black Diamond Shell Pink Crape Myrtle, 30 Gallon"},{"id":"647","sku":"BPRB30","label":"Black Pearl Redbud - 30 Gallon"},{"id":"1053","sku":"BPRB45","label":"Black Pearl Redbud - 45 Gallon"},{"id":"107","sku":"BLKBRY","label":"Blackberry, assorted varieties 3gallon"},{"id":"1119","sku":"BPJ30REP","label":"Blue Point Juniper"},{"id":"646","sku":"BPJPT15","label":"Blue Point Juniper (Patio Tree) - 15 Gallon"},{"id":"642","sku":"BPJ15UP","label":"Blue Point Juniper (UNDER PRODUCTION) - 15 gallon"},{"id":"641","sku":"BPJ15","label":"Blue Point Juniper - 15 gallon"},{"id":"643","sku":"BPJ30","label":"Blue Point Juniper - 30 gallon"},{"id":"644","sku":"BPJ45","label":"Blue Point Juniper - 45 gallon"},{"id":"645","sku":"BPJ7","label":"Blue Point Juniper - 7 gallon"},{"id":"108","sku":"BPJ1","label":"Blue Point Juniper 1 gallon"},{"id":"1099","sku":"BEA3","label":"Bougainvillea Elizabeth Agnus 3G"},{"id":"109","sku":"BRR","label":"Brazos River Rock"},{"id":"1075","sku":"BL3","label":"Breeze Lomandra"},{"id":"672","sku":"CLBT15","label":"Bright n Tight Cherry Laurel - 15 Gallon"},{"id":"629","sku":"BJ15","label":"Brodie Juniper - 15 gallon"},{"id":"630","sku":"BJ30","label":"Brodie Juniper - 30 gallon"},{"id":"631","sku":"BJ45","label":"Brodie Juniper - 45 gallon"},{"id":"68","sku":"BJ3","label":"Brodie Juniper, Aka Eastern Red Cedar, 3 gallon"},{"id":"1123","sku":"BPT","label":"Brown Patch / Take all Patch treatment 4# p 1000 Heritage G"},{"id":"1041","sku":"BJDW5","label":"Bubba Jones Desert Willow - 5 Gallon"},{"id":"640","sku":"BOMT30","label":"Bur Oak (Multi-Trunk) - 30 gallon"},{"id":"634","sku":"BO15UP","label":"Bur Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"636","sku":"BO30UP","label":"Bur Oak (UNDER PRODUCTION) - 30 gallon"},{"id":"638","sku":"BO65UP","label":"Bur Oak (UNDER PRODUCTION) - 65 gallon"},{"id":"633","sku":"BO15","label":"Bur Oak - 15 gallon"},{"id":"635","sku":"BO30","label":"Bur Oak - 30 gallon"},{"id":"637","sku":"BO45","label":"Bur Oak - 45 gallon"},{"id":"1042","sku":"BO65","label":"Bur Oak - 65 gallon"},{"id":"639","sku":"BO95","label":"Bur Oak - 95 gallon"},{"id":"1037","sku":"BO15M","label":"Bur Oak Multi, 15 Gallon"},{"id":"649","sku":"BuJ3UP","label":"Burkii Juniper (UNDER PRODUCTION) - 3 Gallon"},{"id":"648","sku":"BuJ30","label":"Burkii Juniper - 30 Gallon"},{"id":"1100","sku":"BBPF","label":"Butterfly Blue Pincushion Flower 1G"},{"id":"1092","sku":"BPF1","label":"Butterfly Pincushion Flower"},{"id":"1074","sku":"CIP3","label":"Cast Iron Plant - 3 gallon"},{"id":"650","sku":"CATCM30","label":"Catawba Crape Myrtle - 30 Gallon"},{"id":"651","sku":"CATCM45","label":"Catawba Crape Myrtle - 45 gallon"},{"id":"655","sku":"CE200UP","label":"Cedar Elm (UNDER PRODUCTION) - 200 Gallon"},{"id":"657","sku":"CE30UP","label":"Cedar Elm (UNDER PRODUCTION) - 30 gallon"},{"id":"653","sku":"CE15","label":"Cedar Elm - 15 gallon"},{"id":"654","sku":"CE200","label":"Cedar Elm - 200 Gallon"},{"id":"656","sku":"CE30","label":"Cedar Elm - 30 gallon"},{"id":"1115","sku":"CE5","label":"Cedar Elm 3/5 Gallon"},{"id":"658","sku":"CE45","label":"Cedar Elm 45 gallon"},{"id":"660","sku":"CE95","label":"Cedar Elm 95 gallon"},{"id":"659","sku":"CE65","label":"Cedar Elm, 65 gallon"},{"id":"1081","sku":"CBL3","label":"Cherry Blast Loropetalum - 3 gallon"},{"id":"69","sku":"CL15","label":"Cherry Laurel - 15 Gallon"},{"id":"70","sku":"CL30","label":"Cherry Laurel - 30 Gallon"},{"id":"671","sku":"CL65","label":"Cherry Laurel - 65 Gallon"},{"id":"675","sku":"CLCC30UP","label":"Cherry Laurel Centre Court (UNDER PRODUCTION) - 30 Gallon"},{"id":"673","sku":"CLCC15","label":"Cherry Laurel Centre Court - 15 Gallon"},{"id":"674","sku":"CLCC30","label":"Cherry Laurel Centre Court - 30 Gallon"},{"id":"676","sku":"CLCC45","label":"Cherry Laurel Centre Court - 45 Gallon"},{"id":"677","sku":"CLCC65","label":"Cherry Laurel Centre Court - 65 Gallon"},{"id":"678","sku":"CLCC7","label":"Cherry Laurel Centre Court - 7 Gallon"},{"id":"679","sku":"CLEB15","label":"Cherry Laurel Everbrite - 15 Gallon"},{"id":"680","sku":"CLEB30","label":"Cherry Laurel Everbrite - 30 Gallon"},{"id":"681","sku":"CLEB45","label":"Cherry Laurel Everbrite - 45 Gallon"},{"id":"682","sku":"CLEB7","label":"Cherry Laurel Everbrite - 7 Gallon"},{"id":"684","sku":"CP15","label":"Chinese Pistache - 15 gallon"},{"id":"685","sku":"CP30","label":"Chinese Pistache - 30 gallon"},{"id":"686","sku":"CP45","label":"Chinese Pistache - 45 gallon"},{"id":"687","sku":"CP65","label":"Chinese Pistache - 65 gallon"},{"id":"689","sku":"CP95","label":"Chinese Pistache - 95 gallon"},{"id":"662","sku":"CHO15UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"665","sku":"CHO3UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 3 gallon"},{"id":"664","sku":"CHO30UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 30 gallon"},{"id":"667","sku":"CHO45UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 45 gallon"},{"id":"668","sku":"CHO5UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 5 gallon"},{"id":"669","sku":"CHO65UP","label":"Chinkapin Oak (UNDER PRODUCTION) - 65 gallon"},{"id":"661","sku":"CHO15","label":"Chinkapin Oak - 15 gallon"},{"id":"663","sku":"CHO30","label":"Chinkapin Oak - 30 gallon"},{"id":"666","sku":"CHO45","label":"Chinkapin Oak - 45 gallon"},{"id":"670","sku":"CHO95","label":"Chinkapin Oak, 95 gallon"},{"id":"697","sku":"CWP15","label":"Choctaw Pecan - 15 Gallon"},{"id":"693","sku":"CSCM3UP","label":"Colorama Scarlet Crape Myrtle (UNDER PRODUCTION) - 3 gallon"},{"id":"692","sku":"CSCM30","label":"Colorama Scarlet Crape Myrtle - 30 gallon"},{"id":"1111","sku":"CSCM45","label":"Colorama Scarlet Crape Myrtle - 45 Gallon"},{"id":"694","sku":"CSCMST3UP","label":"Colorama Scarlet Crape Myrtle ST (UNDER PRODUCTION) - 3 gallon"},{"id":"691","sku":"CSCM15","label":"Colorama Scarlet Crape Myrtle, 15 gallon"},{"id":"1048","sku":"BBM1Y","label":"Compost - Black Bastrop Mix 1 Yard"},{"id":"695","sku":"CTLq15","label":"Coppertone Loquat  - 15 gallon"},{"id":"696","sku":"CTLq5","label":"Coppertone Loquat - 5 gallon"},{"id":"1018","sku":"CMCM15","label":"Coral Magic Crape Myrtle - 15 Gallon"},{"id":"683","sku":"CMCM7","label":"Coral Magic Crape Myrtle - 7 gallon"},{"id":"652","sku":"CCRB15","label":"Cotton Candy Redbud - 15 gallon"},{"id":"690","sku":"CRCM45","label":"Country Red Crape Myrtle - 45 Gallon"},{"id":"10","sku":"Deposit","label":"Deposit"},{"id":"703","sku":"DW15","label":"Desert Willow - 15 Gallon"},{"id":"704","sku":"DW30","label":"Desert Willow - 30 Gallon"},{"id":"705","sku":"DW45","label":"Desert Willow - 45 Gallon"},{"id":"95","sku":"DW3","label":"Desert Willow 3 Gallon"},{"id":"96","sku":"DW5","label":"Desert Willow 5 gallon"},{"id":"1085","sku":"DWB7","label":"Desert Willow Bubba - 7 gallon"},{"id":"702","sku":"DP15","label":"Desirable Pecan - 15 Gallon"},{"id":"699","sku":"DLO30UP","label":"Discounted Live Oak (UNDER PRODUCTION) - 30 gallon"},{"id":"698","sku":"DLO30","label":"Discounted Live Oak - 30 gallon"},{"id":"700","sku":"DLO45","label":"Discounted Live Oak - 45 gallon"},{"id":"701","sku":"DLO65","label":"Discounted Live Oak - 65 gallon"},{"id":"1067","sku":"DY1","label":"Dwarf Yaupon Holly - 1 gallon"},{"id":"708","sku":"DYCM3UP","label":"Dynamite Crape Myrtle (UNDER PRODUCTION) - 3 Gallon (Red)\n20'-25 ht,"},{"id":"706","sku":"DYCM15","label":"Dynamite Crape Myrtle - 15 Gallon"},{"id":"709","sku":"DYCM45","label":"Dynamite Crape Myrtle - 45 gallon"},{"id":"710","sku":"DYCMST3UP","label":"Dynamite Crape Myrtle ST (UNDER PRODUCTION) - 3 Gallon (Red)\n20'-25 ht,"},{"id":"1019","sku":"DYCM15ST","label":"Dynamite Crape Myrtle STD - 15 Gallon"},{"id":"707","sku":"DYCM30","label":"Dynamite Crape Myrtle, 30 gallon"},{"id":"715","sku":"EH15BF","label":"Eagleston Holly (Bush Form) - 15 gallon"},{"id":"717","sku":"EH30BF","label":"Eagleston Holly (Bush Form) - 30 Gallon"},{"id":"720","sku":"EH45BF","label":"Eagleston Holly (Bush Form) - 45 Gallon"},{"id":"724","sku":"EH65BF","label":"Eagleston Holly (Bush Form) - 65 Gallon"},{"id":"716","sku":"EH15TF","label":"Eagleston Holly (Tree Form) - 15 gallon"},{"id":"719","sku":"EH30TF","label":"Eagleston Holly (Tree Form) - 30 Gallon"},{"id":"722","sku":"EH45TF","label":"Eagleston Holly (Tree Form) - 45 Gallon"},{"id":"726","sku":"EH65TF","label":"Eagleston Holly (Tree Form) - 65 Gallon"},{"id":"728","sku":"EH95TF","label":"Eagleston Holly (Tree Form) - 95 Gallon"},{"id":"725","sku":"EH65BFUP","label":"Eagleston Holly BF (UNDER PRODUCTION) - 65 Gallon"},{"id":"718","sku":"EH30BFUP","label":"Eagleston Holly Bush (UNDER PRODUCTION) - 30 Gallon"},{"id":"721","sku":"EH45BFUP","label":"Eagleston Holly Bush (UNDER PRODUCTION) - 45 Gallon"},{"id":"55","sku":"EHMP30BF","label":"Eagleston Holly Miss Pryss (Bush Form), 30 gallon"},{"id":"723","sku":"EH45TFUP","label":"Eagleston Holly TF (UNDER PRODUCTION) - 45 Gallon"},{"id":"727","sku":"EH65TFUP","label":"Eagleston Holly TF (UNDER PRODUCTION) - 65 Gallon"},{"id":"124","sku":"Eastern Red Cedar","label":"Eastern Red Cedar B&B 10' to 12' tall"},{"id":"1020","sku":"E&ICM15","label":"Ebony & Ivory Crape Myrtle - 15 Gallon"},{"id":"729","sku":"E&ICM3","label":"Ebony & Ivory Crape Myrtle - 3 gallon"},{"id":"711","sku":"EFCM15","label":"Ebony Flame Crape Myrtle - 15 gallon"},{"id":"713","sku":"EFCM30","label":"Ebony Flame Crape Myrtle - 30 gallon"},{"id":"1078","sku":"EGL1","label":"Emerald Goddess Liriope - 1 gallon"},{"id":"1021","sku":"EDFCM15","label":"Enduring Fuchsia Crape Myrtle - 15 Gallon"},{"id":"712","sku":"EDFCM3","label":"Enduring Fuchsia Crape Myrtle - 3 gallon"},{"id":"1022","sku":"EDLCM15","label":"Enduring Lavender Crape Myrtle - 15 gallon"},{"id":"730","sku":"EDLCM3","label":"Enduring Lavender Crape Myrtle - 3 gallon"},{"id":"732","sku":"EDRCM3","label":"Enduring Red Crape Myrtle - 3 gallon"},{"id":"126","sku":"ESP1","label":"Esperanza - 1 gallon"},{"id":"714","sku":"EGW1","label":"Evergreen Wisteria - 1 Gallon"},{"id":"127","sku":"Eves Necklace 10","label":"Eves Necklace 10 gallon"},{"id":"125","sku":"EN30","label":"Eves Necklace 30 gallon"},{"id":"731","sku":"EPM15","label":"Evey's Pride Mimosa - 15 gallon"},{"id":"1124","sku":"EPM30","label":"Evey's Pride Mimosa - 30g"},{"id":"1102","sku":"FB1","label":"Firebush 1G"},{"id":"1083","sku":"FCB3","label":"Firecracker Bush"},{"id":"737","sku":"FTRB15","label":"Flame Thrower Redbud - 15 Gallon"},{"id":"738","sku":"FTRB5","label":"Flame Thrower Redbud - 5 Gallon"},{"id":"1043","sku":"FSV15","label":"Flip Side Vitex - 15 gallon"},{"id":"1039","sku":"FSV3","label":"Flip Side Vitex - 3 Gallon"},{"id":"736","sku":"FSV7","label":"Flip Side Vitex - 7 gallon"},{"id":"734","sku":"FPRB15","label":"Forest Pansy Redbud - 15 Gallon"},{"id":"1058","sku":"FPRB30","label":"Forest Pansy Redbud - 30 Gallon"},{"id":"735","sku":"FPRB45","label":"Forest Pansy Redbud - 45 gallon"},{"id":"1084","sku":"FTF3","label":"Foxtail Fern - 3 gallon"},{"id":"733","sku":"FE30","label":"Frontier Elm - 30 Gallon"},{"id":"1064","sku":"FP4","label":"Fuyu Japanese Persimmon"},{"id":"91","sku":"GiftC","label":"Gift Certificate"},{"id":"741","sku":"GHRB7","label":"Gilded Hearts Redbud - 7 gallon"},{"id":"1072","sku":"GA3","label":"Glossy Abelia"},{"id":"742","sku":"GSE2","label":"Gold Star Esperanza - 2 gallon"},{"id":"739","sku":"GFRB15","label":"Golden Falls Redbud - 15 Gallon"},{"id":"740","sku":"GFRB30","label":"Golden Falls Redbud - 30 Gallon"},{"id":"132","sku":"GLB10","label":"Goldenball Leadtree 10 gallon"},{"id":"1077","sku":"GCS3","label":"Green Cloud Sage - 3 gallon"},{"id":"1049","sku":"HAFRB30","label":"Hearts A' Fire Redbud - 30 Gallon"},{"id":"1054","sku":"HAFRB45","label":"Hearts A' Fire Redbud - 45 Gallon"},{"id":"743","sku":"HAFRB7","label":"Hearts A'fire Redbud - 7 gallon"},{"id":"56","sku":"HTYH15","label":"Hightower Yaupon Holly, 15 gallon"},{"id":"57","sku":"HTYH30","label":"Hightower Yaupon Holly, 30 gallon"},{"id":"58","sku":"HTYH45","label":"Hightower Yaupon Holly, 45 gallon"},{"id":"59","sku":"HTYH65","label":"Hightower Yaupon Holly, 65 gallon"},{"id":"60","sku":"HTYH95","label":"Hightower Yaupon Holly, 95 gallon"},{"id":"1023","sku":"HPCM15","label":"Hopi Crape Myrtle - 15 Gallon"},{"id":"744","sku":"HPCM5","label":"Hopi Crape Myrtle - 5 gal"},{"id":"745","sku":"HPCM7","label":"Hopi Crape Myrtle - 7 gal"},{"id":"1031","sku":"HPCM30","label":"Hopi Crape Myrtle, 30 Gallon"},{"id":"1105","sku":"HBP1","label":"Hummingbird Plant - 1G"},{"id":"1066","sku":"HCR2","label":"Huntington Rosemary 2G"},{"id":"1118","sku":"High Yield Iron Sulphate","label":"HYIS"},{"id":"1126","sku":"IBTF15","label":"Improved Brown Turkey Fig - 15G"},{"id":"746","sku":"JBP45","label":"Japanese Black Pine - 45 gallon"},{"id":"1004","sku":"JBGM15","label":"Japanese Bloodgood Maple - 15 Gallon"},{"id":"748","sku":"JLTLO3UP","label":"Joan Lionetti Texas Live Oak (UNDER PRODUCTION) - 3 Gallon"},{"id":"747","sku":"JLTLO30","label":"Joan Lionetti Texas Live Oak - 30 Gallon"},{"id":"749","sku":"JLTLO45","label":"Joan Lionetti Texas Live Oak - 45 Gallon"},{"id":"1073","sku":"KA3","label":"Kaleidoscope Abelia"},{"id":"766","sku":"LBE65UP","label":"Lacebark Elm (UNDER PRODUCTION) - 65 Gallon"},{"id":"761","sku":"LBE15","label":"Lacebark Elm - 15 gallon"},{"id":"762","sku":"LBE30","label":"Lacebark Elm - 30 gallon"},{"id":"763","sku":"LBE45","label":"Lacebark Elm - 45 gallon"},{"id":"764","sku":"LBE5","label":"Lacebark Elm - 5 gallon"},{"id":"765","sku":"LBE65","label":"Lacebark Elm - 65 gallon"},{"id":"767","sku":"LBE95","label":"Lacebark Elm - 95 gallon"},{"id":"760","sku":"LAOMT15","label":"Lacey Oak (Multi-Trunk) - 15 gallon"},{"id":"752","sku":"LAO15UP","label":"Lacey Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"755","sku":"LAO3UP","label":"Lacey Oak (UNDER PRODUCTION) - 3 gallon"},{"id":"754","sku":"LAO30UP","label":"Lacey Oak (UNDER PRODUCTION) - 30 Gallon"},{"id":"759","sku":"LAO95UP","label":"Lacey Oak (UNDER PRODUCTION) - 95 gallon"},{"id":"751","sku":"LAO15","label":"Lacey Oak - 15 gallon"},{"id":"753","sku":"LAO30","label":"Lacey Oak - 30 Gallon"},{"id":"756","sku":"LAO45","label":"Lacey Oak - 45 Gallon"},{"id":"757","sku":"LAO65","label":"Lacey Oak - 65 gallon"},{"id":"758","sku":"LAO95","label":"Lacey Oak - 95 gallon"},{"id":"750","sku":"LAO1","label":"Lacey Oak, 1 gallon"},{"id":"1091","sku":"DRL2","label":"Lantana 'Dallas Red' - 2 gallon"},{"id":"1086","sku":"FML1","label":"Lantana 'Full Moon' - 1G"},{"id":"1089","sku":"HSL1","label":"Lantana 'Havana Sunset' 1G"},{"id":"1088","sku":"SPL1","label":"Lantana 'Shamrock Peach' - 1 gallon"},{"id":"71","sku":"Mtn Laurel","label":"Laurel \u00b7 Mtn Laurel"},{"id":"769","sku":"LGM15UP","label":"Little Gem Magnolia (UNDER PRODUCTION) - 15 gallon"},{"id":"772","sku":"LGM65UP","label":"Little Gem Magnolia (UNDER PRODUCTION) - 65 gallon"},{"id":"768","sku":"LGM15","label":"Little Gem Magnolia - 15 gallon"},{"id":"770","sku":"LGM30","label":"Little Gem Magnolia - 30 gallon"},{"id":"771","sku":"LGM65","label":"Little Gem Magnolia - 65 gallon"},{"id":"73","sku":"LGM45","label":"Little Gem Magnolia 45 gallon"},{"id":"74","sku":"LGM7","label":"Little Gem Magnolia 7 gal"},{"id":"773","sku":"LMF5","label":"Little Miss Figgy - 5 Gallon"},{"id":"142","sku":"LMF2","label":"Little Miss Figgy 2 gallon"},{"id":"786","sku":"LOMT15","label":"Live Oak (Multi-Trunk) - 15 gallon"},{"id":"787","sku":"LOMT30","label":"Live Oak (Multi-Trunk) - 30 gallon"},{"id":"780","sku":"LO45MT","label":"Live Oak (Multi-Trunk) - 45 Gallon"},{"id":"775","sku":"LO15UP","label":"Live Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"778","sku":"LO3UP","label":"Live Oak (UNDER PRODUCTION) - 3 gallon"},{"id":"781","sku":"LO45UP","label":"Live Oak (UNDER PRODUCTION) - 45 Gallon"},{"id":"774","sku":"LO15","label":"Live Oak - 15 gallon"},{"id":"776","sku":"LO200","label":"Live Oak - 200 gallon"},{"id":"777","sku":"LO30","label":"Live Oak - 30 gallon"},{"id":"779","sku":"LO45","label":"Live Oak - 45 Gallon"},{"id":"782","sku":"LO5","label":"Live Oak - 5 gallon"},{"id":"783","sku":"LO65","label":"Live Oak - 65 gallon"},{"id":"784","sku":"LO7","label":"Live Oak - 7 gallon"},{"id":"785","sku":"LO95","label":"Live Oak, 95 gallon"},{"id":"788","sku":"Lq15","label":"Loquat  - 15 gallon"},{"id":"789","sku":"Lq5","label":"Loquat - 5 gallon"},{"id":"1125","sku":"LGF15","label":"LSU Gold Fig"},{"id":"806","sku":"MHSJ5","label":"Madison Hardy Star Jasmine - 5 Gallon"},{"id":"61","sku":"HY10-12","label":"Male Yaupon Holly 10' to 12' tall"},{"id":"66","sku":"YH8/10","label":"Male Yaupon Holly 8 to 10 ft tall"},{"id":"799","sku":"MeRB15","label":"Merlot Redbud - 15 Gallon"},{"id":"800","sku":"MeRB30","label":"Merlot Redbud - 30 gallon"},{"id":"801","sku":"MeRB45","label":"Merlot Redbud - 45 gallon"},{"id":"802","sku":"MeRB5","label":"Merlot Redbud - 5 Gallon"},{"id":"1080","sku":"MBS1","label":"Mexican Bush Sage - 1 gallon"},{"id":"819","sku":"MP15","label":"Mexican Plum - 15 gallon"},{"id":"820","sku":"MP30","label":"Mexican Plum - 30 Gallon"},{"id":"821","sku":"MP45","label":"Mexican Plum - 45 gallon"},{"id":"823","sku":"MRO45","label":"Mexican Red Oak - 45 Gallon"},{"id":"824","sku":"MRO95","label":"Mexican Red Oak - 95 gallon"},{"id":"822","sku":"MRBMT45","label":"Mexican Redbud (Multi-Trunk) - 45 Gallon"},{"id":"86","sku":"Mexican Redbud S30","label":"Mexican Redbud single trunk   30Gallon"},{"id":"92","sku":"MS15","label":"Mexican Sycamore - 15 gallon"},{"id":"825","sku":"MS30","label":"Mexican Sycamore - 30 gallon"},{"id":"826","sku":"MS45","label":"Mexican Sycamore - 45 gallon"},{"id":"93","sku":"MS65","label":"Mexican Sycamore - 65 gallon"},{"id":"803","sku":"MFCM30","label":"Miss Frances Crape Myrtle - 30 gallon"},{"id":"804","sku":"MFCM45","label":"Miss Frances Crape Myrtle - 45 gallon"},{"id":"805","sku":"MFCM65","label":"Miss Frances Crape Myrtle - 65 Gallon"},{"id":"811","sku":"MO3UP","label":"Monterrey Oak (UNDER PRODUCTION) - 3 gallon"},{"id":"810","sku":"MO30UP","label":"Monterrey Oak (UNDER PRODUCTION) - 30 Gallon"},{"id":"813","sku":"MO45UP","label":"Monterrey Oak (UNDER PRODUCTION) - 45 gallon"},{"id":"816","sku":"MO65UP","label":"Monterrey Oak (UNDER PRODUCTION) - 65 gallon"},{"id":"818","sku":"MO95UP","label":"Monterrey Oak (UNDER PRODUCTION) - 95 gallon"},{"id":"808","sku":"MO15","label":"Monterrey Oak - 15 gallon"},{"id":"809","sku":"MO30","label":"Monterrey Oak - 30 Gallon"},{"id":"812","sku":"MO45","label":"Monterrey Oak - 45 gallon"},{"id":"814","sku":"MO5","label":"Monterrey Oak - 5 gallon"},{"id":"815","sku":"MO65","label":"Monterrey Oak - 65 gallon"},{"id":"817","sku":"MO95","label":"Monterrey Oak - 95 gallon"},{"id":"791","sku":"MC15UP","label":"Montezuma Cypress (UNDER PRODUCTION) - 15 Gallon"},{"id":"797","sku":"MC65UP","label":"Montezuma Cypress (UNDER PRODUCTION) - 65 Gallon"},{"id":"792","sku":"MC200","label":"Montezuma Cypress - 200 gallon"},{"id":"798","sku":"MC95","label":"Montezuma Cypress - 95 gallon"},{"id":"794","sku":"MC45","label":"Montezuma Cypress 45 gallon"},{"id":"790","sku":"MC15","label":"Montezuma Cypress, 15 Gallon"},{"id":"793","sku":"MC30","label":"Montezuma Cypress, 30 Gallons"},{"id":"795","sku":"MC5","label":"Montezuma Cypress, 5 gallon"},{"id":"796","sku":"MC65","label":"Montezuma Cypress, 65 Gallon"},{"id":"828","sku":"MuCM3UP","label":"Muskogee Crape Myrtle (UNDER PRODUCTION) - 3 gallon"},{"id":"827","sku":"MuCM30","label":"Muskogee Crape Myrtle - 30 gallon"},{"id":"829","sku":"MuCM45","label":"Muskogee Crape Myrtle - 45 gallon"},{"id":"1005","sku":"MuCM65","label":"Muskogee Crape Myrtle - 65 Gallon"},{"id":"830","sku":"MuCM95","label":"Muskogee Crape Myrtle - 95 Gallon"},{"id":"833","sku":"MuCMST3UP","label":"Muskogee Crape Myrtle ST (UNDER PRODUCTION) - 3 gallon"},{"id":"831","sku":"MuCMST15","label":"Muskogee Crape Myrtle STD - 15 gallon"},{"id":"832","sku":"MuCMST30","label":"Muskogee Crape Myrtle STD - 30 gallon"},{"id":"807","sku":"MMCM15","label":"Mystic Magenta Crape Myrtle - 15 gallon"},{"id":"1032","sku":"MMCM30","label":"Mystic Magenta Crape Myrtle - 30 gallon"},{"id":"1093","sku":"MSS1","label":"Mystic Spires Salvia"},{"id":"872","sku":"NZCMST45","label":"Natchez Crape Myrtle (Single Trunk), 45 gallon"},{"id":"860","sku":"NZCM3UP","label":"Natchez Crape Myrtle (UNDER PRODUCTION) - 3 gallon"},{"id":"862","sku":"NZCM45UP","label":"Natchez Crape Myrtle (UNDER PRODUCTION) - 45 Gallon"},{"id":"865","sku":"NZCM7UP","label":"Natchez Crape Myrtle (UNDER PRODUCTION) - 7 gallon"},{"id":"867","sku":"NZCM95UP","label":"Natchez Crape Myrtle (UNDER PRODUCTION) - 95 Gallon"},{"id":"857","sku":"NZCM15","label":"Natchez Crape Myrtle - 15 gallon"},{"id":"1038","sku":"NZCM200","label":"Natchez Crape Myrtle - 200 Gallon"},{"id":"858","sku":"NZCM3","label":"Natchez Crape Myrtle - 3 gal"},{"id":"859","sku":"NZCM30","label":"Natchez Crape Myrtle - 30 gallon"},{"id":"861","sku":"NZCM45","label":"Natchez Crape Myrtle - 45 Gallon"},{"id":"863","sku":"NZCM65","label":"Natchez Crape Myrtle - 65 gallon"},{"id":"864","sku":"NZCM7","label":"Natchez Crape Myrtle - 7 gallon"},{"id":"866","sku":"NZCM95","label":"Natchez Crape Myrtle - 95 gallon"},{"id":"871","sku":"NZCMST3UP","label":"Natchez Crape Myrtle ST (UNDER PRODUCTION) - 3 gallon"},{"id":"870","sku":"NZCMST30UP","label":"Natchez Crape Myrtle ST (UNDER PRODUCTION) - 30 gallon"},{"id":"868","sku":"NZCMST15","label":"Natchez Crape Myrtle STD - 15 gallon"},{"id":"869","sku":"NZCMST30","label":"Natchez Crape Myrtle STD - 30 gallon"},{"id":"1033","sku":"NZCM45STD","label":"Natchez Crape Myrtle STD - 45 gallon"},{"id":"834","sku":"NFeYH45","label":"Native Female Yaupon Holly, 45 gallon"},{"id":"835","sku":"NFeYH65","label":"Native Female Yaupon Holly, 65 gallon"},{"id":"840","sku":"NMYH65","label":"Native Male Yaupon Holly - 65 Gallon (8'-10')"},{"id":"841","sku":"NMYH95","label":"Native Male Yaupon Holly - 95 Gallon (10'-12')"},{"id":"839","sku":"NMYH45","label":"Native Male Yaupon Holly, 45 Gallon"},{"id":"842","sku":"NP15","label":"Native Pecan - 15 gallon"},{"id":"843","sku":"NP7","label":"Native Pecan - 7 Gallon"},{"id":"1114","sku":"NP5","label":"Native Pecan 3/5 Gallon"},{"id":"844","sku":"NRSH15BF","label":"Nellie R. Stevens Holly (Bush Form) - 15 gallon"},{"id":"846","sku":"NRSH30BF","label":"Nellie R. Stevens Holly (Bush Form) - 30 gallon"},{"id":"850","sku":"NRSH45BF","label":"Nellie R. Stevens Holly (Bush Form) - 45 gallon"},{"id":"852","sku":"NRSH65BF","label":"Nellie R. Stevens Holly (Bush Form) - 65 gallon"},{"id":"855","sku":"NRSH95BF","label":"Nellie R. Stevens Holly (Bush Form) - 95 gallon"},{"id":"845","sku":"NRSH15TF","label":"Nellie R. Stevens Holly (Tree Form) - 15 gallon"},{"id":"847","sku":"NRSH30TF","label":"Nellie R. Stevens Holly (Tree Form) - 30 gallon"},{"id":"851","sku":"NRSH45TF","label":"Nellie R. Stevens Holly (Tree Form) - 45 gallon"},{"id":"853","sku":"NRSH65TF","label":"Nellie R. Stevens Holly (Tree Form) - 65 gallon"},{"id":"856","sku":"NRSH95TF","label":"Nellie R. Stevens Holly (Tree Form) - 95 gallon"},{"id":"848","sku":"NRSH3BFUP","label":"Nellie R. Stevens Holly BF (UNDER PRODUCTION) - 3 gallon"},{"id":"849","sku":"NRSH3TFUP","label":"Nellie R. Stevens Holly TF (UNDER PRODUCTION) - 3 gallon"},{"id":"854","sku":"NRSH65TFUP","label":"Nellie R. Stevens Holly TF (UNDER PRODUCTION) - 65 gallon"},{"id":"837","sku":"NLO15","label":"Netleaf Oak - 15 gallon"},{"id":"838","sku":"NLO45","label":"Netleaf Oak - 45 gallon"},{"id":"78","sku":"Oak","label":"Oak \u00b7 Oak"},{"id":"1079","sku":"OBP1","label":"Ocean Blue Plumbago - 1 gallon"},{"id":"1113","sku":"OGM45","label":"October Glory Maple - 45 Gallon"},{"id":"1052","sku":"OSRB30","label":"Oklahoma Sparkler - 30 Gallon"},{"id":"874","sku":"OSRB15","label":"Oklahoma Sparkler Redbud - 15 gallon"},{"id":"873","sku":"OM15","label":"Ombrella Mimosa - 15 gallon"},{"id":"876","sku":"PEP15","label":"Pawnee Pecan - 15 Gallon"},{"id":"881","sku":"PMG1","label":"Pink Muhly Grass, 1 gallon"},{"id":"1051","sku":"Peggy Martin Roses","label":"Pink Peggy Martin Roses"},{"id":"891","sku":"PVCM5","label":"Pink Velour Crape Myrtle - 5 gal"},{"id":"1106","sku":"PL","label":"Pinnate Lavender 2G"},{"id":"1024","sku":"PLMCM15","label":"Plum Magic Crape Myrtle - 15 Gallon"},{"id":"878","sku":"PLMCM3","label":"Plum Magic Crape Myrtle - 3 gallon"},{"id":"879","sku":"PLMCM7","label":"Plum Magic Crape Myrtle - 7 gallon"},{"id":"64","sku":"Poss. Haw 15","label":"Possomhaw Holly 15 gallon"},{"id":"62","sku":"PHH30","label":"Possumhaw Holly, 30 gallon"},{"id":"877","sku":"PHH45","label":"Possumhaw Holly, 45 gallon"},{"id":"884","sku":"POHYH15UP","label":"Pride of Houston Yaupon Holly (UNDER PRODUCTION) - 15 Gallon"},{"id":"883","sku":"POHYH15","label":"Pride of Houston Yaupon Holly - 15 Gallon"},{"id":"885","sku":"POHYH3","label":"Pride of Houston Yaupon Holly - 3 Gallon"},{"id":"886","sku":"POHYH30","label":"Pride of Houston Yaupon Holly - 30 Gallon"},{"id":"887","sku":"POHYH45","label":"Pride of Houston Yaupon Holly - 45 Gallon"},{"id":"888","sku":"POHYH65","label":"Pride of Houston Yaupon Holly - 65 Gallon"},{"id":"63","sku":"POHYH5","label":"Pride of Houston Yaupon Holly, 5 Gallon"},{"id":"875","sku":"PATB5","label":"Prime Ark Traveller Blackberry - 5 Gallon"},{"id":"882","sku":"PMP15","label":"Pumilio Mugho Pine - 15 gallon"},{"id":"889","sku":"PPCM15","label":"Purely Purple Crape Myrtle - 15 gallon"},{"id":"1034","sku":"PPCM30","label":"Purely Purple Crape Myrtle - 30 gallon"},{"id":"1025","sku":"PMCM15","label":"Purple Magic Crape Myrtle - 15 Gallon"},{"id":"880","sku":"PMCM3","label":"Purple Magic Crape Myrtle - 3 gallon"},{"id":"890","sku":"PRERB7","label":"Purple Rain (Espalier) Redbud - 7 gallon"},{"id":"1055","sku":"PRRB45","label":"Purple Rain Redbud - 45 Gallon"},{"id":"1061","sku":"PRRB65","label":"Purple Rain Redbud - 65 Gallon"},{"id":"892","sku":"QFAC2","label":"Quick Frost Arizona Cypress, 2 gallon"},{"id":"1098","sku":"BR5","label":"Red Banana"},{"id":"80","sku":"Red Oak 15G","label":"Red Oak 15 gallon"},{"id":"82","sku":"Red Oak 3G","label":"Red Oak 3 gallon"},{"id":"81","sku":"Red Oak 30G","label":"Red Oak 30 gallon"},{"id":"900","sku":"RRCM7","label":"Red Rocket Crape Myrtle (7 Gallon)"},{"id":"899","sku":"RRCM3UP","label":"Red Rocket Crape Myrtle (UNDER PRODUCTION) - 3 Gallon"},{"id":"897","sku":"RRCM15","label":"Red Rocket Crape Myrtle - 15 gallon"},{"id":"898","sku":"RRCM30","label":"Red Rocket Crape Myrtle - 30 gallon"},{"id":"901","sku":"RRCMST3UP","label":"Red Rocket Crape Myrtle ST (UNDER PRODUCTION) - 3 Gallon"},{"id":"907","sku":"RY1","label":"Red Yucca - 1 Gallon"},{"id":"908","sku":"RY3","label":"Red Yucca - 3 Gallon"},{"id":"87","sku":"Redbud","label":"Redbud \u00b7 Redbud"},{"id":"1026","sku":"RPCM15","label":"Rhapsody in Pink Crape Myrtle - 15 Gallon"},{"id":"1035","sku":"RPCM30","label":"Rhapsody In Pink Crape Myrtle - 30 Gallon"},{"id":"895","sku":"RPCM5","label":"Rhapsody in Pink Crape Myrtle - 5 gal"},{"id":"896","sku":"RPCM7","label":"Rhapsody in Pink Crape Myrtle - 7 gal"},{"id":"903","sku":"R&SRB30","label":"Rise & Shine Redbud - 30 gallon"},{"id":"905","sku":"R&SRB45","label":"Rise & Shine Redbud - 45 gallon"},{"id":"906","sku":"R&SRB65","label":"Rise & Shine Redbud - 65 gallon"},{"id":"599","sku":"R&SRB15","label":"Rise & Shine Redbud, 15 gallon"},{"id":"902","sku":"RSRB15","label":"Rising Sun Redbud - 15 Gallon"},{"id":"1050","sku":"RSRB30","label":"Rising Sun Redbud - 30g"},{"id":"904","sku":"RSRB45","label":"Rising Sun Redbud - 45 Gallon"},{"id":"1121","sku":"RLDW5","label":"Rough Leaf Dogwood"},{"id":"894","sku":"RPB3","label":"Royal Purple Bougainvillea - 3gal"},{"id":"893","sku":"RFRB15","label":"Ruby Falls Redbud - 15 gallon"},{"id":"1059","sku":"RFRB30","label":"Ruby Falls Redbud - 30 Gallon"},{"id":"1057","sku":"RFRB45","label":"Ruby Falls Redbud - 45 Gallon"},{"id":"1046","sku":"SV15","label":"Sandankwa Viburnum - 15 gallon"},{"id":"1108","sku":"SFF1","label":"Scarlet Firecracker Fern 1G"},{"id":"932","sku":"SROMT30UP","label":"Shumard Red Oak (Multi-Trunk) (UNDER PRODUCTION) - 30 gallon"},{"id":"931","sku":"SROMT15","label":"Shumard Red Oak (Multi-Trunk) - 15 gallon"},{"id":"922","sku":"SRO15UP","label":"Shumard Red Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"927","sku":"SRO3UP","label":"Shumard Red Oak (UNDER PRODUCTION) - 3 gallon"},{"id":"926","sku":"SRO30UP","label":"Shumard Red Oak (UNDER PRODUCTION) - 30 gallon"},{"id":"921","sku":"SRO15","label":"Shumard Red Oak - 15 gallon"},{"id":"923","sku":"SRO200","label":"Shumard Red Oak - 200 gallon"},{"id":"924","sku":"SRO30","label":"Shumard Red Oak - 30 gallon"},{"id":"925","sku":"SRO300","label":"Shumard Red Oak - 300gal (48\" Box)"},{"id":"928","sku":"SRO45","label":"Shumard Red Oak - 45 gallon"},{"id":"929","sku":"SRO5","label":"Shumard Red Oak - 5 gallon"},{"id":"930","sku":"SRO95","label":"Shumard Red Oak - 95 gallon"},{"id":"177","sku":"SRO100","label":"Shumard Red Oak 100 Gallon"},{"id":"83","sku":"S.Red Oak 45G","label":"Shumard Red Oak 45"},{"id":"1015","sku":"SMRO45","label":"Sierra Red Oak"},{"id":"1027","sku":"SRCM15","label":"Siren Red Crape Myrtle - 15 gallon"},{"id":"920","sku":"SRCM5","label":"Siren Red Crape Myrtle - 5 gal"},{"id":"1028","sku":"SRCM15ST","label":"Siren Red Crape Myrtle STD, 15 Gallons"},{"id":"1109","sku":"SHBS3","label":"Skinner's Hardy Banana Shrub"},{"id":"1103","sku":"HSKLN5","label":"Skyline Holly 5G"},{"id":"914","sku":"SH3","label":"Skyward Holly - 3 gallon"},{"id":"915","sku":"SH30","label":"Skyward Holly - 30 gallons"},{"id":"1087","sku":"SH5","label":"Skyward Holly - 5 gallon"},{"id":"916","sku":"SH7","label":"Skyward Holly - 7 gallon"},{"id":"934","sku":"SWM15","label":"Southern Wax Myrtle - 15 gallon"},{"id":"913","sku":"SE1","label":"Sparklette Esperanza - 1 gallon"},{"id":"1101","sku":"ESPRKL5","label":"Sparklette Esperanza - 5G"},{"id":"917","sku":"SJ5","label":"Star Jasmine (bush form) - 5 Gallon"},{"id":"1090","sku":"SJB1","label":"Star Jasmine Bush - 1 gallon"},{"id":"933","sku":"STRB7","label":"Summer's Tower Redbud - 7 gallon"},{"id":"1069","sku":"SL3","label":"Sunshine Ligustrum - 3 gallon"},{"id":"909","sku":"SAPB5","label":"Sweet Ark Ponca Blackberry - 5 Gallon"},{"id":"1060","sku":"SBDWM30","label":"Sweet Bubba Desert Willow (Multi Trunk) - 30 Gallon"},{"id":"910","sku":"SBDW15","label":"Sweet Bubba Desert Willow - 15 gallon"},{"id":"911","sku":"SBDW30","label":"Sweet Bubba Desert Willow - 30 Gallon"},{"id":"912","sku":"SBDW5","label":"Sweet Bubba Desert Willow - 5 gallon"},{"id":"944","sku":"TJ15","label":"Taylor Juniper - 15 gallon"},{"id":"945","sku":"TJ3","label":"Taylor Juniper - 3 gallon"},{"id":"946","sku":"TJ30","label":"Taylor Juniper - 30 gallon"},{"id":"947","sku":"TJ45","label":"Taylor Juniper - 45 Gallon"},{"id":"956","sku":"TMRB15","label":"Tex-Mex Redbud - 15 gallon"},{"id":"957","sku":"TMRB30","label":"Tex-Mex Redbud - 30 gallon"},{"id":"958","sku":"TMRB45","label":"Tex-Mex Redbud - 45 gallon"},{"id":"1063","sku":"TMRB65","label":"Tex-Mex Redbud - 65Gallon"},{"id":"942","sku":"TEF5","label":"Texas Everbearing Fig - 5 gallon"},{"id":"950","sku":"TML1UP","label":"Texas Mountain Laurel (UNDER PRODUCTION) - 1 gallon"},{"id":"949","sku":"TML15UP","label":"Texas Mountain Laurel (UNDER PRODUCTION) - 15 gallon"},{"id":"954","sku":"TML5UP","label":"Texas Mountain Laurel (UNDER PRODUCTION) - 5 gallon"},{"id":"948","sku":"TML15","label":"Texas Mountain Laurel - 15 gallon"},{"id":"951","sku":"TML20","label":"Texas Mountain Laurel - 20 inch box"},{"id":"952","sku":"TML24","label":"Texas Mountain Laurel - 24 inch box"},{"id":"953","sku":"TML36","label":"Texas Mountain Laurel - 36 inch box"},{"id":"955","sku":"TML65","label":"Texas Mountain Laurel - 65 Gallon"},{"id":"72","sku":"TML45","label":"Texas Mountain Laurel, 45 gallon"},{"id":"970","sku":"TRO15UP","label":"Texas Red Oak (UNDER PRODUCTION) - 15 gallon"},{"id":"972","sku":"TRO30UP","label":"Texas Red Oak (UNDER PRODUCTION) - 30 gallon"},{"id":"969","sku":"TRO15","label":"Texas Red Oak - 15 gallon"},{"id":"971","sku":"TRO30","label":"Texas Red Oak - 30 Gallon"},{"id":"973","sku":"TRO5","label":"Texas Red Oak - 5 gallon"},{"id":"1017","sku":"TRO30M","label":"Texas Red Oak Multi , 30 Gallon"},{"id":"1016","sku":"TRO15M","label":"Texas Red Oak Multi, 15 Gallon"},{"id":"964","sku":"TRB15","label":"Texas Redbud - 15 gallon"},{"id":"965","sku":"TRB30","label":"Texas Redbud - 30 gallon"},{"id":"966","sku":"TRB45","label":"Texas Redbud - 45 gallon"},{"id":"1062","sku":"TRB65","label":"Texas Redbud - 65 Gallon"},{"id":"90","sku":"Texas Redbud S15","label":"Texas Redbud single trunk 15 gallon"},{"id":"943","sku":"ThC3","label":"Thornless Cactus - 3 Gallon"},{"id":"941","sku":"TCBCM30UP","label":"Thunderstruck Coral Boom Crape Myrtle (UNDER PRODUCTION) - 30 gallon"},{"id":"940","sku":"TCBCM15","label":"Thunderstruck Coral Boom Crape Myrtle - 15 gallon"},{"id":"1044","sku":"TCBCM30","label":"Thunderstruck Coral Boom Crape Myrtle - 30 gallon"},{"id":"968","sku":"TRCM30UP","label":"Thunderstruck Ruby Crape Myrtle (UNDER PRODUCTION) - 30 gallon"},{"id":"967","sku":"TRCM15","label":"Thunderstruck Ruby Crape Myrtle - 15 gallon"},{"id":"1045","sku":"TRCM30","label":"Thunderstruck Ruby Crape Myrtle - 30 gallon"},{"id":"961","sku":"TOCM3UP","label":"Tonto Crape Myrtle (UNDER PRODUCTION) - 3 gal"},{"id":"959","sku":"TOCM15","label":"Tonto Crape Myrtle - 15 Gallon"},{"id":"960","sku":"TOCM30","label":"Tonto Crape Myrtle - 30 gallon"},{"id":"962","sku":"TOCM5","label":"Tonto Crape Myrtle - 5 gal"},{"id":"963","sku":"TOCMST3UP","label":"Tonto Crape Myrtle ST (UNDER PRODUCTION) - 3 gal"},{"id":"1029","sku":"TCM15ST","label":"Tonto Crape Myrtle STD - 15 Gallon"},{"id":"974","sku":"TrRB15","label":"Traveller Redbud - 15 gallon"},{"id":"975","sku":"TrRB30","label":"Traveller Redbud - 30 gallon"},{"id":"1056","sku":"TrRB45","label":"Traveller Redbud - 45 Gallon"},{"id":"976","sku":"TrRB65","label":"Traveller Redbud - 65 gallon"},{"id":"1110","sku":"TU 3/5","label":"Tuscarora Crape Myrtle"},{"id":"937","sku":"TACM3UP","label":"Tuscarora Crape Myrtle (UNDER PRODUCTION) - 3 Gallon"},{"id":"935","sku":"TACM15","label":"Tuscarora Crape Myrtle - 15 gallon"},{"id":"936","sku":"TACM30","label":"Tuscarora Crape Myrtle - 30 gallon"},{"id":"938","sku":"TACM45","label":"Tuscarora Crape Myrtle - 45 Gallon"},{"id":"939","sku":"TACMST3UP","label":"Tuscarora Crape Myrtle ST (UNDER PRODUCTION) - 3 Gallon"},{"id":"977","sku":"TuskCM30","label":"Tuskegee Crape Myrtle - 30 Gallon"},{"id":"978","sku":"TuskCM45","label":"Tuskegee Crape Myrtle - 45 Gallon"},{"id":"979","sku":"TuskCM65","label":"Tuskegee Crape Myrtle - 65 Gallon"},{"id":"982","sku":"TWCM3UP","label":"Twilight Crape Myrtle (UNDER PRODUCTION) - 3 Gallon"},{"id":"980","sku":"TWCM15","label":"Twilight Crape Myrtle - 15 gallon"},{"id":"981","sku":"TWCM30","label":"Twilight Crape Myrtle - 30 gallon"},{"id":"983","sku":"TWCMST3UP","label":"Twilight Crape Myrtle ST (UNDER PRODUCTION) - 3 Gallon"},{"id":"1071","sku":"UR3","label":"Upright Rosemary - 3 gallon"},{"id":"985","sku":"VLRB3","label":"Vera Lynn Red Bougainvillea - 3 Gallon"},{"id":"984","sku":"VCM15","label":"Victor Crape Myrtle - 15 Gallon"},{"id":"986","sku":"VSC15","label":"Vitex (Shoal Creek) - 15 Gallon"},{"id":"1040","sku":"VSC3","label":"Vitex (Shoal Creek) - 3 Gallons"},{"id":"987","sku":"VSC30","label":"Vitex (Shoal Creek) - 30 Gallon"},{"id":"988","sku":"VSC45","label":"Vitex (Shoal Creek) - 45 Gallon"},{"id":"989","sku":"VSC5","label":"Vitex (Shoal Creek) - 5 gallon"},{"id":"990","sku":"WM15","label":"Wax Myrtle - 15 gallon"},{"id":"991","sku":"WM3","label":"Wax Myrtle - 3 gallon"},{"id":"992","sku":"WM30","label":"Wax Myrtle - 30 gallon"},{"id":"993","sku":"WM45","label":"Wax Myrtle - 45 gallon"},{"id":"994","sku":"WM65","label":"Wax Myrtle - 65 Gallon"},{"id":"995","sku":"WW15","label":"Weeping Willow - 15 gallon"},{"id":"97","sku":"WW30","label":"Weeping Willow - 30 gallon"},{"id":"98","sku":"WW45","label":"Weeping Willow - 45 gallon"},{"id":"99","sku":"WW65","label":"Weeping Willow - 65 gallon"},{"id":"996","sku":"WW95","label":"Weeping Willow, 95 Gallons"},{"id":"65","sku":"YH6/8","label":"Yaupon Holly 6 to 8 ft. tall, 45 gallon"},{"id":"67","sku":"YH95","label":"Yaupon Holly 95 gallon"},{"id":"997","sku":"ZCM1UP","label":"Zuni Crape Myrtle (UNDER PRODUCTION) - 1 gal"},{"id":"999","sku":"ZCM3UP","label":"Zuni Crape Myrtle (UNDER PRODUCTION) - 3 gal"},{"id":"1030","sku":"ZCM15","label":"Zuni Crape Myrtle - 15 Gallons"},{"id":"998","sku":"ZCM3","label":"Zuni Crape Myrtle - 3 gal"}];
+const PANELS = {"A":{"starts":"4:30 am \u00b7 4:15 pm \u00b7 9:00 pm","total":"244 min (4 hr 04) \u00b7 3 runs a day","run":[15,15,10,0,10,15,12,14,11,13,13,13,13,13,12,11,11,9,7,7,10,10],"desc":{"1":"Small pot perennial section \u2014 overhead sprays","2":"15 gallon area next to greenhouse","3":"Hospital, behind greenhouse","4":"Greenhouse A  \u2190 crossed out on the sheet, run time 0. Why?","5":"Greenhouse B","6":"Greenhouse C","7":"Vitex / LC Oaks 30 gal","8":"LC Oaks","9":"LC Oaks 45","16":"15g EH both \u00b7 30g C Oaks","17":"15g NRS \u00b7 AZC?","18":"15g EHT POHY WM BPJ","19":"15g LGM LQT BRJ CE BO LCO","20":"15g EHT LE MO RO DW LG NRS","22":"MOAK LG LELM DW SORK"}},"B":{"starts":"8:30 am \u00b7 1:15 pm","total":"113 min (1 hr 53) \u00b7 2 runs a day","run":[13,13,13,13,13,0,12,12,12,12,0,0,0,0,0,0,0,0,0,0,0,0],"desc":{"6":"Run time 0 \u2014 no valve, switched off, or broken?","10":"30g SR Oak \u00b7 MOaks","11":"Zones 11\u201322 all read 0. Do these valves exist?"}},"C":{"starts":"10:00 am \u00b7 8:00 pm","total":"sheet says 246 min \u2014 the column adds to 261. Which is right?","run":[10,9,9,9,9,9,9,9,9,9,9,9,9,9,9,10,15,20,20,20,20,20],"desc":{}},"D":{"starts":"12:30 am \u00b7 4:00 am \u00b7 2:30 pm \u00b7 6:00 pm","total":"sheet says 204 min \u2014 22 \u00d7 12 = 264. Are 5 zones not running?","run":[12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12],"desc":{}}};
+const KEY = 'lawns-zone-walk-v1';
+
+const STATUS = [['inuse','In use'],['none','No valve'],['off','Switched off'],
+                ['fault','Broken'],['unknown','Not sure']];
+const EMITTER = [['spaghetti','Spaghetti'],['bubbler','Bubbler'],['micro','Micro-spray'],
+                 ['overhead','Overhead spray'],['drip','Drip line'],['none','None / hand'],
+                 ['other','Something else']];
+const RATE = ['', '0.5 GPH','1 GPH','2 GPH','3 GPH','4 GPH','per foot','not sure'];
+
+let data = {};                       // "A7" -> {...}
+let panel = 'A', zone = 1;
+
+// ── storage ───────────────────────────────────────────────────
+function load(){ try{ data = JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){ data={}; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }
+                 catch(e){ document.getElementById('warn').textContent =
+                   'COULD NOT SAVE ON THIS DEVICE — export now, before you go any further.'; } }
+const key = () => panel + zone;
+function rec(){ return data[key()] || (data[key()] = {plants:[],status:'',emitter:'',rate:'',count:'',notes:''}); }
+function filled(k){ const r=data[k]; if(!r) return false;
+  return !!(r.status || r.emitter || r.notes || (r.plants||[]).length); }
+
+// ── render ────────────────────────────────────────────────────
+function renderPanels(){
+  document.getElementById('panels').innerHTML = Object.keys(PANELS).map(p=>{
+    const done = Array.from({length:22},(_,i)=>filled(p+(i+1))).filter(Boolean).length;
+    return `<button data-p="${p}" aria-pressed="${p===panel}">${p}<small>${done}/22</small></button>`;
+  }).join('');
+}
+function renderZones(){
+  document.getElementById('zones').innerHTML = Array.from({length:22},(_,i)=>{
+    const n=i+1, k=panel+n;
+    return `<button data-z="${n}" data-done="${filled(k)?1:0}"
+      aria-current="${n===zone}">${panel}${n}</button>`;
+  }).join('');
+  const P = PANELS[panel];
+  document.getElementById('panelmeta').innerHTML =
+    `<b>Panel ${panel}</b> — ${P.starts}<br>${P.total}`;
+}
+function renderDetail(){
+  const r = rec(), P = PANELS[panel], run = P.run[zone-1], seed = P.desc[zone];
+  document.getElementById('detail').innerHTML = `
+  <div class="card">
+    <div class="zhead"><div class="zid">${panel}${zone}</div>
+      <div class="zrun">${run===0?'runs 0 min':'runs '+run+' min'}</div></div>
+    ${seed?`<div class="seeded">From the panel sheet: ${seed}</div>`:''}
+
+    <label>Is this zone in use?</label>
+    <div class="chips status" id="st">${STATUS.map(([v,l])=>
+      `<button data-v="${v}" aria-pressed="${r.status===v}">${l}</button>`).join('')}</div>
+
+    <label>What's growing here</label>
+    <div id="plants"></div>
+    <button class="addbtn" id="addplant">+ Add a plant</button>
+    <p class="hint">Rough numbers are fine — the count walk gets the exact ones.</p>
+
+    <label>Emitters</label>
+    <div class="chips" id="em">${EMITTER.map(([v,l])=>
+      `<button data-v="${v}" aria-pressed="${r.emitter===v}">${l}</button>`).join('')}</div>
+    <div class="row2" style="margin-top:10px">
+      <select id="rate">${RATE.map(x=>
+        `<option value="${x}" ${r.rate===x?'selected':''}>${x||'Rate…'}</option>`).join('')}</select>
+      <input id="count" inputmode="numeric" placeholder="How many" value="${r.count||''}">
+    </div>
+
+    <label>Anything worth saying</label>
+    <textarea id="notes" placeholder="Leaks, dry spots, what it used to be…">${r.notes||''}</textarea>
+  </div>`;
+  renderPlants();
+  document.getElementById('st').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
+    r.status = r.status===b.dataset.v ? '' : b.dataset.v; save(); refresh(); };
+  document.getElementById('em').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
+    r.emitter = r.emitter===b.dataset.v ? '' : b.dataset.v; save(); refresh(); };
+  document.getElementById('rate').onchange = e=>{ r.rate=e.target.value; save(); };
+  document.getElementById('count').oninput = e=>{ r.count=e.target.value; save(); };
+  document.getElementById('notes').oninput = e=>{ r.notes=e.target.value; save(); updateGrid(); };
+  document.getElementById('addplant').onclick = ()=>{ r.plants.push({label:'',qty:''});
+    save(); renderPlants(); };
+}
+function renderPlants(){
+  const r = rec();
+  document.getElementById('plants').innerHTML = r.plants.map((p,i)=>`
+    <div class="plantrow">
+      <input class="pick" list="plantlist" data-i="${i}" placeholder="Start typing a name…"
+             value="${(p.label||'').replace(/"/g,'&quot;')}">
+      <input class="qty" data-i="${i}" inputmode="numeric" placeholder="approx"
+             value="${p.qty||''}">
+      <button class="del" data-i="${i}" title="remove">×</button>
+    </div>`).join('');
+  document.querySelectorAll('#plants .pick').forEach(el=>el.oninput = e=>{
+    r.plants[+e.target.dataset.i].label = e.target.value; save(); updateGrid(); });
+  document.querySelectorAll('#plants .qty').forEach(el=>el.oninput = e=>{
+    r.plants[+e.target.dataset.i].qty = e.target.value; save(); updateGrid(); });
+  document.querySelectorAll('#plants .del').forEach(el=>el.onclick = e=>{
+    r.plants.splice(+e.target.dataset.i,1); save(); renderPlants(); refresh(); });
+}
+function updateGrid(){
+  const rows=[];
+  for(const p of Object.keys(PANELS)) for(let n=1;n<=22;n++){
+    const k=p+n, r=data[k]; if(!r || !filled(k)) continue;
+    const st = r.status||'todo';
+    const lab = (STATUS.find(s=>s[0]===st)||['','—'])[1];
+    rows.push(`<tr data-done="1"><td class="z" data-k="${k}">${k}</td>
+      <td>${PANELS[p].run[n-1]}</td>
+      <td>${(r.plants||[]).filter(x=>x.label).map(x=>
+        x.label + (x.qty?` <span style="color:#6b7a63">· ${x.qty}</span>`:'')).join('<br>')||'—'}</td>
+      <td>${[ (EMITTER.find(e=>e[0]===r.emitter)||['',''])[1], r.rate, r.count&&('×'+r.count)]
+            .filter(Boolean).join(' · ')||'—'}</td>
+      <td><span class="tag t-${st}">${lab}</span></td>
+      <td>${(r.notes||'').replace(/</g,'&lt;')}</td></tr>`);
+  }
+  const b=document.getElementById('gridbody');
+  b.innerHTML = rows.join('') || `<tr><td colspan="6" style="color:#6b7a63">Nothing yet.</td></tr>`;
+  b.querySelectorAll('td.z').forEach(td=>td.onclick=()=>{
+    panel = td.dataset.k[0]; zone = +td.dataset.k.slice(1); refresh();
+    window.scrollTo({top:0,behavior:'smooth'}); });
+  const done = Object.keys(data).filter(filled).length;
+  document.getElementById('prog').textContent = `${done} of 88`;
+  document.getElementById('export').textContent = done ? `Export ${done}` : 'Export';
+}
+function refresh(){ renderPanels(); renderZones(); renderDetail(); updateGrid(); }
+
+// ── events ────────────────────────────────────────────────────
+document.getElementById('panels').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
+  panel=b.dataset.p; zone=1; refresh(); };
+document.getElementById('zones').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
+  zone=+b.dataset.z; refresh(); };
+document.getElementById('next').onclick = ()=>{ if(zone<22){zone++;}
+  else { const ps=Object.keys(PANELS); const i=ps.indexOf(panel);
+         if(i<ps.length-1){panel=ps[i+1];zone=1;} }
+  refresh(); window.scrollTo({top:0}); };
+document.getElementById('prev').onclick = ()=>{ if(zone>1){zone--;}
+  else { const ps=Object.keys(PANELS); const i=ps.indexOf(panel);
+         if(i>0){panel=ps[i-1];zone=22;} }
+  refresh(); window.scrollTo({top:0}); };
+
+document.getElementById('export').onclick = ()=>{
+  const out = {captured_at:new Date().toISOString(), tenant:'LAWNS', zones:[]};
+  for(const p of Object.keys(PANELS)) for(let n=1;n<=22;n++){
+    const k=p+n, r=data[k]; if(!r||!filled(k)) continue;
+    out.zones.push({zone:k, panel:p, zone_number:n,
+      run_minutes:PANELS[p].run[n-1],
+      status:r.status||null, emitter_type:r.emitter||null,
+      emitter_rate:r.rate||null, emitter_count:r.count||null,
+      notes:r.notes||null,
+      plants:(r.plants||[]).filter(x=>x.label).map(x=>{
+        const hit = PLANTS.find(pl=>pl.label===x.label);
+        return {label:x.label, qty_approx:x.qty||null,
+                item_id:hit?hit.id:null, sku:hit?hit.sku:null,
+                matched:!!hit};
+      })});
+  }
+  const blob = new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`lawns-zone-walk-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+document.getElementById('plantlist').innerHTML =
+  PLANTS.map(p=>`<option value="${p.label.replace(/"/g,'&quot;')}">${p.sku}</option>`).join('');
+
+load(); refresh();
+</script>
+</body>
+</html>

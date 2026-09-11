@@ -2002,3 +2002,15 @@ Out of scope for #297 by David's instruction: the task object, the meter reading
 [[R-141]] rules the interval belongs on the task. Measured live 2026-09-11: all three schedules have a **daily** task, so the derivation gives **1** on each, and the stored values are **30 · 1 · 30**. Two were typed over in the preview, and **nothing records that a stored cadence is an override rather than a derivation.** LAWNS's 30 matches none of its eight tasks.
 
 And a contradiction on one card: `last_service_at` is NULL on all three schedules and `business_service_log` is empty, so `pmiStatusFrom` returns `NONE` and the chip reads **NO SCHEDULE** — directly beside *"8 tasks scheduled."* A schedule exists; what is missing is a first logged service. The operations calendar's PMI source already says so honestly (`operationsCalendar.ts`, state `no-data`). §6 r18's class.
+
+---
+
+## #266 — 🟡 THE ZONE WALK EXPORTS FOR A DESTINATION THAT DOES NOT EXIST (NEW 2026-09-11)
+
+`packages/cultivar-os/public/tools/zone-walk.html` (ledger #298) says its JSON is *"for import into business_inventory.zone and the irrigation zone records."* **Measured live 2026-09-11 as `supabase_read_only_user`: neither exists.** `business_inventory` has no `zone` column (control: `size` and `attributes` returned); no public table matches `%zone%` or `%irrigat%`; the only zone-shaped column is `cultivar_plants.location_zone`, on a table holding **0 rows**. No importer exists either.
+
+So a walker can capture all 88 zones and the result has no home. The work is not lost — the exported file is the record — but a header naming a column that is not there is [[R-26]]'s shape, and the next session asked to *"import the zone walk"* will go looking for it.
+
+- ⚠️ **The shape is a decision, not a column.** A lot (`business_inventory` row) can sit in more than one zone and a zone holds many lots, so one `zone` text column on the lot records one of them. An irrigation zone also carries facts of its own — panel, run minutes, emitters, whether the valve exists — that belong to the zone, not to what grows in it.
+- ⚠️ **Do not reach for `cultivar_plants.location_zone`.** It is a per-plant place name on an empty table; a valve id does not belong there.
+- **Trigger:** before anyone imports an export. David's call on the shape.
