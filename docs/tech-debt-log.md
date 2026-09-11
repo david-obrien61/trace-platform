@@ -1940,3 +1940,15 @@ Measured 2026-09-11: **17 functions call `assert_movement_actor`; 9 contain no p
 ## #259 — 🟡 NOBODY HAS TRACED WHETHER THE OFFLINE QUEUE HANDLES A CONFLICT ON A STAGED INSERT (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
 
 The offline queue's `rpc` op-kind queues an **apply**. Blind capture (#67) will queue a **staged insert** instead, and nobody has traced whether conflict handling behaves the same for it. **Counting is the one flow that genuinely happens in a dead zone**, so this is the path most likely to meet a conflict and least likely to be watched. Owed before blind capture ships, not after.
+
+---
+
+## #260 — 🟡 RULINGS.md HAS ONE NUMBER USED FOR TWO RULINGS, AND TWO ROWS THAT BREAK THE TABLE (NEW 2026-09-11)
+
+Found while filing R-122…R-138, and **present in the committed file before this session touched it** (checked against `git show HEAD:docs/RULINGS.md`):
+
+- 🔴 **R-101 is two different rulings.** 2026-09-07: *"THE COLLISIONS ARE HER FIRST EDITS, SO THEY LIVE ON THE GRID"*. 2026-09-06: *"DO NOT RUN THE ONBOARDING WIZARD AGAINST LAWNS. EVER, IN ITS CURRENT SHAPE."* Every citation of R-101 elsewhere is now ambiguous. The drafted numbering rule (RULINGS OWED, *"who owns an id"*, clause 4) says **the later claim renumbers** — but renumbering without first reading every citation would silently repoint the ones that meant the earlier ruling. **Not renumbered here, deliberately.**
+- 🟡 **R-26 appears twice only because its row absorbed later "instance" notes** — the 2026-08-29 row opens with *"INSTANCE 14…"* and carries R-26's own text part-way through. One ruling, filed in a way that reads as two.
+- 🟡 **Two dated rows have the wrong number of columns** (R-64 on 2026-09-02, and the 2026-08-23 *"READ HONESTY IS A TYPE"* row), from a literal `|` inside a cell. A markdown renderer splits them into extra columns.
+
+**Nothing checks RULINGS.md's structure.** `verify-id-citations.mjs` checks tech-debt ids only, so a duplicate `R-` number passes every gate — which is how R-101 happened. The backlog's proposed Clause B (every cited `R-\d+` has exactly one row) would catch both the dangling and the duplicate case.
