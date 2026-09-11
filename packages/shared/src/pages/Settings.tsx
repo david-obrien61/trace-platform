@@ -12,6 +12,14 @@ import { transportBindingError, defaultRequiresAddress, categoryScopedFields } f
 // D-40: the tax RATE is per-tenant config data (config.taxRate), not the businesses column, and
 // not a hardcoded default. resolveTaxRate reads it; mergePricingConfig writes it clobber-safe.
 import { readPricingConfig, mergePricingConfig, resolveTaxRate, TX_COMPTROLLER_RATE_LOCATOR_URL } from '../business-logic';
+// The Google review link's ONE store (the Follow-Up module's config — not a businesses column) and
+// the pure rules this Save rests on: whether an edit is a write at all, and how a multi-table Save
+// reports itself. Pure so they can be asserted; a branch inside this .tsx cannot be (#134).
+import { setBusinessModuleState, BUSINESS_MODULE_COLUMNS, type BusinessModuleRow } from '../business-logic/moduleState';
+import {
+  REVIEW_LINK_MODULE_KEY, readReviewLink, reviewLinkEdit, isUsableReviewUrl, saveReport,
+  REVIEW_LINK_NOT_A_URL, type SavePart,
+} from '../business-logic/reviewLink';
 // The FIX 5 required-field pattern — ONE home, every form inherits it (STD-011, §6 r8).
 import { errBorder, FieldError } from '../components/FieldError';
 // A8/R-12 — the ONE place that decides whether a service write failed and what the owner is
@@ -229,12 +237,18 @@ interface SettingsProps {
   // Footer link to the full settings page (the leftover sections — Services / vertical). Shown
   // ONLY on a section-isolated view, so nothing on the full page is orphaned.
   onMoreSettings?: () => void;
+  // The business's Google "ask for reviews" link, as a field INSIDE Business Profile (2026-09-11,
+  // ledger #300). OPT-IN, because it is read from `business_modules` — a host on the other Supabase
+  // project (Ignition) has no such table, and must not issue the read. Default false → unchanged for
+  // every host that does not ask for it.
+  showReviewLink?: boolean;
 }
 
 export function Settings({
   onBack, verticalSection, accountingConnectUrl,
   onConnectAccounting, accountingConnecting, accountingError,
   section, onMoreSettings, accountingHasOwnDestination = false,
+  showReviewLink = false,
 }: SettingsProps) {
   // `full` = the unfiltered page (all sections + vertical). A section filter renders just one card.
   const full = !section;
@@ -281,6 +295,40 @@ export function Settings({
       setLoadedTaxRate(asText);
     })();
   }, [businessId]);
+
+  // ── The Google review link (opt-in: showReviewLink) ─────────────────────────
+  // `loadedReviewLink` is the baseline Save compares against, exactly as `loadedTaxRate` is — and
+  // `null` means NOT LOADED, which is not the same as "no link": `reviewLinkEdit` refuses to clear a
+  // link from a blank field that never received the stored value. `''` = loaded, and none is set.
+  const [reviewLink, setReviewLink]                   = useState('');
+  const [loadedReviewLink, setLoadedReviewLink]       = useState<string | null>(null);
+  const [reviewLinkReadError, setReviewLinkReadError] = useState<string | null>(null);
+  // Whether the Follow-Up module is ON. The hint under the field is a claim (§6 r18), and it must say
+  // plainly when a saved link will not be shown to anyone yet.
+  const [followUpEnabled, setFollowUpEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!showReviewLink || !businessId) return;
+    void (async () => {
+      const { data, error: readErr } = await supabase
+        .from('business_modules')
+        .select(BUSINESS_MODULE_COLUMNS)
+        .eq('business_id', businessId)
+        .eq('module_key', REVIEW_LINK_MODULE_KEY)
+        .maybeSingle();
+      if (readErr) {
+        setReviewLinkReadError(readErr.message);
+        console.log('[TRACE:REVIEWLINK] read FAILED — Save will leave the link untouched', { businessId, error: readErr.message });
+        return;
+      }
+      const row  = (data ?? null) as BusinessModuleRow | null;
+      const link = readReviewLink(row?.config ?? null) ?? '';
+      setReviewLink(link);
+      setLoadedReviewLink(link);
+      setFollowUpEnabled(!!row?.enabled);
+      console.log('[TRACE:REVIEWLINK] loaded', { businessId, linkSet: link !== '', followUpEnabled: !!row?.enabled, row: row ? 'present' : 'NO ROW' });
+    })();
+  }, [showReviewLink, businessId]);
 
   async function saveProfile() {
     if (!businessId) return;
@@ -330,6 +378,44 @@ export function Settings({
     const cfgErr = taxChanged
       ? (await mergePricingConfig(supabase, businessId, { taxRate: rateNum })).error
       : null;
+    // 🔴 THE REVIEW LINK — a THIRD table behind the same button (`business_modules`, through the narrow
+    // module-state RPC, which checks `settings:update` SERVER-SIDE — the same string this Save's other
+    // two writes need). Held to the same two rules: WRITTEN ONLY WHEN IT CHANGED, and REPORTED AS ITS
+    // OWN LINE. `reviewLinkEdit` decides; a refusal (not a web address, or the stored link never
+    // loaded) writes nothing and says why. `null` = this host does not show the field.
+    const linkEdit = showReviewLink ? reviewLinkEdit(loadedReviewLink, reviewLink) : null;
+    let linkPart: SavePart | null = null;
+    if (linkEdit?.kind === 'refused') {
+      linkPart = { label: 'the review link', outcome: 'refused', reason: linkEdit.reason };
+    } else if (linkEdit?.kind === 'set' || linkEdit?.kind === 'clear') {
+      const url = linkEdit.kind === 'set' ? linkEdit.url : null;
+      const res = await setBusinessModuleState(supabase, businessId, REVIEW_LINK_MODULE_KEY, {
+        configured: url !== null,
+        config: { review_url: url },
+      }, prof?.user?.id ?? null);
+      if (res.error || !res.applied) {
+        linkPart = { label: 'the review link', outcome: 'refused', reason: res.reason ?? res.error?.message ?? null };
+      } else {
+        // A8 / R-12 — `applied` says the server ACCEPTED the call, not that the stored value is now the
+        // one asked for. Read it back: the proof is the value, never the acknowledgement.
+        const { data: back, error: backErr } = await supabase
+          .from('business_modules')
+          .select(BUSINESS_MODULE_COLUMNS)
+          .eq('business_id', businessId)
+          .eq('module_key', REVIEW_LINK_MODULE_KEY)
+          .maybeSingle();
+        const stored = readReviewLink((back as BusinessModuleRow | null)?.config ?? null);
+        linkPart = !backErr && stored === url
+          ? { label: 'the review link', outcome: 'written' }
+          : { label: 'the review link', outcome: 'refused',
+              reason: backErr
+                ? 'it could not be read back to confirm (' + backErr.message + ')'
+                : 'the server accepted it, but the stored link reads back differently' };
+      }
+    } else if (linkEdit) {
+      linkPart = { label: 'the review link', outcome: 'unchanged' };
+    }
+
     console.log('[TRACE:TAX] business profile save — per-table outcome', {
       businessId,
       profile: error ? 'REFUSED: ' + error.message : 'written',
@@ -337,25 +423,37 @@ export function Settings({
         ? (cfgErr ? 'REFUSED: ' + cfgErr.message : 'written (' + String(rateNum) + ')')
         : 'not written — unchanged (' + String(loadedTaxRate) + ')',
       source: 'config.taxRate',
+      // [TRACE:REVIEWLINK] rides the same per-table line, so one Save is one line to read.
+      reviewLink: !linkEdit ? 'not on this host'
+        : linkPart?.outcome === 'written' ? 'written (' + linkEdit.kind + ')'
+        : linkPart?.outcome === 'refused' ? 'REFUSED: ' + (linkPart.reason ?? 'no reason given')
+        : 'not written — unchanged',
     });
 
     setSaving(false);
-    // PER TABLE, NEVER ONE VERDICT FOR TWO WRITES. Each half reports its own outcome, and a
-    // partial save SAYS which half landed — because it did land, and it cannot be rolled back.
-    if (error && cfgErr) {
-      setSaveMsg('Error: nothing was saved — ' + error.message);
-    } else if (error) {
-      setSaveMsg('Error: your business details were not saved (' + error.message +
-                 '). The tax rate was saved.');
-    } else if (cfgErr) {
-      setSaveMsg('Saved your business details. The TAX RATE was not saved — ' + cfgErr.message);
-      reload();
-    } else {
-      setSaveMsg('Saved');
-      if (taxChanged) setLoadedTaxRate(raw);
-      reload();
-      setTimeout(() => setSaveMsg(''), 2000);
+    // PER TABLE, NEVER ONE VERDICT FOR SEVERAL WRITES — and an UNCHANGED part is never called saved.
+    // Both rules live in `saveReport` (business-logic/reviewLink.ts), where a test can hold them. The
+    // two-table branch this replaced told an owner "The tax rate was saved" when the rate had not been
+    // written at all, because it had not changed.
+    const parts: SavePart[] = [
+      error
+        ? { label: 'your business details', outcome: 'refused', reason: error.message }
+        : { label: 'your business details', outcome: 'written' },
+      !taxChanged
+        ? { label: 'the tax rate', outcome: 'unchanged' }
+        : cfgErr
+          ? { label: 'the tax rate', outcome: 'refused', reason: cfgErr.message }
+          : { label: 'the tax rate', outcome: 'written' },
+      ...(linkPart ? [linkPart] : []),
+    ];
+    const report = saveReport(parts);
+    setSaveMsg(report);
+    if (!error) reload();
+    if (taxChanged && !cfgErr) setLoadedTaxRate(raw);
+    if (linkPart?.outcome === 'written' && (linkEdit?.kind === 'set' || linkEdit?.kind === 'clear')) {
+      setLoadedReviewLink(linkEdit.kind === 'set' ? linkEdit.url : '');
     }
+    if (report === 'Saved') setTimeout(() => setSaveMsg(''), 2000);
   }
 
   // ── Service offerings ──────────────────────────────────────────────────────
@@ -731,6 +829,33 @@ export function Settings({
               Look it up on the Texas Comptroller rate locator
             </a>. Leave blank if you don't charge sales tax — invoices will show "Tax: not identified" until you set it.
           </p>
+          {showReviewLink && (
+            <>
+              <Field
+                label="Google review link"
+                value={reviewLink}
+                onChange={setReviewLink}
+                placeholder="https://g.page/r/…/review"
+                type="url"
+              />
+              {/* §6 r18 — this hint is a CLAIM and must hold in every state: loading, unreadable, not a
+                  web address, Follow-Up off, Follow-Up on. A saved link no crew will see says so. */}
+              <p style={{
+                fontSize: '0.75rem', margin: '-4px 0 4px',
+                color: reviewLinkReadError || (reviewLink.trim() !== '' && !isUsableReviewUrl(reviewLink)) ? RED : GRAY,
+              }}>
+                {reviewLinkReadError
+                  ? `Your review link couldn’t be read (${reviewLinkReadError}), so saving leaves it as it was.`
+                  : loadedReviewLink === null
+                    ? 'Loading your review link…'
+                    : reviewLink.trim() !== '' && !isUsableReviewUrl(reviewLink)
+                      ? `This link won’t be saved: ${REVIEW_LINK_NOT_A_URL}.`
+                      : followUpEnabled
+                        ? 'From your Google Business Profile → Ask for reviews. After a crew marks a stop done, they can show the customer this link as a code. Nothing is shown while it is blank.'
+                        : 'From your Google Business Profile → Ask for reviews. The Follow-Up module isn’t on for this business, so nothing is shown to a crew or a customer yet — the link is kept for when it is.'}
+              </p>
+            </>
+          )}
           <button
             onClick={saveProfile} disabled={saving}
             style={{

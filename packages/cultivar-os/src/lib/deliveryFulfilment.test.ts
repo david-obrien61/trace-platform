@@ -25,11 +25,15 @@ import {
   DELIVERY_STATUSES, DELIVERY_STATUS_FULFILLED, DELIVERY_STATUS_SCHEDULED,
   deliveryStatusMeta, isDeliveryFulfilled,
   fulfilmentPatch, startPatch, stopMinutes, crewStopModel, openOrderNotice,
-  readReviewAskConfig, isUsableReviewUrl, reviewCopyProblems, reviewAskDecision,
+  readReviewAskConfig, reviewCopyProblems, reviewAskDecision,
   reviewAskPatch, askRateFor,
   DEFAULT_REVIEW_GUIDANCE, REVIEW_ASK_WINDOW_DAYS, REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED,
+  REVIEW_ASK_LATE_GRACE_DAYS,
   type ReviewAskInput,
 } from './deliveryFulfilment';
+// Moved to shared 2026-09-11 (#300) — Business Profile writes against the same function.
+import { isUsableReviewUrl } from '@trace/shared/business-logic/reviewLink';
+import { ymd } from './dashboardWindows';
 import { ORDER_STATUSES } from './orderStatus';
 
 let passed = 0, failed = 0;
@@ -206,6 +210,9 @@ const base: ReviewAskInput = {
   businessName: 'LAWNS Tree Farm',
   status: 'fulfilled',
   customerId: 'cust-1',
+  // Today, in the runner's OWN zone — the door guard compares LOCAL calendar dates, so a fixture typed
+  // as a literal would pass in Texas and fail east of UTC+7.
+  deliveryDate: ymd(NOW),
   reviewAskedAt: null,
   customerLastAskedAt: null,
   now: NOW,
@@ -250,6 +257,25 @@ const base: ReviewAskInput = {
   const custom = reviewAskDecision({ ...base, config: { review_url: base.config!.review_url, review_guidance: 'A review means a lot to a family farm.' } });
   ok(custom.offer?.lines[1] === 'A review means a lot to a family farm.',
     'E16: the per-business line is used — a pantry line is not a nursery line');
+
+  // 🔴 E17–E23 — THE DOOR, NOT THE PAPERWORK (#300). The acceptance clause is "nothing fires on any stop
+  // dated before 2026-08-29"; this guard makes that true BY CONSTRUCTION rather than by trusting every
+  // importer to write `fulfilled` (R-37's import is not built). Both sides of the boundary, LOCAL dates.
+  const dayOffset = (n: number) => ymd(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + n));
+  ok(reviewAskDecision({ ...base, deliveryDate: dayOffset(-REVIEW_ASK_LATE_GRACE_DAYS) }).offer !== null,
+    'E17: a stop finished after midnight (its own date is yesterday) is still at the door');
+  ok(reviewAskDecision({ ...base, deliveryDate: dayOffset(-REVIEW_ASK_LATE_GRACE_DAYS - 1) }).suppressedBy === 'not_at_the_door',
+    '🔴 E18 (negative — the other side of the boundary): one day further back is a desk catching up, and nothing is asked');
+  ok(reviewAskDecision({ ...base, now: T('2026-09-11T17:00:00.000Z'), deliveryDate: '2026-08-29' }).offer === null,
+    '🔴 E19 (negative): Saturday 2026-08-29, marked done on 2026-09-11 — nothing fires on history');
+  ok(reviewAskDecision({ ...base, deliveryDate: '2025-03-14' }).suppressedBy === 'not_at_the_door',
+    '🔴 E20 (negative): a March 2025 stop still reading scheduled cannot prompt, whatever wrote the row');
+  ok(reviewAskDecision({ ...base, deliveryDate: dayOffset(5) }).offer !== null,
+    'E21: a job done EARLY (dated ahead) was still done at the door');
+  ok(reviewAskDecision({ ...base, deliveryDate: null }).suppressedBy === 'not_at_the_door',
+    'E22 (negative): an undated stop cannot be known to be today, so it does not ask');
+  ok(reviewAskDecision({ ...base, deliveryDate: 'soon' }).offer === null,
+    'E23 (negative): a malformed date is not a date');
 }
 
 // ══ §F CONFIG READING ══════════════════════════════════════════════════════════

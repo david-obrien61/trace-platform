@@ -6,7 +6,8 @@ import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { generateQR } from '@trace/shared/qr/generate';
 import { BUSINESS_MODULE_COLUMNS, setBusinessModuleState, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
-import { readReviewAskConfig, reviewCopyProblems, isUsableReviewUrl, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
+import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink';
+import { readReviewAskConfig, reviewCopyProblems, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
 import {
@@ -144,9 +145,16 @@ function NurserySection({ businessId }: { businessId: string }) {
 
 // ── Review ask (follow-up module) ──────────────────────────────────────────────
 //
-// The ENTIRE new input this capability needs: the business's own Google review link, copied once
-// from their Google Business Profile. Stored in `business_modules.config` for `followup_engine`
-// — NOT a new column — which also makes the module's `configured` flag mean something real.
+// 🔴 THE REVIEW LINK IS NOT ENTERED HERE ANY MORE. It is on BUSINESS PROFILE (2026-09-11, ledger
+// #300): a fact about the business, set once, and an owner looks for it beside the name and the phone.
+// David had LAWNS's link in his hand and could not find a field for it, because it sat on this card,
+// four cards down /settings/all, under a module name. It is STORED where it always was
+// (`business_modules.config.review_url`), the shared Business Profile writes it, and the crew's screen
+// reads it. A second input for the same value here would be two editors of one field — and the one
+// nobody looks at is the one that drifts.
+//
+// This card keeps what is genuinely about the ASK: whether the module is on, and the line the
+// customer reads.
 //
 // 🔴 THE GUIDANCE LINE IS VALIDATED, NOT TRUSTED, and the refusal is the feature. Google's Rating
 // Manipulation policy prohibits incentives, sentiment screening, and requesting that specific
@@ -154,7 +162,7 @@ function NurserySection({ businessId }: { businessId: string }) {
 // crew by name and get 10% off" is not being difficult — it is the obvious thing to write. The
 // field says no, in words, with the reason, BEFORE it is saved.
 function ReviewAskSection({ businessId }: { businessId: string }) {
-  const [url, setUrl]           = useState('');
+  const navigate = useNavigate();
   const [guidance, setGuidance] = useState('');
   const [enabled, setEnabled]   = useState<boolean | null>(null);
   const [saving, setSaving]     = useState(false);
@@ -165,28 +173,26 @@ function ReviewAskSection({ businessId }: { businessId: string }) {
       .from('business_modules')
       .select(BUSINESS_MODULE_COLUMNS)
       .eq('business_id', businessId)
-      .eq('module_key', 'followup_engine')
+      .eq('module_key', REVIEW_LINK_MODULE_KEY)
       .maybeSingle()
       .then(({ data }) => {
         const row = (data ?? null) as BusinessModuleRow | null;
         setEnabled(!!row?.enabled);
-        const cfg = readReviewAskConfig(row?.config ?? null);
-        setUrl(cfg.reviewUrl ?? '');
-        setGuidance(cfg.guidance ?? '');
+        setGuidance(readReviewAskConfig(row?.config ?? null).guidance ?? '');
       });
   }, [businessId]);
 
   const problems = reviewCopyProblems(guidance);
-  const urlBad   = url.trim().length > 0 && !isUsableReviewUrl(url);
 
   async function save() {
-    if (problems.length > 0 || urlBad) return;   // refused, not warned
+    if (problems.length > 0) return;   // refused, not warned
     setSaving(true); setSaveMsg('');
     // Same actor resolution the cost-to-produce writer uses — the RPC records who changed it.
     const actor = (await supabase.auth.getUser()).data.user?.id ?? null;
-    const res = await setBusinessModuleState(supabase, businessId, 'followup_engine', {
-      configured: !!url.trim(),
-      config: { review_url: url.trim() || null, review_guidance: guidance.trim() || null },
+    // ONLY the guidance key. The config patch MERGES, so the link Business Profile wrote is untouched;
+    // and `configured` is left alone — it now means "a link is set", which this card no longer decides.
+    const res = await setBusinessModuleState(supabase, businessId, REVIEW_LINK_MODULE_KEY, {
+      config: { review_guidance: guidance.trim() || null },
     }, actor);
     setSaveMsg(res.applied && !res.error ? 'Saved' : 'Error: ' + (res.reason ?? res.error?.message ?? 'not saved'));
     if (res.applied && !res.error) setTimeout(() => setSaveMsg(''), 2000);
@@ -201,33 +207,32 @@ function ReviewAskSection({ businessId }: { businessId: string }) {
       }}>
         Asking for reviews
       </p>
-      {/* The header is a CLAIM (§6 r18): it must hold for every row beneath it, including the
-          case where the business does not have the module at all. */}
+      {/* The header is a CLAIM (§6 r18): it must hold for every row beneath it — including the case
+          where the business does not have the module at all, AND the case where no link is set yet,
+          which is why "nothing is shown while that link is blank" is part of the sentence. */}
       <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: 14 }}>
         {enabled === null ? 'Loading…'
           : enabled
-            ? 'After a crew marks a stop done, they can show the customer a code that opens your review page.'
+            ? 'After a crew marks a stop done, they can show the customer a code that opens your Google review link. Nothing is shown while that link is blank.'
             : 'Your plan doesn’t include the Follow-Up module, so nothing is shown to a crew or a customer. These settings are saved for when it’s turned on.'}
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
-        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Your Google review link
-        </label>
-        <input
-          type="url"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          placeholder="https://g.page/r/…/review"
-          style={inputStyle}
-          onFocus={e => (e.currentTarget.style.borderColor = GREEN)}
-          onBlur={e => (e.currentTarget.style.borderColor = '#d1d5db')}
-        />
-        <p style={{ fontSize: '0.75rem', color: urlBad ? RED : '#9ca3af', marginTop: 2 }}>
-          {urlBad
-            ? 'That doesn’t look like a web address — it should start with https://'
-            : 'From your Google Business Profile → Ask for reviews. Nothing is shown until this is set.'}
+      {/* Where the link went — a control, not a sentence the owner has to act on by hand. The value is
+          deliberately NOT echoed here: on /settings/all the Business Profile card sits on this same
+          page, and a copy read once at load goes stale the moment it is edited above. */}
+      <div style={{ marginBottom: 14 }}>
+        <p style={{ margin: '0 0 6px', fontSize: '0.8125rem', color: DARK }}>
+          Your Google review link is entered on <strong>Business Profile</strong>, beside your name and phone.
         </p>
+        <button
+          onClick={() => navigate('/settings/business')}
+          style={{
+            width: '100%', minHeight: 48, padding: '12px 16px', background: 'transparent', color: GREEN,
+            border: `1.5px solid ${GREEN}`, borderRadius: 10, fontWeight: 700, fontSize: '0.9375rem', cursor: 'pointer',
+          }}
+        >
+          Open Business Profile →
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
@@ -260,13 +265,13 @@ function ReviewAskSection({ businessId }: { businessId: string }) {
 
       <button
         onClick={() => { void save(); }}
-        disabled={saving || problems.length > 0 || urlBad}
+        disabled={saving || problems.length > 0}
         style={{
           width: '100%', padding: '13px 20px',
-          background: saving || problems.length > 0 || urlBad ? '#e5e7eb' : GREEN,
-          color: saving || problems.length > 0 || urlBad ? GRAY : '#fff',
+          background: saving || problems.length > 0 ? '#e5e7eb' : GREEN,
+          color: saving || problems.length > 0 ? GRAY : '#fff',
           fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none',
-          cursor: saving || problems.length > 0 || urlBad ? 'default' : 'pointer',
+          cursor: saving || problems.length > 0 ? 'default' : 'pointer',
         }}
       >
         {saving ? 'Saving…' : 'Save review settings'}
@@ -804,6 +809,9 @@ export function Settings() {
       // Accounting has its own direct destination (/settings/accounting) + the Dashboard prompt,
       // so the full page omits the redundant third copy (Item 4). Same useQboConnect hook drives all.
       accountingHasOwnDestination
+      // The Google review link is a Business Profile field (#300). The crew's review ask reads it; the
+      // "Asking for reviews" card on /settings/all keeps only the customer's line.
+      showReviewLink
       verticalSection={verticalContent}
     />
   );

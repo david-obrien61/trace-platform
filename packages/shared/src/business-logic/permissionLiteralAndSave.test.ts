@@ -147,12 +147,17 @@ ok(/taxChanged\s*\n?\s*\?\s*\(await mergePricingConfig/.test(settings.replace(/\
    || /taxChanged[\s\S]{0,120}mergePricingConfig/.test(settings),
    'E3 mergePricingConfig is called ONLY when the rate changed');
 ok(/not written — unchanged/.test(settings), 'E4 the trace states the skip rather than going quiet');
-// PER-TABLE REPORTING — the "0 customers created" class.
-ok(/error && cfgErr/.test(settings), 'E5 both-failed is its own branch');
-ok(/The TAX RATE was not saved/.test(settings),
-   'E6 a partial save names WHICH half failed instead of one verdict for two writes');
-ok(/your business details were not saved/.test(settings),
-   'E7 the mirror case is also named');
+// PER-TABLE REPORTING — the "0 customers created" class. RE-AIMED 2026-09-11 (#300): the review link
+// made this a THREE-table Save, and the message branches moved into the pure `saveReport`, where the
+// rules are asserted with real outcomes (reviewLink.test.ts §D). Here the probes prove the Save
+// REACHES them. The old E6/E7 matched two literal sentences — one of which told an owner "The tax rate
+// was saved" when an unchanged rate had not been written.
+ok(/saveReport\(parts\)/.test(settings), 'E5 the Save composes its message through saveReport, not inline branches');
+ok(/label: 'your business details', outcome: 'refused'/.test(settings)
+   && /label: 'the tax rate', outcome: 'refused'/.test(settings),
+   'E6 each table reports its OWN refusal instead of one verdict for several writes');
+ok(/!taxChanged\s*\?\s*\{ label: 'the tax rate', outcome: 'unchanged' \}/.test(settings),
+   'E7 an unchanged tax rate is reported UNCHANGED — never as saved');
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // §F — THE ATTACH RULE GOVERNS THE DISPLAY (B.2)

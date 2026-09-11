@@ -2014,3 +2014,17 @@ So a walker can capture all 88 zones and the result has no home. The work is not
 - ⚠️ **The shape is a decision, not a column.** A lot (`business_inventory` row) can sit in more than one zone and a zone holds many lots, so one `zone` text column on the lot records one of them. An irrigation zone also carries facts of its own — panel, run minutes, emitters, whether the valve exists — that belong to the zone, not to what grows in it.
 - ⚠️ **Do not reach for `cultivar_plants.location_zone`.** It is a per-plant place name on an empty table; a valve id does not belong there.
 - **Trigger:** before anyone imports an export. David's call on the shape.
+
+---
+
+## #270 — 🔴 THE REVIEW ASK SHIPPED 2026-08-31 AND COULD NOT RUN ON ANY TENANT — ITS MODULE HAS NO WAY TO BE TURNED ON (NEW 2026-09-11)
+
+The ask (ledger #247) hangs off `followup_engine`: `reviewAskDecision` returns `module_off` unless that row is `enabled`, and every tenant was seeded `enabled:false`. **The only screen that enables a module is `/subscription`, and it cannot enable this one:** `Subscription.tsx:183-198` files any priced module whose tile is not `status:'live'` under **COMING**, which has no Turn on button, and `tileRegistry.ts:261` declares the Follow-Up tile `status:'planned'`. So the fulfilled tap, the prompt, the on-device QR and the ask record were all built and wired, and nobody could reach any of them through the product.
+
+🔴 **And a test card said otherwise.** `delivery-fulfilment-full-surface-test.md` CARD 6 read *"Do CARD 8 first (turn the tile on, save a review link)"* — a step naming a control that does not exist. Nobody ran it, so nobody found out: [[R-26]]'s shape, a written instruction never checked against the product. The link half was a second barrier of the same kind: the field existed, four cards down `/settings/all`, and David — holding LAWNS's link — could not find it.
+
+**The link half is fixed by ledger #300** (the field is on Business Profile). **The other half is a decision, not a code change, and it is David's:**
+- **(a) The catalog offer** — make the tile `live` so `/subscription` shows Turn on, which starts the 30-day clock the catalog declares ($19/mo). ⚠️ A `live` tile needs a destination to open; this one has none.
+- **(b) By hand, for one tenant, no clock** — one SQL statement David runs (`delivery-fulfilment` board CARD 16 does it for Test Dave's). For a PAYING tenant this contradicts ruling 2026-08-02 (8): *enabling and trialling are one act.*
+- **(c) Make the ask core** — the story says it is deliberately a tile; this reverses that.
+- **Trigger:** before the ask is expected to fire on LAWNS. Until then a saved link is shown to nobody, and the Business Profile hint says so in words.

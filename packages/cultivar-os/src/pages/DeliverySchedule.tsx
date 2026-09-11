@@ -38,6 +38,7 @@ import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted, WithheldData, requirementText } from '@trace/shared/components/SurfaceState';
 import { parseYmd } from '../lib/operationsCalendar';
 import { BUSINESS_MODULE_COLUMNS, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
+import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink';
 import {
   crewStopModel, fulfilmentPatch, startPatch, reviewAskDecision, reviewAskPatch,
   REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED, DELIVERY_STATUS_FULFILLED, openOrderNotice,
@@ -251,7 +252,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
         .from('business_modules')
         .select(BUSINESS_MODULE_COLUMNS)
         .eq('business_id', businessId)
-        .eq('module_key', 'followup_engine')
+        .eq('module_key', REVIEW_LINK_MODULE_KEY)
         .maybeSingle();
       setFollowUp((mod ?? null) as BusinessModuleRow | null);
       const { data: biz } = await supabase
@@ -313,6 +314,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
         businessName,
         status:           DELIVERY_STATUS_FULFILLED,   // we just wrote it, in the update above
         customerId:       d.customer_id,
+        deliveryDate:     d.delivery_date,   // the ask is for the door, not for catching up paperwork
         reviewAskedAt:    d.review_asked_at,
         customerLastAskedAt: lastAsked,
         now,

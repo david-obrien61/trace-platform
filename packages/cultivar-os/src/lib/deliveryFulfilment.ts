@@ -14,14 +14,16 @@
 //               consumer must not need this reshaped. §6 r8.
 //
 // DEPENDENCIES: `./inventoryStates` (holdsCommitment — ONE definition of "an open order", shared
-//               with the commitment derivation so the two cannot disagree). Otherwise pure — no
-//               React, no Supabase, no DOM, no clock of its own (every entry point takes `now`).
-//               This is deliberate: a render condition inside a `.tsx` cannot be asserted
+//               with the commitment derivation so the two cannot disagree) · `./dashboardWindows`
+//               (ymd — the one local calendar date) · `@trace/shared/business-logic/reviewLink`
+//               (readReviewLink / isUsableReviewUrl — the link Business Profile writes). Otherwise
+//               pure — no React, no Supabase, no DOM, no clock of its own (every entry point takes
+//               `now`). This is deliberate: a render condition inside a `.tsx` cannot be asserted
 //               (tech-debt #134), so every DECISION lives here where a test can reach it.
 //
 // OUTPUTS:      DELIVERY_STATUSES · isDeliveryFulfilled · fulfilmentPatch · crewStopModel
 //               openOrderNotice · readReviewAskConfig · reviewAskDecision · reviewAskPatch
-//               askRateFor
+//               askRateFor · REVIEW_ASK_LATE_GRACE_DAYS
 //
 // ── AC-1: no vertical noun anywhere in this file. A "stop" is a stop for a nursery, a pantry or a
 //    workshop; nothing here knows what was delivered.
@@ -73,6 +75,10 @@
 // it says. Do not add a CHECK without reading the two migrations named above.
 
 import { holdsCommitment } from './inventoryStates';
+import { ymd } from './dashboardWindows';
+// The review LINK's reader and what makes it usable live in shared — Business Profile writes against
+// the same two functions, so the owner's field and the crew's QR cannot read one value two ways.
+import { readReviewLink, isUsableReviewUrl } from '@trace/shared/business-logic/reviewLink';
 
 export const DELIVERY_STATUS_SCHEDULED = 'scheduled';
 export const DELIVERY_STATUS_FULFILLED = 'fulfilled';
@@ -421,26 +427,42 @@ interface ReviewAskConfig {
   guidance: string | null;
 }
 
-/** Read the review-ask settings out of a `business_modules.config` blob. Unknown keys ignored. */
+/**
+ * Read the review-ask settings out of a `business_modules.config` blob. Unknown keys ignored.
+ *
+ * The LINK half is read by `readReviewLink` in shared — the same function Business Profile writes
+ * against (2026-09-11, ledger #300), so the field an owner fills in and the value a crew's phone
+ * renders cannot be read two ways. What a usable link IS (`isUsableReviewUrl`) moved with it.
+ */
 export function readReviewAskConfig(config: Record<string, unknown> | null | undefined): ReviewAskConfig {
   const c = (config ?? {}) as Record<string, unknown>;
-  const url = typeof c.review_url === 'string' && c.review_url.trim() ? c.review_url.trim() : null;
   const guide = typeof c.review_guidance === 'string' && c.review_guidance.trim() ? c.review_guidance.trim() : null;
-  return { reviewUrl: url, guidance: guide };
+  return { reviewUrl: readReviewLink(c), guidance: guide };
 }
 
 /**
- * A review URL must be an absolute http(s) URL. We do NOT check that it is a Google domain: a
- * business may legitimately use a short link, a profile link, or a different review destination
- * entirely, and refusing those would be us inventing a rule Google does not have.
+ * 🔴 THE ASK IS FOR THE DOOR, NOT FOR THE PAPERWORK — how many days after a stop's own date the tap
+ * may still prompt.
+ *
+ * A stop marked done long after its date is somebody catching up the record from a desk: nobody is
+ * standing at a door to scan anything. Prompting there does worse than nothing — the only honest tap
+ * is "Not this one", which RECORDS a skip, inflates the skip rate that is meant to read as a signal
+ * about the JOBS, and starts this customer's repeat window, so the next real visit is not asked either.
+ *
+ * It is also what makes "do not fire on history" true BY CONSTRUCTION rather than by trusting every
+ * importer. R-37 rules that past deliveries import as `fulfilled` (so the tap is never offered on
+ * them), but that import is not built, and the delivery list reaches thirty days back — so a
+ * past-dated stop still reading `scheduled` WOULD offer the tap. This check does not care how a row
+ * arrived. `1` allows a crew finishing after midnight. A stop dated AHEAD is allowed: a job done
+ * early is still done at the door.
  */
-export function isUsableReviewUrl(url: string | null | undefined): boolean {
-  const s = String(url ?? '').trim();
-  if (!s) return false;
-  try {
-    const u = new URL(s);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch { return false; }
+export const REVIEW_ASK_LATE_GRACE_DAYS = 1;
+
+function isAtTheDoor(deliveryDate: string | null | undefined, now: Date): boolean {
+  const d = String(deliveryDate ?? '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;   // no date → we cannot know it is today; do not ask
+  const earliest = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - REVIEW_ASK_LATE_GRACE_DAYS));
+  return d >= earliest;   // YYYY-MM-DD compares correctly as a string
 }
 
 type ReviewAskSuppression =
@@ -448,6 +470,7 @@ type ReviewAskSuppression =
   | 'not_configured'  // the tile is on but no review link has been entered
   | 'bad_link'        // a link was entered but it is not a usable URL
   | 'not_fulfilled'   // the stop is not done — you cannot ask about a job that has not happened
+  | 'not_at_the_door' // the stop's own date is past REVIEW_ASK_LATE_GRACE_DAYS — record-keeping, nobody at a door
   | 'no_customer'     // nothing to record the ask against, so the window could not be honoured
   | 'already_asked'   // this stop has already been through the prompt
   | 'asked_recently'; // this customer was asked within REVIEW_ASK_WINDOW_DAYS
@@ -466,6 +489,8 @@ export interface ReviewAskInput {
   businessName: string | null;
   status: string | null;
   customerId: string | null;
+  /** The stop's OWN date ('YYYY-MM-DD'). A stop marked done long after it is not a door — see REVIEW_ASK_LATE_GRACE_DAYS. */
+  deliveryDate: string | null;
   /** This stop's own prior ask, if any. */
   reviewAskedAt: string | null;
   /** The most recent ask to THIS customer on any stop, if any. */
@@ -495,9 +520,12 @@ export function reviewAskDecision(
   // Order matters only for the OWNER-facing explanation; every branch renders the same nothing.
   if (!input.moduleEnabled) return no('module_off');
   if (!isDeliveryFulfilled(input.status)) return no('not_fulfilled');
+  // Asked before the link, because it is about the MOMENT rather than the configuration: a stop whose
+  // own date is behind us was marked done from a desk, and prompting there records a skip nobody chose.
+  if (!isAtTheDoor(input.deliveryDate, input.now)) return no('not_at_the_door');
 
   const cfg = readReviewAskConfig(input.config);
-  if (!cfg.reviewUrl) return no(input.moduleConfigured ? 'not_configured' : 'not_configured');
+  if (!cfg.reviewUrl) return no('not_configured');
   if (!isUsableReviewUrl(cfg.reviewUrl)) return no('bad_link');
 
   if (input.reviewAskedAt) return no('already_asked');
