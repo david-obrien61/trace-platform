@@ -1,5 +1,15 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #299, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **R-121 IS SETTLED: NO OWNER-ROLE MEMBER CAN REMOVE THEIR OWN PERMISSIONS — NOT ONLY THE ACCOUNT HOLDER. #296.** 🔴 **THE HEADLINE IS WHY THE SCOPE HAD TO BE THE ROLE: THE GUARD EXISTS SO NOBODY CAN LOCK THEMSELVES OUT, AND LAUREN AND DAVID DIFFER ONLY BY A BOOLEAN THAT IS NOT AUTHORITY.** David: *"My read: every owner-role member. The guard exists so nobody can lock themselves out, and 'she's not the account holder' isn't a reason to let her. It also matches what you ruled today — Lauren and David hold identical arrays and differ only by a boolean."*
+
+**Type:** DOCS ONLY, on `main`. No code, nothing applied. **§3 RETENTION: 1 archived verbatim (#293), 1 written — entries-in == entries-out.**
+
+✅ **SETTLED ON R-121'S OWN ROW, IN DAVID'S WORDS, AND THE OWED QUESTION IS MARKED ANSWERED, NOT DELETED.** The consequence is stated where a builder will read it: **the lockout guard keys on the OWNER role, never on `businesses.owner_id`** — the same line R-22 and R-119 already draw between authority and the account holder. ✅ **Every live record that still called it open was updated, with the old wording struck rather than erased:** tech-debt #238 (its trigger has FIRED) · the *Hand over the keys* story's NEEDS · CLAUDE.md's quick-reference · the bootstrap · built-inventory · three ledger cells. ⚠️ **Narrative §3 entries and past drift lines were left as written** — they record what was true when written.
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **still unruled: where the guard sits** — at the write (the grant surface refuses to remove a string from an OWNER-role member's own row) or at the read. Wiring `get_my_permissions` is no longer blocked on the *ruling*; it is blocked on that shape and on the build. **(b)** 🔴 R-125 vs D-51 · the 8-hour rule · duty-generates-task. **(c)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#260**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #298, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **SEVENTEEN RULINGS DAVID HAD MADE WERE IN NO FILE, AND ONE OF THEM CONTRADICTS A RATIFIED DECISION. #295. R-122…R-138.** 🔴 **THE HEADLINE IS R-125: DAVID'S 2026-06-24 *"EVERY ACTION WRITES TO THE AUDIT LOG"* WAS NEVER FILED, AND D-51 (2026-07-21) LATER RULED THE OPPOSITE FOR ROUTINE STATE EVENTS.** The audit-redirect plan was built on D-51's narrower reading without anyone noticing a ruling said otherwise — because the ruling lived only in a recon doc. **Filed PARTIAL, with the conflict named as David's to settle, not resolved in either direction.**
