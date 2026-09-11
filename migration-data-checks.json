@@ -1,0 +1,69 @@
+{
+  "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) \u00b7 invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) \u00b7 superseded (a later migration rewrote the same rows) \u00b7 unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
+  "checks": {
+    "20260608_advert_channels_config.sql": {
+      "kind": "evidence",
+      "means": "every social_media module row carries the advert_channels key it added",
+      "sql": "(SELECT count(*) > 0 AND bool_and(config ? 'advert_channels') FROM business_modules WHERE module_key = 'social_media')"
+    },
+    "20260611_delete_debris_trace_enterprises_nursery.sql": {
+      "kind": "invariant",
+      "means": "the debris nursery row it deleted is not present",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE id::text LIKE '11901e52%' AND business_type = 'nursery' AND name ILIKE '%TRACE%')"
+    },
+    "20260614_cost_to_produce_trace_seed.sql": {
+      "kind": "unverifiable",
+      "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists \u2014 its effect, if it ran, went with it",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
+    },
+    "20260614_cost_to_produce_restore_truncated_lines.sql": {
+      "kind": "unverifiable",
+      "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists \u2014 its effect, if it ran, went with it",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
+    },
+    "20260727_align_floor_to_bundles.sql": {
+      "kind": "superseded",
+      "means": "the role floor it aligned has been rewritten since",
+      "superseded_by": [
+        "20260727b_align_floor_assets_retired.sql",
+        "20260730a_owner_holds_all_backfill.sql"
+      ]
+    },
+    "20260727b_align_floor_assets_retired.sql": {
+      "kind": "invariant",
+      "means": "no permission alias and no role floor still carries a retired assets:* string",
+      "sql": "((SELECT count(*) = 0 FROM permission_aliases WHERE from_perm IN ('assets:read','assets:create','assets:update') OR implies_perm IN ('assets:read','assets:create','assets:update')) AND (SELECT bool_and(NOT (permissions ?| array['assets:read','assets:create','assets:update'])) FROM role_definitions WHERE business_id IS NULL))"
+    },
+    "20260729_backfill_billing_from_legacy.sql": {
+      "kind": "invariant",
+      "means": "no customer has a legacy address with an empty billing address",
+      "sql": "(SELECT count(*) = 0 FROM customers WHERE address_line1 IS NOT NULL AND billing_line1 IS NULL)"
+    },
+    "20260730a_owner_holds_all_backfill.sql": {
+      "kind": "superseded",
+      "means": "the OWNER floor it backfilled has been rewritten since",
+      "superseded_by": [
+        "20260730c_owner_branch_removed_and_owner_role_locked.sql",
+        "20260801_business_modules_write_narrowing.sql",
+        "20260801b_subscription_permission_and_enablement_split.sql",
+        "20260828_owner_role_carries_authority.sql",
+        "20260910b_owner_id_policies_become_permissions.sql"
+      ]
+    },
+    "20260730b_owner_member_row_invariant.sql": {
+      "kind": "invariant",
+      "means": "every business with an owner_id has an active OWNER member row for that person",
+      "sql": "(SELECT count(*) = 0 FROM businesses b WHERE b.owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM business_members m WHERE m.business_id = b.id AND m.user_id = b.owner_id AND m.role = 'OWNER' AND m.active))"
+    },
+    "20260802_trialling_modules_are_live.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.trial_access_corrected')"
+    },
+    "20260802b_module_classification_corrections.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.classification_corrected')"
+    }
+  }
+}

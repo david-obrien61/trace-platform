@@ -19,7 +19,7 @@
     "quality:baseline": "node scripts/quality-gate.mjs --update",
     "test": "node scripts/run-tests.mjs",
     "verify:rls": "node scripts/run-rls-tests.mjs",
-    "verify": "node scripts/verify-api-parses.mjs && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm run verify:handoff-retention && npm run verify:ui-divergence && npm run verify:owner-boards && npm run verify:pricing-writers && npm run verify:owner-id-repoint && npm run verify:id-citations && npm test",
+    "verify": "node scripts/verify-api-parses.mjs && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm run verify:handoff-retention && npm run verify:ui-divergence && npm run verify:owner-boards && npm run verify:pricing-writers && npm run verify:owner-id-repoint && npm run verify:id-citations && npm run verify:migration-apply-state && npm test",
     "verify:select-policies": "node scripts/verify-select-policies.mjs",
     "verify:write-paths": "node scripts/verify-write-paths.mjs",
     "write-paths:baseline": "node scripts/verify-write-paths.mjs --update",
@@ -40,7 +40,8 @@
     "verify:pricing-writers": "node scripts/verify-pricing-config-writers.mjs && node scripts/verify-pricing-config-writers.mjs --self-test",
     "verify:owner-id-repoint": "node scripts/verify-owner-id-repoint.mjs && node scripts/verify-owner-id-repoint.mjs --self-test",
     "verify:id-citations": "node scripts/verify-id-citations.mjs && node scripts/verify-id-citations.mjs --self-test",
-    "id-citations:baseline": "node scripts/verify-id-citations.mjs --update"
+    "id-citations:baseline": "node scripts/verify-id-citations.mjs --update",
+    "verify:migration-apply-state": "node scripts/verify-migration-apply-state.mjs --self-test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

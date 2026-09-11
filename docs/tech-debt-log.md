@@ -1786,3 +1786,31 @@ CARD 25 (`needs-test`, reason stated).**
 does **not** guarantee the server routes each real-world failure to the RIGHT state. The first is a
 completeness property a cap can assert from source; the second is a fact about Intuit's behaviour
 that only a live run can establish.
+
+---
+
+## #248 — 🟡 `20260529_pmi_shared.sql` NEVER RAN, AND NOTHING SAYS WHETHER IT EVER WILL (NEW 2026-09-11)
+
+Measured by `node scripts/verify-migration-apply-state.mjs --catalog`, read-only: **`pmi_assets` and `pmi_service_logs` do not exist**, and no migration drops them. So the file was never applied. Its purpose was taken over by the `business_*` tables in `20260612_business_assets_inventory_pmi_service.sql` — so it was most likely **abandoned, not forgotten**.
+
+🔴 **The cost is not the missing tables, it is the permanent false "owed".** Every apply-state run will report this file NOT_APPLIED forever, beside the two that genuinely await David (`20260727d` gated, `20260905` production planning). A list where one of three "not applied" entries is really "abandoned" teaches its reader to stop trusting the list.
+
+⚠️ **And a June document contradicts the database.** `data/grower-scan/audit-spine-recon.md` (2026-06-24) names `pmi_service_logs` as one of *"the two 'log' tables"* that exist. It does not exist today, and no migration removed it — so either it never existed in this project or it was dropped by hand. Recorded, not investigated.
+
+**Fix (David's call):** declare it abandoned in the tool (a small `abandoned` list read by `--catalog`, reported apart from NOT_APPLIED), or move the file out of `supabase/migrations/`. It has never run, so moving it breaks nothing applied — but other documents cite it, so the choice is David's.
+
+---
+
+## #249 — 🟡 `customers.shop_id` IS GONE AND NO MIGRATION REMOVES IT (NEW 2026-09-11)
+
+`20260521_make_shop_id_nullable.sql` does `ALTER TABLE customers ALTER COLUMN shop_id DROP NOT NULL`. Measured 2026-09-11: **the column does not exist**, and nothing in the migration corpus drops it. Either it was dropped by hand in the dashboard, or it never existed in this project — the file predates the 2026-05-21 project separation, when `shop_id` was the Ignition-era tenant key.
+
+Harmless today: nothing reads the column. Filed because **a change to live schema that no migration records is tech-debt #39's class** — the repo can no longer rebuild the database it describes. `nursery_modules` is the second instance found by the same run (dropped by hand; CLAUDE.md and PLATFORM_STATE.md said "pending DROP" until corrected 2026-09-11).
+
+---
+
+## #250 — 🟡 THE TRACE BUSINESS `45830ba7` IS GONE, AND TWO MIGRATIONS THAT WROTE TO IT ARE NOW UNVERIFIABLE (NEW 2026-09-11)
+
+`20260614_cost_to_produce_trace_seed.sql` and `20260614_cost_to_produce_restore_truncated_lines.sql` write TRACE's own cost-to-produce config onto business `45830ba7-9961-403f-b048-77f022fb48dc` (the seed selects `business_type = 'general'` first). Measured 2026-09-11: **that business does not exist, and no `business_type = 'general'` business exists at all.** Whatever those migrations wrote went with it, so their apply-state cannot be checked.
+
+⚠️ **Not investigated, deliberately:** who deleted the business and when. Other records still describe it as live — the 2026-06-23 handoff cites *"live values `general` [TRACE 45830ba7]"*. Recorded in `migration-data-checks.json` as `unverifiable`, with a query proving the reason still holds; the check turns **STALE_DECLARATION** the moment a `general` business reappears.
