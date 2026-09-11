@@ -133,6 +133,14 @@ export type {
 // (CostToProduceSettings recurring rows, BusinessAssets capital rows) so they can't drift.
 export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';
 
+// R-120 — the ONE rule for a service_offerings row's category-scoped columns (transport_mode ·
+// requires_address · trigger_transport_mode). Every writer asks it; a transport row with no mode is
+// refused, never defaulted.
+export {
+  TRANSPORT_MODES, TRANSPORT_MODE_REQUIRED, isTransportMode, transportBindingError,
+  defaultRequiresAddress, categoryScopedFields,
+} from './serviceOfferingShape';
+
 // service_offerings schema enums (all-vertical, AC-1) — the ONE option-set for the
 // service editor's category / price_type / price_unit / transport_mode selects, sourced
 // from the migration column CHECKs so the picker can't offer or omit a rejected value.

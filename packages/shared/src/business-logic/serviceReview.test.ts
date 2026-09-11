@@ -229,7 +229,9 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 {
   const B = 'biz-1';
-  const good: AcceptedService = { name: 'Trip charge', description: null, category: 'transport', priceUnit: 'order', price: 50, sortOrder: 0 };
+  // A transport fixture CARRIES A MODE (R-120). Without one, every refusal below would be refused by
+  // the mode clause first, and a mutant deleting the clause each probe is really about would survive.
+  const good: AcceptedService = { name: 'Trip charge', description: null, category: 'transport', priceUnit: 'order', price: 50, sortOrder: 0, transportMode: 'staff' };
 
   const r = buildServiceRows({ accepted: [good], businessId: B, existing: [] });
   ok(r.ok === true && r.rows.length === 1, 'a priced, categorised service writes one row');
@@ -287,6 +289,49 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+// §E2 — R-120: A TRANSPORT SERVICE THAT DOES NOT SAY WHO TRANSPORTS IS REFUSED, BY NAME.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 2026-09-09: this writer set `category='transport'` and never `transport_mode`, and LAWNS's Trip
+// Charge did not appear on an order at all. The REFUSAL is asserted first — a writer only ever seen
+// accepting is not a proven guard — then the acceptance, with every column it writes checked.
+{
+  const B = 'biz-1';
+  const bare: AcceptedService = { name: 'Trip charge', description: null, category: 'transport', priceUnit: 'order', price: 50, sortOrder: 0 };
+
+  const noMode = buildServiceRows({ accepted: [bare], businessId: B, existing: [] });
+  ok(noMode.ok === false, '🔴 R-120: a transport service with NO mode is refused — the 2026-09-09 row cannot be written again');
+  ok(noMode.ok === false && /Trip charge/.test(noMode.reason) && /who transports/i.test(noMode.reason),
+    '…and the refusal NAMES the row and says what is missing, rather than a generic "invalid"');
+  for (const junk of [null, '', 'truck', 'Staff']) {
+    const r = buildServiceRows({ accepted: [{ ...bare, transportMode: junk }], businessId: B, existing: [] });
+    ok(r.ok === false, `a mode of ${JSON.stringify(junk)} is not a mode — the CHECK holds exactly 'self' and 'staff'`);
+  }
+
+  const staff = buildServiceRows({ accepted: [{ ...bare, transportMode: 'staff' }], businessId: B, existing: [] });
+  ok(staff.ok === true, 'the same row WITH a mode is accepted — the guard refuses the gap, never the option');
+  if (staff.ok) {
+    ok(staff.rows[0].transport_mode === 'staff', '🔴 `transport_mode` is WRITTEN — the column this writer never set');
+    ok(staff.rows[0].requires_address === true, 'staff transport defaults to NEEDING an address (Test Dave\'s two staff rows, measured)');
+    ok(staff.rows[0].trigger_transport_mode === null, '`trigger_transport_mode` stays NULL — it is an add-on column');
+  }
+  const self = buildServiceRows({ accepted: [{ ...bare, name: 'Collect', price: 1, transportMode: 'self' }], businessId: B, existing: [] });
+  ok(self.ok === true && self.rows[0].transport_mode === 'self' && self.rows[0].requires_address === false,
+    'self transport defaults to NO address (Test Dave\'s Self Pickup, measured)');
+
+  // ⚠️ A DEFAULT, NOT A LOCK — a staff drop to a site with no street address is a real case.
+  const override = buildServiceRows({ accepted: [{ ...bare, transportMode: 'staff', requiresAddress: false }], businessId: B, existing: [] });
+  ok(override.ok === true && override.rows[0].requires_address === false,
+    '⚠️ an explicit "no address" on a staff service is KEPT — the mode sets a default, never a lock');
+
+  const addon = buildServiceRows({ accepted: [{ ...bare, name: 'Bubbler', category: 'addon', priceUnit: 'plant', transportMode: 'staff', requiresAddress: true }], businessId: B, existing: [] });
+  ok(addon.ok === true && addon.rows[0].transport_mode === null && addon.rows[0].requires_address === false,
+    'a mode typed against an ADD-ON is not written — transport_mode means nothing off a transport row');
+
+  const mixed = buildServiceRows({ accepted: [{ ...bare, name: 'Bubbler', category: 'addon', priceUnit: 'plant', price: 65 }, bare], businessId: B, existing: [] });
+  ok(mixed.ok === false, '🔴 one mode-less transport row refuses the WHOLE press — all-or-nothing holds for this clause too');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
 // §F — RE-RUNNABLE. A SECOND PASS ADDING ONE SERVICE LEAVES THE FIRST PASS INTACT.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 {
@@ -301,7 +346,7 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
 
   // She accepts ONLY the trip charge. That row is now on her menu.
   const wrote = buildServiceRows({
-    accepted: [{ name: 'TC', description: 'Trip Charge', category: 'transport', priceUnit: 'order', price: 50, sortOrder: 0 }],
+    accepted: [{ name: 'TC', description: 'Trip Charge', category: 'transport', priceUnit: 'order', price: 50, sortOrder: 0, transportMode: 'staff' }],
     businessId: 'biz-1', existing: [],
   });
   ok(wrote.ok === true, 'pass one writes it');
@@ -329,7 +374,7 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
 
   // The write itself refuses the name rather than overwriting it — the load-bearing half.
   const again = buildServiceRows({
-    accepted: [{ name: 'TC', description: null, category: 'transport', priceUnit: 'order', price: 999, sortOrder: 0 }],
+    accepted: [{ name: 'TC', description: null, category: 'transport', priceUnit: 'order', price: 999, sortOrder: 0, transportMode: 'staff' }],
     businessId: 'biz-1', existing: afterFirst,
   });
   ok(again.ok === false && /already/i.test((again as { reason: string }).reason),
@@ -338,7 +383,7 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
   // …and a case-different name is the same name. A duplicate that differs only in case is the
   // one that gets through every guard keyed on exact equality.
   const cased = buildServiceRows({
-    accepted: [{ name: 'tc', description: null, category: 'transport', priceUnit: 'order', price: 999, sortOrder: 0 }],
+    accepted: [{ name: 'tc', description: null, category: 'transport', priceUnit: 'order', price: 999, sortOrder: 0, transportMode: 'staff' }],
     businessId: 'biz-1', existing: afterFirst,
   });
   ok(cased.ok === false, '"tc" and "TC" are one service — the guard is case-insensitive');

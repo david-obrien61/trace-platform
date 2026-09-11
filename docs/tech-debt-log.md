@@ -939,6 +939,14 @@ seed path inside a review build is the scope creep the pre-flight gate exists to
 `buildServiceRows` refuses the value before it reaches the database and mutant **W5** guards it, so
 the NEW writer cannot join this defect.
 
+✅ **RESOLVED 2026-09-11 (ledger #293) — the second fix, no SQL.** `seedServiceOfferings` now HOLDS
+BACK any row whose category is flagged and REPORTS it in `held`, with its reason; `classifyCategory`
+keeps its contract (its `catalog.test.ts` probes are unchanged). Landed because R-120 produced a
+sibling of this exact failure: a transport suggestion carries no mode, and the constraint written the
+same day would refuse the whole batch the same way. **Both shapes are held back and both are guarded**
+— `serviceOfferingShape.test.ts` §F, against a double that REFUSES what Postgres refuses and is watched
+refusing first; mutants **D1** and **D2**.
+
 ---
 
 ## #218 — 🟡 `service_offerings` NOW HAS A THIRD WRITE FILE; ONE MODULE SHOULD OWN ALL OF THEM (NEW 2026-09-08)
@@ -972,6 +980,17 @@ build that adds a read-and-review surface.
 
 **TRIGGER:** the next change to what a `service_offerings` row carries — a column, a default, a
 normalisation. Best landed with #217, which is a fourth caller of the same table.
+
+🟡 **PARTIAL 2026-09-11 (ledger #293) — THE TRIGGER FIRED, AND THE HALF THAT HAD ALREADY CAUSED A
+DEFECT IS LANDED.** A new rule for what a row carries arrived (R-120: a transport row must say who
+transports), and it had drifted exactly as this entry predicted — the books review never wrote
+`transport_mode`, and the editor's copy of the rule could never fire. **The category-scoped columns now
+have ONE home, `business-logic/serviceOfferingShape.ts`, asked by all three writers**, and
+`serviceOfferingShape.test.ts` §E **derives the writer population from the corpus and fails on a
+fourth** (mutant **Z1** turns a reader into a writer and is caught). ⚠️ **Still open:** the three
+`.from('service_offerings')` call sites were NOT moved into `serviceOfferingWrites.ts`. The shape rule
+stops the columns drifting; it does not stop a fourth writer inserting — only the §E count does, and
+only because it is a test.
 
 ---
 
@@ -1814,3 +1833,61 @@ Harmless today: nothing reads the column. Filed because **a change to live schem
 `20260614_cost_to_produce_trace_seed.sql` and `20260614_cost_to_produce_restore_truncated_lines.sql` write TRACE's own cost-to-produce config onto business `45830ba7-9961-403f-b048-77f022fb48dc` (the seed selects `business_type = 'general'` first). Measured 2026-09-11: **that business does not exist, and no `business_type = 'general'` business exists at all.** Whatever those migrations wrote went with it, so their apply-state cannot be checked.
 
 ⚠️ **Not investigated, deliberately:** who deleted the business and when. Other records still describe it as live — the 2026-06-23 handoff cites *"live values `general` [TRACE 45830ba7]"*. Recorded in `migration-data-checks.json` as `unverifiable`, with a query proving the reason still holds; the check turns **STALE_DECLARATION** the moment a `general` business reappears.
+
+---
+
+## #251 — 🔴 CHECKOUT OFFERS ONE STAFF DELIVERY PER SHAPE, AND A SECOND IS NEVER OFFERED — WHICH BLOCKS LAWNS'S OWN SERVICE LIST (NEW 2026-09-11)
+
+`resolveTransportRoles` (`packages/cultivar-os/src/lib/transport.ts`) takes
+`delivery = staff.find(price_type === 'flat')` and `planting = staff.find(price_type === 'per_unit')` —
+**the FIRST of each, by `sort_order`** (`useServices` orders ascending). A second staff/flat row fills
+no role, is named in no flag, and is not in `unbound` (it HAS a mode). **It is simply never offered, and
+nothing says so.**
+
+🔴 **WHY IT IS NOT HYPOTHETICAL.** LAWNS's invoices carry three fulfilment modes (David, 2026-09-11):
+**TC trip charge** (533 lines, $40,760 — staff), **Tailgate Delivery** (127 lines, $18,990 — staff, but a
+*different* service: a curb drop rather than carried in) and **self-collect** (no invoice line; nothing is
+charged). Trip charge and tailgate are both staff and both charged once per order, so **modelling LAWNS's
+real list correctly hides one of them at checkout.** The three-branch radio
+(`delivery_planting · delivery_only · self`) has no slot for two staff deliveries.
+
+**Pinned, not fixed:** `transport.test.ts` §D asserts the second row is silent, and says it is expected to
+flip when this is fixed.
+
+**FIX — a decision first:** does checkout offer N staff transport services as N choices (the radio becomes
+a list derived from rows), or does a business carry ONE per shape and Settings refuses a second? The first
+changes `SPEC-transport-netting-decline-workflow-2026-07-08.md` and `submit.ts`'s `deriveTransportMethod`;
+the second is a Settings refusal. **David's call.**
+
+**TRIGGER:** before LAWNS's three service rows are written (the pending data task, ledger #293) — or the data
+task will look done and one service will be invisible.
+
+---
+
+## #252 — 🟡 `price_type` AND `price_unit` ARE TWO REPRESENTATIONS OF ONE FACT, AND THE TWO WRITERS DISAGREE ABOUT IT (NEW 2026-09-11)
+
+R-120's recon question 2 — *"one mapping or two?"* — for the three fields it named:
+
+| Field | Books review (`buildServiceRows`) | Settings add / edit |
+|---|---|---|
+| category + `transport_mode` | never wrote the mode | wrote it, from state that could never be empty |
+| `price_type` | **DERIVED** — `order` → `flat`, else `per_unit` | **chosen independently** of `price_unit` |
+| `sort_order` | `100 + index` | `offerings.length + 10` |
+
+✅ **The first row is ONE mapping now** (`serviceOfferingShape.ts`, ledger #293).
+
+🔴 **`price_type` is the operative one, and the editor lets it disagree with `price_unit`.** Checkout
+multiplies on `price_type` alone (`netting.ts` — per_unit ×N, flat ×1) and `resolveTransportRoles` sorts on
+it; `price_unit` is a label. So `flat` + `plant` charges once while reading *per plant*, and `per_unit` +
+`order` multiplies a per-order fee by the tree count. The review cannot produce either; the editor can
+produce both. `serviceOfferingEnums.ts` records the un-conflation as deliberate (2026-07-08), so this is a
+recorded decision in tension with a later writer, not an accident.
+
+⚠️ **`sort_order` is not cosmetic here:** with two rows of one shape it decides which one checkout offers (#251).
+
+**COST TO MAKE IT ONE:** derive `price_type` from `price_unit` beside `categoryScopedFields` and drop the
+editor's Price-type select — about twenty lines, **plus a live read first**, because any row where the two
+disagree today would change what it charges. Not taken: no PAT this session, and it reverses a recorded
+decision — David's.
+
+**TRIGGER:** the first live row found where the two disagree, or #251's build (it touches the same resolver).

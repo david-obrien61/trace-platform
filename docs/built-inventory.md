@@ -1,4 +1,5 @@
-# Last updated: 2026-09-11 (**#292 — WHICH MIGRATIONS ARE IN THE DATABASE IS DERIVABLE:** `node scripts/verify-migration-apply-state.mjs --catalog` checks every object kind in all 134 files through the read-only PAT; NOT_APPLIED 3, all known. See the *Migration Apply-State* entry.) See also #291, #290.
+# Last updated: 2026-09-11 (**#293 — A TRANSPORT SERVICE MUST SAY WHO TRANSPORTS (R-120):** one shape rule, `serviceOfferingShape.ts`, asked by every `service_offerings` writer; the editor's required check could never fire and now can; the checkout names a row it cannot offer. 19/19 mutants · migration WRITTEN, NOT APPLIED. See the *Transport binding* entry.) See also #292:
+# (#292 — WHICH MIGRATIONS ARE IN THE DATABASE IS DERIVABLE: `node scripts/verify-migration-apply-state.mjs --catalog` checks every object kind in all 134 files through the read-only PAT; NOT_APPLIED 3, all known. See the *Migration Apply-State* entry.) See also #291, #290.
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
 # (prior line, preserved: Last updated: 2026-09-10 (**#289 — LAUREN CAN DO HER WORK: THE 49 RAW `owner_id` POLICIES ARE TRIAGED.** David's ENTITY-vs-WORK test applied to every live policy that compares `businesses.owner_id` raw. **Disposition of all 49: 28 REPOINTED at the permission string · 10 DROPPED · 8 KEPT RAW with the comment none of them had · 3 UNTOUCHED (tables pending DROP).** 🔴 **TEN COULD NOT BE REPOINTED AND THE REASON IS DELETE:** they are `FOR ALL` on tables already carrying a complete per-verb member set, and a `FOR ALL` gated on ONE string grants EVERY verb on that string — repointing `cost_objects_owner_all` at `costs:update` would let an update-string holder DELETE. 🔴 **FOUR THE TRIAGE CALLED WORK ARE THE AUTHORITY STORE** — `bm_owner_all`/`rd_owner_write`/`inv_owner_all`: 20260828's header already ruled that a member INSERT on `business_members` is a permission-granting side door (`BEFORE UPDATE` trigger only), and `team:update` is `declared-unwired` so the repoint would admit NOBODY. **TWO STRINGS MINTED** (`accounting:connect`, `devices:manage`) with status stated literally, **backfilled through the funnel in the same transaction** — a minted string reaching no array makes three tables reachable by nobody. **`get_my_permissions` CAPTURED (`20260910c`) AND DELIBERATELY UNWIRED** — measured under real claims: Lauren 57/`is_account_holder=FALSE`, David 57/TRUE, identical arrays different boolean; AC-3 holds. **NEW cap capR2** parses the plan doc and the migration and fails BOTH directions. **Acceptance query run RED pre-fix. 16 mutants, 16 caught. ✅ **BOTH MIGRATIONS APPLIED 2026-09-10, re-measured off the catalog: `lauren_refusals 3→0` · `dead_permission_policies 31→0` · `surviving_dropped 10→0` · **`joel_refusals` HELD at 12** · raw-`owner_id` policies **49 → 12**. · api/ 12/12 · 11 cards, 0 covered.** See also #288, #287.))
@@ -1667,6 +1668,31 @@ and §N (the declared lists parsed out of the migration, both directions — #17
 third `service_offerings` write file) · #219 (one QuickBooks item can become a service AND a
 product — nothing detects it) · #220 (the ladder has nowhere to live) · #221 (the import still says
 647) · #222 (`/discounts`' first accept retires legacy `pricingTiers`).
+
+---
+
+## Transport binding — a transport service must say who transports (#293, R-120)
+
+**What:** ONE shape rule for the category-scoped columns of `service_offerings` — `transport_mode`,
+`requires_address`, `trigger_transport_mode` — asked by every writer of the table. A transport row
+with no mode is **REFUSED on every path, never defaulted**; `requires_address` follows the mode as a
+default the owner can override (staff → yes, self → no); a transport row the checkout cannot offer is
+**named**, on the Services list and at checkout, and **never repaired**.
+**Status:** 🟡 BUILDER-COMPLETE on `main`. **Owner-proof OWED** — services-review board CARDS 19–26.
+**Migration WRITTEN, NOT APPLIED.**
+**Vertical:** platform | **Type:** rule + guard
+**Location:** `packages/shared/src/business-logic/serviceOfferingShape.ts` (PURE — the rule).
+**Callers:** `pages/Settings.tsx` (add · edit · On/Off refusal · list marker) · `business-logic/serviceReview.ts`
+`buildServiceRows` + `components/services/ServicesReview.tsx` (the *Who transports* field) ·
+`discovery/seed.ts` (holds back and reports `held`) · `cultivar-os/src/lib/transport.ts` (`unbound`) +
+`cultivar-os/src/pages/AddOns.tsx` (the empty-state sentence).
+**Migration:** `supabase/migrations/20260911_service_offerings_transport_requires_mode.sql` — named CHECK;
+its pre-flight REFUSES while any half-bound row exists. NOT APPLIED.
+**Proof:** `serviceOfferingShape.test.ts` (78 — **§E derives the writer population and fails on a fourth**) ·
+`serviceReview.test.ts` §E2 · `transport.test.ts` (14) · `scripts/measure-transport-binding-mutants.mjs` **19/19**.
+**Closes:** tech-debt #217. **Partial:** #218. **Opens:** #251 (one staff delivery per shape — blocks LAWNS's
+rows), #252 (`price_type`/`price_unit`).
+**Recon:** `docs/decisions/2026-09-11-transport-mode-required-recon.md`.
 
 ---
 

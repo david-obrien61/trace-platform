@@ -54,6 +54,10 @@ import {
   type ServiceReview as Review, type ServiceRow, type ServiceItemFact,
   type ExistingOffering, type AcceptedService,
 } from '../../business-logic/serviceReview';
+// R-120 — "pick transport, and the mode field appears and is required". The option list is the
+// schema's own; the rule is the one the Settings editor asks.
+import { TRANSPORT_MODE_OPTIONS } from '../../business-logic/serviceOfferingEnums';
+import { transportBindingError, defaultRequiresAddress } from '../../business-logic/serviceOfferingShape';
 
 const GREEN = '#27500A';
 const DARK  = '#111827';
@@ -62,8 +66,9 @@ const RED   = '#A32D2D';
 const AMBER = '#92400e';
 const RULE  = '#e5e7eb';
 
-/** What the owner has done to one suggested row. A price is a STRING until she presses. */
-interface RowState { include: boolean; name: string; price: string; category: string; unit: string }
+/** What the owner has done to one suggested row. A price is a STRING until she presses. `mode` is
+ *  EMPTY until she picks one — never suggested, never defaulted (R-120). */
+interface RowState { include: boolean; name: string; price: string; category: string; unit: string; mode: string; requiresAddress: boolean }
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString()}`;
 const dateWords = (iso: string | null): string => {
@@ -194,6 +199,10 @@ export function ServicesReview({ supabase, onWritten }:
           price: r.price.price === null ? '' : String(r.price.price),
           category: r.category ?? '',
           unit: r.unit.unit ?? '',
+          // 🔴 NO MODE IS SUGGESTED, EVEN WHEN HER ACCOUNT SAYS "DELIVERY". Whether her staff carry
+          // it or the customer does is a fact about her business her books do not record (R-120).
+          mode: '',
+          requiresAddress: false,
         };
       }
       setRows(seed);
@@ -260,6 +269,8 @@ export function ServicesReview({ supabase, onWritten }:
         priceUnit: x.s.unit,
         price: Number(x.s.price),
         sortOrder: 100 + x.i,
+        transportMode: x.s.mode || null,
+        requiresAddress: x.s.requiresAddress,
       }));
 
     // 🔴 RE-READ THE MENU IMMEDIATELY BEFORE WRITING. The list we read minutes ago is not
@@ -314,6 +325,7 @@ export function ServicesReview({ supabase, onWritten }:
   const setRow = (k: string, patch: Partial<RowState>) => setRows(m => ({ ...m, [k]: { ...m[k], ...patch } }));
   const ticked = Object.values(rows).filter(r => r.include);
   const unpriced = ticked.filter(r => !(Number(r.price) > 0)).length;
+  const unbound = ticked.filter(r => transportBindingError(r.category, r.mode) !== null).length;
 
   if (phase === 'idle' || phase === 'reading') {
     return (
@@ -470,6 +482,14 @@ export function ServicesReview({ supabase, onWritten }:
       <div style={{ borderTop: `1px solid ${RULE}`, paddingTop: 14, marginTop: 8 }}>
         {error && <p style={errStyle}><AlertTriangle size={14} style={{ verticalAlign: -2 }} /> {error}</p>}
         {result && <p style={{ ...p, color: GREEN, fontWeight: 600 }}><Check size={14} style={{ verticalAlign: -2 }} /> {result}</p>}
+        {unbound > 0 && (
+          <p style={{ ...p, color: AMBER }}>
+            <AlertTriangle size={13} style={{ verticalAlign: -2 }} />{' '}
+            {unbound === 1 ? 'One ticked transport service does not say' : `${unbound} ticked transport services do not say`} who
+            transports. A transport service with no answer never appears at checkout, so nothing will be
+            saved until you choose one or untick it.
+          </p>
+        )}
         {unpriced > 0 && (
           <p style={{ ...p, color: AMBER }}>
             <AlertTriangle size={13} style={{ verticalAlign: -2 }} />{' '}
@@ -555,7 +575,36 @@ function Row({ row, state, onChange }:
             {SERVICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </Field>
+        {/* R-120 — PICK TRANSPORT, AND THE MODE FIELD APPEARS AND IS REQUIRED. Choosing it sets the
+            address box to the mode's default (staff → yes); she can still change it. */}
+        {state.category === 'transport' && (
+          <>
+            <Field label="Who transports">
+              <select
+                value={state.mode}
+                onChange={e => onChange({ mode: e.target.value, requiresAddress: defaultRequiresAddress(e.target.value) })}
+                style={{ ...input, width: 230, borderColor: state.include && !state.mode ? RED : '#d1d5db' }}
+              >
+                <option value="">choose…</option>
+                {TRANSPORT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-end', minHeight: 48, fontSize: '0.8125rem', color: DARK, cursor: state.mode ? 'pointer' : 'default' }}>
+              <input
+                type="checkbox" checked={state.requiresAddress} disabled={!state.mode}
+                onChange={e => onChange({ requiresAddress: e.target.checked })}
+                style={{ width: 18, height: 18, accentColor: GREEN }}
+              />
+              Needs a delivery address
+            </label>
+          </>
+        )}
       </div>
+      {state.include && transportBindingError(state.category, state.mode) && (
+        <p style={{ fontSize: '0.75rem', color: AMBER, margin: '6px 0 0 30px' }}>
+          Choose who transports — your staff or the customer. Your books do not say, so we have not chosen for you.
+        </p>
+      )}
       {state.include && row.unit.unknown && !state.unit && (
         <p style={{ fontSize: '0.75rem', color: AMBER, margin: '6px 0 0 30px' }}>
           Your invoices charge this once on some jobs and per tree on others

@@ -6,6 +6,9 @@ import {
   CATEGORY_OPTIONS, TIMING_OPTIONS, PRICE_TYPE_OPTIONS, PRICE_UNIT_OPTIONS,
   TRANSPORT_MODE_OPTIONS, TIMING_LABEL,
 } from '../business-logic/serviceOfferingEnums';
+// R-120 — the ONE rule for a service's category-scoped columns. A transport service must say who
+// transports; the add form, the editor and the On/Off toggle all ask this module, never an inline copy.
+import { transportBindingError, defaultRequiresAddress, categoryScopedFields } from '../business-logic/serviceOfferingShape';
 // D-40: the tax RATE is per-tenant config data (config.taxRate), not the businesses column, and
 // not a hardcoded default. resolveTaxRate reads it; mergePricingConfig writes it clobber-safe.
 import { readPricingConfig, mergePricingConfig, resolveTaxRate, TX_COMPTROLLER_RATE_LOCATOR_URL } from '../business-logic';
@@ -51,8 +54,13 @@ function validateServiceForm(f: {
   if (price === '') errs.price = 'Price is required — enter 0 for a free service.';
   else if (isNaN(parseFloat(price))) errs.price = 'Price must be a number — enter 0 for a free service.';
   if (!f.category) errs.category = 'Category is required.';
-  // Category-scoped: a transport service must say who transports (self / staff).
-  if (f.category === 'transport' && !f.transportMode) errs.transportMode = 'Transport mode is required for a transport service.';
+  // Category-scoped: a transport service must say who transports (self / staff) — R-120.
+  // 🔴 THIS CHECK EXISTED BEFORE 2026-09-11 AND COULD NEVER FIRE. Both forms seeded the mode with
+  // 'staff', so the select always held a value, and the editor turned a NULL mode into 'staff' on
+  // open. The state now starts EMPTY, so the refusal is reachable — a guard nobody can trip is not
+  // a guard (§6 r19).
+  const bindErr = transportBindingError(f.category, f.transportMode);
+  if (bindErr) errs.transportMode = bindErr;
   return errs;
 }
 
@@ -357,7 +365,7 @@ export function Settings({
   const [editForm, setEditForm]           = useState<EditForm>({
     name: '', description: '', price: '',
     category: 'addon', price_type: 'per_unit', price_unit: 'plant',
-    transport_mode: 'staff', requires_address: false, trigger_transport_mode: '',
+    transport_mode: '', requires_address: false, trigger_transport_mode: '',
     compliance_title: '', compliance_body: '', service_note: '',
   });
   const [savingOffering, setSavingOffering] = useState(false);
@@ -377,7 +385,7 @@ export function Settings({
   const [newTiming, setNewTiming]         = useState('at_checkout');
   const [newPriceType, setNewPriceType]   = useState('per_unit');
   const [newPriceUnit, setNewPriceUnit]   = useState('plant');   // DISTINCT from price_type — no longer derived
-  const [newTransportMode, setNewTransportMode]       = useState('staff'); // only when category=transport
+  const [newTransportMode, setNewTransportMode]       = useState('');      // only when category=transport — EMPTY until chosen (R-120: never a silent default)
   const [newRequiresAddress, setNewRequiresAddress]   = useState(false);   // only when category=transport
   const [newTriggerMode, setNewTriggerMode]           = useState('');      // '' = always show; only when category=addon
   const [addingOffering, setAddingOffering] = useState(false);
@@ -406,6 +414,15 @@ export function Settings({
     // + RLS owner-fence). ON by default (STD-003) until owner-proven.
     console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action });
     setServiceError(null);
+    // R-120 — turning ON a transport service that does not say who transports would read "On" while
+    // checkout still cannot offer it. Refused with the reason; turning it OFF is always allowed.
+    const row = offerings.find(o => o.id === id);
+    const unbound = !current && row ? transportBindingError(row.category, row.transport_mode) : null;
+    if (unbound) {
+      console.log('[TRACE:SERVICE] save blocked', { businessId, serviceId: id, action, reason: 'transport_mode missing' });
+      setServiceError({ id, text: `Not turned on. ${unbound} Press Edit and choose one first.` });
+      return;
+    }
     // A8 — `.select('id')` asks for EVIDENCE IT LANDED. Without it an RLS refusal comes back as
     // zero rows and NO error, i.e. indistinguishable from success.
     const { data: hit, error } = await supabase
@@ -433,7 +450,8 @@ export function Settings({
       category:          o.category,
       price_type:        o.price_type,
       price_unit:        o.price_unit,
-      transport_mode:    o.transport_mode ?? 'staff',
+      // A row with no mode opens with NO mode, so saving it demands one (R-120) — never '?? staff'.
+      transport_mode:    o.transport_mode ?? '',
       requires_address:  o.requires_address,
       trigger_transport_mode: o.trigger_transport_mode ?? '',
       compliance_title:  (o as any).compliance_title  ?? '',
@@ -457,14 +475,19 @@ export function Settings({
     setEditErrors({});
     setSavingOffering(true);
     const price = parseFloat(editForm.price);
-    const isTransport = editForm.category === 'transport';
-    const isAddon     = editForm.category === 'addon';
     // Category-scoped rules: transport carries transport_mode + requires_address; an addon can be
     // gated by trigger_transport_mode. Clear the ones that don't apply so moving a service between
-    // categories can't leave a stale rule behind.
-    const transport_mode         = isTransport ? editForm.transport_mode : null;
-    const requires_address       = isTransport ? editForm.requires_address : false;
-    const trigger_transport_mode = isAddon && editForm.trigger_transport_mode ? editForm.trigger_transport_mode : null;
+    // categories can't leave a stale rule behind. ONE mapping, shared with the books review (R-120).
+    const scoped = categoryScopedFields({
+      category: editForm.category, transportMode: editForm.transport_mode,
+      requiresAddress: editForm.requires_address, triggerTransportMode: editForm.trigger_transport_mode,
+    });
+    if (!scoped.ok) {
+      setEditErrors({ transportMode: scoped.reason });
+      setSavingOffering(false);
+      return;
+    }
+    const { transport_mode, requires_address, trigger_transport_mode } = scoped.fields;
     // [TRACE:SERVICE] log the un-conflated rule being written.
     console.log('[TRACE:SERVICE] save', {
       businessId, serviceId: editingId, action: 'edit',
@@ -557,15 +580,21 @@ export function Settings({
     setAddErrors({});
     setAddingOffering(true);
     const price = parseFloat(newPrice);
-    const isTransport = newCategory === 'transport';
-    const isAddon     = newCategory === 'addon';
+    // ONE mapping, shared with the editor and the books review (R-120).
+    const scoped = categoryScopedFields({
+      category: newCategory, transportMode: newTransportMode,
+      requiresAddress: newRequiresAddress, triggerTransportMode: newTriggerMode,
+    });
+    if (!scoped.ok) {
+      setAddErrors({ transportMode: scoped.reason });
+      setAddingOffering(false);
+      return;
+    }
     // [TRACE:SERVICE] log the un-conflated rule being written (category · price_type · price_unit).
     console.log('[TRACE:SERVICE] save', {
       businessId, action: 'add',
       category: newCategory, price_type: newPriceType, price_unit: newPriceUnit,
-      transport_mode: isTransport ? newTransportMode : null,
-      trigger_transport_mode: isAddon && newTriggerMode ? newTriggerMode : null,
-      requires_address: isTransport ? newRequiresAddress : false,
+      ...scoped.fields,
     });
     const { data, error } = await supabase.from('service_offerings').insert({
       business_id:  businessId,
@@ -576,12 +605,10 @@ export function Settings({
       price_type:   newPriceType,
       price_unit:   newPriceUnit,   // OWNER-SET, no longer derived from price_type
       price,
-      // transport_mode is only meaningful for a transport service (self triggers netting).
-      transport_mode:         isTransport ? newTransportMode : null,
-      // trigger_transport_mode gates an addon to a chosen transport mode ('' = always show).
-      trigger_transport_mode: isAddon && newTriggerMode ? newTriggerMode : null,
-      // a delivery/install service needs a destination address.
-      requires_address:       isTransport ? newRequiresAddress : false,
+      // transport_mode (transport only — self triggers netting) · trigger_transport_mode (an addon
+      // gated to a mode; null = always show) · requires_address (transport only, defaults from the
+      // mode). All three from the one shared mapping above.
+      ...scoped.fields,
       is_active:    true,
       pre_selected: false,
       sort_order:   offerings.length + 10,
@@ -604,7 +631,7 @@ export function Settings({
     setNewName(''); setNewDesc(''); setNewPrice('');
     setNewCategory('addon'); setNewTiming('at_checkout');
     setNewPriceType('per_unit'); setNewPriceUnit('plant');
-    setNewTransportMode('staff'); setNewRequiresAddress(false); setNewTriggerMode('');
+    setNewTransportMode(''); setNewRequiresAddress(false); setNewTriggerMode('');
     setShowAddForm(false);
     setAddingOffering(false);
   }
@@ -930,7 +957,10 @@ export function Settings({
                   {newCategory === 'transport' && (
                     <div style={{ marginBottom: 8, padding: '10px 12px', background: '#fff', borderRadius: 9, border: '1px solid #e5e7eb' }}>
                       <FieldLabel text="Transport mode">
-                        <select value={newTransportMode} onChange={e => setNewTransportMode(e.target.value)} style={{ ...inputStyle, marginBottom: 0, ...errBorder(!!addErrors.transportMode) }}>
+                        {/* R-120: starts on "Choose…" and is REQUIRED. Choosing sets the address box to
+                            the mode's default (staff → needs one); the owner can still change it. */}
+                        <select value={newTransportMode} onChange={e => { setNewTransportMode(e.target.value); setNewRequiresAddress(defaultRequiresAddress(e.target.value)); }} style={{ ...inputStyle, marginBottom: 0, ...errBorder(!!addErrors.transportMode) }}>
+                          <option value="">Choose who transports…</option>
                           {TRANSPORT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         <FieldError msg={addErrors.transportMode} />
@@ -1181,7 +1211,8 @@ function OfferingGroup({
                 {editForm.category === 'transport' && (
                   <div style={{ marginBottom: 6, padding: '8px 10px', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>
                     <FieldLabel text="Transport mode">
-                      <select value={editForm.transport_mode} onChange={e => setEditForm({ ...editForm, transport_mode: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.transportMode) }}>
+                      <select value={editForm.transport_mode} onChange={e => setEditForm({ ...editForm, transport_mode: e.target.value, requires_address: defaultRequiresAddress(e.target.value) })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.transportMode) }}>
+                        <option value="">Choose who transports…</option>
                         {TRANSPORT_MODE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
                       </select>
                       <FieldError msg={editErrors.transportMode} />
@@ -1246,7 +1277,17 @@ function OfferingGroup({
                       {o.price === 0 ? 'No charge' : o.price_type === 'per_unit' ? `$${Number(o.price).toFixed(2)}/${o.price_unit}` : `$${Number(o.price).toFixed(2)} flat`}
                       {' · '}{TIMING_LABEL[o.timing] ?? o.timing}
                       {o.trigger_transport_mode ? ` · when ${o.trigger_transport_mode}-transport` : ''}
+                      {o.category === 'transport' && o.transport_mode
+                        ? ` · ${o.transport_mode === 'staff' ? 'your staff transport' : 'customer transports'}${o.requires_address ? ' · needs an address' : ''}`
+                        : ''}
                     </p>
+                    {/* R-120 — a transport row with no mode is INVISIBLE at checkout. It is shown
+                        here, not repaired: which mode it should carry is the owner's fact. */}
+                    {transportBindingError(o.category, o.transport_mode) && (
+                      <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: RED, fontWeight: 600, lineHeight: 1.4 }}>
+                        Customers never see this at checkout — it does not say who transports. Press Edit and choose one.
+                      </p>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button

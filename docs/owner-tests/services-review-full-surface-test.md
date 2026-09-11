@@ -6,8 +6,8 @@
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 
-**Capability:** services / `service_offerings` · **Ledger:** #283
-**Board: 6 of 18 covered** (12 `owed`) — **CARDS 1, 12, 13 and 15 proven live 2026-09-08 on Test Dave's; CARD 10 on LAWNS; CARD 3 FAILED and then PASSED the same day**, both runs recorded on the card.
+**Capability:** services / `service_offerings` · **Ledger:** #283 · #293
+**Board: 5 of 25 covered** (20 `owed`) — **CARDS 1, 12 and 15 proven live 2026-09-08 on Test Dave's; CARD 10 on LAWNS; CARD 3 FAILED and then PASSED the same day**, both runs recorded on the card. 🔁 **CARD 13 flipped to `owed` 2026-09-11 (#293)** — the write it proved changed. **CARDS 19–25 are new (#293 · R-120), every one runnable by David now — start with CARD 19.**
 
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. The review is mounted at
@@ -189,9 +189,14 @@ and confirm no new row. **FAIL:** anything is written, or a $0 row lands, or a g
 the bad one *(the write is all-or-nothing on purpose)*.
 
 ### CARD 13 — the first pass writes what you ticked, and only that
-`STATUS: covered` · `DEVICE: desktop` · `LAST-PROVEN: 2026-09-08 (David, live, Test Dave's)`
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: — (was 2026-09-08)`
 
-✅ **COVERED — David, live, 2026-09-08, Test Dave's.** exactly one ticked service landed, at the price shown, `is_active = true`, and the Services list below reloaded to show it.
+🔁 **FLIPPED `covered` → `owed` 2026-09-11 (#293).** The write this card proved changed: every row now
+carries `transport_mode` · `requires_address` · `trigger_transport_mode`, and a Kind of **transport**
+now demands a mode (that half is CARD 24). A green check on a moved surface asserts a proof nobody
+performed (OP-14). **Re-run it as written with a Kind that is NOT transport.**
+
+**WAS:** ✅ **COVERED — David, live, 2026-09-08, Test Dave's.** exactly one ticked service landed, at the price shown, `is_active = true`, and the Services list below reloaded to show it.
 
 On **Test Dave's**, tick exactly ONE priced service, set its Charged and Kind, and press the button.
 **PASS:** the confirmation names the count and how many services you already had, the Services list
@@ -250,6 +255,179 @@ receives one)*.
 
 ---
 
+## PART FIVE — A TRANSPORT SERVICE MUST SAY WHO TRANSPORTS (#293 · R-120)
+
+> ✅ **DAVID CAN RUN EVERY CARD IN THIS PART NOW** — as owner on **Test Dave's**
+> (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`), in the UI or the Supabase **SQL editor**. None needs
+> Lauren's or Joel's login, and none needs a terminal. **Run CARD 19 first:** it only reads, and it
+> needs no deploy. CARDS 20–24 need GATE 0 — the stamp must match the pushed SHA. **CARD 25 runs
+> only after the migration is applied.**
+>
+> **Story:** *Template-driven service setup — a non-technical owner can't mis-shape a service* (MATCH,
+> part-answered). **Ruling:** R-120 — *"pick transport, and the mode field appears and is required."*
+> Every card proves a REFUSAL before an acceptance: a form only ever seen accepting is not a proven guard.
+
+### CARD 19 — the half-bound transport rows that exist today — REPORTED, NOT REPAIRED
+`STATUS: owed` · `DEVICE: desktop (SQL editor)` · `LAST-PROVEN: —`
+**WHO:** David · **TENANT:** every tenant · **READ-ONLY** · **COVERS:** #293 · R-120 ④
+
+Paste into the SQL editor. It changes nothing.
+```sql
+select b.name as business, so.name, so.category, so.transport_mode, so.requires_address,
+       so.is_active, so.timing, so.price_type, so.price_unit, so.price, so.created_at, so.id
+  from service_offerings so
+  join businesses b on b.id = so.business_id
+ where so.category = 'transport'
+   and so.transport_mode is null
+ order by b.name, so.created_at;
+```
+**PASS:** it runs. Write down every row: business, name, active. **Zero rows is a pass**, and it means
+the migration may be applied. Any rows: each one is a service its customers cannot see at checkout.
+**Do not fix them from this card** — which mode each carries is its owner's decision (R-120 ④), and
+CARD 23 shows how such a row now looks on the Services list. **FAIL:** the query errors.
+⚠️ *Thunder did not run it — no PAT in that session, and the credential read was refused.*
+
+### CARD 20 — 🔴 THE REFUSAL: a transport service with no mode cannot be added
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, as owner · **TENANT:** Test Dave's · **COVERS:** #293 · R-120 ①
+
+1. Count first: `select count(*) from service_offerings where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';`
+2. `/settings/services` → **+ Add service**. Name `ZZ R-120 test`, price `1`, Category **Transport**.
+3. A **Transport mode** select appears. **Leave it on "Choose who transports…"** and press **Add Service**.
+
+**PASS:** the select turns red and reads *"Choose who transports — your staff, or the customer. A
+transport service that does not say never appears at checkout."* The form stays open with what you
+typed, and the count is **unchanged**. **FAIL:** a row is added — or the select was already on a mode
+when it appeared, which is the silent `'staff'` default back.
+
+### CARD 21 — the acceptance, and the address box following the mode
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, as owner · **TENANT:** Test Dave's · **COVERS:** #293 · R-120 ②
+
+Continue from CARD 20. Choose **Business provides transport (staff)**.
+**PASS ①:** **Requires a destination address** ticks itself. Switch to **Customer provides own
+transport (self)** — it unticks. Switch back to staff (it ticks), then **untick it by hand**, and
+press **Add Service**. Then:
+```sql
+select name, category, transport_mode, requires_address, trigger_transport_mode, is_active
+  from service_offerings
+ where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and name = 'ZZ R-120 test';
+```
+**PASS ②:** one row — `transport` · `staff` · **`false`** (your override was kept) · `null` · `true`,
+and the list row reads *· your staff transport*. **FAIL:** `transport_mode` null, `requires_address`
+true (the override was lost), or a trigger value.
+**CLEANUP** (Test Dave's only; refuses to delete anything ever sold):
+```sql
+delete from service_offerings
+ where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and name = 'ZZ R-120 test'
+   and not exists (select 1 from order_service_selections s where s.service_offering_id = service_offerings.id);
+```
+
+### CARD 22 — 🔴 THE REFUSAL ON EDIT: switching a service to Transport demands a mode
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, as owner · **TENANT:** Test Dave's · **COVERS:** #293 · R-120 ①
+
+On `/settings/services`, press **Edit** on any **add-on**. Change Category to **Transport**: the mode
+select appears on **Choose who transports…**. Press **Save**.
+**PASS:** refused with the same red sentence, and the editor stays open. Press **Cancel**, then:
+```sql
+select name, category, transport_mode from service_offerings
+ where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and category = 'addon' order by name;
+```
+Every add-on is still an add-on with `transport_mode` null. **FAIL:** it saved as transport with any
+mode, or the select opened already on a mode.
+
+### CARD 23 — a half-bound row is SHOWN, cannot be turned On, and checkout NAMES it
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, as owner · **TENANT:** Test Dave's · **COVERS:** #293 · R-120 ④ · §6 r18
+⚠️ **Only BEFORE the migration is applied** — afterwards the row in step 1 cannot exist, and proving that is CARD 25.
+
+1. Make one, switched OFF, on the test tenant:
+```sql
+insert into service_offerings (business_id, name, category, timing, price_type, price_unit, price, is_active, pre_selected, sort_order)
+values ('f7ec5d67-a9ef-4cb0-b807-438d67687d1b', 'ZZ R-120 half-bound', 'transport', 'at_checkout', 'flat', 'order', 1, false, false, 999);
+```
+2. Reload `/settings/services`. **PASS ①:** under Transport, **ZZ R-120 half-bound** carries a red line —
+   *"Customers never see this at checkout — it does not say who transports. Press Edit and choose one."*
+3. Press its **Off** button. **PASS ②:** it stays Off and says *"Not turned on. Choose who transports…"*.
+4. Press **Edit**. **PASS ③:** the mode select reads **Choose who transports…**, not staff. Press **Cancel**.
+5. Make it live — `update service_offerings set is_active = true where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and name = 'ZZ R-120 half-bound';`
+   — then start a checkout on Test Dave's and reach the services screen. **PASS ④:** the real branches are
+   still offered with their real prices, and the amber **Heads up** line names **"ZZ R-120 half-bound"**
+   and says it does not say who transports.
+
+**FAIL:** the row is offered with a price, the Off button reports On, the editor opens on staff, or
+nothing on either screen names the row.
+**CLEANUP:** `delete from service_offerings where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and name = 'ZZ R-120 half-bound';`
+
+### CARD 24 — 🔴 THE REVIEW PATH: pick transport, and the mode field appears and is required
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, as owner · **TENANT:** Test Dave's (needs its QuickBooks read — CARD 2) · **COVERS:** #293 · R-120 ①
+
+Press **Find my services**. On one row under **WE'RE SURE OF THE PRICE**, set **Kind** to `transport`
+and tick it. Untick every other row. Count: `select count(*) from service_offerings where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';`
+**PASS ①:** a **Who transports** field appears on **choose…**, bordered red, beside a disabled **Needs a
+delivery address** box, and an amber line above the button says a ticked transport service does not say
+who transports. Press the button. **PASS ②:** refused, NAMING the row — *"… — Choose who transports…
+Nothing was written."* — and the count is unchanged.
+Now choose **Business provides transport (staff)**: the address box ticks. Press. **PASS ③:**
+```sql
+select name, category, transport_mode, requires_address, trigger_transport_mode
+  from service_offerings where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+ order by created_at desc limit 1;
+```
+reads `transport` · `staff` · `true` · `null`. **FAIL:** the first press wrote anything, or the row
+lands with `transport_mode` null — which is exactly the 2026-09-09 row.
+⚠️ This leaves one real row on Test Dave's; remove it by name with CARD 21's cleanup if you do not want it.
+
+### CARD 25 — 🔴 AFTER THE MIGRATION: the database itself refuses, and accepts
+`STATUS: owed` · `DEVICE: desktop (SQL editor)` · `LAST-PROVEN: —`
+**WHO:** David · **TENANT:** Test Dave's (nothing survives) · **COVERS:** #293 · R-120
+⚠️ **Only after `20260911_service_offerings_transport_requires_mode.sql` is applied — and it applies only when CARD 19 returns 0 rows.**
+
+**V1:**
+```sql
+select conname, convalidated, pg_get_constraintdef(oid) as definition
+  from pg_constraint
+ where conrelid = 'public.service_offerings'::regclass
+   and conname = 'service_offerings_transport_requires_mode';
+```
+**PASS:** one row, `convalidated = true`, the definition saying `category <> 'transport' OR transport_mode IS NOT NULL`.
+
+**V3 — paste the whole block; both inserts undo themselves:**
+```sql
+create temp table r120_proof (result text);
+do $$
+begin
+  begin
+    insert into service_offerings (business_id, name, category, price_type, price_unit, price)
+    values ('f7ec5d67-a9ef-4cb0-b807-438d67687d1b', 'ZZ R-120 probe — no mode', 'transport', 'flat', 'order', 1);
+    insert into r120_proof values ('FAIL refusal: a transport row with NO mode was ACCEPTED');
+    raise exception 'r120-undo';
+  exception
+    when check_violation then insert into r120_proof values ('PASS refusal: ' || sqlerrm);
+    when raise_exception then if sqlerrm <> 'r120-undo' then raise; end if;
+  end;
+  begin
+    insert into service_offerings (business_id, name, category, price_type, price_unit, price, transport_mode, requires_address)
+    values ('f7ec5d67-a9ef-4cb0-b807-438d67687d1b', 'ZZ R-120 probe — staff', 'transport', 'flat', 'order', 1, 'staff', true);
+    raise exception 'r120-undo';
+  exception
+    when raise_exception then
+      if sqlerrm = 'r120-undo' then insert into r120_proof values ('PASS acceptance: a transport row WITH a mode was accepted (then undone)');
+      else raise; end if;
+    when others then insert into r120_proof values ('FAIL acceptance: ' || sqlerrm);
+  end;
+end $$;
+select * from r120_proof;
+select count(*) as leftover from service_offerings where name like 'ZZ R-120 probe%';
+```
+**PASS:** two rows, both starting `PASS`, and `leftover = 0`. **FAIL:** any `FAIL` row or a non-zero
+leftover. ⚠️ *Thunder has not watched this block run.* If the editor rejects the temp table, that is
+the finding — record it here rather than rewording the card until it passes.
+
+---
+
 ## WHAT THIS BOARD DOES NOT COVER
 
 - **Not one card runs on a phone.** This is a desk screen by design (capture=mobile, reconcile=desktop).
@@ -257,3 +435,11 @@ receives one)*.
   because nothing in this build writes one.
 - **The 147→500 import correction is REPORTED, NOT BUILT.** `qboItemAdapter` still filters
   `Type: 'Category'` and nothing else, so the import button still says 647. See §3 item ①.
+- **The checkout sentence for a business whose ONLY transport rows are mode-less** (#293) is proven by
+  `transport.test.ts` §B/§E, not by a card: producing it live means switching off every real transport
+  row on a tenant. CARD 23 proves the neighbouring case — the Heads-up line beside working rows.
+- **The discovery seed holding back transport suggestions** (#293, closes #217) has no card: it is
+  reachable only through onboarding's website read, which R-101 fences off LAWNS. Proven by
+  `serviceOfferingShape.test.ts` §F against a double that refuses what Postgres refuses.
+- **Tech-debt #251 — a second staff delivery is never offered** — is pinned by `transport.test.ts` §D and
+  deliberately NOT carded: it is an open defect, and a card for it would pass by failing.

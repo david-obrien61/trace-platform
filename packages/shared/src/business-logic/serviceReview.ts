@@ -64,6 +64,8 @@
 import { isDiscountItem } from './discountReview';
 import { BUNDLE_ITEM_NAMES, type QboInvoiceRow } from '../quickbooks/invoiceList';
 import { normalizeSize } from '../utils/sizeLabel';
+// R-120 — a transport row must say who transports; ONE rule, shared with the Settings editor.
+import { categoryScopedFields } from './serviceOfferingShape';
 
 // ── the thresholds, named so a probe can move them and watch a verdict change ────────────────
 /** More than half the priced lines at one price. Not tuned: "more often than not". */
@@ -704,6 +706,10 @@ export interface AcceptedService {
   priceUnit: string;
   price: number;
   sortOrder: number;
+  /** Who transports — REQUIRED when `category` is `transport` (R-120). Ignored for every other category. */
+  transportMode?: string | null;
+  /** Needs a destination address. Omitted ⇒ the mode's default (staff → yes, self → no). */
+  requiresAddress?: boolean | null;
 }
 
 export type ServiceWriteResult =
@@ -725,6 +731,12 @@ export type ServiceWriteResult =
  * for anything it does not recognise — a D-9 honesty fix that **Postgres rejects outright**, and
  * the caller swallows the error as *"seed (non-fatal)"*. Filed as tech-debt; refused here so this
  * writer cannot join it.
+ *
+ * 🔴 AND IT REFUSES A TRANSPORT SERVICE THAT DOES NOT SAY WHO TRANSPORTS (R-120, 2026-09-11).
+ * This writer used to set `category = 'transport'` and never `transport_mode`. LAWNS's Trip Charge
+ * landed that way on 2026-09-09 and **did not appear on an order at all**, because checkout sorts
+ * transport rows by mode and a NULL mode matches nothing. The three category-scoped columns now come
+ * from `categoryScopedFields` — the same mapping the Settings editor writes through.
  *
  * ⚠️ IT NEVER UPDATES. A name already on her menu is refused rather than overwritten — this
  * screen adds what her books evidence; correcting an existing row is the Services editor's job,
@@ -764,6 +776,12 @@ export function buildServiceRows(input: {
     if (!(PRICE_UNITS as readonly string[]).includes(a.priceUnit)) {
       return { ok: false, reason: `"${name}" needs to say what the price is per. Nothing was written.` };
     }
+    const scoped = categoryScopedFields({
+      category: a.category, transportMode: a.transportMode, requiresAddress: a.requiresAddress,
+    });
+    if (!scoped.ok) {
+      return { ok: false, reason: `"${name}" — ${scoped.reason} Nothing was written.` };
+    }
 
     rows.push({
       business_id: businessId,
@@ -779,6 +797,8 @@ export function buildServiceRows(input: {
       is_active: true,
       pre_selected: false,
       sort_order: a.sortOrder,
+      // transport_mode · requires_address · trigger_transport_mode — from the ONE shared mapping.
+      ...scoped.fields,
     });
   }
   return { ok: true, rows };

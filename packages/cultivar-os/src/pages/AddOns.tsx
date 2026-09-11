@@ -166,7 +166,11 @@ export function AddOns() {
           <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Services unavailable — {error}</p>
         ) : choices.length === 0 ? (
           <p style={{ fontSize: '0.875rem', color: '#A32D2D' }}>
-            No transport options are set up — add a delivery, planting, or self-transport service in Settings.
+            {/* R-120 / §6 r18 — "none are set up" is FALSE when a transport row exists and carries no
+                mode (LAWNS, 2026-09-09: the Trip Charge was set up and this line said otherwise). */}
+            {roles.unbound.length > 0
+              ? `${roles.unbound.map(o => o.name).join(', ')} ${roles.unbound.length === 1 ? 'is set up as a transport service but does not say' : 'are set up as transport services but do not say'} who transports, so ${roles.unbound.length === 1 ? 'it cannot' : 'they cannot'} be offered. Choose a transport mode in Settings → Services.`
+              : 'No transport options are set up — add a delivery, planting, or self-transport service in Settings.'}
           </p>
         ) : (
           <>

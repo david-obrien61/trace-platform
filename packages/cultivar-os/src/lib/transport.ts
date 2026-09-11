@@ -21,6 +21,13 @@
 //           reshapes the rows via the Settings offerings editor (a separate task).
 // AC-1:     generic — no vertical noun leaks here; the Ch.725 copy lives in the row's
 //           compliance_title/compliance_body, not in code.
+//
+// 🔴 THE PREDICATE IS THE MODE AND NOTHING ELSE (R-120, confirmed 2026-09-11). A transport row is
+//    a role only if `transport_mode` is 'self' or 'staff'. A row with NO mode matches neither, so
+//    before this date it fell out of every role WITH NO FLAG NAMING IT — LAWNS's Trip Charge on
+//    2026-09-09, and the screen said no transport was set up. It is now collected in `unbound` and
+//    its own flag names it FIRST. It is still not OFFERED — which mode it carries is the owner's
+//    fact, and guessing one here would put a price on an order nobody agreed to.
 // ============================================================
 import type { ServiceOffering } from '../types/plant';
 
@@ -37,6 +44,8 @@ export interface TransportRoles {
   planting: ServiceOffering | null;
   /** the single fused legacy "delivery + planting" per-plant row, present when delivery is absent. */
   fused:    ServiceOffering | null;
+  /** transport rows that say NOTHING about who transports — never offered, always named (R-120). */
+  unbound:  ServiceOffering[];
   /** D-9 honesty: data-shape problems surfaced (never silently mischarged). */
   flags:    string[];
 }
@@ -52,11 +61,23 @@ export interface TransportSelection {
 export function resolveTransportRoles(transportOfferings: ServiceOffering[]): TransportRoles {
   const self  = transportOfferings.find(o => o.transport_mode === 'self') ?? null;
   const staff = transportOfferings.filter(o => o.transport_mode === 'staff');
+  const unbound = transportOfferings.filter(o => o.transport_mode !== 'self' && o.transport_mode !== 'staff');
   const delivery = staff.find(o => o.price_type === 'flat')     ?? null; // per-order
   const planting = staff.find(o => o.price_type === 'per_unit') ?? null; // per-plant
 
   const flags: string[] = [];
   let fused: ServiceOffering | null = null;
+
+  // FIRST, because it is the one an owner cannot see anywhere else on this screen: a service that
+  // IS set up and is not offered. Named, so the heads-up line says which row, not that "something" is off.
+  if (unbound.length > 0) {
+    const names = unbound.map(o => `"${o.name}"`).join(', ');
+    flags.push(
+      unbound.length === 1
+        ? `${names} is set up as transport but does not say who transports (transport_mode is empty), so it is never offered — choose a transport mode for it in Settings.`
+        : `${names} are set up as transport but do not say who transports (transport_mode is empty), so they are never offered — choose a transport mode for them in Settings.`,
+    );
+  }
 
   // FLAG: only a per-plant staff row exists (the fused "We deliver and plant" legacy shape).
   // "Delivery + planting" runs on that one row (scales ×N) but there's no separate per-order
@@ -76,7 +97,7 @@ export function resolveTransportRoles(transportOfferings: ServiceOffering[]): Tr
     flags.push('no staff transport row: neither delivery nor planting is available.');
   }
 
-  return { self, delivery, planting, fused, flags };
+  return { self, delivery, planting, fused, unbound, flags };
 }
 
 /** Which of the three branches can be assembled from the resolved roles. */
