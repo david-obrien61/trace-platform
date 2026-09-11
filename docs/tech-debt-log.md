@@ -1595,12 +1595,12 @@ sentinel becomes the `is_account_holder` boolean that call already returns.
 🔴 **ONE RULING BLOCKS IT AND IT IS DAVID'S: CAN AN OWNER REMOVE A PERMISSION FROM THEMSELVES?** It
 is the reason the locked set exists. If the stored array is the only truth and an owner drops their
 own `settings:update`, **they cannot grant it back.** Lightning's read is NO — the grant surface
-refuses to remove a string from the account holder's own row, and a new business seeds the owner's
+refuses to remove a string from the account holder's own row *(⚠️ scope settled by R-121, 2026-09-11: every OWNER-role member's own row, not only the account holder's)*, and a new business seeds the owner's
 array complete — which puts the guard at the **WRITE**, not a computed set at the **READ**. Wiring
 before that ruling trades a client that over-claims for an owner who can lock themselves out, and
 only the second is unrecoverable from the UI.
 
-**Trigger:** David's ruling on self-removal. Not before.
+**Trigger:** David's ruling on self-removal. Not before. ✅ **FIRED 2026-09-11 — R-121: no owner may remove their own permissions, and the rule covers EVERY OWNER-ROLE MEMBER.** The lockout guard therefore keys on the OWNER role, never `businesses.owner_id`, and wiring `get_my_permissions` is no longer blocked on a ruling. ⚠️ Where the guard sits — at the write, or at the read — is still not ruled.
 
 ## #239 — 🟡 EIGHT OF THE TEN UNDOCUMENTED POLICIES ARE STILL UNCAPTURED (NEW 2026-09-10)
 
