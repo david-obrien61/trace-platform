@@ -60,7 +60,12 @@ const rowIds = (src) => [...src.matchAll(ROW_RE)].map(m => +m[1]);
 // log #12`, and comma/en-dash runs like `tech-debt #143–#145` / `#237-#241`.
 const citedIds = (src) => {
   const out = new Set();
-  const re = /tech[-\s]debt(?:\s+log)?\s*((?:\*\*)?#\d+(?:\*\*)?(?:\s*(?:[,·]|–|—|-|through|to|and)\s*(?:\*\*)?#?\d+(?:\*\*)?)*)/gi;
+  // 🔴 A BARE NUMBER MAY ONLY CONTINUE A RANGE (after – — - through to). After a LIST separator
+  // (, · and) the next id must carry its own `#`. The first version accepted `#?` after any separator,
+  // so `tech-debt **#253–#259** · 8 David actions` read the 8 as tech-debt #8 — a false NET-NEW that
+  // failed `npm run verify` for every session on 2026-09-11, and was committed past because the
+  // close-out printed the red and did not stop on it. Probe below.
+  const re = /tech[-\s]debt(?:\s+log)?\s*((?:\*\*)?#\d+(?:\*\*)?(?:\s*(?:(?:–|—|-|through|to)\s*(?:\*\*)?#?\d+|(?:[,·]|and)\s*(?:\*\*)?#\d+)(?:\*\*)?)*)/gi;
   for (const m of src.matchAll(re)) for (const n of m[1].matchAll(/\d+/g)) out.add(+n[0]);
   return out;
 };
@@ -78,6 +83,12 @@ const note = [];
   // every CLOSE-OUT-LEDGER build number becomes a false violation.
   if (citedIds('| #242 | a build row').size !== 0) { console.error('CAP PROBE FAILED: a bare #N was read as a tech-debt citation — this is the false-positive that disables caps'); process.exit(2); }
   if (citedIds('see #195 above').size !== 0) { console.error('CAP PROBE FAILED: unmarked #N treated as a citation'); process.exit(2); }
+  // 🔴 NEGATIVE CONTROL — the exact committed sentence that produced the false #8.
+  { const got = [...citedIds('tech-debt **#253–#259** · 8 David actions on the story board.')].sort((a, b) => a - b);
+    if (JSON.stringify(got) !== JSON.stringify([253, 259])) { console.error(`CAP PROBE FAILED: a bare number after a list separator was read as a citation (got ${JSON.stringify(got)})`); process.exit(2); } }
+  // …and the forms that MUST still parse after the tightening.
+  if (!citedIds('tech-debt #143–145').has(145)) { console.error('CAP PROBE FAILED: a bare number after a range dash no longer continues the range'); process.exit(2); }
+  if (!citedIds('tech-debt #231, #232 and #233').has(233)) { console.error('CAP PROBE FAILED: a #-marked id after a list separator is no longer read'); process.exit(2); }
   if (rowIds('### #7 — a sub-heading row').length !== 1) { console.error('CAP PROBE FAILED: a ### row is not counted — correction ① above'); process.exit(2); }
   // 🔴 NEGATIVE CONTROL FOR CORRECTION ② — the exact line that produced the false #211 duplicate.
   if (rowIds('**#211 is #280\'s "a declarative comment" **, filed hours earlier').length !== 0) { console.error('CAP PROBE FAILED: bolded prose at line start read as a row — the false-positive this cap already made once'); process.exit(2); }
