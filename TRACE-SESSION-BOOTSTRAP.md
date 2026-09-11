@@ -81,7 +81,7 @@
 
 ### 🟡 ONE STOP, THREE SCREENS — SCHEDULE · ROUTE · ORDER RENDER THE SAME STOP; SHIP-TO EDITABLE; CHECKOUT STOP CARRIES ITS ORDER (2026-09-11, ledger #301)
 
-- 🟡 **BUILDER-COMPLETE ⏳SHA on `main` · no migration · api/ 12/12 · 10 owner-test cards, 0 COVERED** → `docs/owner-tests/stop-full-surface-test.md` · **RUN CARD 1 FIRST** (read-only SQL)
+- 🟡 **BUILDER-COMPLETE `452d684` on `main` · no migration · api/ 12/12 · 10 owner-test cards, 0 COVERED** → `docs/owner-tests/stop-full-surface-test.md` · **RUN CARD 1 FIRST** (read-only SQL)
 - ✅ What is on the order shows on all three screens (LAWNS: 38 of 39 stops show lines; the 39th says it has no order) · ship-to editable from the stop, never writes the customer, recorded in `audit_log`
 - 🔴 **Fee lines are listed, not filtered (R-144)** — the filter waits on the `order_items` → QuickBooks item link (tech-debt #139)
 - 🟡 Route board CARDS 1, 2, 7 flipped back to `owed` — the stop list feeding the handoff was rebuilt
