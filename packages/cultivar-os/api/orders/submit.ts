@@ -251,6 +251,8 @@ export async function scheduleCheckoutDelivery(
     transportMethod: string;
     deliveryDate: string | null;
     invoiceNumber: string;
+    /** The order this stop carries. 🔴 REQUIRED, not optional: a stop without it renders no load. */
+    orderId: string;
     customerRow: Record<string, any> | null;
   },
 ): Promise<CheckoutDeliveryOutcome> {
@@ -283,12 +285,17 @@ export async function scheduleCheckoutDelivery(
     status:        'scheduled',
     source:        'checkout',                               // distinguishable from 'ocr-invoice'
     service_type:  serviceType,
-    notes:         args.invoiceNumber,                       // the breadcrumb back to the order
+    notes:         args.invoiceNumber,                       // the breadcrumb a PERSON reads
+    // 🔴 THE KEY A SCREEN READS (ledger #301). Every stop card finds what is on its order through
+    // `deliveries.order_id`; a stop written with only the invoice number in `notes` rendered "No order
+    // is linked to this stop" for an order that was taken minutes ago. LAWNS had no checkout stops, so
+    // nothing showed it — until the first real order at the counter. The column is live (20260827).
+    order_id:      args.orderId,
   };
 
   console.log('[TRACE:DELIVERY] checkout — scheduling a stop', {
     businessId: args.businessId, customerId: args.customerId, transportMethod: args.transportMethod,
-    serviceType, deliveryDate: row.delivery_date ?? '(undated)', invoiceNumber: args.invoiceNumber,
+    serviceType, deliveryDate: row.delivery_date ?? '(undated)', invoiceNumber: args.invoiceNumber, orderId: args.orderId,
     addressPresent: !!row.address_line1,
   });
 
@@ -1186,6 +1193,7 @@ async function handleCreate(req: any, res: any) {
       transportMethod,
       deliveryDate: deliveryDateVal,
       invoiceNumber,
+      orderId,
       customerRow: (custRow as Record<string, any> | null) ?? null,
     });
     console.log('[TRACE:DELIVERY] checkout scheduling outcome', { orderId, invoiceNumber, ...deliveryOutcome });

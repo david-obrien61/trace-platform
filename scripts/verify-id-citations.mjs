@@ -116,12 +116,26 @@ for (const id of ids) (seen.has(id) ? dup : seen).add(id);
 for (const id of [...dup].sort((a, b) => a - b)) fail.push(`DUPLICATE ROW — tech-debt #${id} has more than one \`## #${id}\` heading in ${LOG}. The later one silently overwrites the earlier.`);
 
 // ── B — no NET-NEW dangling citation (ratchet; see the header for why) ───────
+// ③ CORRECTION 2026-09-11 (ledger #301) — THE LOG'S OLDER ENTRIES ARE TABLE ROWS, AND ROW_RE COULD NOT SEE
+//    ONE. `| 139 | 🟡 **THE DAY SHEET …** |` sits at docs/tech-debt-log.md:282, yet `tech-debt #139` read as
+//    DANGLING — and #108 and #140 were baselined as "cited-but-unfiled" for the same reason. The cap was
+//    reporting FILED rows as unfiled: a check that could not reach its target (R-33, tech-debt #182's class).
+//    Table rows count as FILED for clause B only. Clause A stays on headings: the two formats were never
+//    meant to be unique across each other. The discriminator is the status marker or bold that opens every
+//    real row's second cell, so a numeric cell in some other table is not mistaken for a filing.
+const TABLE_ROW_RE = /^\| (\d+) \| (?:🟡|🔴|🟢|✅|⚠️|\*\*|~~)/gmu;
+const filedIds = (src) => new Set([...rowIds(src), ...[...src.matchAll(TABLE_ROW_RE)].map(m => +m[1])]);
+if (!filedIds('| 139 | 🟡 **THE DAY SHEET** | x |').has(139)) { console.error('CAP PROBE FAILED: a legacy table row is not counted as filed — correction ③'); process.exit(2); }
+if (filedIds('| 3 | 4 | a count in some other table |').has(3)) { console.error('CAP PROBE FAILED: a numeric table cell with no status marker was counted as a filing'); process.exit(2); }
+if (filedIds('see | 139 | 🟡 mid-line').has(139)) { console.error('CAP PROBE FAILED: a table row not at line start was counted as a filing'); process.exit(2); }
+if (rowIds('| 139 | 🟡 **x** |').length !== 0) { console.error('CAP PROBE FAILED: a table row leaked into clause A\'s duplicate check'); process.exit(2); }
+const filed = filedIds(log);
 const base = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : { _comment: '', stamped: null, dangling: {} };
 const current = {};
 for (const doc of WATCHED) {
   if (!existsSync(doc)) { note.push(`watched doc absent, skipped: ${doc}`); continue; }
   const cited = citedIds(readFileSync(doc, 'utf8'));
-  current[doc] = [...cited].filter(id => !idSet.has(id)).sort((a, b) => a - b);
+  current[doc] = [...cited].filter(id => !filed.has(id)).sort((a, b) => a - b);
 }
 if (UPDATE) {
   writeFileSync(BASELINE, JSON.stringify({

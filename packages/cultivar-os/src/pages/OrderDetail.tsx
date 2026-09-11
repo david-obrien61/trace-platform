@@ -8,7 +8,10 @@
 //   controls never render, and the server independently refuses — submit.ts action gate).
 // DEPENDENCIES: supabase (owner-RLS read), useBusinessContext (can), /api/orders/submit
 //   (action=update|delete|status, Bearer-token gated), orderItemName, orderStatus.
-// OUTPUTS: the order detail view + the edit/delete/status affordances.
+// OUTPUTS: the order detail view + the edit/delete/status affordances + the order's delivery stop(s).
+// STOP (ledger #301, 2026-09-11): the stop renders through the ONE <StopCard> the schedule and the
+//   route render — customer, ship-to, what is on the order, status, actions — read via `readStops`
+//   and acting via `useStopActions` (STD-017). This screen's own axis is the money; the card adds none.
 // ============================================================
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,7 +23,12 @@ import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../l
 import { ORDER_STATUSES, ORDER_STATUS_META, orderStatusMeta } from '../lib/orderStatus';
 import { OrderTotals } from '../components/checkout/OrderTotals';
 import type { TaxStatus } from '@trace/shared/business-logic';
-import { NotPermitted } from '@trace/shared/components/SurfaceState';
+import { NotPermitted, WithheldData } from '@trace/shared/components/SurfaceState';
+// The ONE stop (ledger #301, STD-017) — this screen's own axis is the money above; the stop is the same
+// card, read and actions the schedule and the route render.
+import { readStops, type StopRead } from '../lib/stopRead';
+import { StopCard } from '../components/delivery/StopCard';
+import { useStopActions } from '../components/delivery/useStopActions';
 
 interface DetailItem extends OrderItemAnchorFields {
   id: string;
@@ -118,6 +126,22 @@ export function OrderDetail() {
   const [removed,  setRemoved]      = useState<Set<string>>(new Set());
   const [dateEdit, setDateEdit]     = useState<string>('');
   const [statusEdit, setStatusEdit] = useState<string>('');
+
+  // The order's delivery stop(s), through the ONE stop read. Booleans, not `can`, in the deps: a
+  // function identity that changes per render would re-read on every render.
+  const canReadStops = can('deliveries:read');
+  const canReadLines = can('order_items:read');
+  const [stops, setStops]           = useState<StopRead | null>(null);
+  const [stopsError, setStopsError] = useState<string | null>(null);
+  const loadStops = useCallback(async () => {
+    if (!businessId || !id || !canReadStops) return;
+    const res = await readStops(supabase, businessId, { kind: 'order', orderId: id }, { readLines: canReadLines });
+    if (!res.ok) { setStopsError(res.error); return; }
+    setStopsError(null);
+    setStops(res.value);
+  }, [businessId, id, canReadStops, canReadLines]);
+  useEffect(() => { void loadStops(); }, [loadStops]);
+  const stopActions = useStopActions({ onChanged: loadStops });
 
   const load = useCallback(async () => {
     if (!businessId || !id) return;
@@ -398,6 +422,31 @@ export function OrderDetail() {
         </div>
         {order.transport_note && <p style={{ ...sub, marginTop: 8 }}>{order.transport_note}</p>}
       </Card>
+
+      {/* ── The delivery stop — the SAME card the schedule and the route render (ledger #301). This
+          screen's own axis is the money above; the stop adds no second price. ⚠️ The order's
+          "Delivery date" above and the stop's date below are TWO columns and can disagree (10 of 36
+          LAWNS pairs, tech-debt #108) — shown side by side here, which is the honest place to see it. */}
+      {!canReadStops ? (
+        <WithheldData permission="deliveries:read" what="This order’s delivery stop" style={{ marginBottom: 12 }} />
+      ) : stopsError ? (
+        <Banner tone="err">Couldn’t read this order’s delivery stop: {stopsError}</Banner>
+      ) : stops && stops.stops.length > 0 ? (
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            Delivery stop{stops.stops.length > 1 ? 's' : ''}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {stops.stops.map(s => <StopCard key={s.id} stop={s} read={stops} actions={stopActions} />)}
+          </div>
+        </div>
+      ) : stops && order.transport_method !== 'self' ? (
+        // A self-haul order has no stop BY DESIGN (checkout writes none), so it gets no sentence; any
+        // other order with none is a fact worth saying rather than an empty space.
+        <Card title="Delivery stop"><p style={sub}>No delivery stop is linked to this order.</p></Card>
+      ) : null}
+      {stopActions.actionError && <Banner tone="err">{stopActions.actionError}</Banner>}
+      {stopActions.overlays}
 
       {/* Owner/manager actions */}
       {canManage && (

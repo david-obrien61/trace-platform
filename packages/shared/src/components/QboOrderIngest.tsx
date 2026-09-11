@@ -27,6 +27,7 @@ import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useBusinessContext } from '../context';
 import { holdsOwnerAuthority } from '../auth/ownerAuthority';
+import { OrderLineList } from './OrderLineList';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -396,20 +397,8 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
                       {openId === p.deliveryId && (
                         <tr>
                           <td colSpan={6} style={{ padding: '.35rem .5rem .8rem', background: '#fafafa' }}>
-                            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '.78rem' }}>
-                              <tbody>
-                                {p.lines.map((l, i) => (
-                                  <tr key={i}>
-                                    <td style={{ padding: '.2rem .4rem', color: GRAY, whiteSpace: 'nowrap',
-                                                 fontFamily: 'ui-monospace, monospace' }}>{l.sku || '—'}</td>
-                                    <td style={{ padding: '.2rem .4rem', color: DARK }}>{l.description || '(no description)'}</td>
-                                    <td style={{ padding: '.2rem .4rem', color: DARK, whiteSpace: 'nowrap' }}>×{l.quantity}</td>
-                                    <td style={{ padding: '.2rem .4rem', color: GRAY, whiteSpace: 'nowrap' }}>@ {money(l.unitPrice)}</td>
-                                    <td style={{ padding: '.2rem .4rem', color: DARK, whiteSpace: 'nowrap' }}>{money(l.subtotal)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            {/* The ONE line renderer — the stop card renders these same lines (ledger #301). */}
+                            <OrderLineList lines={p.lines} money={money} />
                             {p.notes.length > 0 && (
                               <p style={{ margin: '.45rem 0 0', color: AMBER, fontSize: '.76rem', lineHeight: 1.5 }}>
                                 <strong>On the invoice, not on the truck:</strong> {p.notes.join(' · ')}

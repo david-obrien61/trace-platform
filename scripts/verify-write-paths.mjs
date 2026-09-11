@@ -170,11 +170,22 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/src/pages/ReceiptKeeper.tsx',
             'packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
   },
+  // AMENDED 2026-09-11 (ledger #301) — a SECOND declared writer, and it IS the separate client insert
+  // the reason below warns against, so why it is accepted is stated rather than slipped in. David asked
+  // that a ship-to edit be RECORDED with the customer and both addresses — the evidence D-41 waits on
+  // before building a saved address book. The address update and the history row are two PostgREST
+  // calls; `saveShipTo` writes the address FIRST and the row second, so a half-landed save can only
+  // ever be "saved, not recorded" — which the card SAYS — and never a history row for a change that did
+  // not happen. One RPC doing both is the durable form; it is a migration, filed as tech-debt #276.
   'audit_log': {
     reason: 'Append-only by RLS + trigger + REVOKE. The row is written INSIDE the audited action '
           + '(edit_receipt_line_items) rather than by a separate client insert that could half-land '
-          + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC.',
-    paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
+          + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC. '
+          + 'SECOND (2026-09-11): stopWrites.ts records a ship-to change (delivery.ship_to_changed) '
+          + 'AFTER the address update lands, so a partial save is "saved, not recorded" and says so — '
+          + 'never a row for a change that did not happen. The one-RPC form is tech-debt #276.',
+    paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx',
+            'packages/cultivar-os/src/lib/stopWrites.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
@@ -227,7 +238,11 @@ const ALLOWED_DIVERGENCE = {
           + 'writes (qb_invoice_id, source=qbo-shipdate). No column overlap with the order paths.',
     paths: ['packages/cultivar-os/api/customers/create.ts',
             'packages/cultivar-os/api/orders/submit.ts',
-            'packages/cultivar-os/src/pages/DeliverySchedule.tsx',
+            // ✏️ 2026-09-11 (ledger #301): the schedule screen's writes MOVED, they did not multiply.
+            // The tap, the date move, the review-ask record and the new ship-to edit go through ONE
+            // module every stop screen shares — so the route and the order screen gained them without
+            // becoming writers themselves. DeliverySchedule.tsx no longer writes this table.
+            'packages/cultivar-os/src/lib/stopWrites.ts',
             'packages/shared/src/quickbooks/deliveryIngestWriter.ts',
             // DECLARED 2026-08-31 (the load pass). A FIFTH path, and the narrowest of the five:
             // it writes exactly ONE column, `order_id`, on a row that already exists, and only

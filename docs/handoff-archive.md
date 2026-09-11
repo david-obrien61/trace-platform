@@ -1,5 +1,19 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #301, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **THE ZONE WALK IS SERVED FROM A URL, AND THE PLACE ITS EXPORT IS FOR DOES NOT EXIST. #298. TECH-DEBT #266.** 🔴 **THE HEADLINE IS WHAT HOSTING IT TURNED UP: `status.html`, `owner-tests.html` AND `ui-standards.html` ARE NOT SERVED BY VERCEL — each URL on `cultivar-os.app` returns the 446-byte app shell.** Root HTML never reaches `dist/`. The tool went where Vite does copy files verbatim, `packages/cultivar-os/public/tools/` — the package's first `public/` folder.
+
+**Type:** ONE STATIC FILE + DOCS, on `main`. No app code, no route, no migration, nothing written to the database; api/ 12/12. **§3 RETENTION: 1 archived verbatim (#295), 1 written — entries-in == entries-out.**
+
+✅ **HOSTED:** `https://cultivar-os.app/tools/zone-walk.html` — byte-identical to David's file (58,970 bytes; a local `vite build` puts it in `dist/tools/`). Filed in built-inventory as a *capture tool, not app code*, with the precedent named: R-118's recipe-builder mockup spent five days as an anonymous download.
+
+⚠️ **IT WRITES NOTHING TO THE DATABASE** — no network call anywhere in the file. **Export** downloads a JSON file a human hands over.
+
+🔴 **ITS IMPORT TARGET IS NOT THERE — measured live, `supabase_read_only_user`:** no `business_inventory.zone` (control: `size` and `attributes` returned), no zone or irrigation table. The only zone-shaped column is `cultivar_plants.location_zone`, on a table with 0 rows. Tech-debt **#266**; the shape (a zone holds many lots, a lot can span zones) is David's call.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **try Export on Joel's phone before zone 1** — the file revokes its download link the instant it clicks it, which some Safari versions cancel. A failed Export loses nothing; the data stays on the phone. **(b)** tell Joel: same phone, same Safari, not a Private tab, don't add it to the Home Screen part-way, Export at the end of each day. **(c)** the three root boards open from the repo, not from the site. **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#266**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #300, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **PMI: THE ASSET TABLE THE PROMPT SAID WAS GONE WAS RENAMED, NOT DROPPED — SO NO SECOND ONE WAS WRITTEN. #297. R-139…R-142. TECH-DEBT #261–#265.** 🔴 **THE HEADLINE IS A PREMISE CORRECTED BY MEASUREMENT: `business_assets` BECAME `cost_objects` ON 2026-06-15, BOTH `asset_id` FOREIGN KEYS POINT THERE, AND ALL THREE "ORPHAN" SCHEDULES RESOLVE TO REAL EQUIPMENT IN THEIR OWN TENANT.** A catalog sweep for `%asset%` cannot see a table named `cost_objects`. Lifting `pmi_assets` into a new table would have made two stores for one fact — the defect the prompt itself warned against — so ② was **not built**, and the question it was reaching for is filed as an OWED decision.

@@ -10,7 +10,7 @@
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing) · the first capability behind `followup_engine`
 **Story:** `user_stories.md` → *The stop is done — one tap, and a moved stop says where it went* (PIECES `fulfilment_tap`, `delivery_complete_state`) · *Ask for a review at the door* (ledger #247; the link moved to Business Profile in #300)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 17 covered** (15 `owed` · 2 `needs-test`). ✏️ **#300 (2026-09-11) added CARDS 13–17 and re-aimed CARDS 6, 8, 9 and 10** — the link field moved to Business Profile, and a stop marked done after its own date no longer prompts.
+**Board: 0 of 17 covered** (15 `owed` · 2 `needs-test`). ✏️ **#300 (2026-09-11) added CARDS 13–17 and re-aimed CARDS 6, 8, 9 and 10** — the link field moved to Business Profile, and a stop marked done after its own date no longer prompts. ✏️ **#301 (2026-09-11): the tap and the ask moved into the shared `<StopCard>` + `useStopActions`** — same decisions, same permission strings, and they now also appear on `/deliveries?date=` and `/orders/:id`. No card here was `covered`, so nothing flips; every card still reads `/delivery-schedule` and still applies. The stop's own board is `stop-full-surface-test.md`.
 **DEVICE:** CARDS 2–7, 10, 12 and 17 are **`DEVICE: phone`** — a crew surface in a customer's garden, every one provable **without a console**. CARDS 8, 9, 14 and 15 are `DEVICE: desktop`. CARDS 13 and 16 are the **SQL editor**. CARDS 1 and 11 are `needs-test`.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**

@@ -90,6 +90,7 @@ const BASE = {
   customerId: 'cust-1',
   deliveryDate: '2026-09-04',
   invoiceNumber: 'CLV-20260825-1693',
+  orderId: 'order-1',
   customerRow: CUSTOMER_FULL as Record<string, any>,
 };
 
@@ -124,6 +125,9 @@ async function main(): Promise<void> {
     ok(r.status === 'scheduled',           `B4 status is 'scheduled' (got ${r.status})`);
     ok(r.source === 'checkout',            `B5 source is 'checkout' — distinguishable from 'ocr-invoice' (got ${r.source})`);
     ok(r.notes === 'CLV-20260825-1693',    `B6 notes carries the invoice number (got ${r.notes})`);
+    // ledger #301 — the key every stop card reads its lines through. Without it a checkout stop says
+    // "No order is linked to this stop" beside an order taken minutes earlier.
+    ok(r.order_id === 'order-1',           `B6b order_id carries the order this stop belongs to (got ${r.order_id})`);
     ok(r.business_id === 'biz-1' && r.customer_id === 'cust-1', 'B7 scoped to the order\'s business + customer');
     ok(r.address_line1 === '400 Honeycomb Mesa' && r.city === 'Leander' && r.state === 'TX' && r.zip === '78641',
       'B8 city/state/zip are SEPARATE columns, matching the seeded row shape');
@@ -234,8 +238,16 @@ async function main(): Promise<void> {
     ok(db.rows.deliveries.length !== 2, 'I1 the counter does not double-count one insert');
     ok(db.rows.deliveries[0]?.service_type !== 'planting',
       'I2 the service_type mapping is not constant — a delivery is NOT tagged planting');
-    ok((db.rows.deliveries[0] as any)?.order_id === undefined,
-      'I3 no order_id is written — the column does not exist and this build adds none (zero migrations)');
+    // ✏️ FLIPPED 2026-09-11 (ledger #301). This asserted that NO order_id was written, on the premise
+    // "the column does not exist". It did exist — 20260827 adds it and 38 LAWNS stops carry it — and the
+    // assertion was guarding the defect: a checkout stop whose load no screen could find.
+    ok((db.rows.deliveries[0] as any)?.order_id === 'order-1',
+      'I3 the order id written is the order passed in');
+  }
+  {
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', orderId: 'order-2' });
+    ok((db.rows.deliveries[0] as any)?.order_id === 'order-2', 'I3b the order id is not a constant');
   }
   {
     // The stub itself must be capable of reporting a miss, or every count above is meaningless.

@@ -11,7 +11,7 @@
 **Story:** `user_stories.md` → *What the driver receives is what the manager saw* (PIECES `handoff_order_parity`, `one_derived_route_url`, `stop_count_parity`)
 **Surface:** `/deliveries` — and, for every card below, **the artefact that leaves it**.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 3 of 8 covered** (4 `owed` · 1 `needs-test`) — **CARDS 1, 2 and 7 proven live 2026-09-09 on LAWNS, build `f5f40e3`, the first run in this feature's history.** **CARD 2 is `covered` WITH A NAMED LIMIT** (Cultivar on the phone, Google's render on desktop — the mobile half is unevidenced). CARD 8 carries a partial desktop finding and a rewritten method; it stays `needs-test`.
+**Board: 0 of 8 covered** (7 `owed` · 1 `needs-test`) — ✏️ **#301 (2026-09-11) flipped CARDS 1, 2 and 7 back to `owed`: the stop list that feeds the route on `/deliveries?date=` was rebuilt as the shared stop card.** Before that — **CARDS 1, 2 and 7 proven live 2026-09-09 on LAWNS, build `f5f40e3`, the first run in this feature's history.** **CARD 2 is `covered` WITH A NAMED LIMIT** (Cultivar on the phone, Google's render on desktop — the mobile half is unevidenced). CARD 8 carries a partial desktop finding and a rewritten method; it stays `needs-test`.
 ⚠️ **THE ROUTE COULD NOT BE BUILT UNTIL TWO LIVE ADDRESSES WERE CORRECTED** — see CARD 2 and tech-debt #226/#227.
 **DEVICE:** CARDS 1–3 and 5–6 are `DEVICE: desktop` (Lauren builds the route at a desk). **CARD 4 is `DEVICE: phone` and is the one that matters most** — it reads what actually landed on the installer's handset, and it is provable **without a console**.
 
@@ -35,7 +35,13 @@ error that produced this board.
 ---
 
 ## CARD 1 — the link carries the order the screen shows
-**STATUS: covered · **DEVICE:** desktop · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — (was covered 2026-09-09, David, live, LAWNS)
+
+✏️ **FLIPPED `covered` → `owed` 2026-09-11 (ledger #301, OP-14 clause 3).** The handoff derivation is
+unchanged, but the stop list that FEEDS it on `/deliveries?date=` was rebuilt: stops are now read
+through `readStops` and rendered as the shared `<StopCard>`, and their address is the stop's own
+ship-to via `shipToLine` rather than a synthetic customer object. A green check on a moved surface
+asserts a proof nobody performed. The 2026-09-09 run below stays as the record of what passed then.
 
 ✅ **COVERED — David, live, 2026-09-09, LAWNS, build `f5f40e3`. THE FIRST RUN IN THIS FEATURE'S
 HISTORY.** Saturday 09-12, **8 stops**. Google's own panel returned:
@@ -75,7 +81,11 @@ this card fails, nothing else on this board matters.**
 ---
 
 ## CARD 2 — 🔴 the text the installer receives
-**STATUS: covered · **DEVICE:** phone · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS) — PASSED WITH ONE LIMIT
+**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** — (was covered 2026-09-09, David, live, LAWNS, passed with one limit)
+
+✏️ **FLIPPED `covered` → `owed` 2026-09-11 (ledger #301, OP-14 clause 3)** — for the same reason as
+CARD 1: the stop list that feeds the handoff on `/deliveries?date=` was rebuilt. Re-run it with the
+new `stop` board's CARD 6 (a changed ship-to must reach the link).
 
 ✅ **COVERED — PASSED WITH A NAMED LIMIT. David, live, 2026-09-09, LAWNS, build `f5f40e3`. THE FIRST
 RUN IN THIS FEATURE'S HISTORY, and this is the card the whole build was for.**
@@ -180,7 +190,10 @@ the farm.
 ---
 
 ## CARD 7 — the farm is at both ends
-**STATUS: covered · **DEVICE:** desktop · **LAST-PROVEN: 2026-09-09 (David, live, LAWNS)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — (was covered 2026-09-09, David, live, LAWNS)
+
+✏️ **FLIPPED `covered` → `owed` 2026-09-11 (ledger #301, OP-14 clause 3)** — the stop list feeding the
+route on `/deliveries?date=` was rebuilt; see CARD 1. Settled by the same re-run.
 
 ✅ **COVERED — David, live, 2026-09-09, LAWNS, build `f5f40e3`.** The same Google panel read
 **`400 Honey Comb Mesa` first and last** — the driver leaves the farm and returns to it. Settled by

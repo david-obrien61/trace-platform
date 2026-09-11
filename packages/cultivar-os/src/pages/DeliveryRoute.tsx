@@ -11,6 +11,12 @@ import { customerDisplayName } from '@trace/shared/utils/personName';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
 import { buildRouteHandoff, driverSmsBody, type HandoffStop } from '../lib/routeHandoff';
+// ?date= mode renders the ONE stop (ledger #301, STD-017): the same read, card and actions as the
+// schedule and the order screen. This page adds only its own axis — the selection and the sequence.
+import { readStops, type StopRead } from '../lib/stopRead';
+import { shipToLine } from '../lib/stopWrites';
+import { StopCard } from '../components/delivery/StopCard';
+import { useStopActions } from '../components/delivery/useStopActions';
 
 interface DeliveryOrder {
   id: string;
@@ -373,6 +379,20 @@ export function DeliveryRoute() {
   // renders the Directions route. Null until a route with a road path resolves.
   const [routeSummary, setRouteSummary] = useState<RouteResult | null>(null);
 
+  // ?date= mode: the stops for the day, read through the ONE stop read (ledger #301).
+  const [stopData, setStopData] = useState<StopRead | null>(null);
+  // Set when a stop changed while a route was on screen. The route and its Google Maps link are DERIVED
+  // from the stops' addresses, so a changed ship-to must rebuild them from the re-read — a link that
+  // outlives the address it was built from is the stale-handoff defect (ledger #286) wearing a new coat.
+  const [rebuildPending, setRebuildPending] = useState(false);
+  const actions = useStopActions({
+    onChanged: async () => {
+      if (routeStops.length > 0) setRebuildPending(true);
+      clearRoute();
+      await load();
+    },
+  });
+
   useEffect(() => {
     if (!businessId) return;
     load();
@@ -388,45 +408,18 @@ export function DeliveryRoute() {
       .from('businesses').select('address').eq('id', businessId!).maybeSingle();
     setOriginAddress(bizRow?.address?.trim() ?? '');
 
-    // ── SCHEDULED-DELIVERIES MODE (?date=) — the OCR-invoice loop close ──
-    // Loads the `deliveries` table for the day and maps each row into the existing
-    // DeliveryOrder shape (address lives on the delivery row, surfaced via the synthetic
-    // `customers` object) so the route UI and the driver handoff are reused verbatim.
+    // ── SCHEDULED-DELIVERIES MODE (?date=) — the day's STOPS, through the ONE stop read ──
+    // Before ledger #301 this mapped each stop into the cart-order shape through a synthetic
+    // `customers` object carrying the stop's address — which is why the route showed a name and a
+    // location and nothing else. It now reads the same stop the schedule and the order screen read.
     if (dateParam) {
-      const { data, error: err } = await supabase
-        .from('deliveries')
-        .select(`
-          id, created_at, delivery_date, notes, address_line1, city, state, zip,
-          customers ( first_name, last_name, phone )
-        `)
-        .eq('business_id', businessId!)
-        .eq('delivery_date', dateParam)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: true })
-        .limit(50);
-
-      if (err) { setError(err.message); setLoading(false); return; }
-
-      const rows: DeliveryOrder[] = (data ?? []).map((d: any) => ({
-        id: d.id,
-        created_at: d.delivery_date ?? d.created_at,
-        notes: d.notes ?? null,
-        customers: d.customers ? {
-          first_name: d.customers.first_name,
-          last_name:  d.customers.last_name,
-          phone:      d.customers.phone,
-          address_line1: d.address_line1, // address is on the delivery row, not the customer
-          city:  d.city,
-          state: d.state,
-          zip:   d.zip,
-        } : null,
-        order_items: [],
-      }));
-      setOrders(rows);
-      const withAddr = new Set(rows.filter(o => fullAddress(o.customers).length > 0).map(o => o.id));
+      const res = await readStops(supabase, businessId!, { kind: 'day', date: dateParam }, { readLines: can('order_items:read') });
+      if (!res.ok) { setError(res.error); setLoading(false); return; }
+      setStopData(res.value);
+      const withAddr = new Set(res.value.stops.filter(s => shipToLine(s).length > 0).map(s => s.id));
       setSelected(withAddr);
       setLoading(false);
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route mode — date:', dateParam, 'stops:', rows.length, 'withAddr:', withAddr.size);
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route mode — date:', dateParam, 'stops:', res.value.stops.length, 'withAddr:', withAddr.size);
       return;
     }
 
@@ -475,11 +468,8 @@ export function DeliveryRoute() {
     // name). ONE array, built ONCE: the map optimises it, the list renders it, the link is derived
     // from it. (It was previously assembled twice — a bare address list for the URL and this model
     // for the map — which is precisely the parallel-copy shape that let the two drift apart.)
-    const stopModels: RouteStop[] = selectedOrders
-      .map(o => ({
-        label: customerDisplayName(o.customers, 'Customer'),
-        address: getAddress(o),
-      }))
+    const stopModels: RouteStop[] = selectedCandidates
+      .map(c => ({ label: c.label, address: c.address }))
       .filter(s => s.address.length > 0);
 
     if (stopModels.length === 0) return;
@@ -523,7 +513,7 @@ export function DeliveryRoute() {
 
   function textDriver() {
     // Body and count come from the SAME handoff object as the link — never a count computed here.
-    // It used to read `selectedOrders.length`, so five selected orders with two blank addresses
+    // It used to read `selectedCandidates.length`, so five selected orders with two blank addresses
     // texted "(5 stops)" above a three-stop link.
     const body = driverSmsBody(handoff);
     if (!body) return;
@@ -531,8 +521,24 @@ export function DeliveryRoute() {
     window.open(`sms:?body=${encodeURIComponent(body)}`);
   }
 
-  const selectedOrders = orders.filter(o => selected.has(o.id));
-  const canBuild = selectedOrders.some(o => getAddress(o).length > 0);
+  // The route's candidates, from whichever source this mode reads. ?date= reads STOPS and their
+  // snapshotted ship-to; the legacy mode reads cart orders and the customer's address. One shape, so the
+  // build, the count and the handoff below do not care which.
+  const candidates: { id: string; label: string; address: string }[] = dateParam
+    ? (stopData?.stops ?? []).map(s => ({ id: s.id, label: customerDisplayName(s.customers, 'Customer'), address: shipToLine(s) }))
+    : orders.map(o => ({ id: o.id, label: customerDisplayName(o.customers, 'Customer'), address: getAddress(o) }));
+  const selectedCandidates = candidates.filter(c => selected.has(c.id));
+  const canBuild = selectedCandidates.some(c => c.address.length > 0);
+
+  // A stop changed while a route was on screen → rebuild from the re-read, once it has landed. The link
+  // is derived from `displayStops`, so rebuilding the stops is what makes it carry the new address.
+  useEffect(() => {
+    if (!rebuildPending || loading) return;
+    setRebuildPending(false);
+    if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] stop changed — rebuilding the route from the re-read');
+    buildRoute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rebuildPending, loading, stopData]);
 
   // Stops shown on the route-ready card: optimized driving order when Directions resolved,
   // else the built order. Keeps pins + list + route in agreement.
@@ -578,8 +584,8 @@ export function DeliveryRoute() {
           </h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>
             {loading ? 'Loading…'
-              : dateParam ? `${dateParam} · ${orders.length} stop${orders.length !== 1 ? 's' : ''}`
-              : `${orders.length} pending deliver${orders.length !== 1 ? 'ies' : 'y'}`}
+              : dateParam ? `${dateParam} · ${candidates.length} stop${candidates.length !== 1 ? 's' : ''}`
+              : `${candidates.length} pending deliver${candidates.length !== 1 ? 'ies' : 'y'}`}
           </p>
         </div>
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches the delivery-card gating). */}
@@ -596,23 +602,66 @@ export function DeliveryRoute() {
         {loading && <p style={{ textAlign: 'center', color: GRAY, paddingTop: 40 }}>Loading…</p>}
         {error  && <p style={{ textAlign: 'center', color: '#A32D2D', paddingTop: 40 }}>{error}</p>}
 
-        {!loading && !error && orders.length === 0 && (
-          <div style={{ textAlign: 'center', paddingTop: 60, color: GRAY }}>
-            <Truck size={40} color="#d1d5db" style={{ marginBottom: 12 }} />
-            <p style={{ margin: 0, fontWeight: 600 }}>No pending deliveries</p>
-            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>Delivery orders will appear here when customers choose delivery at checkout.</p>
+        {actions.actionError && (
+          <div style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>{actions.actionError}</span>
+            <button onClick={actions.clearActionError} style={{ background: 'none', border: 'none', color: '#991B1B', fontWeight: 700, cursor: 'pointer', minHeight: 36 }}>Dismiss</button>
           </div>
         )}
 
-        {!loading && !error && orders.length > 0 && (
+        {!loading && !error && candidates.length === 0 && (
+          <div style={{ textAlign: 'center', paddingTop: 60, color: GRAY }}>
+            <Truck size={40} color="#d1d5db" style={{ marginBottom: 12 }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>{dateParam ? 'Nothing scheduled on this day' : 'No pending deliveries'}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>
+              {dateParam ? 'Pick another day on the schedule to route its stops.' : 'Delivery orders will appear here when customers choose delivery at checkout.'}
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && candidates.length > 0 && (
           <>
             <p style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 12 }}>
               Select stops to include in today's route.
             </p>
 
-            {/* Order list */}
+            {/* Stop list. ?date= renders the ONE StopCard (ledger #301); this page's own axis — the
+                selection and the sequence — is passed in as `leading`. The legacy cart-order list below
+                it is unchanged (tech-debt #277). */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-              {orders.map((order, idx) => {
+              {dateParam && stopData && stopData.stops.map(s => {
+                const isSelected = selected.has(s.id);
+                const seq = selectedCandidates.findIndex(c => c.id === s.id) + 1;
+                return (
+                  <StopCard
+                    key={s.id}
+                    stop={s}
+                    read={stopData}
+                    actions={actions}
+                    selected={isSelected}
+                    leading={
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <button
+                          onClick={() => toggleSelect(s.id)}
+                          aria-label={isSelected ? 'Leave this stop out of the route' : 'Include this stop in the route'}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, margin: -10 }}
+                        >
+                          {isSelected ? <CheckSquare size={22} color={GREEN} /> : <Square size={22} color="#d1d5db" />}
+                        </button>
+                        {isSelected && (
+                          <span style={{
+                            width: 22, height: 22, borderRadius: '50%', background: GREEN, color: '#fff',
+                            fontSize: '0.6875rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {seq}
+                          </span>
+                        )}
+                      </div>
+                    }
+                  />
+                );
+              })}
+              {!dateParam && orders.map((order, idx) => {
                 const isSelected = selected.has(order.id);
                 const addr = getAddress(order);
                 const hasAddr = addr.length > 0;
@@ -649,7 +698,7 @@ export function DeliveryRoute() {
                               color: '#fff', fontSize: '0.6875rem', fontWeight: 700,
                               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                             }}>
-                              {selectedOrders.indexOf(order) + 1}
+                              {selectedCandidates.findIndex(c => c.id === order.id) + 1}
                             </span>
                           )}
                           <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: DARK }}>{custName}</span>
@@ -716,7 +765,7 @@ export function DeliveryRoute() {
                 }}
               >
                 <Navigation size={18} />
-                Route {selectedOrders.length} Stop{selectedOrders.length !== 1 ? 's' : ''}
+                Route {selectedCandidates.length} Stop{selectedCandidates.length !== 1 ? 's' : ''}
               </button>
             ) : (
               <div style={{ background: '#fff', borderRadius: 16, padding: '20px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -810,6 +859,9 @@ export function DeliveryRoute() {
           </>
         )}
       </div>
+
+      {/* The review ask and the customer editor, once for the page (useStopActions). */}
+      {actions.overlays}
     </div>
   );
 }

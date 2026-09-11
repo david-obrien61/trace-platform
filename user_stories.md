@@ -501,6 +501,24 @@ Lauren walks the lot with one order open. She scans a tree — Add. Scans the ne
 
 _Schedule → day-group → select stops → bookend (business→stops→business) → Google Maps handoff._
 
+### One stop, the same on every screen — and where it goes can change
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 3.4, 3.5, 3.6, 2.1
+PIECES: one_stop_read, stop_card, stop_actions_everywhere, order_lines_on_stop, ship_to_edit, ship_to_edit_recorded, checkout_stop_order_link, fee_line_classification
+NEEDS: 🔴 **`fee_line_classification` is OWED and is not a default to pick.** [[R-144]] (David, 2026-09-11): every line is shown under *"On this order"*, and a line copied from an invoice says fees may be among them. The filter waits on the LINK from an `order_items` row to its QuickBooks item — the classification already exists in her books (income account splits the 685 items 564 · 73 · 8 · 2 · 38), the link does not (tech-debt #139). ⚠️ **Written by Thunder 2026-09-11 (ledger #301) from David's dictated prompt**: the §9 gate found no story for the composition — *"What the driver receives"* covers the handoff, *"The stop is done"* the tap, *"A stop with no load"* the ingest that wrote the lines.
+_David, 2026-09-11: "I'm having a real problem not seeing the same information across all the screens with the same functionality — ORDERS, DELIVERY and ROUTE. On orders and delivery I can edit customer data; on route I can't do anything or see anything except name and location."_
+
+Lauren opens tomorrow's stop on the schedule, on the route, or from the order — and **it is the same stop**: who it is for, where it goes, what is on the order, whether it is done, and the same buttons. Each screen adds only its own axis — the order its money, the schedule the day, the route the sequence. **Nothing one screen shows is missing from another by accident.**
+
+When the customer calls to say the trees go to the job site, not the house, she **changes the ship-to from the stop**, on whichever screen she is standing on. The customer's billing address does not move — the ship-to is snapshotted per order onto the stop ([[D-41]] L1), and that snapshot is the point. The route rebuilds to the new address, so the link the driver gets goes there. **And the change is kept, with the customer and both addresses on it** — because a customer who keeps shipping to the same second site is the evidence D-41 was waiting for before building a saved address book.
+
+An order she rings up at the counter for delivery lands a stop that **shows what is on it**, not only an invoice number. A stop whose order has nothing on it **says so in words**, and so does a stop with no order at all — a blank reads as *nothing to load*, and a truck leaving empty is the failure *"A stop with no load"* named.
+
+✅ **BUILT 2026-09-11 (ledger #301), SEVEN OF EIGHT PIECES** — all but `fee_line_classification`. `readStops` · `<StopCard>` · `useStopActions` · `stopWrites` (one client write path to `deliveries`; the ship-to edit + its `delivery.ship_to_changed` audit row) · the shared `OrderLineList` (the ingest preview renders through it too) · `scheduleCheckoutDelivery` now writes `order_id`. Proof: `docs/owner-tests/stop-full-surface-test.md`.
+
 ### What the driver receives is what the manager saw
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform

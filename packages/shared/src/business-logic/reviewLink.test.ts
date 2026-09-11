@@ -105,9 +105,14 @@ ok(/no reason was given/.test(saveReport([R('the review link', null)])) && !/nul
 console.log('§E — the probes reach the shipped files');
 const sharedCode = code(readFileSync('packages/shared/src/pages/Settings.tsx', 'utf8'));
 const hostCode   = code(readFileSync('packages/cultivar-os/src/pages/Settings.tsx', 'utf8'));
-const crewCode   = code(readFileSync('packages/cultivar-os/src/pages/DeliverySchedule.tsx', 'utf8'));
-ok(sharedCode.length > 20_000 && hostCode.length > 10_000 && crewCode.length > 10_000,
-   'E0 the three files were read — not matched against empty slices');
+// ✏️ 2026-09-11 (ledger #301): the crew's tap and the ask it may trigger MOVED from DeliverySchedule.tsx into
+// the shared `useStopActions` hook, so the schedule, the route and the order screen all run the same one.
+// The assertions below are unchanged; only the file they read followed the code.
+const crewCode   = code(readFileSync('packages/cultivar-os/src/components/delivery/useStopActions.tsx', 'utf8'));
+// The crew floor is 4,000, not 10,000: the hook holds only the actions, where the page it came from also held
+// the whole list. Still far above an empty or truncated read, which is all this guard is for.
+ok(sharedCode.length > 20_000 && hostCode.length > 10_000 && crewCode.length > 4_000,
+   `E0 the three files were read — not matched against empty slices (crew ${crewCode.length} chars)`);
 ok(REVIEW_LINK_MODULE_KEY === 'followup_engine',
    'E1 the link lives in the Follow-Up module config — the store the 2026-08-31 build wrote, not a new column');
 ok(/reviewLinkEdit\(loadedReviewLink, reviewLink\)/.test(sharedCode), 'E2 Business Profile judges the edit through reviewLinkEdit');
