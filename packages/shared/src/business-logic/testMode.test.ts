@@ -24,6 +24,7 @@ import { join } from 'path';
 import {
   isTestMode, orderKindForMode, pushPermitted,
   TEST_MODE_BANNER, TEST_MODE_STOCK_CAVEAT, testModeExplanation, writeSwitchConfirmation, LIVE_MODE_CONFIRMED,
+  TEST_ORDER_CONFIRMATION,
 } from './testMode';
 import { TEST_ORDER_KIND } from './orderKind';
 
@@ -251,6 +252,135 @@ function stripComments(t: string): string {
   const sw2 = stripComments(readFileSync(join(process.cwd(), 'packages/shared/src/components/QboWriteSwitch.tsx'), 'utf8'));
   ok(/TEST_MODE_BANNER/.test(sw2) && !/nothing is being sent to QuickBooks/.test(sw2),
     '🔴 the settings screen RENDERS the shared banner string rather than keeping a second, shorter copy of it (STD-011 — the copy that drifts is never the one you are looking at)');
+}
+
+// ══ §H 🔴 THE FIVE PUSH STATES — SERVER, CLIENT TYPE AND SCREEN, READ FROM SOURCE ══
+//
+// 🔴 THIS SECTION EXISTS BECAUSE THE THREE DIVERGED AND NOTHING WENT RED. `submit.ts` emitted
+// `qbStatus: 'test'` from the day the 422 guard shipped. `QbSyncStatus` listed four members and
+// none of them was it. `Confirmation.tsx` branches on `qbState === …` with no `default`, so the
+// value arrived, matched nothing, and the block that reports the invoice's fate rendered EMPTY —
+// no wrong message, NO message. Every layer was internally consistent; only the SEAM was wrong,
+// and a seam is precisely what a unit test of either side cannot see (R-33 / §6 r19).
+//
+// ⚠️ NOTE WHAT COULD NOT HAVE CAUGHT IT, because it is the argument for reading source here.
+// tsc is silent: the runtime cast in `useSubmitOrder` accepts any string off the wire, and an
+// exhaustiveness check needs a `default` clause nobody had written. eslint has no view across
+// two packages. The five-state vocabulary is a CONTRACT between an api file and a page, and
+// nothing in this repo was asserting it.
+{
+  const submitSrc = stripComments(readFileSync(join(process.cwd(), 'packages/cultivar-os/api/orders/submit.ts'), 'utf8'));
+  const hookSrc   = stripComments(readFileSync(join(process.cwd(), 'packages/cultivar-os/src/hooks/useSubmitOrder.ts'), 'utf8'));
+  const confSrc   = stripComments(readFileSync(join(process.cwd(), 'packages/cultivar-os/src/pages/Confirmation.tsx'), 'utf8'));
+
+  const literals = (t: string): string[] => (t.match(/'[a-z_]+'/g) ?? []).map(x => x.slice(1, -1));
+
+  // ① WHAT THE SERVER CAN SAY — its own declared union, plus every literal it assigns. Both,
+  // because either one alone can be the stale half: an annotation can list a state no branch
+  // produces, and a branch can assign one the annotation forgot.
+  const declM   = /let qbStatus:\s*([^=]+)=/.exec(submitSrc);
+  const emitted = new Set<string>([
+    ...literals(declM ? declM[1] : ''),
+    ...[...submitSrc.matchAll(/qbStatus\s*=\s*'([a-z_]+)'/g)].map(m => m[1]),
+  ]);
+
+  // ② WHAT THE CLIENT TYPE ADMITS.
+  const unionM = /export type QbSyncStatus\s*=\s*([^;]+);/.exec(hookSrc);
+  const union  = new Set(literals(unionM ? unionM[1] : ''));
+
+  // ③ WHAT THE SCREEN ACTUALLY DRAWS A BADGE FOR.
+  const branched = new Set([...confSrc.matchAll(/qbState === '([a-z_]+)'/g)].map(m => m[1]));
+
+  const missingFromType   = [...emitted].filter(k => !union.has(k));
+  const missingFromScreen = [...union].filter(k => !branched.has(k));
+  const inventedByType    = [...union].filter(k => !emitted.has(k));
+
+  ok(emitted.size === 5,
+    `the server emits exactly FIVE push states (got ${emitted.size}: ${JSON.stringify([...emitted].sort())})`);
+  ok(missingFromType.length === 0,
+    `🔴 EVERY STATE THE SERVER EMITS IS IN QbSyncStatus — this is the direction that shipped the defect, and it is the assertion that would have caught it on the day (missing: ${JSON.stringify(missingFromType)})`);
+  ok(inventedByType.length === 0,
+    `🔴 AND THE OTHER DIRECTION: the type invents no state the server cannot produce. A member with no producer is dead copy nobody can reach, and it reads on the screen like coverage (invented: ${JSON.stringify(inventedByType)})`);
+  ok(missingFromScreen.length === 0,
+    `🔴 EVERY STATE HAS A BADGE. The branch list has no \`default\`, so an unbranched state does not render a fallback — it renders NOTHING, which is the exact defect this section was written for (unbranched: ${JSON.stringify(missingFromScreen)})`);
+  ok(union.has('test') && emitted.has('test') && branched.has('test'),
+    'and \'test\' specifically is present in all three — named, because it is the one that was missing');
+
+  // ④ THE TEST BRANCH'S OWN BLOCK. Windowed to the NEXT branch, never a fixed character count —
+  // §D records a mutant surviving because a 1400-char window reached into the neighbouring guard
+  // and the assertion passed on THAT guard's 422.
+  const testAt   = confSrc.indexOf("qbState === 'test'");
+  const nextAt   = confSrc.indexOf("qbState === '", testAt + 1);
+  const testBlock = confSrc.slice(testAt, nextAt > -1 ? nextAt : confSrc.length);
+
+  ok(/TEST_ORDER_CONFIRMATION/.test(testBlock),
+    '🔴 THE BADGE RENDERS THE SHARED SENTENCE rather than a locally-worded copy of it — §G above caught the settings screen keeping its own shorter version, which went stale the moment David\'s ruling landed (STD-011)');
+  // ⚠️ THE FIRST DRAFT OF THIS ASSERTION COULD NOT FAIL, and it is recorded rather than quietly
+  // rewritten: it was `!/amber/.test(slice(0, block.length)) || !/…/.test(block)` — a no-op slice
+  // disjoined with a second pattern, so SOME branch of it was true whatever the file said. Written
+  // inside the very section arguing R-33. Now it names both colours and both can be checked.
+  ok(/color="blue"/.test(testBlock),
+    'the owner badge is BLUE — informational, the colour this screen already uses for "here is what happened to your invoice"');
+  ok(!/color="amber"/.test(testBlock),
+    '🔴 AND IT IS NOT AMBER. Amber is this platform\'s "something needs your attention" and nothing here does — the order is complete, the refusal was requested, no action is owed. Amber would manufacture the alarm David\'s ruling exists to prevent');
+  ok(!/failed|rejected|error/i.test(testBlock.replace(/qbState === '[a-z_]+'/g, '')),
+    '🔴 AND THE BRANCH SAYS NOTHING ABOUT FAILURE. "Failed" would send an owner hunting a problem that does not exist — the same sentence CARD 5 of the test-mode board puts in its FAIL line');
+
+  // ⑤ THE SENTENCE ITSELF. Asserted by PROPERTY, not verbatim, and the distinction is the point:
+  // §E asserts TEST_MODE_BANNER and TEST_MODE_STOCK_CAVEAT word-for-word BECAUSE DAVID WROTE
+  // THEM, and records that an earlier version of that section asserted the shape of Thunder's
+  // wording and so "went green on copy David had not seen". This sentence is Thunder's. Asserting
+  // it verbatim would manufacture exactly that false authority. What is NOT negotiable is what it
+  // must convey, and that is what is tested.
+  ok(/saved/.test(TEST_ORDER_CONFIRMATION),
+    'it says the ORDER IS SAVED — David\'s ruling is that a buyer in test mode must SEE A PRODUCT, and the first thing they need to know is that their work was kept');
+  ok(/Nothing was sent to QuickBooks/.test(TEST_ORDER_CONFIRMATION),
+    'it says nothing was sent');
+  ok(/because writing to QuickBooks is turned off/.test(TEST_ORDER_CONFIRMATION),
+    '🔴 AND IT SAYS WHY — "because writes are off". Without the reason, "nothing was sent" is indistinguishable from a push that silently did not happen, which is the fortnight-long failure this whole module is shaped around');
+  ok(/nothing failed/.test(TEST_ORDER_CONFIRMATION) && !/error|rejected/i.test(TEST_ORDER_CONFIRMATION),
+    'it states plainly that nothing failed, and never uses the vocabulary of an error');
+  ok(/account owner/.test(TEST_ORDER_CONFIRMATION),
+    '🔴 IT NAMES WHO CAN CHANGE IT. `businesses` carries ONE update policy (`businesses_owner_update`), and `ownerAuthority.ts` records David\'s explicit exception that the WRITES SWITCH stays `owner_id` only — so a manager reading this screen cannot flip it. "Turn writes on in Settings" would be an instruction Postgres refuses (§6 r13/r18)');
+  ok(/Settings/.test(TEST_ORDER_CONFIRMATION),
+    'and where — the switch is mounted in Settings\' Accounting card (`Settings.tsx` → `<QboWriteSwitch />`), so the copy points at a surface that exists and can actually do it (#180\'s class)');
+
+  // ⑥ 'test' AND 'held' ARE NOT ONE SENTENCE WEARING TWO NAMES. They look identical on screen and
+  // are not: a hold is DAVID's, over a tenant, and lifts from an env var; test mode is the OWNER's
+  // own switch. Collapsing them would tell an owner to wait on somebody about their own decision.
+  const heldAt    = confSrc.indexOf("qbState === 'held'");
+  const heldNext  = confSrc.indexOf("qbState === '", heldAt + 1);
+  const heldBlock = confSrc.slice(heldAt, heldNext > -1 ? heldNext : confSrc.length);
+  ok(heldAt > -1 && testAt > -1 && heldAt !== testAt, 'both branches exist and neither replaced the other');
+  ok(/paused/i.test(heldBlock) && !/paused/i.test(testBlock),
+    'the HELD copy speaks of a pause and the TEST copy does not — two states, two sentences');
+  ok(!/account owner can turn writes on/i.test(heldBlock),
+    'and the held copy does not point at the owner\'s switch, which would not lift an operator hold');
+
+  // ⑦ THE 503 BRANCH — a title that asserted ONE cause for a state that has TWO.
+  // `pushQboInvoice` returns 503 for a missing accounting_company_id (never connected) AND for
+  // `qb_token_expired` (connected, authorised once, tokens since dead). §6 r18: a claim must hold
+  // for every state the section can contain; make a sometimes-true claim conditional.
+  const ncAt    = confSrc.indexOf("qbState === 'not_connected'");
+  const ncNext  = confSrc.indexOf("qbState === '", ncAt + 1);
+  const ncBlock = confSrc.slice(ncAt, ncNext > -1 ? ncNext : confSrc.length);
+  ok(/expired/i.test(ncBlock),
+    '🔴 THE 503 COPY NAMES BOTH CAUSES. A business that connected QuickBooks months ago and whose refresh token has died is told "QuickBooks isn\'t connected" — false, and it is the likelier of the two cases at a business that has been running a while');
+  ok(/\bnever connected\b/i.test(ncBlock) || /was never connected/i.test(ncBlock),
+    'and it still covers the genuinely-never-connected case rather than swapping one half-truth for the other');
+  ok(/[Cc]onnect QuickBooks from the owner dashboard/.test(ncBlock),
+    'the REMEDY is unchanged and is still stated — both causes are fixed the same way, which is why this stayed one branch');
+
+  // ⑧ THE SERVER'S 422 SENTENCE IS A DIFFERENT SENTENCE, DELIBERATELY, and a probe holds them
+  // apart. The seam's refusal is true of the ROW FOREVER ("a test order is never sent"), including
+  // a re-push attempted months after go-live. This screen's sentence is about the BUSINESS's state
+  // RIGHT NOW ("because writes are off") and stops being true the instant the switch flips. One
+  // string covering both would be wrong on the re-push path the day after go-live.
+  const seam = stripComments(readFileSync(join(process.cwd(), 'packages/cultivar-os/api/qbo/invoice/cultivar.ts'), 'utf8'));
+  ok(/Test orders are never sent to QuickBooks/.test(seam),
+    'the seam keeps its own row-scoped sentence');
+  ok(!seam.includes(TEST_ORDER_CONFIRMATION) && !confSrc.includes('Test orders are never sent to QuickBooks'),
+    '🔴 and the two are NOT the same string — this is one fact split into two genuinely different claims, not STD-011 duplication. If they are ever merged, one of the two surfaces starts lying on the day the owner goes live');
 }
 
 console.log(`\n  testMode — ${passed} passed, ${failed} failed`);

@@ -13,23 +13,36 @@ import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from
 // D-39: the server-authoritative per-line breakdown returned by submit — the Confirmation receipt
 // renders THIS (not the client Review preview), so Confirmation === QBO and the discount is visible.
 /**
- * The THREE honest states of a QuickBooks invoice push (D-48 · D-9 Surface Honesty). There is no
+ * The FIVE honest states of a QuickBooks invoice push (D-48 · D-9 Surface Honesty). There is no
  * 'pending': the push is synchronous, so "will sync shortly" was never true — it was the absence of
  * a failed state. Each maps to distinct owner copy and a distinct owner action:
  *   • 'success'       — the invoice exists in QBO.
- *   • 'not_connected' — QBO isn't connected / the token expired (503) → connect, then re-push.
+ *   • 'not_connected' — QBO isn't usable: never connected, or the tokens expired (503) → reconnect,
+ *                       then re-push.
  *   • 'failed'        — QBO rejected it or the call failed → the owner sees the reason and fixes it.
  *   • 'held'          — the push is deliberately PAUSED for this business (409 PUSH_HELD) → the
  *                       order is complete and correct and NOTHING is wrong; there is no owner
  *                       action, and the copy says who can lift it.
+ *   • 'test'          — this business is in TEST MODE, so the order was born `order_kind: 'test'`
+ *                       and the seam refused it (422 TEST_ORDER_NOT_PUSHABLE). Nothing is wrong and
+ *                       nothing failed; the owner chose this, and the copy says who can undo it.
  *
- * 🔴 'held' IS A FOURTH STATE RATHER THAN A REUSE OF 'not_connected', and the reason is the
- * same one that created these three: `not_connected` renders "QuickBooks isn't connected —
- * connect it from the owner dashboard", which on a held push is FALSE TWICE (it IS connected,
- * and reconnecting changes nothing). That is the exact shape of the defect D-48 ended. A
- * deliberate pause reported as a connection problem is a lie with a call to action attached.
+ * 🔴 'held' AND 'test' ARE SEPARATE STATES RATHER THAN REUSES OF 'not_connected' OR OF EACH OTHER,
+ * and the reason is the one that created the first three: `not_connected` renders "QuickBooks isn't
+ * connected — connect it from the owner dashboard", which on a held or test push is FALSE TWICE (it
+ * IS connected, and reconnecting changes nothing). That is the exact shape of the defect D-48 ended.
+ * A deliberate pause reported as a connection problem is a lie with a call to action attached.
+ * `held` is DAVID's hold over a tenant and lifts from an env var; `test` is the OWNER's own switch
+ * and lifts from their Settings screen. Two different people, two different remedies.
+ *
+ * ⚠️ 'test' WAS MISSING FROM THIS UNION WHILE `submit.ts` HAD BEEN EMITTING IT — added 2026-09-10.
+ * The server set `qbStatus = 'test'` (submit.ts, the 422 branch), the value reached `Confirmation`
+ * intact, and matched none of its four badges, so the block where the invoice's fate is reported
+ * rendered EMPTY. Nothing anywhere went red: the runtime cast below accepts any string, and a state
+ * absent from the union cannot be flagged by an exhaustiveness check that has no `default`. See
+ * `testMode.test.ts` §H, which now reads BOTH files and fails the build if they diverge again.
  */
-export type QbSyncStatus = 'success' | 'not_connected' | 'failed' | 'held';
+export type QbSyncStatus = 'success' | 'not_connected' | 'failed' | 'held' | 'test';
 
 export interface OrderBreakdown {
   lines:               PricedLine[];
@@ -147,6 +160,12 @@ export function useSubmitOrder() {
               // so a failed — or even a KILLED — push leaves a whole order with qbStatus 'failed',
               // which is exactly what the manual re-push endpoint repairs.
               qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus: qbStatusRaw, qbError } = await res.json();
+      // ⚠️ THE CAST IS WHY A MISSING STATE WAS SILENT, AND IT IS KEPT DELIBERATELY. An
+      // unrecognised string passes through untouched; `?? 'failed'` fires only on null/undefined.
+      // Narrowing it to a whitelist would swap one wrong screen for another — a state we do not
+      // recognise is not a state we may report as "QuickBooks rejected the invoice" (D-9). The
+      // divergence is caught at BUILD time instead, by `testMode.test.ts` §H, which parses every
+      // `qbStatus = '…'` literal out of `api/orders/submit.ts` and asserts this union carries it.
       const qbStatus: QbSyncStatus = (qbStatusRaw as QbSyncStatus) ?? 'failed';
       console.log('[TRACE:CHECKOUT] QBO result carried on the submit response —',
         { orderId, qbStatus, qbInvoiceId: qbInvoiceId ?? null, qbError: qbError ?? null });

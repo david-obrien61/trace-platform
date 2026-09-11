@@ -10,7 +10,8 @@
 //               env, no network. Every input is passed in, which is what makes the server and
 //               the banner incapable of reaching different conclusions.
 // OUTPUTS:      isTestMode · orderKindForMode · pushPermitted · TEST_MODE_BANNER ·
-//               testModeExplanation · writeSwitchConfirmation · LIVE_MODE_CONFIRMED.
+//               TEST_MODE_STOCK_CAVEAT · testModeExplanation · writeSwitchConfirmation ·
+//               LIVE_MODE_CONFIRMED · TEST_ORDER_CONFIRMATION.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 THE FAILURE THIS MODULE IS SHAPED AROUND IS NOT THE ONE PEOPLE EXPECT.
@@ -172,3 +173,31 @@ export function writeSwitchConfirmation(businessName?: string | null): string {
  */
 export const LIVE_MODE_CONFIRMED =
   'QuickBooks writing is on. New orders will be sent to QuickBooks as invoices.';
+
+/**
+ * 🔴 WHAT THE CONFIRMATION SCREEN SAYS WHEN THE ORDER JUST RUNG UP WAS A TEST ORDER.
+ *
+ * David's ruling, 2026-09-04: *"TEST only will not write to any output QBO… but definitely not to
+ * the accounting system — so they SEE A PRODUCT."* A buyer evaluating the platform must reach the
+ * end of a checkout and be shown a RESULT. Before this string existed the confirmation screen had
+ * no branch for the state at all and rendered an EMPTY block where the invoice's fate belongs —
+ * `qbStatus: 'test'` matched none of the four badges. Silence is the one answer that cannot be
+ * right: it leaves an owner unable to tell a withheld push from a forgotten one (D-9).
+ *
+ * ⚠️ IT IS NOT THE SEAM'S SENTENCE, AND THE TWO MUST NOT BE MERGED. `pushQboInvoice` refuses a
+ * test order with *"This is a test order. Test orders are never sent to QuickBooks"* — true of the
+ * ROW, FOREVER, including a re-push attempted months after go-live. This sentence is about the
+ * BUSINESS's state RIGHT NOW: nothing was sent **because writes are off**, which stops being true
+ * the moment the owner flips the switch. One string covering both would be wrong on the re-push
+ * path the day after go-live.
+ *
+ * 🔴 IT NAMES WHO CAN CHANGE IT, BECAUSE THE READER MAY NOT BE ABLE TO. `businesses` carries one
+ * UPDATE policy — `businesses_owner_update` — so a MANAGER reading this screen cannot flip the
+ * switch whatever the copy says. "Turn writes on in Settings" told Lauren to do something Postgres
+ * refuses (§6 r18: a claim naming an action must hold for every reader the surface can have; §6
+ * r13: locked WITH an explanation, never a dead instruction).
+ */
+export const TEST_ORDER_CONFIRMATION =
+  'This order is saved and correct. Nothing was sent to QuickBooks because writing to QuickBooks is '
+  + 'turned off for this business — nothing failed. The account owner can turn writes on in '
+  + 'Settings → Accounting.';

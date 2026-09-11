@@ -23,9 +23,16 @@ somebody remembered**, and it stays excluded after go-live.
 **(3)** Nobody can be in test mode without knowing it — because the expensive failure is not fake
 data reaching real books, it is somebody working in test mode for a week believing they are live.
 
-**Board: 0 of 15.** Every card is `STATUS: owed` except **13**, which is `needs-test` with its
-reason stated. **Card 15 is R-63's** — it was added after David ruled the stock sentence, and it is
-the one that closes the question this build raised and could not decide. Thunder never sets `covered` (OP-14).
+**Board: 0 of 25.** Every card is `STATUS: owed` except **13**, **23** and **25**, which are
+`needs-test` with their reasons stated. **Card 15 is R-63's** — it was added after David ruled the
+stock sentence, and it is the one that closes the question this build raised and could not decide.
+Thunder never sets `covered` (OP-14).
+
+⚠️ **THIS LINE READ `0 of 15` WHILE THE BOARD HELD 23 CARDS — corrected 2026-09-10 (#287).**
+`verify-owner-test-boards.mjs` had been printing `⚠ header claims 0 of 15` on every `npm run verify`
+for as long as the gap existed; it warns rather than fails, and a warning that scrolls past in a
+600-line chain is a warning nobody reads. It is a header making a claim its own section contradicts
+(§6 r18), on the board whose whole subject is a mode you can be wrong about.
 
 ---
 
@@ -152,20 +159,42 @@ this card is about the path she is not.
 
 ## CARD 5 — a test order is born marked, and says so on its own confirmation
 **STATUS:** owed · **DEVICE:** either · **LAST-PROVEN:** —
+**COVERS:** #287 — the `test` badge, built 2026-09-10
+
+> 🔴 **THIS CARD'S OWN FAIL LINE CAUGHT THE DEFECT, AND NOBODY HAD RUN THE CARD.** It has said
+> *"FAIL: … or no mention of it at all"* since the board was written. That is EXACTLY what shipped:
+> `submit.ts` emitted `qbStatus: 'test'`, `QbSyncStatus` listed four members and none of them was
+> it, and the block where the invoice's fate is reported **rendered empty** — not a wrong message,
+> **no message.** The card was right, was marked `owed`, and was never driven. This is the
+> BUILDER-COMPLETE → OWNER-PROVEN gap OP-14 exists to make visible: it WAS visible, in writing, on
+> this line. **Run it.**
 
 With the switch OFF, ring up a complete order through checkout — real items, real customer, finish it.
 
 1. The order completes normally. Nothing about the flow is degraded.
-2. The confirmation screen does **not** say the QuickBooks push failed, and does **not** tell you to
-   reconnect QuickBooks.
-3. It says this was a test order and nothing was sent.
+2. 🔴 **THERE IS A QUICKBOOKS BLOCK AND IT IS NOT EMPTY.** Under the green header, before the
+   transport line, there is a badge. If that area is blank, **this card fails** — a silent screen
+   cannot be told apart from a push nobody noticed was skipped.
+3. The badge reads **`Order saved — nothing sent to QuickBooks (test mode)`**, in **blue**, with a
+   **✓** — not amber, not a warning triangle. Nothing needs your attention.
+4. Its sentence says the order is saved, that nothing was sent **because writing to QuickBooks is
+   turned off for this business**, and that **nothing failed**.
+5. It does **not** say the push failed, and does **not** tell you to reconnect QuickBooks.
+6. 🔴 **IT NAMES THE ACCOUNT OWNER, NOT YOU.** It reads *"The account owner can turn writes on in
+   Settings → Accounting."* **Sign in as LAUREN (manager) and ring up a second one** — the sentence
+   must still name the account owner, because `businesses` carries one UPDATE policy and the writes
+   switch is `owner_id` only (David's explicit exception, `ownerAuthority.ts`). Copy telling her to
+   flip it herself is an instruction Postgres refuses.
 
 **PASS:** the order is saved and complete, and the QuickBooks line reads as a deliberate choice
 rather than a fault.
 🔴 **"Failed" would send you hunting a problem that does not exist; "not connected" would tell you
 to reconnect a QuickBooks that is connected.** Neither is what happened.
-**SIGNAL:** `[TRACE:TESTMODE] order born — { writesEnabled: false, order_kind: 'test' }`.
-**FAIL:** an error, a "reconnect QuickBooks" message, or no mention of it at all.
+**SIGNAL:** `[TRACE:TESTMODE] order born — { writesEnabled: false, order_kind: 'test' }` and
+`[TRACE:QBO] inline push — { qbStatus: 'test' }`. **Secondary** — every check above is readable on
+the screen without a console.
+**FAIL:** an error, a "reconnect QuickBooks" message, an amber badge, a sentence telling a manager
+to turn writes on, or **no mention of it at all**.
 
 ---
 
@@ -641,3 +670,64 @@ questions that ask an owner how a size should read. **Neither has a screen, and 
 
 🔴 **WRITING THIS DOWN IS THE POINT.** An unrecorded hole looks exactly like a covered surface on a
 board where every other row is green, and #262 could otherwise read as "retire-and-replace: done."
+
+---
+
+## CARD 24 — 🔴 "isn't connected" was a claim about a cause, and the state has two
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**COVERS:** #287 — the 503 copy, corrected 2026-09-10
+
+> 🔴 **WHY THIS CARD IS ON THE TEST-MODE BOARD AND NOT THE INVOICE BOARD.** The invoice board proves
+> what reaches QuickBooks. This is about what the CONFIRMATION SCREEN SAYS when nothing does — the
+> same block CARD 5 reads, one badge over. Splitting one screen's five badges across two boards is
+> how a surface ends up half-covered with neither board noticing.
+
+🔴 **Run on Test Dave's, never LAWNS.** You are going to disconnect a QuickBooks company.
+
+1. Turn **writes ON** (Settings → Accounting). You need a live order, or you get CARD 5's badge instead.
+2. Disconnect QuickBooks from the owner dashboard.
+3. Ring up a complete order.
+
+**PASS:** the badge reads **`Invoice NOT created — QuickBooks isn't connected right now`**, and its
+sentence names **both** ways this happens — *"Either QuickBooks was never connected, or its
+connection has expired and needs authorising again"* — then gives the one remedy that fixes both.
+
+🔴 **THE WORD `right now` AND THE WORD `Either` ARE THE CARD.** `pushQboInvoice` returns 503 for two
+different states: a missing `accounting_company_id` (never connected) and `qb_token_expired`
+(connected, authorised once, tokens since dead). The old copy asserted the first — *"QuickBooks
+isn't connected"* — flat, for both. At a business that has been running a year the SECOND is the
+likelier one, and being told you are not connected to a QuickBooks you connected in March sends you
+to set up a thing that is already set up. §6 r18: a claim must hold for every state its section can
+contain.
+
+**SIGNAL:** `[TRACE:CHECKOUT] confirmation rendering WITHOUT a QB invoice — { qbState: 'not_connected' }`.
+**Secondary** — read the badge.
+**FAIL:** copy that names only one cause, a missing remedy, or the test-mode badge appearing here
+(that would mean writes did not actually go on).
+
+---
+
+## CARD 25 — the EXPIRED-TOKEN half of CARD 24, which nobody has produced
+**STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** never
+**COVERS:** #287 — the half of the 503 that is stated and unproven
+**KIND:** none — the state cannot be produced on demand yet.
+
+CARD 24 proves the **never-connected** half by disconnecting. The **expired-token** half — the case
+the corrected copy was written for, and the likelier one in real life — is **not proven by that
+run**, and saying so is the point of this card.
+
+**WHAT IS UNKNOWN, STATED PLAINLY:** the intended way to produce it is to disconnect the app from
+**inside QuickBooks** (Intuit → Apps → Disconnect), which kills the tokens while our
+`businesses.accounting_company_id` stays populated. **Nobody has run that**, and it is genuinely
+uncertain which branch it lands on: if `refreshQBToken` fails we get the 503 and this badge; if a
+cached access token is still inside its expiry window, the invoice POST 401s instead and the screen
+shows **`failed`** — a different badge, with different copy, saying QuickBooks rejected the invoice.
+
+**What is owed before this becomes a real card:**
+- run the Intuit-side disconnect on Test Dave's and record **which of the two badges appears**
+- if it is `failed`, that is a finding, not a pass: an expired connection reported as a rejected
+  invoice is the D-48 defect in a new place, and the fix is at the seam, not in the copy
+
+🔴 **WRITING THIS DOWN IS THE POINT.** CARD 24 will go green and the board will read as though the
+503 copy is proven. **Half of it is.** An unrecorded hole under a green neighbour is indistinguishable
+from coverage (OP-14 clause 2).

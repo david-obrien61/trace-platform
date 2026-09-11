@@ -2,6 +2,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import type { OrderBreakdown, QbSyncStatus } from '../hooks/useSubmitOrder';
 import type { TaxStatus } from '@trace/shared/business-logic';
+// The mode's own sentence, from the module the SERVER reads. Not re-worded here: this suite
+// already caught the settings screen keeping a second, shorter copy of the banner, which went
+// stale the moment David's ruling landed (testMode.test.ts §G, STD-011).
+import { TEST_ORDER_CONFIRMATION } from '@trace/shared/business-logic/testMode';
 import { OrderTotals } from '../components/checkout/OrderTotals';
 
 interface ConfirmState {
@@ -169,13 +173,25 @@ export function Confirmation() {
           />
         )}
 
-        {/* NOT CONNECTED (503) — the connect prompt is the RIGHT answer here, and only here. */}
+        {/* NOT CONNECTED (503) — the connect prompt is the RIGHT answer here, and only here.
+            ⚠️ THE TITLE NAMED ONE CAUSE AND THE STATE HAS TWO — corrected 2026-09-10. A 503 is
+            returned for a missing `accounting_company_id` (never connected) AND for
+            `qb_token_expired` (connected, authorised once, tokens since dead). "QuickBooks isn't
+            connected" is simply false in the second case, and it is the more likely of the two at
+            a business that has been running a while. The REMEDY is identical — re-authorise from
+            the owner dashboard — so this stays one branch rather than two; what changed is that
+            the copy no longer asserts a cause it did not check (§6 r18: make a sometimes-true
+            claim conditional, never approximate).
+            ⚠️ `qbError` is still not rendered here, and that is a KNOWN gap rather than an
+            oversight: the two bodies are a prose sentence and the bare code `qb_token_expired`,
+            and printing a raw code at a customer-facing screen is not an improvement. Naming both
+            causes in the detail is what this build could do honestly. */}
         {qbState === 'not_connected' && (ownerView ? (
           <StatusBadge
             icon="⚠"
             color="amber"
-            title="Invoice NOT created — QuickBooks isn't connected"
-            detail="The order is saved. Connect QuickBooks from the owner dashboard, then push this invoice again from the order page."
+            title="Invoice NOT created — QuickBooks isn't connected right now"
+            detail="The order is saved. Either QuickBooks was never connected, or its connection has expired and needs authorising again. Connect QuickBooks from the owner dashboard, then push this invoice again from the order page."
           />
         ) : (
           <StatusBadge
@@ -198,6 +214,51 @@ export function Confirmation() {
             detail={qbError || 'Sending invoices to QuickBooks is paused for this business. The order is saved and correct. David can lift the pause.'}
           />
         ) : (
+          <StatusBadge
+            icon="✓"
+            color="green"
+            title="Order confirmed — invoice to follow"
+            detail={`Your order is saved. ${businessName ?? 'The nursery'} will send your invoice.`}
+          />
+        ))}
+
+        {/* ══════════════════════════════════════════════════════════════════════════════════
+            🔴 TEST MODE — THE STATE THAT HAD NO BRANCH, SO THE BLOCK RENDERED EMPTY.
+            ══════════════════════════════════════════════════════════════════════════════════
+            `submit.ts` has emitted `qbStatus: 'test'` since the 422 guard shipped; `QbSyncStatus`
+            listed four members and none of them was it. So the value arrived here intact, matched
+            no badge, and this whole section — the one place the invoice's fate is reported — drew
+            NOTHING. Not a wrong message: no message. That is the failure mode CARD 5 of the
+            test-mode board names in its own FAIL line ("…or no mention of it at all"), written
+            before the defect and never run.
+
+            🔴 DAVID'S RULING IS WHAT THIS COPY SERVES (2026-09-04): "TEST only will not write to
+            any output QBO… but definitely not to the accounting system — so they SEE A PRODUCT."
+            A buyer ringing up a week of practice orders must reach the end of one and be shown a
+            RESULT. An empty block is the opposite: it leaves them unable to tell a push that was
+            deliberately withheld from a push that was forgotten.
+
+            🔴 IT IS NOT `held`, THOUGH THEY LOOK ALIKE ON SCREEN. A hold is DAVID's, over a tenant
+            whose line mapping he has not watched land, and it lifts from an env var he controls. A
+            test order is the OWNER's own decision about their own books, and it lifts from their
+            Settings screen. Same shape, different person, different remedy — and telling an owner
+            "David can lift this" about their own switch would leave them waiting on somebody.
+
+            ⚠️ BLUE, NOT AMBER. Amber is the platform's "something needs your attention" and there
+            is nothing to attend to: the order is complete, the refusal was requested, and no
+            action is owed. Amber here would manufacture the alarm the ruling exists to prevent. */}
+        {qbState === 'test' && (ownerView ? (
+          <StatusBadge
+            icon="✓"
+            color="blue"
+            title="Order saved — nothing sent to QuickBooks (test mode)"
+            detail={TEST_ORDER_CONFIRMATION}
+          />
+        ) : (
+          /* The customer sees what the other three non-success states show them, deliberately and
+             for the reason those three share: a customer is not told about the business's internal
+             configuration. "This business is in test mode" is a fact about the nursery's account,
+             not about this person's order, and their order IS saved. */
           <StatusBadge
             icon="✓"
             color="green"

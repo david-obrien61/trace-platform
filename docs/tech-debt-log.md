@@ -1756,3 +1756,33 @@ Four occurrences in a single day forced it: **#195 → #213 → #288(e) → #242
 - **The backlog is 182**, not four: 182 tech-debt ids are cited across `CLAUDE.md`, `CLOSE-OUT-LEDGER.md`, `built-inventory.md` and `RULINGS.md` with **no row in the log**. CLAUDE.md has said a version of this three times (*"the log stops at 185"*, *"stopped at 209"*) and nobody had counted it. **Baselined and printed on every run — it shrinks, never grows.**
 - **It is a RATCHET for exactly that reason.** A hard gate over a 182-item backlog gets commented out inside a day, which `verify-write-paths.mjs`'s own header already learned out loud: *"a gate that blocks every build gets worked around, and a worked-around gate is worse than none."*
 - ⚠️ **The cap made the very error it exists to catch, and it is recorded in its own source.** Version ① matched only `## #N` → 47 rows read as 40, inflating the dangling count. Version ② widened to `**#N` and produced a **FALSE DUPLICATE on #211** — both `**#N` line-starts in the log are bolded prose mid-sentence, never rows. **Found by running it, not by reading it.** The real discriminator is the em-dash after the id; a negative control for the #211 line is now a permanent probe. **The ledger shares this number space** (build #242 and tech-debt #242 both exist), so clause B matches only an explicit `tech-debt #N` marker and ignores bare `#N` — an earlier draft reported twelve ledger build ids as dangling citations.
+
+---
+
+## #247 — 🟡 AN EXPIRED QUICKBOOKS CONNECTION MAY REPORT ITSELF AS A REJECTED INVOICE, AND NOBODY HAS PRODUCED THE STATE (NEW 2026-09-10)
+
+**Found while correcting the 503 copy in #291, and deliberately NOT chased inside that fix.**
+
+`pushQboInvoice` returns **503 for two different states**: a missing `accounting_company_id` (never
+connected) and `qb_token_expired` (`cultivar.ts` — `refreshQBToken` returned nothing). The
+confirmation copy now names both, which is the honest description of the branch **as written**.
+
+🔴 **WHAT IS NOT KNOWN IS WHETHER THE SECOND ONE EVER ACTUALLY ARRIVES THERE.** If an owner
+disconnects the app from inside QuickBooks (Intuit → Apps → Disconnect), the tokens die while our
+row keeps its `accounting_company_id`. Whether the next checkout lands on **503 `qb_token_expired`**
+or sails past the refresh on a still-unexpired access token and **401s at the invoice POST** —
+surfacing as `failed`, *"QuickBooks rejected the invoice"* — **has never been observed.** If it is
+the latter, an expired connection is being reported as a rejected invoice: the D-48 defect in a new
+place, the fix is at the seam rather than in the copy, and the owner is sent to debug an invoice
+instead of to re-authorise.
+
+**WHY IT WAS NOT SETTLED IN #291:** producing it requires disconnecting a real QuickBooks company
+from Intuit's side, which is an owner action on Test Dave's, not something a probe can reach. Any
+claim either way from a desk would be [[R-26]] — a written description standing in for a
+measurement. **Recorded as OWED with the exact run that settles it: `qb-test-mode-full-surface-test.md`
+CARD 25 (`needs-test`, reason stated).**
+
+⚠️ **RELATED, AND NOT THE SAME:** #291's fix guarantees every state in the union has a badge. It
+does **not** guarantee the server routes each real-world failure to the RIGHT state. The first is a
+completeness property a cap can assert from source; the second is a fact about Intuit's behaviour
+that only a live run can establish.
