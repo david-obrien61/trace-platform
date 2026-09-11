@@ -10,7 +10,7 @@ Of 135 migration files, **4 are not applied.** Every other file is applied, deli
 | `20260905_production_planning` | 🔴 **YES — shipped code already depends on it** | Yes. Additive; its dependencies are live |
 | `20260911_service_offerings_transport_requires_mode` | 🟡 Yes — it is R-120's database guard | 🔴 **No — it refuses while one test-tenant service has no mode** |
 | `20260727d_drop_losses_and_nurseries` | 🟡 Not for anything to work — it finishes the noun purge | Yes. Its own safety checks pass |
-| `20260529_pmi_shared` | ⚪ **No — retire it** (#248) | Would run, but nothing uses what it creates |
+| `20260529_pmi_shared` | ✅ **RETIRED 2026-09-11** (R-139, ledger #297) — ~~No — retire it (#248)~~ | No longer runnable: every statement is commented out, the reason is in its header |
 
 ---
 
@@ -666,6 +666,8 @@ COMMIT;
 ---
 
 ## 4 · `20260529_pmi_shared` — ⚪ NOT NEEDED — RETIRE
+
+> ✅ **RETIRED 2026-09-11 ([[R-139]], ledger #297).** Retired in place, not moved: the file keeps its path, its header says why and what replaced each piece, and every statement is commented out, so it runs nothing and `--catalog` now reads it **NOTHING_TO_APPLY**. ✏️ **One claim below was corrected by measurement:** its asset table was not missing — `business_assets` was renamed `cost_objects` on 2026-06-15, and both `asset_id` foreign keys point there. The SQL below is the file as it was, kept for the record.
 
 **What it does:** creates `pmi_assets` and `pmi_service_logs`.
 

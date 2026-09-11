@@ -44,7 +44,7 @@ Do not route new features through it. See TD#25.
 | **Discovery — analysis stage** | `api/discovery/ingest.ts` | After identity → `runAnalysis()` → `ai/execute.ts` | `claude-sonnet-4-6` | WIRED | Silent-partner analysis (pain/opportunity/referral) |
 | **Discovery — synthesis stage** | `api/discovery/ingest.ts` | After analysis → `shared/discovery/synthesis.ts:runSynthesis()` → `ai/execute.ts` | `claude-sonnet-4-6` | WIRED | Assembles full SilentPartnerAnalysis, sends notification email |
 | **Campaign post generator** | `api/campaigns.ts` | POST → shared `campaigns/generate.ts` → `ai/execute.ts` | `claude-sonnet-4-6` | WIRED | Multi-channel (SMS/email/social); → needs David operational verify (advert_channels migration pending) |
-| **PMI schedule suggest** | `api/pmi/suggest.ts` | POST → direct Anthropic call (text-only, not via execute.ts) | `claude-sonnet-4-6` | WIRED | Returns `{tasks:[{name,interval}]}`; 3–8 tasks; ⚠️ 13th Vercel function — deploy blocked by Hobby limit |
+| **PMI schedule suggest** | `api/pmi/suggest.ts` | POST → direct Anthropic call (text-only, not via execute.ts) | `claude-sonnet-4-6` | WIRED | Returns `{tasks:[{name,interval}]}`; 3–8 tasks; ~~⚠️ 13th Vercel function — deploy blocked by Hobby limit~~ ✏️ **CORRECTED 2026-09-11 (#297):** slot 11 of 12, deployed and live — it wrote 3 real schedules (see built-inventory *PMI Schedule Generator*). 🔴 **No auth check** (tech-debt #261) |
 
 ---
 

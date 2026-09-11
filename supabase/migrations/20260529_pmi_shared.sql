@@ -1,48 +1,98 @@
--- Migration: Shared PMI (Preventive Maintenance)
--- Works identically for every vertical — tools, farm equipment, HVAC units, vehicles.
--- Tenant anchor: business_id (references businesses table).
-
-CREATE TABLE IF NOT EXISTS pmi_assets (
-  id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id       uuid        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-  name              text        NOT NULL,
-  asset_type        text,
-  make              text,
-  model             text,
-  serial_number     text,
-  year              int,
-  pmi_interval_days int,
-  last_service_at   timestamptz,
-  notes             text,
-  is_active         boolean     NOT NULL DEFAULT true,
-  created_at        timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE pmi_assets ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY pmi_assets_owner ON pmi_assets
-  FOR ALL USING (
-    business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())
-  );
-
-CREATE TABLE IF NOT EXISTS pmi_service_logs (
-  id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
-  asset_id      uuid          NOT NULL REFERENCES pmi_assets(id) ON DELETE CASCADE,
-  business_id   uuid          NOT NULL REFERENCES businesses(id),
-  service_type  text          NOT NULL,
-  performed_by  text,
-  notes         text,
-  cost          numeric(10,2),
-  performed_at  timestamptz   NOT NULL DEFAULT now(),
-  created_at    timestamptz   NOT NULL DEFAULT now()
-);
-
-ALTER TABLE pmi_service_logs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY pmi_service_logs_owner ON pmi_service_logs
-  FOR ALL USING (
-    business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())
-  );
-
-CREATE INDEX IF NOT EXISTS pmi_assets_business_idx     ON pmi_assets     (business_id, is_active);
-CREATE INDEX IF NOT EXISTS pmi_service_logs_asset_idx  ON pmi_service_logs (asset_id, performed_at DESC);
+-- ════════════════════════════════════════════════════════════════════════════════
+-- 20260529_pmi_shared — 🔴 RETIRED 2026-09-11 (R-139, ledger #297). DO NOT APPLY.
+-- ════════════════════════════════════════════════════════════════════════════════
+-- THIS FILE NEVER RAN. Measured 2026-09-11 through the read-only catalog role
+-- (`supabase_read_only_user`): `pmi_assets` and `pmi_service_logs` do not exist, and no migration
+-- drops them (tech-debt #248).
+--
+-- RETIRED IN PLACE — NOT DELETED, NOT MOVED. Other documents cite this path, and a deleted file
+-- leaves the next session to rediscover an unapplied migration and wonder whether it is owed.
+-- Every original statement is kept below VERBATIM and COMMENTED OUT, so:
+--   · pasting this file into the SQL editor executes nothing;
+--   · `verify-migration-apply-state.mjs` reads it NOTHING_TO_APPLY instead of NOT_APPLIED, so the
+--     not-applied list means what it says again;
+--   · the corpus caps stop reasoning about two tables that never existed.
+-- Editing an unapplied file is permitted — CLAUDE.md §6 r1 governs migrations that have RUN, the
+-- same reasoning `20260727b_align_floor_assets_retired.sql` records in its own header.
+--
+-- ── WHY IT IS RETIRED: WHAT RAN TWO WEEKS LATER DOES ITS JOB, AND DOES IT BETTER ──────────────
+--   pmi_assets         → `business_assets` (20260612), RENAMED IN PLACE to `cost_objects` on
+--                        2026-06-15 (20260615; asset rows are node_type = 'ASSET'). It carries
+--                        every asset column below plus barcode_id, status, acquisition_cost and
+--                        the cost axes. LIVE 2026-09-11: 11 ASSET rows across 2 tenants.
+--   pmi_interval_days  → `business_pmi_schedule.interval_days`   } the schedule is its own row,
+--   last_service_at    → `business_pmi_schedule.last_service_at` } one per asset. The asset does
+--                        not carry them, and must not: two stores for one fact.
+--   (never modelled)   → `business_pmi_schedule.tasks jsonb` + `overrides jsonb` — the task list
+--                        this file had no place for. LIVE: 3 schedules, 27 tasks.
+--   pmi_service_logs   → `business_service_log` (20260612 + 20260613), which ADDS `receipt_id`
+--                        (FK → receipts, the count-once seam) and `result`
+--                        (PASS / NEEDS_ATTENTION / FAIL). LIVE: 0 rows.
+--   the two policies   → NOT TAKEN. Both test `owner_id = auth.uid()` — the pattern removed from
+--                        49 policies on 2026-09-10 (20260910b, R-119). The live tables gate on
+--                        is_active_member(business_id) AND has_permission(business_id, '<string>'):
+--                        'pmi:read' / 'pmi:update' on the schedule and log, 'costs:*' on cost_objects.
+--
+-- ── WHAT WAS TAKEN FROM IT: NOTHING, AND THE REASON IS A MEASUREMENT ──────────────────────────
+-- The 2026-09-11 prompt asked for `pmi_assets` to be lifted into a new asset table, on the premise
+-- that no asset table exists and the three live schedules point at nothing. MEASURED FALSE: both
+-- `asset_id` foreign keys are live and reference cost_objects(id) ON DELETE CASCADE, and all three
+-- schedules resolve to an ASSET row in their own tenant (a Mahindra 4025 tractor and a Craftsman
+-- air compressor on Test Dave's; a Kubota L4802HST tractor on LAWNS). A catalog sweep for
+-- '%asset%' cannot see a table named `cost_objects`. A second asset table would be two stores for
+-- one fact, so none was written.
+-- What IS real: a member holding pmi:* without costs:read cannot see the equipment list at all
+-- (tech-debt #262 — LAWNS's manager, today). That is a decision about a projection, owed to David
+-- in docs/RULINGS.md, not a table.
+-- ════════════════════════════════════════════════════════════════════════════════
+--
+-- ── THE ORIGINAL FILE, VERBATIM, COMMENTED OUT ────────────────────────────────────────────────
+--
+-- -- Migration: Shared PMI (Preventive Maintenance)
+-- -- Works identically for every vertical — tools, farm equipment, HVAC units, vehicles.
+-- -- Tenant anchor: business_id (references businesses table).
+--
+-- CREATE TABLE IF NOT EXISTS pmi_assets (
+--   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+--   business_id       uuid        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+--   name              text        NOT NULL,
+--   asset_type        text,
+--   make              text,
+--   model             text,
+--   serial_number     text,
+--   year              int,
+--   pmi_interval_days int,
+--   last_service_at   timestamptz,
+--   notes             text,
+--   is_active         boolean     NOT NULL DEFAULT true,
+--   created_at        timestamptz NOT NULL DEFAULT now()
+-- );
+--
+-- ALTER TABLE pmi_assets ENABLE ROW LEVEL SECURITY;
+--
+-- CREATE POLICY pmi_assets_owner ON pmi_assets
+--   FOR ALL USING (
+--     business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())
+--   );
+--
+-- CREATE TABLE IF NOT EXISTS pmi_service_logs (
+--   id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+--   asset_id      uuid          NOT NULL REFERENCES pmi_assets(id) ON DELETE CASCADE,
+--   business_id   uuid          NOT NULL REFERENCES businesses(id),
+--   service_type  text          NOT NULL,
+--   performed_by  text,
+--   notes         text,
+--   cost          numeric(10,2),
+--   performed_at  timestamptz   NOT NULL DEFAULT now(),
+--   created_at    timestamptz   NOT NULL DEFAULT now()
+-- );
+--
+-- ALTER TABLE pmi_service_logs ENABLE ROW LEVEL SECURITY;
+--
+-- CREATE POLICY pmi_service_logs_owner ON pmi_service_logs
+--   FOR ALL USING (
+--     business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())
+--   );
+--
+-- CREATE INDEX IF NOT EXISTS pmi_assets_business_idx     ON pmi_assets     (business_id, is_active);
+-- CREATE INDEX IF NOT EXISTS pmi_service_logs_asset_idx  ON pmi_service_logs (asset_id, performed_at DESC);

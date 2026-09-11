@@ -900,6 +900,22 @@ Built from **two real spoken walks**, this is the spec for counting a lot **by t
 
 **🔴 DESIGN CALL (2026-08-23) — THE TWO TALLY CLAUSES ABOVE ARE BOTH CORRECT, THEY ARE DIFFERENT ACTS, AND THE DISCRIMINATOR IS *PLACE*.** Lauren's question — *she counts 3, finds 6 more, finds 5 more: does it make 14, or does it replace?* — is answered by this story twice, and the two answers do not conflict. **A running tally** (*"4, 6, 8, 12, 16" → 16, last value wins*) is **one person counting up in one spot**: each number restates the total so far, so the last one IS the total. **A location-spanning tally** (*same variety here + in the greenhouse, summed*) is **the same variety found in two places**, so it adds. **Lauren's walk is the second act at fine grain** — same row, different clumps — which is why the running-tally reading gets it wrong. **The application cannot know which act she is performing**, because both look identical at the keypad: a second number typed against a lot already counted. **So it must ASK — and the conflict sheet ALREADY DOES.** What it is missing is a third option: it offers **REPLACE** (the running-tally reading) and **KEEP** (abandon the new number) and has **no ADD**, so the one act this story explicitly specifies is the one the sheet cannot express. **The build adds ADD to that sheet.** ⚠️ Two things ride with it, recorded here so they are not rediscovered: **(1)** the sheet's *"first count"* label goes FALSE after the first recount — on her third pass it reads *"first count 6"* when 6 was the second (tech-debt **#93**); **(2)** the ledger takes **ONE row at session close** carrying whatever she chose — the three passes are session detail living in `inventory_counts`, not three ledger events (**R-A, ruled 2026-08-23**). _Grounds: recon [count-session-multi-pass-recon-2026-08-23](../docs/audits/count-session-multi-pass-recon-2026-08-23.md); ledger #198 · #205._
 
+### Keep the equipment running — the maker's schedule, on the machine it belongs to
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: asset-inventory-pmi
+MAPS-TO: 5.2
+PIECES: pmi_generator, pmi_schedule, service_log, task_interval, usage_meter_reading, operational_asset_list, billed_hours_link
+NEEDS: David — whether someone who maintains equipment without holding `costs:read` may see the equipment list (a projection over `cost_objects`, a separate table, or grant the string). The task build carries the rest, already ruled: usage recurrence (R-140), the interval on the task (R-141), duty-generates-task (R-142).
+The farm owns a Kubota tractor, and it also sells its hours. Whoever keeps it running opens it and asks for the maker's schedule, and gets one they recognise: check the oil daily, grease every 50 hours, change the hydraulic fluid every 400 hours, flush the coolant every two years. Nothing is saved until they accept it. Reading the hour meter is itself a job on that list. When a job comes due it **appears** on the operations calendar beside the deliveries, because the same people do both — with no assignee, the instruction as its payload (R-131, R-134). The hours the farm puts on a customer's invoice are the same hours that bring the next service due. And the person who does the maintenance can see the machines without seeing what they cost.
+
+**Built today (measured 2026-09-11, ledger #297):** the generator — `/pmi` → an asset → **✦ Suggest Schedule** → review → **Accept** — has written three real schedules: a Mahindra 4025 tractor and a Craftsman air compressor on Test Dave's, and LAWNS's Kubota L4802HST. The asset registry is `cost_objects` (renamed from `business_assets` on 2026-06-15); the service log is `business_service_log`, empty.
+
+**Not true yet, each named:** hour intervals get no due date (10 of 27 live tasks) · the schedule carries one cadence for every task · an asset with tasks but no logged service reads **NO SCHEDULE** · LAWNS's manager holds PMI authority and is shown a locked list (tech-debt #262) · the generator endpoint checks no login (tech-debt #261) · `Kubota Hours` is priced in the catalogue and linked to nothing.
+
+_Grounded: `packages/shared/src/modules/PMI.tsx`, `pmiInterval.ts`, `api/pmi/suggest.ts`; live read via `supabase_read_only_user` 2026-09-11; owner-test board `docs/owner-tests/pmi-full-surface-test.md`; R-139…R-142; tech-debt #261–#265._
+
 ---
 
 ## NEEDED — cross-cutting (no single build-arc)

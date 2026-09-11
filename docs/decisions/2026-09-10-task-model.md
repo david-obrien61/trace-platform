@@ -13,6 +13,9 @@
 3. **One object.** An emergency and a task are the same thing at different urgency. An **observation** (*"plants look dry"*) is a different thing: it needs a judgment, not a repair. — **R-137**
 4. **It lives on the operations calendar, beside the deliveries**, because they compete for the same people on the same day. Terry's drive-through list, visible to Lauren and Joel. — **R-134**
 5. **Closing must be one tap from where you already are**, or the list rots. LAWNS has zero inactive customers in 1,959 because nothing ever deactivates. — **R-138**
+6. **A duty generates; a task is its instance.** Filed 2026-09-11 from David's PMI prompt: *"a task APPEARS rather than being assigned; a DUTY generates, a TASK is the instance."* — **R-142**
+7. **Usage-based recurrence is required**, and taking the meter reading is itself a task. — **R-140**
+8. **The interval belongs on the task**, not on the schedule. — **R-141**
 
 ## Stated with the rulings, not rulings themselves
 

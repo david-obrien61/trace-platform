@@ -37,7 +37,7 @@ It reads the system catalogs through the read-only PAT (`supabase_read_only_user
 
 - **`20260727d_drop_losses_and_nurseries`** — `losses` and `nurseries` still exist. **Known and gated** (ledger #162). Three objects it would remove are reported as *a later change not in effect*.
 - **`20260905_production_planning`** — none of its three tables exist. Known (tech-debt #234).
-- **`20260529_pmi_shared`** — `pmi_assets` / `pmi_service_logs` never created; its job went to the `business_*` tables in `20260612`. **Most likely abandoned, not owed** — David's call (#248).
+- **`20260529_pmi_shared`** — `pmi_assets` / `pmi_service_logs` never created; its job went to the `business_*` tables in `20260612`. **Most likely abandoned, not owed** — David's call (#248). ✅ **RETIRED 2026-09-11 (R-139, ledger #297)** — every statement commented out in place; it now reads **NOTHING_TO_APPLY**, and the not-applied three are `20260727d`, `20260905` and `20260911`.
 
 ### Removed by hand, outside any migration — 4 objects
 

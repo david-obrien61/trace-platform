@@ -1810,6 +1810,8 @@ that only a live run can establish.
 
 ## #248 — 🟡 `20260529_pmi_shared.sql` NEVER RAN, AND NOTHING SAYS WHETHER IT EVER WILL (NEW 2026-09-11)
 
+✅ **RESOLVED 2026-09-11 — RETIRED IN PLACE ([[R-139]], ledger #297).** The file keeps its path and its text: a header records why it is retired and what replaced each piece, and every statement is commented out, so it executes nothing and `--catalog` no longer lists it NOT_APPLIED. ✏️ **Corrected premise carried with it:** the asset table it would have created exists as `cost_objects` (renamed from `business_assets`), so nothing was taken from it. ⚠️ **Still unexplained:** the June document's claim that `pmi_service_logs` existed (below).
+
 Measured by `node scripts/verify-migration-apply-state.mjs --catalog`, read-only: **`pmi_assets` and `pmi_service_logs` do not exist**, and no migration drops them. So the file was never applied. Its purpose was taken over by the `business_*` tables in `20260612_business_assets_inventory_pmi_service.sql` — so it was most likely **abandoned, not forgotten**.
 
 🔴 **The cost is not the missing tables, it is the permanent false "owed".** Every apply-state run will report this file NOT_APPLIED forever, beside the two that genuinely await David (`20260727d` gated, `20260905` production planning). A list where one of three "not applied" entries is really "abandoned" teaches its reader to stop trusting the list.
@@ -1923,6 +1925,8 @@ decision — David's.
 
 Measured 2026-09-11: **14 live policies** test `is_active_member(...)` and never `has_permission(...)`. Anyone signed in to the tenant can do what those policies allow. The 2026-09-10 handoff counted **23**; #289's triage reduced it. **Tolerable at LAWNS (three trusted logins); not at customer two.** Each needs the ENTITY-vs-WORK test (R-119) — most are WORK and want a string; some may be the membership read an app needs to function at all.
 
+⚠️ **ONE OF THEM, NAMED (2026-09-11, ledger #297): `business_pmi_schedule_member_all`** — `FOR ALL` to `{public}`, `is_active_member(business_id)` only. Postgres ORs permissive policies together, so **it makes `business_pmi_schedule_owner_all`'s `pmi:update` gate decorative**: any active member can write any schedule in their business. `business_service_log` does not have this problem — all four of its policies carry a string.
+
 ---
 
 ## #257 — 🟡 NOTHING PROVES A PERMISSION MARKED `enforced` IS CHECKED BY ANY LIVE POLICY (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
@@ -1952,3 +1956,49 @@ Found while filing R-122…R-138, and **present in the committed file before thi
 - 🟡 **Two dated rows have the wrong number of columns** (R-64 on 2026-09-02, and the 2026-08-23 *"READ HONESTY IS A TYPE"* row), from a literal `|` inside a cell. A markdown renderer splits them into extra columns.
 
 **Nothing checks RULINGS.md's structure.** `verify-id-citations.mjs` checks tech-debt ids only, so a duplicate `R-` number passes every gate — which is how R-101 happened. The backlog's proposed Clause B (every cited `R-\d+` has exactly one row) would catch both the dangling and the duplicate case.
+
+---
+
+## #261 — 🔴 `/api/pmi/suggest` AUTHENTICATES NOBODY, AND EVERY CALL IS BILLED (NEW 2026-09-11)
+
+Read 2026-09-11, `packages/cultivar-os/api/pmi/suggest.ts` (109 lines): the handler checks the method, requires `businessId` and `name` to be non-empty, and calls Anthropic. **It reads no `Authorization` header, resolves no session, and checks no membership or permission.** `businessId` appears only in log lines. Anyone who knows the URL can make the platform pay for a Sonnet call, as often as they like, naming any business. `max_tokens: 512` bounds each call; nothing bounds how many.
+
+Nothing suggests it has been abused. It is still a billable endpoint on the public internet with no door. **Fix, not built here (#297 was docs and a migration):** require the caller's bearer token, resolve the member for `businessId`, and refuse without `pmi:update` — the same string the accept write already needs. ⚠️ **The other AI endpoints were not audited in this pass.** A keyword count proves nothing either way, so no claim is made about them.
+
+---
+
+## #262 — 🔴 THE PMI SCREEN IS INERT FOR ANYONE HOLDING `pmi:*` WITHOUT `costs:read` — AND LAWNS'S MANAGER IS THAT PERSON TODAY (NEW 2026-09-11)
+
+Measured live 2026-09-11, read-only: **LAWNS's active MANAGER holds `pmi:read` and `pmi:update` and not `costs:read`**, and so does the platform MANAGER floor. `pages/PMI.tsx` passes `canSeeCosts={can('costs:read')}`, and `PMI.tsx:176` returns before reading a single asset. With no row to open there is no **Log Service**, no **✦ Suggest Schedule** and no schedule to read: the member holds maintenance authority over nothing.
+
+Two things on that screen are false today:
+- 🔴 **The redaction says** *"Your maintenance schedule and service history above are complete and unaffected."* **Nothing is above it.** The schedule and history render only inside an asset's detail view, which is reached only from the hidden list. §6 r18's class: a claim no state of the screen makes true.
+- 🟡 **`+ Add` is shown**, and the insert into `cost_objects` needs `costs:create`, which that member does not hold — a control that looks usable and cannot save.
+
+**Why the answer is not a new table:** the equipment IS recorded, in `cost_objects`. The obstacle is that one table holds both what a machine is and what it cost. `20260727b` already names the shape of the answer as the condition for `assets:*` to return — *"when 3b's projection makes an operational/financial split inside cost_objects real"* — and the choice is David's (RULINGS.md OWED: *who may see the equipment list without seeing what it cost?*). ⚠️ **The proposed yard-worker permission set inherits this exactly.**
+
+---
+
+## #263 — 🟡 THE GENERATOR SUGGESTS INTERVALS ITS OWN CONVERTER CANNOT READ (NEW 2026-09-11)
+
+`api/pmi/suggest.ts:11` tells the model to use *"daily", "weekly", "monthly", "quarterly", "semi-annually", "annually", "every 2 years"* or a usage form. `pmiInterval.ts` `INTERVAL_DAYS` knows five words: `daily · weekly · monthly · quarterly · annually`. **So two intervals the prompt itself offers are unreadable by construction**, and the model also returns forms the prompt never listed. Measured live: **2 of the 27 saved tasks** — *"Flush and replace engine coolant — every 2 years"* (Mahindra 4025) and *"Change compressor pump oil — every 3 months"* (Craftsman compressor) — are calendar intervals the preview labels *"non-standard interval — no automatic due date."* The label is honest; the gap is that `every 3 months` IS `quarterly`. Low stakes while [[R-141]] is unbuilt, since only the soonest task drives a due date. ⚠️ Also: the prompt asks for 3–8 tasks, the Mahindra list has 11, and nothing enforces the range.
+
+---
+
+## #264 — 🔴 USAGE-BASED RECURRENCE HAS NOWHERE TO LIVE, AND THE HOURS ARE ALREADY A PRICED ITEM (NEW 2026-09-11)
+
+[[R-140]] rules it required. Measured live 2026-09-11: **10 of the 27 tasks** on the three live schedules are hour intervals — *every 50 · 100 · 200 · 400 hours* — five on each tractor, none on the compressor. No table or column holds a meter reading, and no task exists for taking one. `deriveIntervalDays` excludes them rather than inventing a cadence, which is correct: the Ignition donor fabricated 30 days.
+
+🔴 **The same number already exists on the sell side.** LAWNS's catalogue carries **`Kubota Hours` at $45** (`business_inventory`, measured), and LAWNS's asset list holds **one Kubota tractor (L4802HST) and a Kubota BH70 backhoe attachment**. Nothing links the priced item to either asset or to maintenance: hours sold to a customer never bring a service due.
+- ⚠️ **[STATED], not measured: that LAWNS bills it on invoices.** 0 of LAWNS's 130 `order_items` reference it, so any invoice history for it is not in this database.
+- ⚠️ **[INFERRED], not checked: that `Kubota Hours` counts the L4802HST's engine.** It could be the backhoe, or machine time not read off any meter.
+
+Out of scope for #297 by David's instruction: the task object, the meter reading and the link are one later build.
+
+---
+
+## #265 — 🟡 ONE `interval_days` FOR TASKS FROM DAILY TO EVERY TWO YEARS — TWO OF THREE LIVE VALUES ARE UNRECORDED OVERRIDES, AND EVERY SCHEDULED ASSET SAYS "NO SCHEDULE" (NEW 2026-09-11)
+
+[[R-141]] rules the interval belongs on the task. Measured live 2026-09-11: all three schedules have a **daily** task, so the derivation gives **1** on each, and the stored values are **30 · 1 · 30**. Two were typed over in the preview, and **nothing records that a stored cadence is an override rather than a derivation.** LAWNS's 30 matches none of its eight tasks.
+
+And a contradiction on one card: `last_service_at` is NULL on all three schedules and `business_service_log` is empty, so `pmiStatusFrom` returns `NONE` and the chip reads **NO SCHEDULE** — directly beside *"8 tasks scheduled."* A schedule exists; what is missing is a first logged service. The operations calendar's PMI source already says so honestly (`operationsCalendar.ts`, state `no-data`). §6 r18's class.
