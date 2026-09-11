@@ -1417,6 +1417,21 @@ David, verbatim: *"will call is an online order for pickup which is what they wa
 _Grounded: David 2026-08-28 (verbatim above) · [[R-21]] origin decides the hold · [[R-20]] the four-word status vocabulary · [[D-52]] on-hand / committed / available · [[D-37]] money boundary · the *Online shop* story's fulfilment-choice piece (`orders.transport_method` = `self`)._
 ---
 
+### David can't see what is still open, so one finished stage reads as a finished feature
+STATUS: written
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: open_work_board, stage_vs_done_visibility, feedback_loop, step_by_step_cards, card_handoff_lightning_to_board, cross_session_state
+NEEDS: build input — (1) what counts as DONE, so a board can refuse to show one finished stage as a finished feature; (2) where Lightning's cards land so they reach the board without David carrying them across by hand.
+**In David's words (2026-09-11):** *"David can't see what's outstanding or owed, or still needs his input. He thinks things are completed when only a single stage has been completed and no feedback loop exists. The cards are not step by step and are rarely kept up to date, because of the transition between David and Lightning, and David forgets to ensure the card transfer, due to multiple sessions running and he is singly running development and testing."*
+
+David is one person doing both building and testing, across several Claude sessions at once. Open work gets written down, but in six different places — the owner-test boards, the close-out ledger, the tech-debt log, the rulings, the story board, and each session's handoff notes — and **no single screen shows what is still open, what is waiting on him, and what only looks done.** A build reaching BUILDER-COMPLETE reads like a finished feature, because nothing puts "built" beside "not yet proven by you" in a way he can't miss. A session closing takes its knowledge with it unless it wrote it down first, and the cards that should carry that forward are written as summaries rather than steps, then go stale in the hand-off between Lightning and the board — because the only thing moving them across is David remembering to.
+
+**What done looks like:** David opens one page and sees everything open, grouped by what it is waiting on — **him** (a decision, a live test, SQL to apply), **a build**, or **nothing** (done and proven). Something finished at one stage shows as *that stage*, never as done. The page reads the files sessions already write, so it cannot drift from them and needs nobody to remember to update it. Test cards are steps he can follow at a screen, and a card that no longer matches what was built is visibly flagged as stale rather than trusted.
+
+⚠️ **Measured the day this was written (rough keyword counts, not exact rows):** owner-test cards **156 owed · 16 needs-test · 7 covered**; close-out ledger **117 builder-complete against 13 owner-proven**; and **182 tech-debt numbers cited in the docs with no row in the log** (`scripts/verify-id-citations.mjs`). So a board reading only what is filed will show far less than is really open until those are filed. _Grounded: ledger #290; OP-14 (owner-test coverage); tech-debt #246; the id-citation cap._
+
 ## PLATFORM STANDARD CAPABILITIES
 
 _The three-category capability roster the platform-standard **gap analysis** (2026-07-14, David) surfaced: the
