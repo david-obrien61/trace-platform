@@ -6,6 +6,114 @@ Maintained per the Honest Friction principle (see PLATFORM_STRATEGY.md Design Pr
 
 ---
 
+## TRANSCRIBED 2026-09-11 — NINE IDS CITED IN `CLAUDE.md` THAT HAD NO ENTRY HERE (#195's CLASS, SECOND INSTANCE)
+
+🔴 **THIS IS NOT NINE NEW FINDINGS. It is nine existing ones that lived ONLY in CLAUDE.md's quick-reference
+line and nowhere in this log** — the exact defect **#195** filed on 2026-09-06 about **#186–#191**, in a
+range nobody then re-checked. **#186–#191 and #192–#195 were transcribed; 58, 59, 85, 86, 87, 88, 89, 90 and
+178 were not.** Measured 2026-09-11: every id from 1 to 277 cross-checked against this file, both the `##`
+headings and the legacy table.
+
+⚠️ **THE OTHER 22 GAPS ARE NOT GAPS, AND SAYING SO IS THE POINT.** Ids **160–177** and **5, 6, 158, 161,
+164–172** also have no entry here, and they need none: every CLAUDE.md citation of them reads **"ledger #NNN"**
+— `docs/CLOSE-OUT-LEDGER.md` entries, a different numbering space. Reporting them as missing tech debt would
+have been a confident wrong answer of exactly the kind #178 below describes.
+
+**Prose below is CLAUDE.md's own, verbatim** — transcribed, not rewritten, so the two records cannot drift
+into two different accounts of one item. Statuses are as CLAUDE.md carries them.
+
+---
+
+### #58 — 🟡 THE DB-LEVEL GUARD FOR THE `(variant_group, size)` PAIR (NEW 2026-07-16 · transcribed 2026-09-11)
+
+the durable form of ledger #135's defect 2: a partial unique index `(business_id, variant_group, size) WHERE
+variant_group IS NOT NULL AND size IS NOT NULL`. This is **ledger #74's deferred option C**. It is a MIGRATION
+and **it would REJECT the live Acoma dup, so it cannot land until the data is clean** (i.e. after the
+regenerated remediation). The code guard `findSizeTwin` is proportionate at a single-owner nursery's volume.
+**Sibling of #54** — the `qb_customer_id` partial unique index, named-not-taken on the same reasoning.
+
+---
+
+### #59 — 🟡 `TRACE-SESSION-BOOTSTRAP.md`'s HEADER HAS THE DUPLICATE-HEADER DISEASE AND IS LOADED EVERY SESSION (NEW 2026-07-16 · transcribed 2026-09-11)
+
+`TRACE-SESSION-BOOTSTRAP.md`'s header carries the **STD-011 duplicate-header disease AND IS LOADED EVERY
+SESSION** — §10's Session Starter opens it FIRST, so its `Last updated:` prose block is a per-session token tax
+exactly like CLAUDE.md line 3 was. **OP-13's own triage put it with the ledger/DECISIONS-INDEX as "not loaded
+every session" — that was WRONG for this one**; the triage stands for the other two. The header-is-a-POINTER
+clause should extend to it — **David's call.** Ledger #135.
+
+⚠️ **STILL TRUE 2026-09-11:** the file's line 3 reads `> **Last updated:** 2026-09-11 — **#301** one stop,
+three screens — schedule, route and order render the s…` — a summary, not a pointer. **It is also an OPEN
+question in `docs/RULINGS.md` § OWED.**
+
+---
+
+### #85 / #86 — ✅ RESOLVED 2026-07-31 (transcribed 2026-09-11)
+
+two legacy-string client gates that admitted NOBODY (`view_costs` → `costs:read`, `import_pricing` →
+`inventory:import_price`). → **ledger #174**.
+
+---
+
+### #87 — 🟡 `navPermission()` FALLS BACK TO A RETIRED STRING (NEW 2026-07-31 · transcribed 2026-09-11)
+
+`navPermission()` falls back to **`view_dashboard`**, retired into the `member` sentinel. **UNREACHABLE TODAY
+(0 of 26 nav nodes)** — a landmine, not a live defect: the next node added without a `tileKey` or its own
+permission goes invisible to everyone including the owner. DECLARED in `authority-grants-baseline.json`, prints
+RED every capA run. **Fall back to `member`, or delete the fallback and make the field required?** Ledger #174.
+
+---
+
+### #88 — ⚠️ THE CITATION ITSELF IS DAMAGED — DAVID'S CALL WHAT THIS ITEM WAS (2026-07-31 · transcribed 2026-09-11)
+
+🔴 **TRANSCRIBED WITH ITS DEFECT NAMED RATHER THAN REPAIRED.** CLAUDE.md's line for this id reads, in full:
+
+> `**#88  by MINTING \`reports:read\` as the NEW \`planned\` status — the string was gating a tile without existing in ANY manifest. Ledger #175)**`
+
+The opening clause is **missing** — there is no status marker, no date, and no subject for *"by MINTING"*.
+Comparing it to its neighbours, the lost words were almost certainly a resolution marker (`✅ resolved
+2026-07-31 — …`), but **almost certainly is not a record.** Inventing the clause would be the one thing this
+log exists to prevent: a confident sentence nobody wrote.
+
+**WHAT IS OWED:** David confirms what #88 was, or it is struck. `docs/CLOSE-OUT-LEDGER.md` **#175** is the
+place the answer most likely survives.
+
+---
+
+### #89 — ✅ RESOLVED 2026-07-31 (transcribed 2026-09-11)
+
+`useModules` filtered `can()` before reading `status`; `<BeingBuilt>` mounted. → **ledger #176**.
+
+---
+
+### #90 — 🟡 PARTIAL — REMOVE `team:update` / `team:delete` RATHER THAN LEAVE THEM MIS-DESCRIBED (NEW 2026-07-31 · PARTIAL 2026-08-28 · transcribed 2026-09-11)
+
+**PARTIAL 2026-08-28: the BLOCKER is gone and the scope SHRANK to two verbs.** Originally: REMOVE
+`team:create/update/delete` rather than leave them mis-described, since team changes go through the funnel —
+owner-only by design, enforced by a trigger — which is *"never"*, not *"unbuilt"*. 🔴 **`team:create` IS NO
+LONGER ONE OF THEM: R-22 wired it**, and it is enforced by `create_invitation` plus two `invitations` member
+policies (#228). **`team:update`/`team:delete` remain the original item.** 🔴 **AND THE BLOCKER RESOLVED ITSELF
+BY BEING HIT FROM THE OTHER SIDE:** the obstacle was capQ's retained `migration ⊆ manifest` direction failing
+when a string leaves BOTH manifest sets while `20260727_rbac_resource_action_flip.sql` cannot be edited
+(§6 r1). #228 hit exactly that with three strings and fixed it properly — a **self-pruning declaration**
+(`r-b2-wired-since-declarations.json`) that fails the build if an entry goes stale or was meaningless to begin
+with. **Removing a verb is now a declaration away, not blocked.** Ledger #175 · #228.
+
+---
+
+### #178 — 🟡 `supabase/types.ts` DECLARES THREE TABLES THAT DO NOT EXIST (NEW 2026-09-02 · transcribed 2026-09-11)
+
+**`packages/shared/src/supabase/types.ts` DECLARES THREE TABLES THAT DO NOT EXIST.** `GrowthGoal`,
+`NotificationLog`, `AIUsageLog` — probed live against a NEGATIVE CONTROL (a name that cannot exist) plus
+`receipts` as a positive one: all three **ABSENT**. All carry `tenant_id`, the pre-`business_id` naming; none is
+imported anywhere. The fourth, `Vendor`, was removed by #259 — **only it, because deleting types unrelated to
+vendors inside a vendor build is the scope creep that makes a diff unreviewable.** ⚠️ **The file's own header
+still calls these *"tables that exist in every vertical's schema"***, which is the claim that needs correcting
+deliberately. **The cost is not clutter — it is a CONFIDENT WRONG ANSWER**: anyone reading this file to settle
+*"do we have X?"* gets YES. Same class as the inventory doc that said a function slot was free at 12/12.
+
+---
+
 ## #199 — 🔴 LAWNS'S PRICING CONFIG IS A ONE-KEY STUB, AND THE SEEDER THAT EXISTS TO PREVENT THIS CANNOT REPAIR IT (NEW 2026-09-06)
 
 **MEASURED live, both tenants, service key, `.select()` only.**
