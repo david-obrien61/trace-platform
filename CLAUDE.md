@@ -301,6 +301,14 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > **§3 RETENTION — N=3 (binding; OP-13).** §3 holds the **most recent THREE entries**, no more. At every close-out, **BEFORE** writing the new entry, move every entry beyond the newest three — **verbatim, never summarized** — to [docs/handoff-archive.md](docs/handoff-archive.md) (newest-first, under a dated provenance comment). The new entry is #1. Nothing is deleted or condensed; the archive is append-and-preserve and is **NOT loaded at session start** — it holds the full history (185 entries as of 2026-07-17). Verification is arithmetic: **entries-in == entries-out**. Canonical "is X closed / owner-proof owed" state does NOT live here — it lives in `docs/CLOSE-OUT-LEDGER.md`, `docs/DECISIONS-INDEX.md`, and `docs/built-inventory.md`, each with its own gate. §3 is the narrative of the last three sessions; it was never the system of record. Full statement of force: `docs/operating-doctrine/end-of-session-protocol.md` → **GATE — CLAUDE.md §3 HANDOFF RETENTION**; close sequence step 0 (§9).
 
+## 3b. OPEN QUESTIONS — the register
+
+🔴 **[docs/open-questions.md](docs/open-questions.md) — every question waiting on David, counted, with a pointer to the file that OWNS each one.** Created 2026-09-11 because they were scattered across **seven homes** and no surface had ever shown how many there are: **65 still open in `RULINGS.md`'s OWED queue**, plus 11 more that only §3 was holding — and §3 drops them at N=3.
+
+⚠️ **It is an INDEX, never a second copy** (STD-011): answer a question in its owning file, then update its line there. **A close-out that adds a `FLAGGED FOR DAVID` item adds a line to the register too** — that is what survives the N=3 rotation.
+
+---
+
 ## 4. ACTIVE TASKS
 
 ### ✅ DEMO CRITICAL — ALL COMPLETE
