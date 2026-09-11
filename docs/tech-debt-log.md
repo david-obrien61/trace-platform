@@ -1659,3 +1659,100 @@ database that no longer matches its model: **raw-`owner_id` policies went 49 →
 ENTITY/authority-store ones, `bpc_owner_insert`, and 3 on tables pending DROP), and capability #3
 still reports dual RLS for `receipts`, `business_inventory`, `cost_objects` and `labor_resources`
 **off `CREATE` statements the applied migration removed.** It is passing on history. Next pass.
+
+---
+
+## #242 — 🟡 THE AUDIT SPINE'S MIGRATION HEADER STATES AN AUTHOR MODEL THE PERMISSION MANIFEST RETIRED (NEW 2026-09-10)
+
+⚠️ **RENUMBERED ON ARRIVAL, AND THAT IS THIS ROW'S SIBLING FINDING.** `docs/decisions/2026-09-10-audit-redirect-close-recon.md` claimed **#237–#241** for these five findings by arithmetic off the log's tail. **All five were already taken** by a parallel #289 session filed hours earlier (`get_my_permissions` ACL · client-computed authority · uncaptured policies · the unrun V-block · the dual-RLS cap). Claimed as **#242–#246**, read off `scripts/verify-id-citations.mjs` rather than counted. **#195's exact shape, fourth occurrence on one day** — see **#246**, which is the cap built to end it.
+
+`supabase/migrations/20260623_audit_log_spine.sql:36-42` states, as a ratified decision:
+*"AUTHOR MODEL: client-side INSERT (accountability-grade) — The owner/member appends audit rows from their own authenticated session (rides the existing call sites — no Vercel-fn round-trip per event)."*
+
+`packages/shared/src/auth/permissionManifest.ts:204-206` states the opposite, and it is the one that matches reality:
+*"`audit_log:create` takes NO ENTRY (spec §3): audit rows are written ONLY inside the funnel/RPCs as a side effect of an audited action. No member ever holds it. It is a SYSTEM WRITER."*
+
+**The manifest is right.** All 11 live writers are `SECURITY DEFINER` plpgsql RPCs, and a repo-wide grep for `.from('audit_log').insert(` in application code returns **zero hits**. The author model changed by practice between June and July and **the migration header was never corrected**, so the document a reader opens first to learn how the spine works describes a model the platform abandoned. Nothing is broken today; the hazard is that the next writer built from that header is built client-side, which the permission model then refuses.
+
+**Fix:** a comment-only correction to the migration header — **append a superseding note, never edit the applied migration's body** (§6 r1). Not taken in the recon pass: it is a documentation change inside a measurement prompt.
+
+---
+
+## #243 — 🔴 `audit_log` HAS NO READER, AND THE ONE NON-DAVID HOLDER OF `audit_log:read` WOULD BE REFUSED BY THE POLICY (NEW 2026-09-10)
+
+**Two halves, both measured, and together they mean the accountability record is unreadable by design rather than by oversight.**
+
+**① There is no reader at all.** `grep "from('audit_log')"` across `packages/` and `api/` returns **no application code** — only `scripts/measure-vendor-chain-applied.mjs:88` and a comment in `scripts/verify-write-paths.mjs:162`. **No page, no route, no tile, no endpoint.** 98 rows, 12 action types, written since 2026-07-20, and nothing in the product can display one.
+
+**② The permission and the policy disagree.** Measured off `business_members`: **four members hold `audit_log:read`** — `David OBrian`, `David OBrien`, `TD OBrien`, and **`Lauren Bishop`**. The RLS policy is `audit_owner_read`:
+```
+business_id IN (SELECT id FROM businesses WHERE owner_id = auth.uid())
+```
+`businesses.owner_id` only. Per **#288**'s correction, **Lauren is an OWNER-ROLE member and is NOT `businesses.owner_id`** — David is. So the one non-David person holding the permission **would be refused by the policy if a surface existed.** That is **#232**'s class one table over: a permission that admits nobody.
+
+🔴 **AND IT IS NOT A COSMETIC GAP. An accountability record nobody can read is not accountability** — every other item in the audit-redirect plan is theatre without this one. 29 of the 98 rows are attributed to LAWNS Tree Farm, a tenant about to go live, and no one there can see any of them.
+
+**Fix:** an owner-gated `/audit` page reading the trail, plus widening the policy to `owner_id = auth.uid() OR has_permission(business_id,'audit_log:read')`. Costed at ~1 day and placed **above the line** in the before-go-live plan — the one item in that plan I would refuse to cut. Evidence: `docs/decisions/2026-09-10-audit-redirect-close-recon.md` §1.
+
+---
+
+## #244 — 🟡 THE RATIFIED `action` VOCABULARY DRIFTED: 8 OF 12 LIVE NAMES ARE ABSENT FROM IT, AND TWO SPELLINGS OF ONE SUBJECT ARE LIVE (NEW 2026-09-10)
+
+`audit_log.action` is plain `text`. Live constraints on the table are exactly two — `audit_log_pkey` and `audit_log_business_id_fkey`. **No CHECK, no enum, no lookup.** That was a *stated, reasoned* choice (`20260623_audit_log_spine.sql:78-93`): *"a documented convention + an index, NOT a CHECK constraint. A CHECK would force a migration every time a new action type is added."* The vocabulary was homed in a `COMMENT ON COLUMN`.
+
+**Seventy-eight days later, measured against the live table: 8 of the 12 action names in use are not in that comment.**
+
+| live action | rows | in the ratified vocabulary? |
+|---|---|---|
+| `module_trial.started` | 28 | ✗ |
+| `role.permissions_changed` | 19 | ✓ |
+| `business_module.state_changed` | 16 | ✗ — the comment says `tile.activated` / `tile.revoked` |
+| `role.factory_reset` | 9 | ✓ |
+| `settings.profile_changed` | 9 | ✗ |
+| `inventory.delete` | 7 | ✗ |
+| `business_modules.seeded` | 4 | ✗ |
+| `permission.self_elevation_denied` | 2 | ✓ |
+| `receipt.deleted_by_db_owner` | 1 | ✗ |
+| `business_modules.trial_access_corrected` | 1 | ✗ |
+| `business_modules.classification_corrected` | 1 | ✗ |
+| `member.role_changed` | 1 | ✓ |
+
+⚠️ **And it is not merely off-list, it is internally inconsistent:** `business_module.state_changed` (singular) sits beside `business_modules.seeded` (plural) — **two spellings of one subject**, and the redundant spelling is the one that drifts (STD-011).
+
+✏️ **`outcome` drifted identically and that one WAS caught**, which is the proof the mechanism is reachable: the column comment said `success | denied`, STD-023 (**#74**) added `no_change`, **26 rows carry it**, and `20260728c`'s footer corrected the comment with the right reason — *"a comment that undercounts the domain is the same class of artifact this whole week has been about."* **The `action` comment has never had such a correction.**
+
+**Fix (keeps the original decision, adds teeth):** an `audit_action_types(action text PRIMARY KEY, description text)` lookup + an FK from `audit_log.action`. A new verb stays **one INSERT — data, no migration**, which is exactly what the no-CHECK ruling was protecting; a typo raises at write time. ~20 new call sites are about to be added, which is why this is filed now rather than after.
+
+---
+
+## #245 — 🔴 `removeMember` HARD-DELETES A MEMBERSHIP AND HAS NEVER WRITTEN AN AUDIT ROW — ITEM 3 ON THE 2026-06-24 REDIRECT LIST, HALF-CLOSED AND RECORDED AS CLOSED (NEW 2026-09-10)
+
+The 2026-06-24 redirect inventory (`data/grower-scan/audit-spine-recon.md:76-86`) listed as item 3: *"`updateMemberRole` / `removeMember` → `member.role_changed` / `member.removed`."*
+
+**Only the first half landed.** `updateMemberRole` was retired 2026-07-23 into `assign_member_role`, which audits — 1 live `member.role_changed` row. **`removeMember` was never touched**, and the live count of `member.removed` is **0, ever**.
+
+Two unaudited authority acts, both client-direct, both in `packages/shared/src/auth/members.ts`:
+- **`removeMember` (`:30-40`)** — a **hard `DELETE`** of a `business_members` row. No RPC, no trigger, no audit row.
+- **`setMemberActive(false)` (`:56-69`)** — **revokes a person's access.** Same.
+
+Five further direct `business_members` UPDATEs carry no audit row either: `Profile.tsx:544`, `acceptInvitation.ts:149`, `pinReset.ts:52`, `pinReset.ts:107`, and the first-owner INSERT at `OnboardingWizard.tsx:560` — **so the creation of a tenant and its first owner is unaudited too.**
+
+🔴 **This is the case that decides the redirect's architecture, which is why it is filed as its own row.** Route A (an RPC per write path) needs **three to five new RPCs** to cover this one table, and a `DELETE` is the write A is worst at — there is no returning row to hang a contract on. Route B (one trigger on `business_members`) covers **all eight sites at once**, including the hard delete and including a hand-run SQL edit. See `docs/decisions/2026-09-10-audit-redirect-close-recon.md` §4.
+
+**Fix:** `business_members` is one of the ten tables in item **B3** of the before-go-live plan.
+
+---
+
+## #246 — 🟡 NOTHING COUNTED CLIENT WRITE PATHS AGAINST AUDIT COVERAGE, AND NOTHING CHECKED THAT A CITED ID EXISTS — THE SECOND HALF IS NOW BUILT (NEW 2026-09-10)
+
+**Two gaps with one shape: a declaration nobody re-derives (#73's class).**
+
+**① Audit coverage is uncounted — STILL OPEN.** `scripts/verify-write-paths.mjs` tracks 33 tables' worth of write paths and says **nothing about whether any of them is audited.** Measured this session: **34 distinct tables, ~123 write sites** across `packages/cultivar-os/src` + `packages/shared/src`. A 35th table gaining a client write path with no audit trigger would pass every check in `npm run verify`. ⚠️ **This is why the 2026-06-24 redirect list rotted: it was complete against its own scope and nothing watched the scope grow.** Fix = item **B6** of the before-go-live plan, and without it this recon gets written again in November.
+
+**② Cited-but-unfiled ids — ✅ BUILT 2026-09-10, `scripts/verify-id-citations.mjs`, wired into `npm run verify`.**
+Four occurrences in a single day forced it: **#195 → #213 → #288(e) → #242–#246's own renumbering.** Two assertions: **(A)** no duplicate `## #N` row — *hard fail*; **(B)** no **net-new** tech-debt id cited in a watched doc with no row — *ratchet against `id-citations-baseline.json`*. Every run prints **the next genuinely free id**, so nobody has to do arithmetic again.
+
+🔴 **THREE THINGS THE CAP MEASURED THAT NOBODY KNEW, ALL REPORTED NOT HIDDEN:**
+- **The backlog is 182**, not four: 182 tech-debt ids are cited across `CLAUDE.md`, `CLOSE-OUT-LEDGER.md`, `built-inventory.md` and `RULINGS.md` with **no row in the log**. CLAUDE.md has said a version of this three times (*"the log stops at 185"*, *"stopped at 209"*) and nobody had counted it. **Baselined and printed on every run — it shrinks, never grows.**
+- **It is a RATCHET for exactly that reason.** A hard gate over a 182-item backlog gets commented out inside a day, which `verify-write-paths.mjs`'s own header already learned out loud: *"a gate that blocks every build gets worked around, and a worked-around gate is worse than none."*
+- ⚠️ **The cap made the very error it exists to catch, and it is recorded in its own source.** Version ① matched only `## #N` → 47 rows read as 40, inflating the dangling count. Version ② widened to `**#N` and produced a **FALSE DUPLICATE on #211** — both `**#N` line-starts in the log are bolded prose mid-sentence, never rows. **Found by running it, not by reading it.** The real discriminator is the em-dash after the id; a negative control for the #211 line is now a permanent probe. **The ledger shares this number space** (build #242 and tech-debt #242 both exist), so clause B matches only an explicit `tech-debt #N` marker and ignores bare `#N` — an earlier draft reported twelve ledger build ids as dangling citations.

@@ -1,7 +1,7 @@
 # Close the audit redirect — recon before the build
 
 **Date:** 2026-09-10 · **Type:** RECON (no build, no migration, no branch) · **Build id claimed:** #289
-**Close-out ledger row claimed:** #247 · **Tech-debt ids claimed:** #237–#241 · **Decisions row:** D-56 (proposed, David rules)
+**Close-out ledger row claimed:** #290 · **Tech-debt ids claimed:** #242–#246 (⚠️ CORRECTED 2026-09-10 — this doc first claimed #237–#241 and all five were already owned by a parallel #289 session; see tech-debt #242 and the cap at #246) · **Decisions row:** D-56 (proposed, David rules)
 **Story (§9 gate — MATCH, no new story needed):** `user_stories.md:862` *"The log that proves what happened outlives the log that proves what's on hand"* — `STATUS: needs-input`, and its `NEEDS:` line is **verbatim this recon's question**: *"confirm which discretionary acts dual-write to audit_log at split time (delete is in; override / tier-change / permission-change to confirm)."* The build that lands this flips it `needs-input` → `written` in the same commit.
 **Grounded in:** D-51 (event log ≠ audit log, split by retention) · `20260623_audit_log_spine.sql` · `data/grower-scan/audit-spine-recon.md` PART 2.
 
@@ -285,12 +285,12 @@ Ruthless test applied: *if LAWNS disputes something in month three, what questio
 
 ## 8. BOOKKEEPING CLAIMED (one line each — David overrides, then move on)
 
-- **Build id #289** · **close-out ledger row #247** (ledger currently ends 246) · **§3 entry** written at close-out, archiving #286 (oldest of three).
-- **Tech-debt #237** — 🟡 the audit spine's migration header states an author model ("client-side INSERT") that the permission manifest superseded in July; two records, one subject.
-- **Tech-debt #238** — 🔴 `audit_log` has **no reader**: zero application code selects it, `audit_log:read` is held by four members, and `audit_owner_read` admits only `businesses.owner_id` — so Lauren holds a permission the policy refuses. #232's class, one table over.
-- **Tech-debt #239** — 🟡 the `action` vocabulary drifted: 8 of 12 live action names are absent from the ratified `COMMENT ON COLUMN`, with singular/plural inconsistency (`business_module.` vs `business_modules.`). The `outcome` comment got its correction in `20260728c`; `action` never did.
-- **Tech-debt #240** — 🔴 `removeMember` (a hard DELETE of a membership) and `setMemberActive(false)` (revoking access) have **never** written an audit row; `member.removed` count is 0. Item 3 on the 2026-06-24 redirect list, half-closed and recorded as closed.
-- **Tech-debt #241** — 🟡 nothing counts client write paths against audit coverage; the write-path cap tracks 33 tables and says nothing about auditing. B6 is its fix.
+- **Build id #290** · **close-out ledger row #290** (⚠️ CORRECTED — the ledger's newest row is **#289**, bold-formatted, which my first read missed: an `^\| *#[0-9]+` grep sees only the older unbolded rows and reported a max of 246) · **§3 entry** written at close-out, archiving #286 (oldest of three).
+- **Tech-debt #242** — 🟡 the audit spine's migration header states an author model ("client-side INSERT") that the permission manifest superseded in July; two records, one subject.
+- **Tech-debt #243** — 🔴 `audit_log` has **no reader**: zero application code selects it, `audit_log:read` is held by four members, and `audit_owner_read` admits only `businesses.owner_id` — so Lauren holds a permission the policy refuses. #232's class, one table over.
+- **Tech-debt #244** — 🟡 the `action` vocabulary drifted: 8 of 12 live action names are absent from the ratified `COMMENT ON COLUMN`, with singular/plural inconsistency (`business_module.` vs `business_modules.`). The `outcome` comment got its correction in `20260728c`; `action` never did.
+- **Tech-debt #245** — 🔴 `removeMember` (a hard DELETE of a membership) and `setMemberActive(false)` (revoking access) have **never** written an audit row; `member.removed` count is 0. Item 3 on the 2026-06-24 redirect list, half-closed and recorded as closed.
+- **Tech-debt #246** — 🟡 nothing counts client write paths against audit coverage; the write-path cap tracks 33 tables and says nothing about auditing. B6 is its fix.
 - **Decisions row D-56 (proposed):** *"The audit redirect is closed by TRIGGERS for coverage and RPCs for denied events — a trigger cannot record a refusal."* David rules; if accepted it extends D-51.
 - **Story:** `user_stories.md:862` flips `needs-input` → `written` in the build commit, with the discretionary-act list from §2 filled into its `NEEDS:`.
 - **Owner-test board (new): `docs/owner-tests/audit-trail-full-surface-test.md`** — every card names **WHO** can run it and **WHICH TENANT**, per the prompt: Cards 1–4 David-on-Test-Dave's (writer, vocabulary refusal, trigger fires, test flag); Card 5 **David-on-LAWNS, read-only** (the `/audit` page renders his own real trail); Card 6 **Lauren-on-LAWNS** (she holds `audit_log:read` — does the widened policy admit her?); Card 7 **Joel-on-LAWNS** (MANAGER, holds nothing — must be refused); Card 8 David-on-Test-Dave's (`removeMember` writes `member.removed`); Card 9 David-on-Test-Dave's (import run + undo both leave a row). All `owed`; Thunder sets none `covered`.
