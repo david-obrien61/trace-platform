@@ -1891,3 +1891,52 @@ disagree today would change what it charges. Not taken: no PAT this session, and
 decision — David's.
 
 **TRIGGER:** the first live row found where the two disagree, or #251's build (it touches the same resolver).
+
+---
+
+## #253 — 🔴 SHIPPED CODE READS AND WRITES THREE TABLES THAT DO NOT EXIST, BECAUSE THEIR MIGRATION WAS NEVER APPLIED (NEW 2026-09-11)
+
+`20260905_production_planning.sql` creates `business_operations_config`, `production_plans` and `production_plan_lines`. **It is not applied** (measured 2026-09-11, `verify-migration-apply-state.mjs --catalog`). The code that depends on it **is shipped**:
+- `packages/cultivar-os/src/components/settings/OperationsSettings.tsx` — rendered by the Settings page; reads and upserts `business_operations_config`. Its own trace logs *"operations settings write landed NOTHING"* and shows a notice.
+- `packages/cultivar-os/src/lib/uppotPlanWrite.ts` — imported by `UppotPlan.tsx`; writes `production_plans` and `production_plan_lines`.
+- `packages/shared/src/production/productionHold.ts` — reads `production_plan_lines` (logs the error rather than throwing).
+
+🔴 **So Settings → Operations cannot save and the Uppot plan page cannot commit, on every tenant, today.** Nothing in `npm run verify` can see it: tsc, eslint and every probe read code, and the code is correct — the database it was written for does not exist. The migration is additive and its dependencies (`is_active_member`, `has_permission`, `set_updated_at`) are live. **Apply-or-retire is David's call** (RULINGS OWED); it is a MIGRATION question, not a code defect.
+
+---
+
+## #254 — 🟡 THE QUICKBOOKS IMPORTER DOES NOT READ `BillAddr.Line2` (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
+
+`qboCustomerAdapter.ts` `billingOf()` returns `address_line1`, `city`, `state`, `zip` — **no second line**, deliberately: *"Line2 is deliberately NOT folded into line1 — `customers` has `billing_line2` and the party editor owns it; concatenating here would make this writer disagree with that one."* The reason is sound; the consequence is not handled. The handoff reports **451 routable addresses landing as phone numbers** because LAWNS staff put the real address on the second line — **that count is the handoff's, not re-measured here.**
+
+**Fix the reader before any address cleanup** (handoff §6): write `Line2` to `billing_line2` rather than dropping it. Otherwise a clean-up of the address lines is undone by the next import.
+
+---
+
+## #255 — 🟡 A HARNESS MEMBER ROW IS LEFT ON TEST DAVE'S TREE NEST (NEW 2026-09-11)
+
+`business_members` holds **`Harness STAFF (ledger)`**, one permission, on Test Dave's Tree Nest — measured 2026-09-11. `memberSession.mjs` deletes its principals in a `finally` and reports residue loudly; this row predates or escaped that. It grants almost nothing, and it is on a test tenant. Filed because a leftover principal changes every count of "members on this tenant" that anyone takes, and a harness that leaves residue corrupts the next run (tech-debt #79's lesson). **Delete it once its origin is identified** — it is not this session's to delete unasked.
+
+---
+
+## #256 — 🟡 FOURTEEN POLICIES ADMIT ANY ACTIVE MEMBER, WITH NO PERMISSION STRING (NEW 2026-09-11)
+
+Measured 2026-09-11: **14 live policies** test `is_active_member(...)` and never `has_permission(...)`. Anyone signed in to the tenant can do what those policies allow. The 2026-09-10 handoff counted **23**; #289's triage reduced it. **Tolerable at LAWNS (three trusted logins); not at customer two.** Each needs the ENTITY-vs-WORK test (R-119) — most are WORK and want a string; some may be the membership read an app needs to function at all.
+
+---
+
+## #257 — 🟡 NOTHING PROVES A PERMISSION MARKED `enforced` IS CHECKED BY ANY LIVE POLICY (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
+
+`permissionManifest.ts` marks strings `enforced`, and no check compares that label to the live catalog. **`pricing_recipe:update` was marked enforced and admitted nobody for weeks** (#232). [[R-31]] already rules that an unenforced string may not be cited as evidence of coverage; nothing enforces R-31. A cap would read the manifest's `enforced` set and require each string to appear in at least one live policy or RPC body — through the read-only PAT, the same way `verify-migration-apply-state.mjs --catalog` reads the catalog.
+
+---
+
+## #258 — 🟡 SEVEN MOVEMENT RPCs CHECK WHO THE ACTOR IS BUT NOT WHAT THEY MAY DO (NEW 2026-09-11)
+
+Measured 2026-09-11: **17 functions call `assert_movement_actor`; 9 contain no permission check.** Two of those nine (`save_role_permissions`, `assign_member_role`) check `owner_id` inline, so **seven are genuinely unchecked**: `adjust_inventory_manual` · `adjust_inventory_qty` · `count_group_variant_sizes` · `count_promote_create_inventory` · `count_reconcile_inventory` · `soft_delete_inventory` · **`record_order_event`** (the handoff's list named the inventory six and missed this one). `assert_movement_actor` proves membership and no forgery, not authority — so any member can adjust or delete stock through these. One permission argument fronts the inventory six. ⚠️ **Depends on the count/reconcile split** (`inventory:reconcile` is ruled minted per the 2026-09-10 handoff §3, and the string comes LAST; ⚠️ **no numbered ruling for it exists** — drafted as item (4) in RULINGS.md's OWED table): mint the string before blind capture exists and counting stops working for staff.
+
+---
+
+## #259 — 🟡 NOBODY HAS TRACED WHETHER THE OFFLINE QUEUE HANDLES A CONFLICT ON A STAGED INSERT (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
+
+The offline queue's `rpc` op-kind queues an **apply**. Blind capture (#67) will queue a **staged insert** instead, and nobody has traced whether conflict handling behaves the same for it. **Counting is the one flow that genuinely happens in a dead zone**, so this is the path most likely to meet a conflict and least likely to be watched. Owed before blind capture ships, not after.
