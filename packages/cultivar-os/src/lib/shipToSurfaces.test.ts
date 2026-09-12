@@ -124,14 +124,29 @@ function main(): void {
       'C6 the predicate DISCRIMINATES — it is not a constant wearing a gate\'s clothes (R-33)');
   }
   {
-    const src = read(CARD);
+    // ✏️ C8–C10 RE-AIMED 2026-09-12, NOT LOOSENED. The claims they make are all still true; the
+    // code they make them about moved from <StopCard> to `useStopActions` when CARD 4's live failure
+    // was fixed. The offer had to leave the card: held there, it died in the unmount that the card's
+    // own save triggers on two of the three screens. Each assertion now reads the file that owns the
+    // behaviour. 🔴 AND NONE OF THEM COULD HAVE CAUGHT THAT DEFECT — they are regex over source
+    // text, and every one was TRUE of the broken file. The probe that catches it MOUNTS:
+    // `packages/cultivar-os/src/components/delivery/stopOfferMount.test.ts`, A2.
+    const src  = read(CARD);
+    const acts = read(ACTIONS);
     ok(/export function StopCard|function StopCard/.test(src), 'C7 StopCard was READ');
-    ok(/can\('customers:create'\)/.test(src), 'C8 the card gates the offer on customers:create');
-    ok(/canSaveSite/.test(src) && /siteOffer &&/.test(src), 'C9 and the offer block is rendered behind that gate');
-    ok(/canSaveSite\) \{ setSiteNote\(null\); setSiteOffer/.test(src),
+    ok(/can\('customers:create'\) && d\.customer_id/.test(acts),
+      'C8 the HOOK gates raising the offer on customers:create AND a customer to save it for');
+    ok(/actions\.siteOffer\?\.stopId === d\.id/.test(src) && /siteOffer && \(/.test(src),
+      'C9 and the card renders that offer, keyed to its OWN stop — never another card\'s');
+    ok(/if \(out\.kind === 'saved'\) \{[\s\S]{0,900}?setSiteOffer\(\{ stopId: d\.id, label: '' \}\)/.test(acts),
       'C10 🔴 the offer is reachable ONLY from a save that landed — population is a by-product, never a chore');
-    ok(!/setSiteOffer\(\{ label: '[^']/.test(src),
+    ok(!/setSiteOffer\(\{ stopId: d\.id, label: '[^']/.test(acts),
       'C11 the name starts BLANK — nothing auto-saves, and no label is guessed on the owner\'s behalf');
+    // `setSiteOfferLabel(` is the hook's setter called THROUGH the prop and is allowed; the trailing
+    // paren is what tells the two apart, so this does not forbid the card from driving the offer.
+    ok(!/setSiteOffer\(|setSiteNote\(/.test(src),
+      'C11b 🔴 THE CARD HOLDS NO OFFER STATE OF ITS OWN — the regression guard for CARD 4, in source terms');
+    ok(/setSiteOffer\(/.test(acts), 'C11c and the state it no longer holds is genuinely held by the hook (C11b is not vacuous)');
   }
   {
     const src = read(ACTIONS);

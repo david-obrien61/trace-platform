@@ -54,7 +54,11 @@ for (const file of files) {
   let ok = true;
   try {
     // Bundle to CJS on stdout, pipe straight into node. Externals are runtime deps the
-    // pure-function tests never actually call into.
+    // pure-function tests never actually call into — EXCEPT `jsdom`, which the mounting test
+    // (stopOfferMount.test.ts) very much calls into. It is external for the opposite reason:
+    // bundled, jsdom loses the package-relative path to its own default stylesheet and dies
+    // with ENOENT on `/Users/browser/default-stylesheet.css`. Left external, node resolves it
+    // from node_modules and it works.
     // 🔴 `set -o pipefail` IS LOAD-BEARING, NOT HYGIENE — ADDED 2026-09-07 AFTER THIS RUNNER
     // REPORTED ✅ ON A FILE THAT WOULD NOT COMPILE. Without it, bash returns only the LAST
     // command's status: esbuild writes its error to STDERR and nothing to stdout, so `node` reads
@@ -64,7 +68,7 @@ for (const file of files) {
     // it. [[R-33]] in the runner that certifies every other check.
     out = execSync(
       `set -o pipefail; "${ESBUILD}" "${file}" --bundle --platform=node --format=cjs --log-level=error ` +
-      `--external:@supabase/supabase-js --external:@anthropic-ai/sdk | node`,
+      `--external:@supabase/supabase-js --external:@anthropic-ai/sdk --external:jsdom | node`,
       { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: '/bin/bash' }
     );
   } catch (e) {

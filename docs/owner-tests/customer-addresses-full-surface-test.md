@@ -10,9 +10,21 @@
 **Capability:** 3.7 (customers) · 2.1 (checkout) · 3.5 (delivery)
 **Ruling:** **D-41** (2026-07-16) — *"ADDRESS = L1 … the saved ship-to address book (`customer_addresses`) is the L2 HOOK — documented as a deferred follow-up, NOT built."* This build takes it up.
 **Story:** ⚠️ **NO MATCH — and a story is OWED to David.** See the note at the foot of this board.
-**Surfaces:** the order-time picker on the checkout customer step · the *"Save this as a site"* offer on the `<StopCard>` (all three screens) · the migration.
+**Surfaces:** the order-time picker on the checkout customer step · the *"Save this as a site"* offer on the `<StopCard>` · the migration.
+
+> ✏️ **CORRECTED 2026-09-12 — THIS BOARD SAID THE OFFER RENDERED ON *"all three screens"* AND THAT WAS
+> FALSE WHEN IT SHIPPED.** CARD 4 was run live on 2026-09-12 (build `fe24e68`, Test Dave's, OWNER) and
+> **FAILED**: the address saved and the green panel never appeared. Measured cause — the offer was held
+> in `<StopCard>`'s own `useState`, and `saveShipTo` awaits `onChanged()`, which on the **schedule**
+> (`DeliverySchedule.tsx:176`) and the **route** (`DeliveryRoute.tsx:622`) sets `loading = true` and
+> renders the card list behind `{!loading && …}`. The card was **UNMOUNTED mid-save**, its state went
+> with it, and the setter that ran when the promise resolved was called on a dead instance — which
+> React discards silently. It worked on **`/orders/:id` only**, whose refresh never touches `loading`.
+> **Fixed** by moving the offer to `useStopActions`, which the PAGE owns and the refresh does not
+> destroy; it now renders on all three for the first time. 🔴 **Re-prove CARD 4 on the SCHEDULE, not
+> on the order screen** — the order screen is the one that was never broken.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
+**Board: 0 of 12 covered** (10 `owed` · 2 `needs-test`).
 
 > 🔴 **NOTHING ON THIS BOARD EXCEPT CARD 2 CAN RUN UNTIL THE MIGRATION IS APPLIED.**
 > `customer_addresses` does not exist yet. Until it does the picker renders nothing and the save
@@ -26,7 +38,7 @@
 > **David's own login, LAWNS, LOOKING ONLY:** CARD 9.
 > **Needs a login David does not hold:** CARD 8b (a STAFF member) — `needs-test`, with its reason.
 >
-> **🔴 ORDER: CARD 2 (before applying) → CARD 1 → CARD 3 → the screens.**
+> **🔴 ORDER: CARD 1 → CARD 3 → the screens.** (CARD 2 is `needs-test` — its window cannot open on a single database.)
 
 ---
 
@@ -48,21 +60,29 @@ Open `supabase/migrations/20260911b_customer_addresses.sql`, paste everything fr
 ---
 
 ### CARD 2 — 🔴 BEFORE APPLYING: nothing is broken and nothing is promised
-STATUS: owed
+STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: phone
 COVERS: ledger #303
 
-⚠️ **Runnable only BEFORE CARD 1.** If you have already applied, mark this card `needs-test` and
-say why — do not fake it.
+🔴 **CLOSED BY DAVID, 2026-09-11 — THE WINDOW THIS CARD TESTS CAN NEVER OPEN.** His words: *"single
+database, no unmigrated tenant exists, so the pre-apply window can never open."* There is ONE
+Supabase project (`bgobkjcopcxusjsetfob`); applying the migration applies it for every tenant at
+once. So the state this card describes — the app running against a database where
+`customer_addresses` does not exist — has no moment in which to be observed once CARD 1 is run, and
+before CARD 1 it is the only state there is.
 
-**Test Dave's, your own login.** Take a delivery order for an **existing** customer as far as the
-customer step.
+⚠️ **`needs-test` rather than deleted, and rather than `covered`.** The degraded path it describes
+is REAL and still shipped — `ShipToPicker` returns null when the read fails or the book is empty,
+so an absent table renders nothing rather than an error. That behaviour is asserted in
+`shipToSurfaces.test.ts` §B (B4/B5) and by mutant R3. **What is unprovable is the LIVE observation,
+not the behaviour** — and recording that honestly is the point (OP-14 clause 2: an unrecorded hole
+is a lie by omission). Thunder does not mark it `covered`; nobody ran it.
 
-**PASS:** the address form is exactly as it always was. **No saved-sites block, no error, and no
-empty "Saved delivery sites" heading over nothing** — a header promising saved sites above an
-empty row is a claim that is not true (§6 r18). The order completes normally.
-**FAIL:** a visible error, a blank panel, or a heading with nothing under it.
+**What it WOULD have checked, kept for the record:** on Test Dave's, a delivery order for an
+existing customer taken as far as the customer step shows the address form exactly as it always
+was — **no saved-sites block, no error, and no empty "Saved delivery sites" heading over nothing**
+(§6 r18: a header promising saved sites above an empty row is a claim that is not true).
 
 ---
 
@@ -128,12 +148,22 @@ SELECT line FROM (
 
 ### CARD 4 — 🔴 a site is saved as a by-product of moving a stop
 STATUS: owed
-LAST-PROVEN: never
+LAST-PROVEN: never — ❌ **RUN AND FAILED 2026-09-12 on `fe24e68`** (see below)
 DEVICE: phone
 COVERS: ledger #303
 
-**Test Dave's, your own login. This WRITES.** Open the delivery schedule, find a stop that has a
-customer, tap **Change address**, change the street, and **Save address**.
+> ❌ **THIS CARD FAILED ITS FIRST LIVE RUN, AND THE RECORD OF THAT STAYS HERE.** 2026-09-12, Test
+> Dave's, OWNER, stop `06dfb114`, three saves: the address saved every time and **step 2 never
+> happened.** The panel could not appear on this screen — see the correction at the top of this
+> board. Fixed on branch `fix/stop-site-offer-unmount`; the card is `owed` again, not `covered`,
+> because a fix Thunder wrote is a claim until David drives it (OP-14).
+>
+> 🔴 **RUN IT ON THE SCHEDULE.** `/orders/:id` passed on the broken build and would pass on a
+> reverted one, so proving it there proves nothing about the defect.
+
+**Test Dave's, your own login. This WRITES.** Open the **delivery schedule** (`/delivery-schedule`,
+NOT the order screen), find a stop that has a customer, tap **Change address**, change the street,
+and **Save address**.
 
 **PASS:**
 1. The address saves as it always did — this is #301's behaviour, unchanged.
@@ -145,7 +175,13 @@ customer, tap **Change address**, change the street, and **Save address**.
    &lt;customer&gt;."*
 
 **FAIL:** the panel appears **before** the address saved · a name is pre-filled · the panel appears
-on a stop with no customer · pressing **Not this one** still saves (check with CARD 10).
+on a stop with no customer · pressing **Not this one** still saves (check with CARD 10) · 🔴 **the
+panel never appears at all — the 2026-09-12 failure; if you see this again the fix did not take, and
+check the build stamp against `git log --oneline origin/main -1` before anything else (GATE 0).**
+
+⚠️ **THEN REPEAT IT ON `/deliveries?date=…` (the route).** Same gesture, same expected panel. That
+screen carried the identical defect and is the second half of what was fixed — a pass on the
+schedule alone does not cover it.
 
 **SIGNAL:** `[TRACE:SITES] saved { id, label: 'Job site A', isDefault: true }`
 

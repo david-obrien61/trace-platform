@@ -25,6 +25,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
 import { BUSINESS_MODULE_COLUMNS, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
@@ -56,6 +57,23 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
   // The stop whose prompt is open, and the offer to render. `offer: null` renders NOTHING.
   const [asking, setAsking]             = useState<{ id: string; offer: ReviewAskOffer | null } | null>(null);
   const [tierOptions, setTierOptions]   = useState<{ value: string; label: string }[]>([{ value: RETAIL_TIER_NAME, label: 'Retail (no discount)' }]);
+
+  // ── D-41 L2 (ledger #303) — THE SAVE-THIS-SITE OFFER LIVES HERE, NOT ON THE CARD ───────────────
+  // 🔴 IT LIVED ON <StopCard> AND COULD NEVER APPEAR ON TWO OF THE THREE SCREENS. CARD 4 failed live
+  // on 2026-09-12 (build fe24e68, Test Dave's, OWNER) and the cause is a LIFECYCLE, not a gate:
+  // `saveShipTo` awaits `onChanged()`, the schedule's `load()` sets `loading = true`, and both the
+  // schedule (DeliverySchedule.tsx:176) and the route (DeliveryRoute.tsx:622) render their cards
+  // behind `{!loading && ...}`. So every <StopCard> UNMOUNTED mid-await, its `useState` went with it,
+  // and the `setSiteOffer` that ran when the promise resolved was called on a DEAD instance —
+  // which React 18 discards SILENTLY, with no warning. The address saved; the offer never showed.
+  // `/orders/:id` worked only because its `loadStops` never touches `loading`.
+  //
+  // The hook is called by the PAGE, which stays mounted while the list subtree does not. Holding the
+  // offer here makes it survive the refresh BY CONSTRUCTION rather than by every consumer remembering
+  // not to unmount its list — the fix belongs at the ONE place all three screens share (STD-017).
+  // Keyed by stop id so it can only ever render on the card it belongs to.
+  const [siteOffer, setSiteOffer] = useState<{ stopId: string; label: string } | null>(null);
+  const [siteNote,  setSiteNote]  = useState<{ stopId: string; text: string } | null>(null);
 
   // The editor prices from the configured tiers, same source the roster uses.
   useEffect(() => {
@@ -182,9 +200,31 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
       businessId: businessId!, stop: d, form, actorUserId: user?.id ?? null, now: new Date(),
     });
     if (TRACE_DELIVERY) console.log('[TRACE:STOP] ship-to save —', out.kind, out);
-    if (out.kind === 'saved') await onChanged();
+    if (out.kind === 'saved') {
+      // Raised BEFORE the refresh, not after: `onChanged()` unmounts the card list on two of the
+      // three screens, and state set after an await that outlives the component is the defect this
+      // moved to fix. Here it is page state, so the order is a choice rather than a hazard — and
+      // raising it first means a refresh that THROWS still leaves the owner the offer they earned.
+      // The gate is the same pair the card used, checked in one place now (§1.6 item 4).
+      if (can('customers:create') && d.customer_id) {
+        setSiteNote(null);
+        setSiteOffer({ stopId: d.id, label: '' });
+      }
+      await onChanged();
+    }
     setSavingId(null);
     return out;
+  }
+
+  /** The name box on the offer. The label starts BLANK and nothing guesses one (David's redline). */
+  function setSiteOfferLabel(label: string) {
+    setSiteOffer(o => (o ? { ...o, label } : o));
+  }
+
+  /** "Not this one" — and the note goes with it, so a dismissed offer leaves no orphan sentence. */
+  function dismissSiteOffer() {
+    setSiteOffer(null);
+    setSiteNote(null);
   }
 
   /**
@@ -215,6 +255,20 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
     });
     if (TRACE_DELIVERY) console.log('[TRACE:SITES] save-site from a stop —', out.kind, { stopId: d.id, label });
     setSavingId(null);
+    // The outcome sentence is page state for the same reason the offer is: it is written after an
+    // await, and on two screens the card that asked for it is already gone by then. Keyed by stop.
+    const who = customerDisplayName(d.customers, 'this customer');
+    if (out.kind === 'saved') {
+      setSiteOffer(null);
+      setSiteNote({ stopId: d.id, text: `Saved as \u201c${out.site.label}\u201d. It will be offered next time you take an order for ${who}.` });
+    } else if (out.kind === 'already_saved') {
+      // Not an error. The answer to "save this?" for an address already in the book is "it already
+      // is" — and naming the site they have beats both a duplicate row and a red refusal.
+      setSiteOffer(null);
+      setSiteNote({ stopId: d.id, text: `This address is already saved for ${who} as \u201c${out.site.label}\u201d.` });
+    } else {
+      setSiteNote({ stopId: d.id, text: out.kind === 'refused' ? out.reason : out.error });
+    }
     return out;
   }
 
@@ -256,6 +310,7 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
   return {
     savingId, actionError, clearActionError: () => setActionError(null),
     markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
+    siteOffer, siteNote, setSiteOfferLabel, dismissSiteOffer,
   };
 }
 
