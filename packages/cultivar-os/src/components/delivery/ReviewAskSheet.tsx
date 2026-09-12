@@ -61,10 +61,24 @@ const BACKDROP: React.CSSProperties = {
 };
 
 // CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL, M1).
+//
+// 🔴 AND BOUNDED — V4 (§8, R-148, 2026-09-12). This card previously had NO `maxHeight` and NO
+// `overflow` at all, which is the WORSE half of V4 rather than an exemption from it: content taller
+// than the viewport would have overflowed with no way to scroll to the buttons, where a mis-bounded
+// dialog at least lets you reach them. It did not bite because the content is short and fixed — an
+// argument about today's copy, not about the shape. The clause covers unbounded and mis-bounded
+// alike for exactly that reason: **the save-a-site dialog in this same overlays fragment is built on
+// this pattern**, and a pattern copied from an unbounded card inherits the defect.
 const CARD: React.CSSProperties = {
-  background: '#fff', borderRadius: 16, padding: '22px 20px',
-  width: '100%', maxWidth: 420, boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
+  background: '#fff', borderRadius: 16,
+  width: '100%', maxWidth: 420, maxHeight: '85vh',
+  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
 };
+/** Scrolls. */
+const CARD_BODY: React.CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '22px 20px 0' };
+/** Pinned — the two taps are on screen whenever the sheet is. */
+const CARD_ACTIONS: React.CSSProperties = { flexShrink: 0, padding: '16px 20px 20px' };
 
 // The customer screen is a FULL takeover, not a dialog: the phone is handed over, so the crew's
 // surrounding interface must not be readable behind it. White, large type, nothing tappable that
@@ -149,11 +163,13 @@ export function ReviewAskSheet({
   return (
     <div style={BACKDROP}>
       <div style={CARD}>
-        <h2 style={{ margin: '0 0 4px', fontSize: '1.125rem', fontWeight: 800, color: DARK }}>
-          {CREW_COPY.title}
-        </h2>
-        <p style={{ margin: '0 0 18px', fontSize: '0.8125rem', color: GRAY }}>{CREW_COPY.hint}</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={CARD_BODY}>
+          <h2 style={{ margin: '0 0 4px', fontSize: '1.125rem', fontWeight: 800, color: DARK }}>
+            {CREW_COPY.title}
+          </h2>
+          <p style={{ margin: '0 0 18px', fontSize: '0.8125rem', color: GRAY }}>{CREW_COPY.hint}</p>
+        </div>
+        <div style={{ ...CARD_ACTIONS, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             onClick={() => { setShowing(true); onShown(); }}
             style={BTN_PRIMARY}

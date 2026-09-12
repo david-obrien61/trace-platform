@@ -141,7 +141,7 @@ export function OrderDetail() {
     setStops(res.value);
   }, [businessId, id, canReadStops, canReadLines]);
   useEffect(() => { void loadStops(); }, [loadStops]);
-  const stopActions = useStopActions({ onChanged: loadStops });
+  const stopActions = useStopActions({ onChanged: loadStops, stops: stops?.stops ?? [] });
 
   const load = useCallback(async () => {
     if (!businessId || !id) return;

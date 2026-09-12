@@ -375,6 +375,9 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
             <X size={20} color="#6b7280" />
           </button>
         </div>
+
+        {/* V4 (§8) — the body scrolls; the action row below is pinned. */}
+        <div style={SS.sheetBody}>
         {error && <div style={SS.error}>{error}</div>}
 
         {/* ── IDENTITY ── */}
@@ -519,14 +522,20 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
             placeholder="Supplier, purchase context, storage notes…" />
         </div>
 
+        </div>
+
+        {/* V4 — pinned. The auto-save branch carries no button, but E3's claim about the commit model
+            is exactly the sentence that must not scroll away from the fields it describes. */}
+        <div style={SS.sheetActions}>
         {creating ? (
           <button type="button" onClick={() => { void saveCreate(); }} disabled={saving}
-            style={saving ? SS.submitBtnDisabled : { ...SS.submitBtn, marginTop: 6 }}>
+            style={saving ? SS.submitBtnDisabled : { ...SS.submitBtn, marginTop: 0 }}>
             {saving ? 'Saving…' : isAddSize ? 'Save size' : 'Save item'}
           </button>
         ) : (
-          <p style={SS.hint}>Changes save automatically as you edit. Close when you're done.</p>
+          <p style={{ ...SS.hint, margin: 0 }}>Changes save automatically as you edit. Close when you're done.</p>
         )}
+        </div>
       </div>
     </div>
   );

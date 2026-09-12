@@ -280,6 +280,7 @@ to a banner describing standing state, or to a passive status a reader may legit
 |---|---|---|---|
 | **V1** | **VISIBLE WITHOUT SCROLLING FROM WHERE THE ACTION WAS TAKEN.** Feedback that follows an action is on screen, from the scroll position the reader was already at when they acted — either a modal (§2, M1: centered, so it cannot land below the fold on any viewport) or an equivalent that is anchored so it **cannot** be displaced by content rendered above it. | G2's 2026-09-07 amendment and G10's rationale, generalised off the horizontal axis. Every design system puts a required decision in a dialog. | **An offer nobody can see is indistinguishable from one that does not exist** — and it reads as a FAILURE, not as an absence. Measured: the save-a-site offer was below the fold twice on `/delivery-schedule` on 2026-09-12 and was read as broken both times. |
 | **V2** | 🟢 **SELF-ANCHORING FEEDBACK SATISFIES V1, AND THIS CARVE-OUT IS BINDING, NOT A CONCESSION.** A confirmation rendered **on, or replacing, the control just pressed** — `Copy caption` → `✓ Copied!`, `Save` → `Saving…` — is compliant **wherever it appears, including inside a list item**, because it occupies the control the reader's eye and finger are already on. Its position cannot drift relative to the action: it *is* the action. | The label-swap pattern in every list UI (Gmail, GitHub, Linear). | 🔴 **A rule written as *"post-save confirmation must be a modal"* would convert a dozen CORRECT controls into dialogs** — `CampaignDetail.tsx:366`, `Dashboard.tsx:1005`, `Settings.tsx:1204`, and every `Saving…` button label. The clause must name what is already right, or it makes the platform worse while claiming to improve it. |
+| **V4** | 🔴 **A DIALOG IS BOUNDED, AND ITS COMMIT CONTROLS ARE NOT PART OF WHAT SCROLLS.** The dialog carries the bound (`maxHeight`) as a **flex column**; the BODY takes the remainder (`flex:1; minHeight:0; overflow:auto`); the action row is a **sibling that does not scroll**, so content added above it SHRINKS the body instead of pushing the buttons off screen. **Both failures are covered and the unbounded one is worse:** a dialog with no `maxHeight` and no `overflow` at all does not merely hide its actions, it gives the reader no way to reach them. | **G2's 2026-09-07 amendment, third instance** — not re-derived. Standard dialog anatomy (header / scrollable content / pinned footer) in every design system. | **A modal that hides its own Save is §8 one level down: the decision is there and you cannot reach it.** Measured 2026-09-12 — Edit customer, six field groups, Save and Cancel below the visible area. The survey found **11 dialogs and not one pinned its action row**; the worst was `ConflictDialog`, whose `Save anyway — I've checked the receipt` records a **durable override on a money discrepancy** beneath the numbers you must scroll to judge. |
 | **V3** | 🔴 **FEEDBACK RENDERED ELSEWHERE INSIDE A LIST ITEM DOES NOT SATISFY V1 — BY CONSTRUCTION.** A panel, note or offer rendered in a repeated row, anywhere other than on the control that was pressed, has a screen position determined by how many rows precede it and how tall they are. That is unreasonable at build time and it is not fixed by making the row shorter, the list smaller, or the copy tighter. **Scroll-into-view is not a remedy** — it moves the reader's viewport without their asking, and it still fails when the row is the last one. | — | Page content can be scrolled past; **a required decision cannot.** The fix is to move the feedback OUT of the row (§2 modal, or V2 self-anchoring), never to tune where the row sits. |
 
 **Descent, stated because this is a GENERALISATION and not a new idea.** The same defect was ruled
@@ -300,11 +301,23 @@ section's own existence — *"the G-clauses cover sort, filter and the read-only
 about column order, which is why four grids have three different shapes"* — here, §2 covered how a
 modal behaves once you have one and said nothing about **when feedback must be one.**
 
-**Current implementation:** V1/V2/V3 met on the delivery stop (ledger #308) — the save-a-site offer is
-a centered dialog in `useStopActions`' `overlays` fragment beside `ReviewAskSheet` (M1), its outcome
-is reported **inside that dialog** rather than as a third surface, and the ship-to save's
-partial-failure note is **self-anchored to the Save control** (V2). The label-swap surfaces named in
-V2 were compliant already and were NOT changed.
+**Current implementation (ledger #308):** V1/V2/V3 met on the delivery stop — the save-a-site offer is
+a centered dialog (`<SaveSiteDialog>`) in `useStopActions`' `overlays` fragment beside `ReviewAskSheet`
+(M1), its outcome is reported **inside that dialog** rather than as a third surface, and the ship-to
+save's partial-failure note is **self-anchored to the Save control** (V2). The label-swap surfaces
+named in V2 were compliant already and were NOT changed.
+
+**V4** is met by the **shared** `sheetStyles.sheet` — now a bounded flex column with `sheetBody`
+(scrolls) and `sheetActions` (pinned) — which its **six** consumers inherit: `CustomerPartyEditor`
+(the reported instance), `InventoryEditor`, `VendorEditor`, `BusinessAssets`, `BusinessInventory`,
+`InventoryReconcile`. Plus `ConflictDialog` (the money decision) and `ReviewAskSheet` (which had **no
+bound at all** — the worse half of V4, fixed because the save-a-site dialog is built on that pattern).
+
+⚠️ **KNOWN AND DELIBERATE: five dialogs still carry a drifted COPY of the old shape** —
+`ProjectsManager` · `InventoryCount` · `OperatingCosts` · `ScanOrder` · `ProjectCostDrillIn`. They were
+left out of #308 on David's scope call and are **tech-debt #285** (§6 r8 consolidation, with the
+measured list). **They now diverge from the shared sheet visibly, and that is intended** — do not
+"fix" it by reverting the shared style.
 
 **Known gap (inherited, honest amber — NOT a regression of this section):** a new dialog inherits the
 platform-wide **M3 / M4 / M5** gaps (escape-to-close, defined backdrop behaviour, focus management),
@@ -317,8 +330,11 @@ divergence from it. ⚠️ **No cap detects a V1 violation on its own** — whet
 from where the reader acted is a judgement about layout, and the three live declarations diverge from
 §§1/3/4 only, so adding this section invalidated none of them (checked, not assumed). The mechanical
 half that DOES exist: `shipToSurfaces.test.ts` §C asserts the offer is not rendered inside `StopCard`,
-and `stopOfferMount.test.ts` mounts the real components and asserts it renders OUTSIDE the card
-subtree — which is the V3 prohibition, made falsifiable for one surface rather than for the platform.
+and `stopOfferMount.test.ts` mounts the real components and asserts **A3b** it renders OUTSIDE the card
+subtree (V3) and **A6/A7** that its Save is not inside the dialog's scrolling region (V4). Both were
+proven RED by mutation before being trusted — render the dialog inside the list, A3b fails; un-pin the
+action row, A7 fails. ⚠️ **Made falsifiable for ONE surface, not for the platform:** no cap sweeps the
+other ten dialogs, which is why #285 carries a list rather than a check.
 
 ---
 

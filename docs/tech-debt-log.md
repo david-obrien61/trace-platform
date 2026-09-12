@@ -2478,3 +2478,50 @@ happens to those, or it moves the collision rather than removing it.
 for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
 (*did it reach main and production?*). They are one family: **nothing in the corpus asserts where the
 work is, at any of the three moments** — and each was found by a different failure within one day.
+
+---
+
+## #285 — 🟡 FIVE DIALOGS CARRY A DRIFTED COPY OF THE SHARED SHEET, AND THE V4 FIX MAKES THEM DIVERGE VISIBLY (NEW 2026-09-12, ledger #308, §6 r8)
+
+**This is a CONSOLIDATION item with a measured population, not a tidy-up.** The 2026-09-12 modal
+survey (11 dialogs, both packages) found the same literal shape in six separate style objects:
+
+```
+{ …, maxHeight: '85vh', overflowY: 'auto' }
+```
+
+One of them is the shared `sheetStyles.sheet`. **The other five are hand-rolled copies** that no
+longer track it:
+
+| Surface | Where | What it is |
+|---|---|---|
+| `ProjectsManager.tsx` | `:183` `S.sheet` | project admin, `Done` |
+| `InventoryCount.tsx` | `:1056` `S.sheet` | the count walk's sheets (+ a nested `maxHeight:'40vh'` list) |
+| `OperatingCosts.tsx` | `:113` `S.sheet` | cost editor, submit at `:544` |
+| `ScanOrder.tsx` | `:658` `S.sheet` | scan flow sheets |
+| `ProjectCostDrillIn.tsx` | `:360` `card` | read-only drill-in, `Done` only |
+
+🔴 **AND THE STATE THIS ENTRY IS FILED IN IS DELIBERATE, NOT AN OVERSIGHT.** Ledger #308 rewrote
+`sheetStyles.sheet` into a bounded flex column with a pinned action row (**§8 V4**) and converted its
+**six** consumers plus `ConflictDialog` and `ReviewAskSheet`. **These five were NOT converted**, on
+David's scope call — folding five more files into a pass whose ledger is about feedback placement is
+the scope creep §1.6 exists to catch.
+
+⚠️ **SO THE FIVE NOW DIVERGE FROM THE SHARED SHEET VISIBLY, AND THAT IS INTENDED.** Until they are
+folded back, their action rows scroll with their bodies while every shared-sheet dialog's does not —
+two behaviours for one control class, on one platform. **Recorded here so the next reader finds a
+decision rather than inconsistency**, and so nobody "fixes" the divergence by reverting the shared
+style. The fix direction is one-way: point each at `sheetStyles.sheet` / `sheetBody` / `sheetActions`
+and delete the local copy.
+
+**WHY IT IS §6 r8 AND NOT COSMETIC.** *"The same OPERATION exists in exactly one place"* — this is one
+operation (bound a dialog, scroll its body, pin its actions) in six. It has already cost once: the V4
+defect had to be found and fixed **seven times** rather than once, and five instances are still open.
+
+⚠️ **ONE OF THE FIVE IS NOT LIKE THE OTHERS:** `ProjectCostDrillIn` is a read-only drill-in whose only
+button is `Done`. It carries no commit control, so V4's *consequence* is mild there — but it still
+holds a copy of the shape, which is why it is on the consolidation list and not on a V4 list.
+
+**TRIGGER:** the next build that touches any of the five (consolidate-when-touched, AC-5's discipline
+applied to a style), or a dedicated pass. **Not blocked on anything** — the shared parts exist and are
+proven by `stopOfferMount.test.ts` A6/A7.

@@ -335,9 +335,11 @@ export function BusinessAssets() {
                 <X size={20} color="#6b7280" />
               </button>
             </div>
+            {/* V4 (§8) — the form body scrolls; Save Asset below it does not. */}
+            <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+            <div style={SS.sheetBody}>
             {saveError && <div style={SS.error}>{saveError}</div>}
             {saveSuccess && <div style={SS.success}>Asset saved.</div>}
-            <form onSubmit={handleSubmit}>
               <div style={SS.field}>
                 <label style={SS.label}>Name *</label>
                 <input style={SS.input} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Mahindra tractor" required />
@@ -396,9 +398,12 @@ export function BusinessAssets() {
                 <label style={SS.label}>Notes</label>
                 <textarea style={SS.textarea} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Condition, history, anything relevant…" />
               </div>
+            </div>
+            <div style={SS.sheetActions}>
               <button type="submit" style={saving ? SS.submitBtnDisabled : SS.submitBtn} disabled={saving}>
                 {saving ? 'Saving…' : 'Save Asset'}
               </button>
+            </div>
             </form>
           </div>
         </div>

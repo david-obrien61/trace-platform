@@ -590,6 +590,9 @@ export function BusinessInventory() {
             <div style={SS.sheetHeader}>
               <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Delete item</h2>
             </div>
+            {/* V4 (§8) — the explanation scrolls; Cancel/Delete do not. A destructive confirm whose
+                buttons can leave the screen is the worst shape this clause exists to prevent. */}
+            <div style={SS.sheetBody}>
             <p style={{ fontSize: '0.92rem', color: '#374151', margin: '0 0 8px' }}>
               Delete <b>{deleteTarget.name}</b>{deleteTarget.size ? ` — ${deleteTarget.size}` : ''}?
             </p>
@@ -597,7 +600,8 @@ export function BusinessInventory() {
               If this item has order history it is <b>archived</b> (kept for your records, no longer sellable).
               If it was never sold it is <b>removed permanently</b>. Other sizes of the variety are untouched.
             </p>
-            <div style={{ display: 'flex', gap: 10 }}>
+            </div>
+            <div style={SS.sheetActions}>
               <button style={{ ...SS.addBtn, flex: 1, justifyContent: 'center' }} disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button>
               <button style={{ ...SS.submitBtn, flex: 1, background: '#b91c1c', minHeight: 40 }} disabled={deleting} onClick={() => { void confirmDelete(); }}>
                 {deleting ? 'Deleting…' : 'Delete'}

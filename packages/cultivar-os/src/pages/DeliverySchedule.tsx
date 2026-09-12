@@ -93,7 +93,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', res.value.stops.length, 'stops · fulfilment columns', res.value.fulfilmentColumns ? 'present' : 'ABSENT (20260831d not applied)');
   }
 
-  const actions = useStopActions({ onChanged: load });
+  const actions = useStopActions({ onChanged: load, stops: read?.stops ?? [] });
   const rows: StopRow[] = read?.stops ?? [];
 
   // Group by delivery_date, soonest day forward (undated grouped last). The filter is applied to the

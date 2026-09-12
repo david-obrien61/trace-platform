@@ -23,6 +23,15 @@
 > **Fixed** by moving the offer to `useStopActions`, which the PAGE owns and the refresh does not
 > destroy; it now renders on all three for the first time. 🔴 **Re-prove CARD 4 on the SCHEDULE, not
 > on the order screen** — the order screen is the one that was never broken.
+>
+> ✏️ **AND THEN IT WAS FOUND TO BE VISIBLE BUT UNREACHABLE — CORRECTED AGAIN 2026-09-12, BEFORE CARD 4
+> WAS EVER RUN.** With the state fixed the panel rendered, and David saw it **below the fold twice on
+> `/delivery-schedule`** and read it as a failure both times: inside a list item, its screen position
+> was a function of how many stops sat above it. **Surviving the refresh and being VISIBLE are
+> different properties, and #304 only fixed the first.** Ruled **R-148** → `ui-control-standards.md`
+> **§8 V1–V4**; the offer is now a centered dialog (`<SaveSiteDialog>`) in the hook's overlays, beside
+> the review ask. **Nothing on this board was `covered`, so no proof was lost** — which is why the
+> change was made before you ran it rather than after.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
 **Board: 0 of 12 covered** (10 `owed` · 2 `needs-test`).
 
@@ -167,17 +176,24 @@ and **Save address**.
 
 **PASS:**
 1. The address saves as it always did — this is #301's behaviour, unchanged.
-2. **Then** a green panel appears: *"Save this address as a delivery site for &lt;customer&gt;?"*
-   with an **empty** name box.
+2. **Then a DIALOG opens, centered on the screen** — *"Save this address as a delivery site?"*, naming
+   the customer, with an **empty** name box. ✅ **It is a dialog and not a panel on the card as of
+   2026-09-12 (§8 V1, R-148).** You reported the panel below the fold twice; David's ruling:
+   *"a required decision is not page content — page content can be scrolled past, a decision cannot."*
 3. It is a question, not a pre-ticked box: **nothing has been saved yet.**
 4. Type **`Job site A`** and press **Save as a site**.
-5. It reports *"Saved as "Job site A". It will be offered next time you take an order for
-   &lt;customer&gt;."*
+5. **The same dialog** reports *"Saved as "Job site A". It will be offered next time you take an
+   order for &lt;customer&gt;."* and you close it with **Done**. ⚠️ The outcome is reported IN the dialog,
+   never as a line on the card — answering where the question could not be seen is the same defect.
+6. 🔴 **Check the dialog's buttons without scrolling inside it** (§8 V4): `Save as a site` and
+   `Not this one` are pinned — they stay on screen whatever the dialog's content does.
 
-**FAIL:** the panel appears **before** the address saved · a name is pre-filled · the panel appears
-on a stop with no customer · pressing **Not this one** still saves (check with CARD 10) · 🔴 **the
-panel never appears at all — the 2026-09-12 failure; if you see this again the fix did not take, and
-check the build stamp against `git log --oneline origin/main -1` before anything else (GATE 0).**
+**FAIL:** the dialog appears **before** the address saved · a name is pre-filled · it appears on a
+stop with no customer · pressing **Not this one** still saves (check with CARD 10) · 🔴 **it never
+appears at all — the 2026-09-12 failure; if you see this again the fix did not take, and check the
+build stamp against `git log --oneline origin/main -1` before anything else (GATE 0)** · 🔴 **you
+have to scroll to reach its buttons** (§8 V4) · 🔴 **it renders inside the stop card instead of over
+the page** (§8 V3 — that is the shape that put it below the fold).
 
 ⚠️ **THEN REPEAT IT ON `/deliveries?date=…` (the route).** Same gesture, same expected panel. That
 screen carried the identical defect and is the second half of what was fixed — a pass on the

@@ -90,7 +90,12 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
   const { can } = useBusinessContext();
   const [editingAddress, setEditingAddress] = useState(false);
   const [form, setForm] = useState<ShipToForm>(() => shipToFormOf(d));
-  const [addressNote, setAddressNote] = useState<string | null>(null);
+  // §8 V2 — SELF-ANCHORED. This note is rendered INSIDE the editor, directly above the Save control
+  // that produced it, so it satisfies V1 without being a dialog. `landed` matters: the only message
+  // this platform has for "the address saved but the history row did not" used to be red text below
+  // a COLLAPSED editor, at the bottom of a list item — the least visible place on the screen for the
+  // one sentence a reader must not miss.
+  const [addressNote, setAddressNote] = useState<{ text: string; landed: boolean } | null>(null);
   // D-41 L2 (ledger #303) — the save-this-site offer. It appears ONLY after an address was actually
   // saved, so the book fills as a by-product of work already being done.
   //
@@ -101,8 +106,11 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
   // so the setter ran on a dead instance and React 18 discarded it silently. The hook belongs to the
   // PAGE, which stays mounted; the offer now survives the refresh by construction on all three
   // screens. Keyed by stop id, so it renders on the card it belongs to and on no other.
-  const siteOffer = actions.siteOffer?.stopId === d.id ? actions.siteOffer : null;
-  const siteNote  = actions.siteNote?.stopId  === d.id ? actions.siteNote.text : null;
+  // ✏️ §8 V1/V3 (R-148) — THE CARD NO LONGER RENDERS THE OFFER AT ALL. It moved to a centered
+  // dialog in `useStopActions`' overlays (`<SaveSiteDialog>`), because feedback rendered anywhere in
+  // a list item has a screen position set by the rows above it. #304 moved the STATE off this
+  // component so it would survive the refresh; that fixed existence, not visibility. The outcome
+  // sentence went with it — answering in the place the question could not be seen is the same bug.
 
   const name = customerDisplayName(d.customers, 'Customer');
   const address = shipToLine(d);
@@ -121,22 +129,21 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
     setAddressNote(null);
     const out = await actions.saveShipTo(d, form);
     if (out.kind === 'no_change') { setEditingAddress(false); return; }
-    if (out.kind === 'refused') { setAddressNote(out.reason); return; }
-    if (out.kind === 'failed') { setAddressNote(out.error); return; }
-    setEditingAddress(false);
+    if (out.kind === 'refused') { setAddressNote({ text: out.reason, landed: false }); return; }
+    if (out.kind === 'failed') { setAddressNote({ text: out.error, landed: false }); return; }
     // Saved but not recorded is its OWN outcome and it is said, not folded into success.
-    if (!out.audited) setAddressNote(`The new address is saved, but the change was not recorded in the history (${out.auditError}).`);
+    // 🔴 V2 — THE EDITOR STAYS OPEN so the sentence sits on the control that caused it. Closing
+    // first is what put it below the fold: the form collapsed, the card shrank, and the message
+    // landed wherever the rows above happened to leave it.
+    if (!out.audited) {
+      setAddressNote({ text: `The new address is saved, but the change was not recorded in the history (${out.auditError}).`, landed: true });
+      return;
+    }
+    setEditingAddress(false);
     // The offer rides the edit that just landed — raised by `saveShipTo` itself, because this
     // component may not be alive to raise it. It is a QUESTION with a blank name, never a
     // pre-ticked box: David's rule is that nothing auto-saves, because a book full of one-off
     // drops is worse than no book at all.
-  }
-
-  // Every outcome — saved, already-saved, refused, failed — is worded and cleared by the hook, for
-  // the same reason the offer is: it is decided after an await this component may not survive.
-  async function submitSite() {
-    if (!siteOffer) return;
-    await actions.saveSite(d, siteOffer.label);
   }
 
   return (
@@ -197,7 +204,14 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
                   />
                 </label>
               ))}
+              {/* §8 V2 — the outcome sits on the control that produced it, never below the card. */}
+              {addressNote && (
+                <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: addressNote.landed ? DARK : RED, lineHeight: 1.45 }}>
+                  {addressNote.text}
+                </p>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
+                {!addressNote?.landed && (
                 <button
                   onClick={() => { void submitAddress(); }}
                   disabled={busy}
@@ -205,52 +219,18 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
                 >
                   {busy ? 'Saving…' : 'Save address'}
                 </button>
+                )}
                 <button
                   onClick={() => { setEditingAddress(false); setAddressNote(null); }}
                   disabled={busy}
                   style={{ flex: 1, minHeight: 48, background: '#fff', color: DARK, border: '1px solid #d1d5db', borderRadius: 10, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}
                 >
-                  Cancel
+                  {addressNote?.landed ? 'Close' : 'Cancel'}
                 </button>
               </div>
             </div>
           )}
-          {addressNote && <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: RED, lineHeight: 1.45 }}>{addressNote}</p>}
 
-          {/* ── D-41 L2 — "Save this as a site for this customer?" ── */}
-          {siteOffer && (
-            <div style={{ marginTop: 8, padding: 10, border: '1px solid #d8e3c8', background: '#F6FAF0', borderRadius: 10 }}>
-              <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: DARK, lineHeight: 1.45 }}>
-                Save this address as a delivery site for <strong>{name}</strong>? Give it a name and it
-                will be offered next time you take their order.
-              </p>
-              <input
-                value={siteOffer.label}
-                onChange={e => { actions.setSiteOfferLabel(e.target.value); }}
-                placeholder="Job site A"
-                disabled={busy}
-                autoComplete="off"
-                style={inputStyle}
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button
-                  onClick={() => { void submitSite(); }}
-                  disabled={busy}
-                  style={{ flex: 1, minHeight: 48, background: GREEN, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.875rem', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
-                >
-                  {busy ? 'Saving…' : 'Save as a site'}
-                </button>
-                <button
-                  onClick={() => { actions.dismissSiteOffer(); }}
-                  disabled={busy}
-                  style={{ flex: 1, minHeight: 48, background: '#fff', color: DARK, border: '1px solid #d1d5db', borderRadius: 10, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}
-                >
-                  Not this one
-                </button>
-              </div>
-            </div>
-          )}
-          {siteNote && <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: GRAY, lineHeight: 1.45 }}>{siteNote}</p>}
 
           {d.customers?.phone && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
