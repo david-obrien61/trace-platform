@@ -1,3 +1,16 @@
+// ============================================================
+// api/pmi/suggest — AI preventive-maintenance schedule suggestion
+// PURPOSE:      Given one asset (name/type/make/model/year), ask Claude for 3-8 typical
+//               maintenance tasks + intervals. Returns a PREVIEW only — nothing is written
+//               here; `PMI.tsx`'s Accept does the write through the caller's own session.
+// DEPENDENCIES: @anthropic-ai/sdk (BILLABLE call), shared/auth/callerPermission (callerCan).
+//               No database, no service key.
+// OUTPUTS:      { ok, tasks: [{ name, interval }] } · 400 missing fields · 403 unauthorized
+//               · 503 AI unavailable/failed · 500 unparseable or empty response.
+// AUTHORITY:    `pmi:read` for the business named in the body, resolved from the Bearer token
+//               (MB_D-015 — never the body). See the gate comment in the handler for why
+//               `pmi:read` and not `pmi:update`.
+// ============================================================
 import Anthropic from '@anthropic-ai/sdk';
 import { callerCan } from '../../../shared/src/auth/callerPermission';
 
@@ -39,7 +52,8 @@ export default async function handler(req: any, res: any) {
   // Pattern and wording copied from `api/social/generate-posts.ts:31-38`, which is the SAME defect
   // already fixed on an AI-billing route (2026-07-27) — not a new pattern. `callerCan` resolves the
   // caller from the Bearer token and never from the body, so a forged `businessId` refuses.
-  if (!(await callerCan(req.headers?.authorization, businessId, 'pmi:read'))) {
+  const authHeader = req.headers?.authorization;
+  if (!(await callerCan(authHeader, businessId, 'pmi:read'))) {
     console.log('[TRACE:AUTHORITY] pmi/suggest REFUSED — caller lacks pmi:read/owner', { businessId });
     return res.status(403).json({ ok: false, error: 'Not authorized to suggest maintenance for this business', code: 'FORBIDDEN' });
   }
