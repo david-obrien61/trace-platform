@@ -2326,3 +2326,75 @@ three files (CLAUDE.md §9, `docs/operating-doctrine/end-of-session-protocol.md`
 hosts it) plus a new check; ② is a decision about whether we take a Vercel credential into the repo
 at all. **Both are David's calls, and the merge of `fix/pmi-suggest-auth` is a separate decision he
 has explicitly reserved.**
+
+---
+
+## #282 — 🔴 TWO SESSIONS, ONE WORKING TREE: THE BRANCH CAN CHANGE UNDER A SESSION BETWEEN THE COMMIT IT PLANNED AND THE COMMIT IT MAKES (NEW 2026-09-12, ledger #304)
+
+**The occurrence, measured.** While ledger **#304** was being built, another session switched the
+shared checkout from `fix/stop-site-offer-unmount` to `feat/breakpoint-vocabulary`. The #304 commit
+(`9fd1d15`) landed on **that** branch. The push then named the ref it *meant* —
+`git push origin fix/stop-site-offer-unmount` — which was still sitting at `fe24e68`, so it
+**published a branch containing none of the work.**
+
+🔴 **AND THE TELL WAS INVERTED: EVERYTHING REPORTED SUCCESS.** The push exited 0. Git printed
+`* [new branch] fix/stop-site-offer-unmount -> fix/stop-site-offer-unmount`. The verification block
+printed `fe24e68` on both sides — *and that is the shape of a correct fast-forward*. Only reading the
+two SHAs against the commit that was supposed to be there showed it. **A push that succeeds is not a
+push that shipped** — **#280**'s sentence, one layer further in: there the commit was on a branch and
+not on `main`; here it was not even on the branch its own push named.
+
+⚠️ **THE REPAIR WAS CLEAN BY LUCK, NOT BY DESIGN, AND THE LUCK SHOULD BE NAMED.**
+`feat/breakpoint-vocabulary` was **local-only, unpushed, and sitting at the same `fe24e68` with zero
+commits of its own** — so restoring it was `git branch -f` and nothing was lost. Had it carried a
+single commit, un-picking one session's commit from another's branch would have been a merge
+decision taken under time pressure, on a tree both sessions were still writing to.
+
+**WHY #281's MIDDLE CHECK DOES NOT CATCH THIS.** That check reads: *every commit since the merge-base
+cites the same ledger id* — `git log --format=%s origin/main.. | grep -oE '#[0-9]+' | sort -u` must
+yield exactly one. 🔴 **A commit landing ALONE on a branch has nothing to disagree with.** One
+commit, one id, the check passes, and the branch is still the wrong one. It was in fact run against
+the #304 branch and returned `#304` — correct, and blind to the defect.
+
+**THE CHECK THAT WOULD: CONFIRM THE CURRENT BRANCH IMMEDIATELY BEFORE COMMITTING** —
+`git branch --show-current`, compared against the branch the session *intended*, at the moment of the
+commit rather than at the start of the session. The failure here was a session trusting a branch it
+had set an hour earlier, in a tree it does not own alone.
+
+⚠️ **A SECOND SYMPTOM OF THE SAME CAUSE — THE GATE MEASURES THE TREE, NOT YOUR DIFF.** `npm run
+verify` in the shared checkout ran across another session's in-flight edits to `OperationsCalendar.tsx`,
+`ReceiptKeeper.tsx`, `TileGrid.tsx`, `design-system/tokens.ts` and an untracked `packages/shared/src/hooks/`.
+So **"exit 0, zero net-new" was a statement about a tree nobody owns**, and neither session could
+attribute it to their own work. That is real and it is structural.
+
+✏️ **CORRECTION TO THE INSTANCE CITED WHEN THIS WAS FILED, AND IT MATTERS BECAUSE THE ENTRY WOULD
+OTHERWISE CARRY A FALSE EXAMPLE.** The `tsc 5→6` / `eslint 244→245` movement observed during #304 was
+**measured to THIS session's own file, both times** — `stopOfferMount.test.ts(33,23): error TS7016:
+Could not find a declaration file for module 'jsdom'` and `stopOfferMount.test.ts 181:1
+@typescript-eslint/no-floating-promises`. Both name the file by path. After `@types/jsdom` was
+installed and the IIFE was voided, the gate read **5/5 and 244/244 with every other session's file
+still present in the tree.** So that particular movement was **not** cross-session contamination —
+the mechanism above is real, and this is not its example. If a *different* run showed the same
+numbers move, those numbers need re-measuring before they are cited, rather than inheriting this one's
+explanation ([[R-26]]).
+
+**THE PROPOSED RULE — RECORDED AS A PROPOSAL, DELIBERATELY NOT BUILT (David, 2026-09-12).**
+> *A session that will commit works in its own worktree, not the shared checkout.*
+
+**Precedent, measured today rather than asserted:** `git worktree list` shows two worktrees created by
+one session on 2026-09-12 — `wt-camp` (`feat/campaign-lifecycle`) and `wt-recon`
+(`recon/campaigns-2026-09-12`) — taken by that session's **own judgement**, before any rule existed,
+and both clean. ⚠️ **Ledger #305 has no row in `docs/CLOSE-OUT-LEDGER.md` yet** (grepped 2026-09-12),
+so that close-out is still in flight; the evidence above is from the worktree list, not from the ledger.
+
+**WHAT THE RULE DOES NOT YET ANSWER, so that adopting it is a decision and not a reflex:** it is a
+workflow constraint, not code, and **nothing would enforce it** — which is the same shape as §2's
+*"Confirm branch (main or feature branch as appropriate)"*, a rule with no referent (#281). A worktree
+costs a full checkout (~1,200 files here). And 🔴 **the shared tree is also where DAVID works** — his
+own uncommitted edits were sitting in it during this incident — so *"own worktree"* has to say what
+happens to those, or it moves the collision rather than removing it.
+
+**CLASS — THREE MOMENTS, ONE MISSING ASSERTION.** #281 is **build start** (*what is this branch
+for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
+(*did it reach main and production?*). They are one family: **nothing in the corpus asserts where the
+work is, at any of the three moments** — and each was found by a different failure within one day.
