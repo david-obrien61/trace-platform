@@ -137,7 +137,7 @@ function main(): void {
     ok(/can\('customers:create'\) && d\.customer_id/.test(acts),
       'C8 the HOOK gates raising the offer on customers:create AND a customer to save it for');
     // ✏️ C9 RE-AIMED AGAIN 2026-09-12 — AND IN THE OPPOSITE DIRECTION, WHICH IS THE POINT.
-    // It asserted the CARD renders the offer. §8 V3 (R-148) says it must not: feedback in a repeated
+    // It asserted the CARD renders the offer. §8 V3 (R-150) says it must not: feedback in a repeated
     // row has a position set by the rows above it, and this offer sat below the fold twice on
     // /delivery-schedule. The offer is a dialog in the hook's overlays now, so the claim inverts.
     ok(!/siteOffer/.test(src),

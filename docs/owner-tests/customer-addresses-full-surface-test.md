@@ -28,7 +28,7 @@
 > WAS EVER RUN.** With the state fixed the panel rendered, and David saw it **below the fold twice on
 > `/delivery-schedule`** and read it as a failure both times: inside a list item, its screen position
 > was a function of how many stops sat above it. **Surviving the refresh and being VISIBLE are
-> different properties, and #304 only fixed the first.** Ruled **R-148** → `ui-control-standards.md`
+> different properties, and #304 only fixed the first.** Ruled **R-150** → `ui-control-standards.md`
 > **§8 V1–V4**; the offer is now a centered dialog (`<SaveSiteDialog>`) in the hook's overlays, beside
 > the review ask. **Nothing on this board was `covered`, so no proof was lost** — which is why the
 > change was made before you ran it rather than after.
@@ -178,7 +178,7 @@ and **Save address**.
 1. The address saves as it always did — this is #301's behaviour, unchanged.
 2. **Then a DIALOG opens, centered on the screen** — *"Save this address as a delivery site?"*, naming
    the customer, with an **empty** name box. ✅ **It is a dialog and not a panel on the card as of
-   2026-09-12 (§8 V1, R-148).** You reported the panel below the fold twice; David's ruling:
+   2026-09-12 (§8 V1, R-150).** You reported the panel below the fold twice; David's ruling:
    *"a required decision is not page content — page content can be scrolled past, a decision cannot."*
 3. It is a question, not a pre-ticked box: **nothing has been saved yet.**
 4. Type **`Job site A`** and press **Save as a site**.

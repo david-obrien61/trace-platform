@@ -62,7 +62,7 @@ const BACKDROP: React.CSSProperties = {
 
 // CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL, M1).
 //
-// 🔴 AND BOUNDED — V4 (§8, R-148, 2026-09-12). This card previously had NO `maxHeight` and NO
+// 🔴 AND BOUNDED — V4 (§8, R-150, 2026-09-12). This card previously had NO `maxHeight` and NO
 // `overflow` at all, which is the WORSE half of V4 rather than an exemption from it: content taller
 // than the viewport would have overflowed with no way to scroll to the buttons, where a mis-bounded
 // dialog at least lets you reach them. It did not bite because the content is short and fixed — an

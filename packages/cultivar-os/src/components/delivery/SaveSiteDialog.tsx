@@ -6,7 +6,7 @@
  * DEPENDENCIES @trace/shared/business-logic (SaveOutcome) · rendered from useStopActions' `overlays`
  * OUTPUTS      <SaveSiteDialog> — renders NOTHING when there is no offer.
  *
- * 🔴 WHY THIS IS A DIALOG AND NOT A PANEL ON THE CARD — §8 V1/V3 (R-148, David 2026-09-12).
+ * 🔴 WHY THIS IS A DIALOG AND NOT A PANEL ON THE CARD — §8 V1/V3 (R-150, David 2026-09-12).
  * It shipped inside <StopCard>, in a list of stops, and its screen position therefore depended on
  * how many stops sat above it and how tall they were. It landed below the fold twice on
  * /delivery-schedule on 2026-09-12 and read as a failure both times. David's sentence: *"a required

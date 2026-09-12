@@ -23,7 +23,7 @@ const DIALOG_BACKDROP: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-// 🔴 V4 (§8, R-148) — BOUNDED FLEX COLUMN, ACTIONS PINNED. This card used to be one box with
+// 🔴 V4 (§8, R-150) — BOUNDED FLEX COLUMN, ACTIONS PINNED. This card used to be one box with
 // `overflowY:'auto'`, so the two buttons scrolled with the evidence above them. **Of the eleven
 // dialogs the 2026-09-12 survey measured, this is the one where a missed control costs most:**
 // `Save anyway — I've checked the receipt` records a DURABLE override on a money discrepancy, and it

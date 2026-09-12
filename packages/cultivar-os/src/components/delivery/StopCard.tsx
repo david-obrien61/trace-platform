@@ -106,7 +106,7 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
   // so the setter ran on a dead instance and React 18 discarded it silently. The hook belongs to the
   // PAGE, which stays mounted; the offer now survives the refresh by construction on all three
   // screens. Keyed by stop id, so it renders on the card it belongs to and on no other.
-  // ✏️ §8 V1/V3 (R-148) — THE CARD NO LONGER RENDERS THE OFFER AT ALL. It moved to a centered
+  // ✏️ §8 V1/V3 (R-150) — THE CARD NO LONGER RENDERS THE OFFER AT ALL. It moved to a centered
   // dialog in `useStopActions`' overlays (`<SaveSiteDialog>`), because feedback rendered anywhere in
   // a list item has a screen position set by the rows above it. #304 moved the STATE off this
   // component so it would survive the refresh; that fixed existence, not visibility. The outcome

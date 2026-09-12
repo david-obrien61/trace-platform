@@ -75,7 +75,7 @@ export function useStopActions(
   // offer here makes it survive the refresh BY CONSTRUCTION rather than by every consumer remembering
   // not to unmount its list — the fix belongs at the ONE place all three screens share (STD-017).
   // Keyed by stop id so it can only ever render on the card it belongs to.
-  // ✏️ §8 V1/V3 (R-148, 2026-09-12) — THE OFFER IS A DIALOG NOW, NOT A PANEL ON THE CARD, so this
+  // ✏️ §8 V1/V3 (R-150, 2026-09-12) — THE OFFER IS A DIALOG NOW, NOT A PANEL ON THE CARD, so this
   // state carries what the DIALOG renders rather than a stop id the card matched on. It was moved
   // OFF <StopCard> on 2026-09-11 to survive the refresh (#304); it is moved OUT OF THE LIST ENTIRELY
   // here, because surviving the refresh and being VISIBLE are different properties and only the

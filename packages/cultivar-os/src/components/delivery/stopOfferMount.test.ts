@@ -26,7 +26,7 @@
  *     save lands  →  await onChanged()  →  loading = true  →  {!loading && <StopCard/>}  ← UNMOUNTS
  *                                       →  loading = false →  fresh <StopCard/> mounts
  *
- * ✏️ **STRENGTHENED 2026-09-12 (§8 V1/V3/V4, R-148).** It used to assert only that the offer was ON
+ * ✏️ **STRENGTHENED 2026-09-12 (§8 V1/V3/V4, R-150).** It used to assert only that the offer was ON
  * SCREEN after the refresh — true of the panel that shipped inside the card, which was on screen and
  * below the fold. The claim now is the one that matters: **the offer renders OUTSIDE the stop list
  * subtree** (A3), which is what makes its position independent of how many stops sit above it. A2

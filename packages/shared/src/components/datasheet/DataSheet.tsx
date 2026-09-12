@@ -668,7 +668,7 @@ export const sheetStyles = {
   // the three datasheet add-sheets (Add Inventory / Add Customer / Add Asset) — changing it here
   // centers all three at once (compliance-audit rows #3/#5/#6, convention A "always center").
   modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box' as const, zIndex: 100 } as React.CSSProperties,
-  // 🔴 V4 (§8, R-148, 2026-09-12) — THE SHEET IS A BOUNDED FLEX COLUMN AND ITS ACTION ROW DOES NOT
+  // 🔴 V4 (§8, R-150, 2026-09-12) — THE SHEET IS A BOUNDED FLEX COLUMN AND ITS ACTION ROW DOES NOT
   // SCROLL. It used to be ONE box with `overflowY:'auto'`, so the header, the fields AND the Save/Cancel
   // row scrolled together: a tall dialog pushed its own commit controls below the visible area and the
   // reader had to scroll INSIDE the modal to find them. Reported live on Edit customer 2026-09-12.

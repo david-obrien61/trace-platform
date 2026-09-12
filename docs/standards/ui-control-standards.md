@@ -260,7 +260,7 @@ gains a second long operation is measured against W1–W5 before it ships.
 
 ## 8. ACTION FEEDBACK (a confirmation nobody can see is one that does not exist)
 
-✅ **BINDING — ruled by David 2026-09-12 (R-148), in the doc BEFORE the component, per R-74:**
+✅ **BINDING — ruled by David 2026-09-12 (R-150), in the doc BEFORE the component, per R-74:**
 *"where the doc is SILENT it is AMENDED BEFORE the widget is touched — silence is not permission to
 decide locally."* This section did not exist when the save-a-site offer was built, and the offer was
 placed inside a list item by default rather than by decision.
