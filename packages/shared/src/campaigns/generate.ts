@@ -4,15 +4,27 @@ import type { CampaignToneSample } from './types';
 const ADVERT_DEBUG = false;
 
 export interface AdvertChannel {
-  type:    string;   // 'social' | 'sms'
-  name:    string;   // e.g. 'instagram', 'facebook', 'tiktok', 'twitter', 'sms'
+  type:    string;   // 'social' | 'sms' | 'email' — from channels.kind, drives post count only
+  name:    string;   // a `channels.name`; the vocabulary lives in the table, never in this comment
   enabled: boolean;
+  /**
+   * From `channels.guidance`. Optional because the tenant's own config carries no guidance — the
+   * endpoint joins it on by name. A channel without it falls back to DEFAULT_CHANNEL_GUIDANCE, which
+   * is what lets a new channel be a row.
+   */
+  guidance?: string | null;
 }
 
 interface PostDraft {
   channel:        string;   // channel name — drives platform col in campaign_posts
   scheduled_date: string | null;
   copy_text:      string;
+  /**
+   * Email only. NULL for every channel whose post is a caption — the model is told to omit it, and
+   * the mapper below coerces an empty string to NULL so an absent subject never reaches the database
+   * as a present-but-blank one (A9).
+   */
+  subject:        string | null;
   image_prompt:   string | null;
 }
 
@@ -28,18 +40,22 @@ interface PostDraft {
 // CONFIGURATION and call it covered, which is STD-025's exact shape — deliberately not written.
 const SYSTEM_PROMPT = 'You write content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department. Specific means grounded in the facts you were given, never invented: no statistic, percentage, dollar figure, date, award, certification or comparative claim unless it appears in the supplied data. If a number would strengthen a post and you do not have one, write the sentence without it — a fabricated figure publishes under the name of the business, and the owner carries the liability.';
 
-// Per-channel formatting guidance injected into the prompt.
-// Keys match the channel names in advert_channels.
-// New channels: add an entry here — no code branching needed.
-const CHANNEL_GUIDANCE: Record<string, string> = {
-  instagram: '(Instagram) Visual and upbeat. Under 220 characters. 3–5 relevant hashtags at end.',
-  facebook:  '(Facebook) 50–120 words. Warm and conversational. 2–3 hashtags max. More storytelling.',
-  tiktok:    '(TikTok) Under 150 characters. Punchy and energetic. 3–5 hashtags.',
-  twitter:   '(Twitter/X) Under 260 characters. Brief and direct. 2–3 hashtags.',
-  sms:       '(SMS) Under 160 characters. Direct, one clear call to action. Include the business name. No hashtags.',
-};
-
+// 🔴 `CHANNEL_GUIDANCE` WAS HERE AND IS DELETED (ledger #310, R-150). It was a hardcoded map keyed
+// by channel name, and the moment `public.channels` gained a `guidance` column it would have become a
+// SECOND copy of the same fact — replacing four copies of the list with three copies plus a new copy
+// of the guidance is not a fix. Guidance now arrives ON the channel, read from the table by the
+// endpoint that already reads the tenant's config.
+//
+// The DEFAULT stays, and it is what makes a new channel a ROW rather than a code change: a channel
+// seeded with NULL guidance still generates, it simply generates generically.
 const DEFAULT_CHANNEL_GUIDANCE = 'Short, warm, and authentic. One clear message.';
+
+/**
+ * Channel kinds that get ONE message per campaign rather than a run of posts. An SMS blast and an
+ * email are single sends; a feed is a cadence. Stated as a LIST because `=== 'sms'` was the old test
+ * and adding email would have silently given it three posts.
+ */
+const ONE_PER_CAMPAIGN_KINDS: readonly string[] = ['sms', 'email'];
 
 function postsPerChannel(advertChannels: AdvertChannel[], campaignDays: number): number {
   // Derive count from campaign length — not hardcoded.
@@ -95,12 +111,15 @@ export async function generateCampaignPosts(params: {
 
   // Build per-channel instructions from enabled channels — no vertical nouns, no hardcoded names
   const channelInstructions = enabledChannels.map(ch => {
-    const guidance = CHANNEL_GUIDANCE[ch.name] ?? DEFAULT_CHANNEL_GUIDANCE;
-    const count = ch.type === 'sms' ? 1 : countPerSocialChannel;
+    // Guidance comes off the CHANNEL (sourced from the table). No map in this file to drift.
+    const guidance = ch.guidance?.trim() || DEFAULT_CHANNEL_GUIDANCE;
+    // A one-to-one channel (sms, email) gets ONE message; a feed gets several.
+    const count = ONE_PER_CAMPAIGN_KINDS.includes(ch.type) ? 1 : countPerSocialChannel;
     return `- ${count} × ${guidance}`;
   }).join('\n');
 
-  const totalPosts = enabledChannels.reduce((sum, ch) => sum + (ch.type === 'sms' ? 1 : countPerSocialChannel), 0);
+  const totalPosts = enabledChannels.reduce(
+    (sum, ch) => sum + (ONE_PER_CAMPAIGN_KINDS.includes(ch.type) ? 1 : countPerSocialChannel), 0);
 
   const userPrompt = `Generate social content for a campaign at ${params.businessName}, a ${params.businessType} business.
 
@@ -121,10 +140,14 @@ Return a JSON array of exactly ${totalPosts} objects:
   {
     "channel": "<channel name from the list above>",
     "scheduled_date": "YYYY-MM-DD or null",
+    "subject": "email ONLY — the subject line. Empty string for every other channel.",
     "copy_text": "full post text ready to copy and paste",
-    "image_prompt": "what to photograph for this post (empty string for sms)"
+    "image_prompt": "what to photograph for this post (empty string for sms and email)"
   }
 ]
+An EMAIL is a subject line and a body. The owner copies both and sends it themselves from their own
+mail — you are drafting, not sending. Write the subject as a real subject: concrete, under 60
+characters, no all-caps, no exclamation marks.
 Return only valid JSON. No markdown fences. No explanation.`;
 
   if (ADVERT_DEBUG) console.log('[TRACE:advert] prompt channels:', enabledChannels.map(c => c.name), 'total:', totalPosts);
@@ -139,6 +162,9 @@ Return only valid JSON. No markdown fences. No explanation.`;
     channel:        p.channel        ?? p.platform   ?? enabledChannels[0]?.name ?? 'instagram',
     scheduled_date: p.scheduled_date ?? null,
     copy_text:      p.copy_text      ?? '',
+    // `|| null` not `?? null`: the model is told to send '' for a non-email channel, and an empty
+    // subject must land as NULL rather than as a blank value a reader would take for a real one.
+    subject:        (typeof p.subject === 'string' ? p.subject.trim() : '') || null,
     image_prompt:   p.image_prompt   || null,
   }));
 }
