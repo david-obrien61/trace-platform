@@ -1,5 +1,20 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #306, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **THE GOOGLE REVIEW ASK: THE LINK FIELD EXISTED, NOBODY COULD FIND IT, AND THE ASK COULD NEVER HAVE RUN ANYWAY. #300. TECH-DEBT #270.** 🔴 **THE HEADLINE IS THE PREMISE, CORRECTED BY THE RECON: three of four parts were wired AND SO WAS THE FIELD** — on `/settings/all` → *Asking for reviews*, stored in `business_modules.config.review_url`. What was actually missing was a way to turn the feature on: `followup_engine` is a `planned` tile and `/subscription` offers no Turn on for it, so the prompt could not fire on any tenant whatever David entered.
+
+**Type:** BUILD, on `main`. `f7c0e00`. **BUILDER-COMPLETE** — no migration, api/ 12/12, no permission string. `npm run verify` exit 0 ZERO NET-NEW, unpiped · 94/94 files, 5,161 assertions · 13/13 deliberate mutants caught. **§3 RETENTION: 1 archived verbatim (#297), 1 written — entries-in == entries-out.**
+
+✅ **THE FIELD IS ON BUSINESS PROFILE**, beside name, phone and tax rate — same store, no migration. The Save writes it only when it changed, proves the write by reading the value back, and reports every table through a pure `saveReport`. 🔴 **Writing that as a pure function found a defect in the code it replaced:** the two-table message said *"The tax rate was saved"* when an unchanged rate had not been written. Any `https://` address is accepted — no Google-shape check.
+
+✅ **NOTHING FIRES ON HISTORY, BY CONSTRUCTION:** a stop marked done more than a day after its own date never prompts (`not_at_the_door`). R-37's import — the thing meant to land past stops `fulfilled` — is not built, and the list reaches 30 days back, so relying on it alone would not have held. ⚠️ **Not measured live:** `SUPABASE_PAT` was absent, so the history count is board **CARD 13** for David.
+
+⚠️ **ID COLLISION, HANDLED:** another session was closing out an install-date recon as **#299** and filed tech-debt **#267–#269** while this build ran. This build took **#300** / **#270** and committed only its own hunks from the two shared files.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **how Follow-Up gets turned on** — catalog 30-day clock, by hand, or core (#270). Until then CARD 16 turns it on for Test Dave's only. **(b)** does a SKIP start the 180-day window? Today it does. **(c)** the one-day grace for a late tap is Thunder's number. **(d)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#270**.
+
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #303, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **`orders.install_date` IS NEVER SET, AND `business_inventory.location` ALREADY EXISTS — TWO BUILT-AND-EMPTY COLUMNS FROM DAVID'S SWEEP. #299. R-143. TECH-DEBT #267–#269.** 🔴 **THE HEADLINE IS THAT NO WARRANTY CODE EXISTS, SO NOTHING READS ANY OF THE THREE CANDIDATE DATES. THE ONE THAT WOULD RECORD PLANTING, `deliveries.completed_at`, IS 0 OF 57 — AND 7 OF 19 QUICKBOOKS STOPS ARE INSTALLS TYPED AS DELIVERY, SO THEY COULD NEVER START A CLOCK.**

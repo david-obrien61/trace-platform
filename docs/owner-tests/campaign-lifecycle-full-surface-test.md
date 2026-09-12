@@ -66,6 +66,26 @@ your customers have seen something, it is wrong even if everything else passes.*
 
 **PASS = every card in scope is `covered` with today's date.** Thunder never sets `covered` (OP-14).
 
+### 🔴 `RUNS:` — WHEN A CARD CAN BE RUN, AND WHY THIS TAG EXISTS
+
+| Tag | Means |
+|---|---|
+| `RUNS: pre-merge` | Reads the **database or the catalog only**. It does not need the code deployed, or even merged. **It can and should be run BEFORE the thing it gates.** |
+| `RUNS: post-deploy` | Needs the built code live in front of it. Cannot be run earlier. |
+| `RUNS: either` | Read-only SQL that is equally valid before or after; used as a baseline. |
+
+🔴 **WHY THIS TAG EXISTS — IT WAS PAID FOR ON 2026-09-12, THE DAY THIS BOARD WAS WRITTEN.**
+CARD 1 is a **stop-gate**: if the live CHECK on `campaigns.status` does not contain `'cancelled'`,
+R-146 becomes a migration and the cancel half must not ship. It reads `pg_constraint` and **nothing
+else** — so it could have run hours before the merge. **It ran AFTER the merge instead**, because the
+instruction to merge and the instruction to run the cards arrived as one step and nothing in this file
+said which cards did not need the merge. **A stop-gate that runs after the thing it gates is not a
+gate — it is a post-mortem that happened to come out clean.** It did come out clean. That is luck, not
+process, and luck is not a control. Every card now states when it can run, so the ones that gate
+something can be run first.
+
+⚠️ **FOUR of these twelve cards are `pre-merge` — 1, 2, 3 and 11.** None of them needed the build to exist, and three of them gate something. ✏️ *This line first said FIVE. A count in a legend that disagrees with the cards beneath it is the same defect §6 r18 is about, so it is corrected here rather than rounded.*
+
 ---
 
 ## 🟢 DAVID CAN RUN CARDS 1–3 RIGHT NOW — READ-ONLY, BEFORE THE BUILD IS ANYWHERE NEAR PRODUCTION
@@ -78,6 +98,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-146 · ledger #306 · the stop-gate
+RUNS: pre-merge — reads `pg_constraint` only. 🔴 **THIS IS THE STOP-GATE AND IT NEEDED NOTHING BUILT** — it could have run before the merge it gates, and did not.
 WHY: `20260529_campaigns.sql:15` declares `CHECK (status IN ('draft','active','completed','cancelled'))`
 **INLINE**, so Postgres auto-names it and the name is never typed. Tech-debt **#91** is precisely a
 campaign-table inline CHECK whose live definition was the open question — and it found two platform
@@ -91,6 +112,19 @@ SELECT conname, pg_get_constraintdef(oid) AS definition
    AND contype  = 'c';
 ```
 
+🟢 **RAN 2026-09-12 (David supplied `SUPABASE_PAT`; Thunder executed) — THE STOP-GATE IS CLEAR:**
+
+```
+campaigns_status_check
+CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text])))
+```
+
+**`'cancelled'` IS in the live constraint. R-146 does NOT become a migration** — repo and database
+agree on this table, so #91's class is checked and clean here.
+⚠️ **`STATUS` stays `owed` and Thunder is not flipping it.** OP-14 is absolute — *Thunder may never
+mark a card `covered`* — and the builder does not grade its own homework even on a read-only query.
+**David flips this one, with a date.**
+
 **PASS:** a row whose `definition` contains **`'cancelled'`**.
 🔴 **FAIL → STOP AND TELL THUNDER.** R-146 then needs a migration and that is a different
 conversation. Do not run CARD 8.
@@ -100,6 +134,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-145 · R-146 · R-147 · ledger #306
+RUNS: pre-merge — reads `pg_policies` only. The policies predate this build by weeks.
 WHY: this build mints **no permission string** — edit, cancel and append all reuse `campaigns:update`,
 which the repo says is carried by `campaigns_member_update` and `campaign_posts_member_insert`. But
 tech-debt **#241** is a cap that passed by reading `CREATE POLICY` statements an applied migration had
@@ -115,6 +150,13 @@ SELECT tablename, policyname, cmd,
  ORDER BY tablename, cmd, policyname;
 ```
 
+🟢 **RAN 2026-09-12 — BOTH PRESENT AND LIVE.** `campaigns_member_update` (UPDATE, USING + WITH CHECK)
+and `campaign_posts_member_insert` (INSERT, WITH CHECK), plus `campaigns_member_select` /
+`campaign_posts_member_select` (SELECT) and `campaign_posts_member_update` (UPDATE). The `*_owner`
+`FOR ALL` policies still stand on both tables — which is exactly how DELETE stays owner-only-at-the-
+database under R2, with no product control for it. **#241's class clean: these are catalog rows, not
+corpus greps.** ⚠️ `STATUS` stays `owed` — David flips it.
+
 **PASS:** `campaigns_member_update` (UPDATE) and `campaign_posts_member_insert` (INSERT) both present.
 ⚠️ If either is missing, Lauren's edit/cancel/append will fail under her own session even though the
 owner's works — that is CARD 12's failure mode arriving early.
@@ -124,23 +166,38 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-147 · the `arbor day` orphan David is deciding about
-WHY: there is exactly ONE campaign row platform-wide and it is a survivor of the R-147 defect — zero
-posts, `status='active'`, `end_date 2026-10-30`. **This card records it before the build touches
-anything, so CARD 4 can be proven against the real thing rather than a fixture.** Nothing in this
-build writes to it.
+RUNS: pre-merge — read-only baseline. Better run BEFORE, so CARDS 4 and 11 have a before-figure.
+WHY: there are **TWO** campaign rows platform-wide and **both are survivors of the R-147 defect** —
+zero posts each, both `status='active'`, both `end_date 2026-10-30`. **This card records them before
+the build touches anything, so CARDS 4 and 11 can be proven against the real thing rather than a
+fixture.** Nothing in this build writes to either. ✏️ **The recon said ONE and was wrong** — see the
+correction in the query block below; the two duplicates are better evidence than one would have been,
+because CARD 11's arithmetic now has a real duplicate pair to hold.
+
+🔴 **THIS CARD'S FIRST DRAFT WAS WRONG IN TWO WAYS AND BOTH ARE RECORDED RATHER THAN QUIETLY FIXED.**
+**(1) IT DID NOT RUN.** `ORDER BY c.created_at` with `GROUP BY 1,2,3,4,5` is a Postgres error (42803) —
+handed over unexecuted, against this platform's own standing rule that Thunder runs its verification
+queries before presenting them. **(2) GROUPING BY THE DISPLAY COLUMNS HID A DUPLICATE:** both rows are
+byte-identical in name, tenant, status and both dates, so the GROUP BY **collapsed two rows into one**
+and the recon reported *"exactly one campaign row platform-wide"*. **There are TWO.** Group by `c.id`.
 
 ```sql
-SELECT c.name, b.name AS tenant, c.status, c.start_date, c.end_date,
-       count(p.id) AS posts
+SELECT c.id, c.name, b.name AS tenant, c.status, c.created_at,
+       (SELECT count(*) FROM campaign_posts p WHERE p.campaign_id = c.id) AS posts
   FROM campaigns c
   JOIN businesses b ON b.id = c.business_id
-  LEFT JOIN campaign_posts p ON p.campaign_id = c.id
- GROUP BY 1,2,3,4,5
  ORDER BY c.created_at;
+
+-- The one that cannot be collapsed by anything, and the reason to run it too:
+SELECT count(*) AS campaigns_total FROM campaigns;
 ```
 
-**PASS:** `arbor day · Test Dave's Tree Nest · active · 2026-08-24 · 2026-10-30 · 0`.
-⚠️ If LAWNS now appears, a campaign was created since 2026-09-12 and CARD 4's expected reading changes.
+**PASS (MEASURED 2026-09-12):** **TWO rows**, both `arbor day`, both Test Dave's Tree Nest, both
+`active`, both **0 posts**, created **2026-08-22 19:25:16+00** and **2026-08-22 22:25:37+00** —
+**three hours and ten minutes apart**, exactly as `user_stories.md:1150` described. `count(*)` = 2.
+`campaign_posts` is empty platform-wide (0 rows).
+⚠️ If LAWNS appears, a campaign was created since and CARD 4's expected reading changes.
+🔴 **Neither row is to be touched** — David decides their fate, and no card here writes to them.
 
 ---
 
@@ -151,8 +208,9 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
 COVERS: the claim that hid R-147 · `user_stories.md:1151-1152` · §6 r18
-STEPS: open `/campaigns` on Test Dave's. Find the `arbor day` row (0 posts, status **active**).
-**PASS:** it reads **"No posts yet — open to generate"**.
+RUNS: post-deploy — needs the fixed list page in front of you.
+STEPS: open `/campaigns` on Test Dave's. There are **TWO** `arbor day` rows (0 posts each, status **active**) — check **both**.
+**PASS:** **each one** reads **"No posts yet — open to generate"**. Two rows, two correct claims.
 🔴 **FAIL:** it reads anything containing the word *published*. That is the original lie.
 ⚠️ **Look, do not click through and generate** — CARD 3's row is the evidence and David is still
 deciding what happens to it.
@@ -162,6 +220,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
 COVERS: the claim fix's negative direction · ledger #306
+RUNS: post-deploy — needs the fixed list page, and a campaign you drive to completion.
 WHY: **a fix that makes the true claim disappear is not a fix.** CARD 4 on its own would pass if the
 row simply stopped saying anything. This card is the other direction and it is **not implied by CARD
 4 — it must be run.**
@@ -175,6 +234,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-145
+RUNS: post-deploy — needs the edit card, which did not exist before this build.
 STEPS: on a campaign with **no copied posts**, press **Edit dates & focus**. Change the end date and
 the focus. **Save changes.** Then **reload the page.**
 **PASS:** the card closes, the header's date range shows the new dates, and **both survive the
@@ -187,6 +247,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-145's before-publication limit · `user_stories.md:1250-1252`
+RUNS: post-deploy — needs the lock and its copy.
 STEPS: on a campaign with drafts, **Copy** one post. Return to the campaign.
 **PASS — all four, and the wording half matters as much as the lock:**
 1. The **Edit dates & focus** button is **gone**.
@@ -203,6 +264,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-146 · `user_stories.md:1160-1163` · the scoped-out delete story
+RUNS: post-deploy — needs the cancel control. 🔴 **And it needs CARD 1 to have PASSED first** — that is the gate relationship this tag exists to make visible.
 🔴 **DO NOT RUN UNTIL CARD 1 HAS PASSED.**
 STEPS: open a campaign on Test Dave's → **Cancel campaign** → read the confirm → **Yes, cancel it**.
 **PASS — all four:**
@@ -220,6 +282,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-147 · ledger #306 · `user_stories.md:1141-1153`
+RUNS: post-deploy — needs the append.
 STEPS: open a campaign that already has posts. **Note the URL and the post count.** Press
 **✦ Generate more posts for this campaign** and wait.
 **PASS — all four:**
@@ -236,6 +299,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-147 · *"with no error surface at all"* (`user_stories.md:1149-1150`)
+RUNS: post-deploy — needs the new error surface.
 WHY: the old handler's catch block was literally `catch { /* silent */ }`. A failure looked identical
 to a success that produced nothing — which is the other half of why the duplicates went unnoticed.
 STEPS: easiest honest trigger — turn off wifi, press **Generate more posts for this campaign**, wait.
@@ -248,6 +312,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-147 — **this is the card that would have caught the original defect**
+RUNS: pre-merge — the SQL itself is read-only and runnable any time — **run it once BEFORE CARD 9 to get the before-figure**, which is the whole point of it. Its verdict needs CARD 9 in between.
 WHY: CARD 9 is an observation and observations are how this defect survived three hours. This is the
 count, before and after, and it cannot be misread.
 STEPS: run the query, then do CARD 9, then run it again.
@@ -270,6 +335,7 @@ STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: R-145 · R-146 · R-147 under real RLS
+RUNS: post-deploy — needs the deployed surfaces AND Lauren's login.
 WHY: `campaigns:update` is in the aligned MANAGER floor (`20260727b:40`) — **that is a corpus read,
 not a session.** Every write in this build goes through the client under the caller's own RLS, so a
 manager whose permission array disagrees with the floor would see the button work and the save fail.

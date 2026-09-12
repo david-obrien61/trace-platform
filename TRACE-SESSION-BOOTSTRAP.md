@@ -79,6 +79,17 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 THE CAMPAIGN LIFECYCLE — EDIT SCOPE, CANCEL, APPEND (2026-09-12, ledger #306 · R-145 · R-146 · R-147)
+
+- 🟡 **MERGED TO `main` — `496ac56`, rebased onto `eb4aad6` then fast-forward; `merge-base --is-ancestor` asserted (tech-debt #280 clause ①).** No migration · **api/ 12/12** · **no permission string minted** (edit/cancel/append all reuse `campaigns:update`). `npm run verify` exit 0 ZERO NET-NEW, re-run after the rebase · 102/102 files, 5,522 assertions · **25/25 mutants caught, 0 survived**.
+- 🔴 **OWNER-PROOF OWED — 0 of 12 → `docs/owner-tests/campaign-lifecycle-full-surface-test.md`. CARD 1 IS A STOP-GATE AND RUNS FIRST:** the live CHECK on `campaigns.status` must contain `'cancelled'`. **If it does not, R-146 becomes a migration and CARD 8 must not be run** — tech-debt **#91** is a campaign-table inline CHECK whose live definition disagreed with its migration. Its own board, per David; the 2-card social board is untouched.
+- ✅ **NOTHING HAD TO BE BUILT UNDERNEATH ANY OF IT, which is why it sat for weeks:** the 2026-08-23 scoping had already measured that the RLS policy, the `enforced` string and the `'cancelled'` CHECK value all existed and **already rendered red**. There was no UI. That was the whole gap.
+- ✅ **R-145 — the refusal copy is part of the ruling.** `published` means **she copied it**, not that it reached a feed (`user_stories.md:1250-1252`), so the lock says TRACE cannot see where a copied post went and names cancel-and-restart. **Six probes (A9–A14) assert it claims no feed, no customer view, no "live".**
+- ✅ **R-147 — the append is real:** the id is sent, the `campaigns` INSERT is reached only on CREATE, the page does **not** navigate, the silent `catch` is gone, and the client refuses a response whose `mode` is not `append`. The generator reads the campaign's **stored terms**, never the request body.
+- ✅ **THE CLAIM THAT HID IT:** `draft_count` counted only drafts and **no total was ever fetched**. Now `campaignPostClaim` answers `total === 0` first, before status. **The negative control is BUILT, not implied** (CARD 5).
+- 🟡 **STILL NOT BUILT, named so it is not mistaken for a pass:** the ASK (`campaign_call_to_action`), the sales grounding, the sellability guard, channel codes — **David scoped all of them to a separate pass.** Arbor Day's STATUS stays `needs-input` for exactly that reason; only its EDIT clause flipped.
+- 🟡 **David's, none blocking:** should `name`/`description` be editable after all · the residual overclaim (*published* means *copied* on the done claim and the per-post chip) · the **TWO** `arbor day` rows on Test Dave's (0 posts each) are **left alone by instruction** — ✏️ the recon said ONE because its GROUP BY collapsed two byte-identical rows, which is this build's own defect class.
+
 ### 🟡 THE SHIP-TO ADDRESS BOOK — `customer_addresses`, D-41's L2 HOOK, TAKEN UP (2026-09-11, ledger #303)
 
 - 🔴 **MIGRATION WRITTEN AND NOT APPLIED — `supabase/migrations/20260911b_customer_addresses.sql`.** Until David applies it the picker renders nothing and the save offer never appears, which is the correct degraded state. **Board CARD 2 is only runnable BEFORE applying.**
