@@ -2886,3 +2886,53 @@ now stale by the passage of time on a busy tree — and it is the clearest argum
 quantity is not cacheable at all. 🔴 **Each correction has itself been wrong within the hour.**
 
 **TRIGGER:** the next branch that consumes an id and merges — i.e. immediately, and repeatedly.
+## #290 — 🟡 THE ZONE WALK'S PLANT PICKER IS A `<datalist>`, AND iOS SAFARI IS THE ONE PLATFORM IT IS USED ON (NEW 2026-09-12, ledger #311)
+
+**Where.** `packages/cultivar-os/public/tools/zone-walk.html` — the plant field is an `<input list=…>`
+backed by `<datalist id="plantlist">`, populated from `PLANTS` at load:
+
+```js
+document.getElementById('plantlist').innerHTML =
+  PLANTS.map(p=>`<option value="${p.label.replace(/"/g,'&quot;')}">${p.sku}</option>`).join('');
+```
+
+🔴 **THE PLATFORM MISMATCH IS THE WHOLE ENTRY.** `<datalist>` is the weakest-supported form control
+in Safari: iOS renders it as a thin suggestion strip above the keyboard rather than a picker, it does
+not filter the way it does on desktop Chrome, and the `<option>`'s **label/value split is not
+honoured** — the SKU that is meant to show as the description is not reliably shown at all. **This
+tool is used standing in a lot, on a phone, by someone reading a plant tag** — the picker IS the
+interface, and desktop is the platform it will never be used on.
+
+**Named by David 2026-09-12 and deliberately NOT fixed in `#311`**, which committed the Safari
+blob-revoke fix only. ⚠️ **Not measured on a device by Thunder** — this entry records the defect as
+REPORTED, with the mechanism explained; the live behaviour on David's iPhone is the proof and it has
+not been taken. **Filed as a register row rather than left in a ledger row, because ledger rows
+scroll and this is the register** (David's instruction, same session).
+
+---
+
+## #291 — 🟡 EXPORTED LABELS CARRY A TRAILING SPACE, AND AN EXACT JOIN IS WHAT WILL READ THEM (NEW 2026-09-12, ledger #311)
+
+**Where.** `packages/cultivar-os/public/tools/zone-walk.html` — the label written into the export
+retains a trailing space, so a row exports as `"Live Oak 30gal "` rather than `"Live Oak 30gal"`.
+
+🔴 **WHY A SINGLE SPACE IS A DATA DEFECT AND NOT A COSMETIC ONE.** Whatever eventually imports this
+file has to JOIN each exported label back to a stored one, and **every join this platform performs on
+a text label is an EXACT comparison** — `canonicalName` and `normalizeSize` exist precisely because
+inexact spellings had already cost us real rows (#55, #56, ledger #135). A trailing space is
+invisible in every surface a human would check it in: the JSON viewer, the spreadsheet, the console,
+the tag itself. **It will not look wrong; it will simply fail to match**, and the failure mode is a
+silent no-match that reads as *"this plant isn't in the catalogue"* rather than as a formatting bug.
+
+⚠️ **THE FIX IS A `.trim()` ON THE WAY OUT, NOT ON THE WAY IN.** Trimming at capture would edit what
+the walker typed; trimming at export normalises only the value being handed to a machine. Which side
+it lands on is a small decision, and it is not taken here.
+
+🔴 **AND THE REASON THIS IS 🟡 RATHER THAN 🔴: NOTHING CONSUMES THE EXPORT YET.** The tool exports for
+`business_inventory.zone` and *"the irrigation zone records"*, and **both were measured ABSENT**
+(tech-debt **#266**). So there is no importer to mis-join today — which makes this the cheapest
+possible moment to fix it, and **the last moment at which fixing it is free**: once a file with
+trailing spaces has been imported once, the same space has to be tolerated forever on the read side
+or the stored rows need repairing. **The window is open because the importer does not exist.**
+
+**Named by David 2026-09-12; not fixed in `#311`, which committed the Safari blob-revoke fix only.**

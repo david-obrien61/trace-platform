@@ -17,8 +17,15 @@ venv/
 .env.vercel.*
 # Scratch / throwaway work — never commit
 scratch/
-# Local Claude Code permission prefs — stays on David's machine, never commit
-.claude/settings.json
+# Claude Code's local working directory — stays on David's machine, never commit.
+# WIDENED 2026-09-12 (ledger #311) from `.claude/settings.json` to the whole directory. The
+# narrow form ignored ONE file, so `.claude/` still showed as untracked on every status — and it
+# now holds `settings.local.json` and, more seriously, REGISTERED GIT WORKTREES
+# (`.claude/worktrees/<name>`) carrying other sessions' uncommitted work. An accidental
+# `git add -A` staged the whole 27MB tree in a shared checkout three sessions were using (caught
+# before any push). Committed as a gitlink, that worktree would be orphaned for everyone who
+# clones. All of it is per-machine state, none of it is project source.
+.claude/
 # Personal-financial / personal-sensitive decisions — never commit (family reads the repo)
 decisions/PERSONAL-FINANCIAL.local.md
 
