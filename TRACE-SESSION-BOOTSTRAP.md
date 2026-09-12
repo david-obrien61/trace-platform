@@ -86,7 +86,9 @@
   command is the answer; **no next-free numbers are written here on purpose.** Read them off the run.
   **Then RESERVE AND PUSH before building** (R-149) — the sweep does not close the race and says so.
   - ⚠️ **FROM A BRANCH, because run from `main` the sweep excludes every branch cut from current `main`**
-    (`sameLineage()`) — which is exactly where a session that has just merged is standing. Tech-debt **#286**.
+    (`sameLineage()`) — which is exactly where a session that has just merged is standing. ⚠️ *The tech-debt row
+    naming this is filed on an unmerged branch, so it is described here rather than cited by a number that
+    points at nothing in this tree.*
   - ⚠️ **IT CANNOT SEE AN ID CLAIMED IN AN UNCOMMITTED WORKING FILE. THAT IS THE FLOOR, NOT A BUG** — it reads
     refs, and an id typed into a file nobody has committed is in no ref. **Reserve-and-push exists to lift a
     claim over that floor**, which is why it is the next instruction and not a nicety.
