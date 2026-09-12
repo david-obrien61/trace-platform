@@ -149,7 +149,7 @@ export default async function handler(req: any, res: any) {
         .order('created_at', { ascending: false })
         .limit(5);
 
-      const posts = await generateCampaignPosts({
+      const { posts, refusals } = await generateCampaignPosts({
         businessName:   biz.name,
         businessType:   biz.business_type,
         advertChannels,
@@ -206,9 +206,20 @@ export default async function handler(req: any, res: any) {
 
       // STD-003 — ON by default, not behind ADVERT_DEBUG. The mode is the thing a reader of this
       // trail needs: an append that silently created would be invisible without it.
-      console.log('[TRACE:CAMPAIGN] generate', { mode: plan.mode, campaignId: targetId, postCount: posts.length });
+      console.log('[TRACE:CAMPAIGN] generate', { mode: plan.mode, campaignId: targetId, postCount: posts.length,
+        refusedChannels: refusals.map(r => r.value) });
 
-      return res.json({ campaignId: targetId, postCount: posts.length, mode: plan.mode });
+      // 🔴 A REFUSED ROW IS REPORTED, NOT SWALLOWED. The model named a channel nobody offered, so
+      // that post does not exist — and the caller is told how many and which values came back, because
+      // "you asked for 6 posts and got 4" with no reason is the shape that hid this defect for three
+      // months. `refusedChannels` is absent on a clean run rather than an empty array, so a reader
+      // never has to decide whether `[]` means none or means nobody looked.
+      return res.json({
+        campaignId: targetId, postCount: posts.length, mode: plan.mode,
+        ...(refusals.length > 0
+          ? { refusedChannels: refusals.map(r => r.value), offeredChannels: refusals[0].offered }
+          : {}),
+      });
     } catch (err: any) {
       console.error('[campaigns/generate]', err.message);
       return res.status(500).json({ error: err.message });

@@ -64,6 +64,76 @@ function postsPerChannel(advertChannels: AdvertChannel[], campaignDays: number):
   return Math.min(weeks, 3); // cap at 3 per channel to avoid bloat
 }
 
+/**
+ * The per-channel lines the model is given.
+ *
+ * 🔴 IT PRINTS `ch.name`, AND THAT IS THE WHOLE FIX (R-150 is unrelated; this is ledger #310).
+ * It used to emit `- ${count} × ${guidance}` — the NAME was used to look up the guidance and never
+ * shown. So the only channel identifiers in the entire prompt were the display labels inside the
+ * guidance text (`(Instagram)`, `(TikTok)`, `(Twitter/X)`), and the JSON spec then said *"channel
+ * name from the list above"*. The model answered with the only names it could see: `TikTok`,
+ * `Twitter/X`, `Instagram`. None of those equals a seeded `channels.name`, so the write was refused
+ * — by the CHECK before #310, by the FK after it. **The values were never wrong; they were never
+ * asked for.** Live since 2026-06-08.
+ *
+ * ⚠️ A channel with no guidance (email, before the table carried one) fell to the default text,
+ * which contains no identifier at all — so for that channel the model had nothing to echo and
+ * invented something. Printing the name fixes that case by construction too.
+ */
+export function buildChannelInstructions(
+  enabledChannels: AdvertChannel[], countPerSocialChannel: number,
+): string {
+  return enabledChannels.map(ch => {
+    // Guidance comes off the CHANNEL (sourced from the table). No map in this file to drift.
+    const guidance = ch.guidance?.trim() || DEFAULT_CHANNEL_GUIDANCE;
+    // A one-to-one channel (sms, email) gets ONE message; a feed gets several.
+    const count = ONE_PER_CAMPAIGN_KINDS.includes(ch.type) ? 1 : countPerSocialChannel;
+    return `- ${count} × [${ch.name}] ${guidance}`;
+  }).join('\n');
+}
+
+/** What the model returned for `channel`, once it has been checked against what was offered. */
+export type ChannelResolution =
+  | { ok: true;  name: string; source: 'model' | 'fallback' }
+  | { ok: false; value: string };
+
+/**
+ * Resolve one post's channel against the channels that were actually offered.
+ *
+ * 🔴 THE FALLBACK STAYS A FALLBACK. It fires ONLY when the model omitted the field — which is the
+ * one case where there is nothing to disagree with. Before this, `p.channel ?? p.platform ?? first
+ * ?? 'instagram'` meant a PRESENT-BUT-WRONG value passed straight through to the database, and the
+ * chain produced a valid name only by accident: it reached `enabledChannels[0].name` exactly when
+ * the model FAILED to answer. So the write succeeded when the model misbehaved and was refused when
+ * it obeyed. A value that is present and unrecognised is now REFUSED and NAMED — never quietly
+ * replaced with `instagram`, which would put a post on a channel the owner did not choose and then
+ * publish under their name (David's instruction, 2026-09-12).
+ */
+export function resolvePostChannel(raw: unknown, enabledChannels: AdvertChannel[]): ChannelResolution {
+  const offered = enabledChannels.map(c => c.name);
+  const given = typeof raw === 'string' ? raw.trim() : '';
+
+  // Absent or blank: nothing was claimed, so the fallback is an inference and not an override.
+  if (given === '') {
+    const first = offered[0];
+    return first ? { ok: true, name: first, source: 'fallback' } : { ok: false, value: '' };
+  }
+  // Exact match on what was offered. No case-folding and no aliasing: `channels.name` is the
+  // vocabulary, and quietly accepting `TikTok` for `tiktok` would re-create the drift the lookup
+  // table exists to end — the prompt now asks for the exact string, so a mismatch is a real signal.
+  if (offered.includes(given)) return { ok: true, name: given, source: 'model' };
+  return { ok: false, value: given };
+}
+
+/** A post the model returned on a channel that was never offered. Surfaced, never substituted. */
+export interface ChannelRefusal { value: string; offered: string[] }
+
+export interface GeneratedCampaign {
+  posts: PostDraft[];
+  /** Empty on a clean run. Non-empty means the model named channels nobody offered it. */
+  refusals: ChannelRefusal[];
+}
+
 export async function generateCampaignPosts(params: {
   businessName:   string;
   businessType:   string;
@@ -78,10 +148,10 @@ export async function generateCampaignPosts(params: {
   };
   toneSamples: CampaignToneSample[];
   apiKey:       string;
-}): Promise<PostDraft[]> {
+}): Promise<GeneratedCampaign> {
   const enabledChannels = params.advertChannels.filter(c => c.enabled);
 
-  if (enabledChannels.length === 0) return [];
+  if (enabledChannels.length === 0) return { posts: [], refusals: [] };
 
   if (ADVERT_DEBUG) console.log('[TRACE:advert] generateCampaignPosts — channels:', enabledChannels.map(c => c.name));
 
@@ -109,14 +179,10 @@ export async function generateCampaignPosts(params: {
       }\n\nMatch this tone and style in every post you write.`
     : '';
 
-  // Build per-channel instructions from enabled channels — no vertical nouns, no hardcoded names
-  const channelInstructions = enabledChannels.map(ch => {
-    // Guidance comes off the CHANNEL (sourced from the table). No map in this file to drift.
-    const guidance = ch.guidance?.trim() || DEFAULT_CHANNEL_GUIDANCE;
-    // A one-to-one channel (sms, email) gets ONE message; a feed gets several.
-    const count = ONE_PER_CAMPAIGN_KINDS.includes(ch.type) ? 1 : countPerSocialChannel;
-    return `- ${count} × ${guidance}`;
-  }).join('\n');
+  const channelInstructions = buildChannelInstructions(enabledChannels, countPerSocialChannel);
+
+  // The allowed values, spelled out in the spec itself rather than left to be inferred from prose.
+  const offeredList = enabledChannels.map(c => c.name).join(' | ');
 
   const totalPosts = enabledChannels.reduce(
     (sum, ch) => sum + (ONE_PER_CAMPAIGN_KINDS.includes(ch.type) ? 1 : countPerSocialChannel), 0);
@@ -138,7 +204,7 @@ Each post must sound like the owner wrote it — warm, local, specific. Not a ma
 Return a JSON array of exactly ${totalPosts} objects:
 [
   {
-    "channel": "<channel name from the list above>",
+    "channel": "EXACTLY one of these, copied character for character: ${offeredList}",
     "scheduled_date": "YYYY-MM-DD or null",
     "subject": "email ONLY — the subject line. Empty string for every other channel.",
     "copy_text": "full post text ready to copy and paste",
@@ -158,13 +224,35 @@ Return only valid JSON. No markdown fences. No explanation.`;
     apiKey: params.apiKey,
   });
 
-  return (raw as any[]).map((p: any) => ({
-    channel:        p.channel        ?? p.platform   ?? enabledChannels[0]?.name ?? 'instagram',
-    scheduled_date: p.scheduled_date ?? null,
-    copy_text:      p.copy_text      ?? '',
-    // `|| null` not `?? null`: the model is told to send '' for a non-email channel, and an empty
-    // subject must land as NULL rather than as a blank value a reader would take for a real one.
-    subject:        (typeof p.subject === 'string' ? p.subject.trim() : '') || null,
-    image_prompt:   p.image_prompt   || null,
-  }));
+  // Every returned row is checked against what was OFFERED before it becomes a post. A row naming a
+  // channel nobody offered is dropped and reported — not coerced onto `instagram`.
+  const posts: PostDraft[] = [];
+  const refusals: ChannelRefusal[] = [];
+  const offered = enabledChannels.map(c => c.name);
+
+  for (const p of (raw as any[])) {
+    const resolved = resolvePostChannel(p?.channel ?? p?.platform, enabledChannels);
+    if (!resolved.ok) {
+      refusals.push({ value: resolved.value, offered });
+      continue;
+    }
+    posts.push({
+      channel:        resolved.name,
+      scheduled_date: p.scheduled_date ?? null,
+      copy_text:      p.copy_text      ?? '',
+      // `|| null` not `?? null`: the model is told to send '' for a non-email channel, and an empty
+      // subject must land as NULL rather than as a blank value a reader would take for a real one.
+      subject:        (typeof p.subject === 'string' ? p.subject.trim() : '') || null,
+      image_prompt:   p.image_prompt   || null,
+    });
+  }
+
+  // 🔴 ON BY DEFAULT (STD-003), and it names the VALUE — a refusal that does not say what came
+  // back leaves the next reader exactly where this defect left everyone for three months.
+  if (refusals.length > 0) {
+    console.warn('[TRACE:advert] channel REFUSED — the model named channels that were not offered',
+      { refused: refusals.map(r => r.value), offered });
+  }
+
+  return { posts, refusals };
 }
