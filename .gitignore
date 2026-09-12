@@ -36,3 +36,16 @@ docs/cost-to-produce/.scratch/
 # nurseries (some are prospects). Desktop-only, NEVER versioned. The recon .md
 # notes in this dir ARE tracked (institutional memory about TRACE's own system).
 data/grower-scan/*.csv
+
+# Pre-migration database snapshots — NEVER versioned (David's instruction, 2026-09-12).
+# `docs/snapshots/pre-*.sql` is a LOGICAL capture taken before a migration is applied, and it
+# contains LIVE ROWS: `business_modules` config for every tenant (LAWNS and Test Dave's), plus
+# `social_drafts`, `campaigns` and `campaign_posts` contents. Real customer configuration does not
+# belong in a git history that outlives the migration it was taken for.
+#
+# ⚠️ THE ROLLBACK AND THE README ARE CAUGHT BY THIS TOO, AND THAT IS ACCEPTED, NOT OVERLOOKED.
+# A narrower `pre-*.sql` rule would version the rollback script — which is pure DDL and safe — but
+# it sits beside a file that must never be committed, and a rule that versions one file in a
+# secrets-bearing directory is a rule somebody will widen by accident. The whole directory is
+# excluded; the rollback's content is reproduced in the close-out ledger row where it is needed.
+docs/snapshots/
