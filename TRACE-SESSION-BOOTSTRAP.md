@@ -79,6 +79,15 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 OPEN QUESTIONS — ONE REGISTER, 65 IN THE OWED QUEUE AND 11 THAT ONLY §3 WAS HOLDING (2026-09-11, ledger #302)
+
+- 🟡 **`docs/open-questions.md`** — every question waiting on David, counted, each with a pointer to the file that OWNS it. **DOCS only** — no code, no migration, nothing applied.
+- 🔴 **THE 11 IN §3 WERE THE URGENT HALF.** §3 holds three entries and drops the fourth, so a question flagged three sessions ago had nothing pointing at it. This register is what survives the N=3 rotation.
+- 🔴 **THE SHORT LIST IS SEVEN, AND THEY BLOCK WORK RATHER THAN SLOW IT:** apply-or-retire `20260905_production_planning` (#253) · who may see the equipment list without its cost (#262, Joel sees nothing today) · how Follow-Up gets turned on (#270, the review ask cannot fire on any tenant) · LAWNS's three service rows (yours to write, blocked on #251) · the 8-hour rule's actual words · the yard-worker permission set · the coarse-split A-or-B.
+- ⚠️ **IT IS AN INDEX, NEVER A SECOND COPY (STD-011).** Answer a question in its owning file, then update its one line here. A second full copy is the one that goes stale.
+- ⚠️ **THE COUNT IS MEASURED AND STAMPED `2026-09-11`** — every number in it is a claim about seven other files on that date.
+- ✏️ **ITS LEDGER ROW WAS LATE AND THE CAUSE IS RECORDED:** #302 was claimed by a session later overwritten and restored, so the number survived in the file while the rows backing it did not — a **third shape** of the OWED *"a ledger id cannot be claimed atomically"* question, and the first that is **not a collision**. See the ⏳ row in `docs/CLOSE-OUT-LEDGER.md`.
+
 ### 🟡 ONE STOP, THREE SCREENS — SCHEDULE · ROUTE · ORDER RENDER THE SAME STOP; SHIP-TO EDITABLE; CHECKOUT STOP CARRIES ITS ORDER (2026-09-11, ledger #301)
 
 - 🟡 **BUILDER-COMPLETE `452d684` on `main` · no migration · api/ 12/12 · 10 owner-test cards, 0 COVERED** → `docs/owner-tests/stop-full-surface-test.md` · **RUN CARD 1 FIRST** (read-only SQL)

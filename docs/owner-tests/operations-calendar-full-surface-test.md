@@ -10,7 +10,7 @@
 
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 15 covered** (14 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**).
+**Board: 0 of 16 covered** (15 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**). ✏️ *Denominator corrected 2026-09-11 (15 → 16): CARD 16 was added without bumping this claim. **No card, status or `LAST-PROVEN` was touched.***
 🔴 **CARDS 1 AND 9 WERE REWRITTEN 2026-08-31 AND THE REASON IS THE FINDING, NOT THE EDIT.** Both were written on 2026-08-28 against the window as it stood that day, and both had since become **impossible to run as written** — they asked the reader to look at Saturday 08-29 in a window that, three days later, starts on 08-30. **True when written, false by the passage of time, and nothing watched them.** That is [[R-26]]'s shape and [[R-29]]'s half-life: a card that names a DATE is a claim with an expiry, exactly like a line number. The dates below are now given **relative to the window**, and the absolute ones are marked with what makes them reachable.
 **DEVICE: desktop** — declared per the 2026-08-23 tile-capability ruling, using this board's own `DEVICE:` vocabulary. The `TileEntry.capability` field that ruling calls for is still **OPEN** (a 33-tile backfill); this build did not mint it.
 

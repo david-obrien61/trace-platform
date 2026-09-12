@@ -20,7 +20,7 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 33.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. **31 is the trial badge (#185); 32–33 are the marketplace (#186), and 33's Part B is the six-state model's first NEW surface.** *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
+**Board: 0 of 36.** Every card is `STATUS: owed` except cards **13, 22, 30 and 36**, which are `needs-test` with their reasons stated. ✏️ *Denominator corrected 2026-09-11 (33 → 36): the module OFF-switch surface added CARDS 34–36 (ledger #212) and this claim was not bumped with them; the `needs-test` list was stale in the same sentence (13 and 36 were missing). **No card, status or `LAST-PROVEN` was touched** — only the header's own count of them.* **31 is the trial badge (#185); 32–33 are the marketplace (#186), and 33's Part B is the six-state model's first NEW surface.** *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's

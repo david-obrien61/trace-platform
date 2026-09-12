@@ -2195,3 +2195,33 @@ Filed with ledger #301. `stopWrites.saveShipTo` updates the stop, then inserts t
 ## #277 — 🟡 `/deliveries` WITHOUT A DATE STILL LISTS CART ORDERS, NOT STOPS (NEW 2026-09-11)
 
 Found building ledger #301. The route page's date mode now renders the ONE stop; its **legacy mode** (`/deliveries`, reached from *"Route delivery orders from checkout →"*) still lists `orders` with `transport_method='delivery'`, shows the first line only, reads the CUSTOMER's billing address rather than a ship-to, and offers a local-only address box that is never saved. Since 2026-08-25 checkout writes a stop, and since #301 that stop carries its order — so for every new order this mode is a second, thinner view of a stop the date mode already shows. **Measured: Test Dave's has 27 delivery/install orders with no stop** (all predating the checkout stop writer); LAWNS has none. **Retire it, or convert it to a window of stops** — David's call; converting would drop those 27 pre-stop orders from the route. **Trigger:** the next change to the route page.
+
+## #278 — 🟡 A BOARD'S SELF-REPORTED DENOMINATOR IS A SECOND COPY OF A DERIVED NUMBER (NEW 2026-09-11, FILED NOT BUILT)
+
+Every owner-test board carries a header claim — `**Board: 0 of 17 covered** (15 owed · 2 needs-test)` —
+and **`owner-tests.html` already derives exactly those numbers by parsing the cards.** Two
+representations of one fact, and the hand-written one is the copy that goes stale (**STD-011**).
+
+**MEASURED 2026-09-11 across all 36 boards:** 21 state a count, 15 state none, and **two of the 21
+were wrong** — `authority-model` claimed *0 of 33* against **36** actual cards (the module OFF-switch
+surface added CARDS 34–36 under ledger #212 and the claim was not bumped), and `operations-calendar`
+claimed *0 of 15* against **16**. ⚠️ **`authority-model`'s breakdown was stale in the same sentence**:
+it named cards 22 and 30 as the `needs-test` pair when 13 and 36 are also `needs-test`.
+
+🔴 **NEITHER WAS A FALSE PROOF — both claimed 0 covered and both HAD 0 covered.** The numerator, the
+one that would lie about work David has done, was right in both. It is the DENOMINATOR that drifted,
+which is the benign direction and is exactly why nobody noticed for weeks.
+
+**THE DURABLE FIX IS DELETION, NOT MAINTENANCE.** Remove the hand-written `Board: X of Y` claims and
+let the renderer print the count it already computes. A number maintained in two places is a number
+that will disagree again; the header's job is to say what the board is FOR.
+
+⚠️ **FILED, DELIBERATELY NOT BUILT (David, 2026-09-11).** The two stale headers were bumped in place
+that day — mechanical, no card, status or `LAST-PROVEN` touched — and the class was left standing.
+**Both halves need deciding together:** where the derived count renders for a reader who opens the
+`.md` rather than the page, and whether the 15 boards that state no count should gain one or the
+other 21 should lose theirs. That is a call about the boards' shape, not a repair.
+
+✏️ **SAME CLASS AS #73 AND #185** — a hand-maintained declaration nobody re-derives. It differs from
+both in being *checkable*: the cards are right there beside the claim, which is how this was caught.
+
