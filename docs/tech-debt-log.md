@@ -2701,8 +2701,62 @@ reserve-and-push-first, and both caps say so in their output rather than implyin
 
 ---
 
-## #288 — ⏳ RESERVED (NEW 2026-09-12, ledger #313)
+## #288 — 🟡 A RULING REACHED THE FILE AS A **FORECAST** AND NEVER REACHED THE STORY IT FORECAST, SO THE BOARD REPORTED A DECIDED QUESTION AS OWED FROM INSIDE THE FILE THAT HELD THE DECISION (NEW 2026-09-12, ledger #313 · minted as [[R-151]])
 
-Claimed before writing, per R-149 (a′). A forecast of a ruling reached `user_stories.md` and the
-ruling itself never reached the story it forecast. Real entry arrives on branch
-`docs/four-recovered-stories`.
+**THE INSTANCE, MEASURED.** On **2026-08-31** David ruled the Spanish-language interface. The ruling
+reached `user_stories.md` **that day** — but as a **FORECAST**, at `:730`, inside a *different* story
+(*the on-site maintenance position*):
+
+> 🔴 **DO NOT ASSUME ONE LANGUAGE PER TENANT, and Cuto is the counter-example INSIDE one business.**
+> Two stories are being filed against this by David — **a Spanish-language interface where the choice
+> is made BY THE PERSON, on the invitation screen** — and the on-site maintenance position itself.
+
+**The story it forecast already existed**, 470 lines below at `:1199` (*Give it to me in my language*,
+filed 2026-08-23, ledger #194). Its `NEEDS` line read:
+
+> David to rule scope — crew-facing surfaces only, or the whole app — and whether locale is a
+> **per-user setting or a per-device one**.
+
+🔴 **THE FORECAST ANSWERS THAT QUESTION IN ITS OWN SENTENCE — *"the choice is made BY THE PERSON"* —
+AND THE TWO LINES SAT IN ONE FILE, UNCONNECTED, FOR TWELVE DAYS.** Anyone opening the board was told
+a question was owed to David by a file that, 470 lines earlier, recorded him answering it. **Nobody
+was wrong at any point**: the forecast was accurate, the story was honest about what it lacked, and
+neither knew about the other.
+
+**THE MECHANISM: NOTHING LINKS A FORECAST TO THE THING FORECAST.** A sentence that says *"a story is
+being filed"* creates no obligation, names no owner, carries no id, and is not swept by anything. It
+reads as a record of a decision **because it is one** — which is exactly why it does not read as an
+outstanding task. The `NEEDS` field is the board's only owed-marker, and a forecast written anywhere
+but in that field is invisible to it.
+
+🔴 **FOURTH SHAPE TODAY, AND THE FAMILY IS THE POINT — DAVID'S FRAMING.** Same family as **ledger
+#193's `MAPS-TO: —`**, which was set *deliberately* so the social gap would **stay visible**, and
+stayed visible for **twenty days** without ever being assigned. Both are **a true statement, correctly
+recorded, in a place that generates no obligation.** The other two of the four:
+
+| | The record | Why nothing acted on it |
+|---|---|---|
+| **#284** ([[R-148]]/[[R-149]]) | The id-claim rule, complete and correct since 2026-09-02 | It **disqualified itself in its own text** (*"deliberately NOT written into the table above as a ruling in his voice"*), and lived in a file now grepped rather than read |
+| **#283** (§6 r7) | *"Tile grid: desktop/tablet only (768px+)"* | **True when written**, invalidated by a change that never came back to it — a rule that was once true reads exactly like a rule that is true |
+| **#193** (`MAPS-TO: —`) | The social surface has no story | Set deliberately to keep the hole **visible**. Twenty days. **A visible gap is not an assigned one** |
+| **#288** (this) | *"two stories are being filed against this by David"* | A **forecast** — accurate, dated, in the right file, attached to nothing. Twelve days |
+
+**⚠️ WHAT THIS IS NOT.** It is not a call to stop writing forecasts — the `:730` line is genuinely
+useful and it is the reason the ruling survived at all. It is not [[R-26]] either: R-26 is *a written
+declaration nobody checked against reality*, and every one of these declarations was **true**. **The
+defect is that being true and being acted upon are unrelated properties of a written line**, and only
+one of them has a mechanism.
+
+🔴 **NOT FIXED, AND THE FIX IS NOT OBVIOUS — WHICH IS WHY THIS IS FILED RATHER THAN BUILT.** The cheap
+mechanical form is a cap that greps for forecast phrasing (*"is being filed"*, *"a story will be
+written"*, *"David will rule"*) and fails when it cannot find a matching owed-marker — but that is
+**matching on spelling**, which is tech-debt **#189**'s named weakness, and it would not have caught
+`:730`'s wording. The durable form is that **a forecast carries the id of the thing it forecasts**,
+which makes it sweepable — but nothing today gives an unwritten story an id, and R-148 clause (6)
+says an unminted thing **carries no id at all**. **That tension is real and is David's to resolve, not
+Thunder's to pick a default for.**
+
+**BLAST RADIUS: NOT MEASURED.** This entry documents **one** instance found while filing four stories.
+Whether other forecasts sit unconnected in `user_stories.md`, `RULINGS.md`'s OWED queue, or §3 prose
+that has since rotated out at N=3 **has not been swept** — and §3's N=3 rotation is precisely where a
+forecast would go to die unnoticed.

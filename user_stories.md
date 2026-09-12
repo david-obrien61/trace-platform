@@ -1291,12 +1291,12 @@ DAVID'S ORDER: the zone walk is the working example · delivery next ·
 then orders.
 
 ### Give it to me in my language — Spanish for the people doing the work
-STATUS: needs-input
+STATUS: written
 SCOPE: platform
 BUILD: active
 MAPS-TO: —
 PIECES: i18n_locale_switch, i18n_crew_surfaces, i18n_string_layer, i18n_invite_language_choice, i18n_profile_language_change, i18n_inline_string_cap
-NEEDS: 🔴 **RULED 2026-08-31 — AND THE RULING NEVER REACHED THIS STORY, WHICH IS WHY THIS LINE ASKED FOR IT UNTIL 2026-09-12 (ledger #313).** Both questions this NEEDS used to pose are answered: **scope** — start at Cuto's screens, not everyone's; **per-user or per-device** — **per-PERSON, chosen by the person, on the invitation screen.** 🔴 **STILL OPEN, and it is the only thing owed: does Cuto have a device and an account?** He has neither today, and a translated screen he cannot reach is not a feature.
+NEEDS: — ✅ **FLIPPED `needs-input` → `written` BY DAVID, 2026-09-12 (ledger #313), AND HIS REASON IS THE PART WORTH KEEPING: *"The device question does not block the string layer — the mechanism is the work and it is ruled. Cuto having an account is a separate question."* Both questions this line used to pose were answered on 2026-08-31 and are now minted as **[[R-151]]**: **scope** — start at Cuto's screens, not everyone's; **per-user or per-device** — **per-PERSON, chosen by the person, on the invitation screen.** ⚠️ **`STILL OPEN: does Cuto have a device and an account?` remains in the prose below and is NOT retracted** — it is a real open question, ruled to be a SEPARATE one. It does not block the translation layer, and this story is no longer waiting on it.
 A man has worked at LAWNS for ten years and does not speak English at home. He is one of
 the people who would be walking the rows with a phone — counting a block, marking a
 rotation date, working a delivery route. Terry gives him instructions in person and it
