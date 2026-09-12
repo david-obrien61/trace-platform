@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-11** — created at David's request (ledger #302).
+**Last updated: 2026-09-12** (ledger #314 — the #314 block added; ledger #312 — the #312 block added; the counts below are still measured 2026-09-11 and say so) — created at David's request (ledger #302).
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,19 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#314 — the sweep's blind spot, closed; and a gap in clause (4)**
+- ✅ **ANSWERED BY BUILD — tech-debt #286 is RESOLVED.** Two populations: NEXT FREE from every ref, collisions by per-id inheritance at `merge-base(HEAD, ref)`. **Proven by making it fail from `main`** — old script exit 0, new exit 1, same tree, same id. 9/9 mutants.
+- 🔴 **OPEN — a ONE-LINE MERGE DECISION.** The bootstrap's cached *"next free is #310 / tech-debt #286 / R-150"* numbers are **DELETED** on `fix/id-sweep-next-free-population` (the command is the answer) and **CORRECTED-WITH-A-CAVEAT** on `main`. Both defensible; the cached-next-free item's own text argues for deletion while its fix kept the numbers. Owner: `TRACE-SESSION-BOOTSTRAP.md` line 85.
+- 🔴 **OPEN — R-148 clause (4) HAS NO PROVISION FOR THE LATER CLAIM HAVING ALREADY MERGED.** Live today on tech-debt `#286`: the EARLIER claim by 30 minutes was the UNMERGED one, so "the later claim renumbers" pointed at a row already on `main`. It resolved itself before it needed answering — **the gap in the clause did not.** The cap names the fact and deliberately does not rule on it. Owner: `docs/RULINGS.md` → **R-148**.
+- ✅ **ANSWERED BY MEASUREMENT, NOTHING OWED — #310.** `feat/channel-vocabulary` claimed it at **15:25:51**, the zone-walk session at **15:35:58** (10m07s later); **that session renumbered itself to `#311` at 15:39:01** and orphaned its three `#310` commits. **#310 is channel-vocabulary's. Nothing moved, nothing to move.** Same for `R-150` (channel-vocabulary moved to R-152/R-153) and tech-debt `#286` (ledger #308 moved to `#289`).
+
+**#312 — the card flips, the leak-clause split, and the sweep's blind spot**
+- 🔴 **OPEN — tech-debt #286, and it reopens a question you thought you closed yesterday.** `verify-id-sweep` reported **`NEXT FREE: #310`** while `origin` held `reserve(#310)` AND `reserve(#311)` + a filed `#311` row: `sameLineage()` excludes every branch cut from current `main`, so **run from `main` the gate hands a careful session a taken id.** The fix is small (split the populations; name the ref holding the highest id) and was **deliberately not taken inside a card-flip pass.** **Until it lands, a sweep run from `main` is not evidence.** Owner: `docs/tech-debt-log.md` → **#286**.
+- 🔴 **OPEN — `#310` is a live DOUBLE claim.** `feat/channel-vocabulary` reserved it and so did an unreachable local commit; R-148 clause (4) says the later renumbers, and **neither is Thunder's to move.** Owner: `docs/CLOSE-OUT-LEDGER.md`.
+- ⚠️ **NOT A QUESTION, A RECORD: `deliveries.address_line2` is no longer forbidden by any board.** The ship-to CARD 3 clause was split on your instruction; the dropped half is a note and **tech-debt #279 is its only owner.** When you decide ① (`deliveries` gains the column) or ② (the importer folds Line2 into Line1), **#279 is the row that closes and no card needs changing** — which is the point of moving it out of one. Owner: `docs/tech-debt-log.md` → **#279**.
+- ⚠️ **AWAITING YOUR RUN, not your answer:** campaign **CARD 3** (runnable now — its SQL needed no repair, both defects were fixed in `efc02f8` itself) · ship-to **CARD 4 on the delivery SCHEDULE**, not `/orders/:id` · breakpoint **CARD 2**, the only card that asks you to decide rather than observe.
+- ✅ **ANSWERED BY MEASUREMENT, NOTHING OWED:** *did the 2026-09-09 card reconciliation run?* **Yes — `ac6d0ce`, merged to `main`, 32 → 51 covered over 598 cards on 31 boards, and it refused three flips with stated reasons.** Nothing to re-send.
 
 **#309 — the id-claim rule, minted and guarded**
 - ✅ **ANSWERED — you minted it.** `R-148` + `R-149` are rulings; both mechanisms are built and in `npm run verify`.
