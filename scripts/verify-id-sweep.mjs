@@ -40,7 +40,13 @@ const SELF_TEST = process.argv.includes('--self-test');
 const DO_FETCH = process.argv.includes('--fetch');
 const STALE_HOURS = 6;
 
-const git = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+// 🔴 maxBuffer IS NOT OPTIONAL HERE, AND THE DEFAULT SILENTLY BROKE THIS CAP ON ITS FIRST RUN
+// AGAINST `main`. `docs/CLOSE-OUT-LEDGER.md` is 1,049,133 bytes — 25KB over Node's 1MB default —
+// so `git show origin/main:<ledger>` threw ENOBUFS, the catch returned '', and an EMPTY READ IS
+// INDISTINGUISHABLE FROM A FILE WITH NO ROWS. The cap then believed `main` claimed NOTHING and
+// reported 60 ids as unclaimed-on-main while HEAD *was* main. That is #182's class — a check that
+// could not reach its target reporting as though it had — inside the cap written to prevent it.
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 256 * 1024 * 1024 });
 
 // ── the three id-spaces, each with its own matcher. They are SEPARATE number lines that overlap:
 //    `#281` is simultaneously a live ledger id and a live tech-debt id, so they are never merged.
@@ -77,8 +83,12 @@ try {
   branches = git('for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin')
     .split('\n').map(s => s.trim()).filter(b => b && !b.endsWith('/HEAD'));
 } catch {
-  console.error('🔴 verify-id-sweep — git could not be read. This is SKIPPED, not passed: a sweep that never reached a branch must not look like a clean sweep (#182).');
-  process.exit(STRICT ? 1 : 0);
+  // FAILS, rather than skipping. An unreadable git in THIS repo is a broken tool, not a legitimate
+  // environment — and the first instance was ENOBUFS on an oversized ledger, i.e. exactly the case
+  // where passing quietly would hide a real defect. (A fresh clone with no fetched refs is handled
+  // separately below and stays lenient.)
+  console.error('🔴 verify-id-sweep — git could not be read. FAILING rather than skipping: a sweep that never reached a branch must not look like a clean sweep (#182).');
+  process.exit(1);
 }
 if (!branches.length) {
   console.error('🔴 verify-id-sweep — ZERO remote branches found. A sweep of nothing finds nothing and passes, which is the failure this line exists to prevent (#182). Run `git fetch --all`.');
@@ -93,7 +103,19 @@ try {
 } catch { /* left null — reported as unknown */ }
 
 const MAIN = 'origin/main';
-const show = (ref, file) => { try { return git('show', `${ref}:${file}`); } catch { return ''; } };
+// A read that FAILED must never look like a read that found nothing. A missing file at a ref is
+// legitimate (the branch predates it) and returns ''; any OTHER failure is fatal and says so.
+const show = (ref, file) => {
+  // stderr is PIPED (not ignored) so the failure can be CLASSIFIED. Ignoring it would leave every
+  // error looking alike, which is the very thing this helper exists to tell apart.
+  try { return execFileSync('git', ['show', `${ref}:${file}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 }); }
+  catch (e) {
+    const msg = String(e.stderr || e.message || '');
+    if (/does not exist|exists on disk, but not in|unknown revision|bad object/i.test(msg)) return '';
+    console.error(`🔴 verify-id-sweep — could not read ${ref}:${file} (${e.code || 'error'}). A sweep that cannot read a branch is NOT a clean sweep (#182).`);
+    process.exit(2);
+  }
+};
 const subjectsOf = (ref) => { try { return git('log', '--format=%s', '-n', '400', ref).split('\n').filter(Boolean); } catch { return []; } };
 const scopeIds = (subjects) => {
   const ledger = new Set(), techdebt = new Set();

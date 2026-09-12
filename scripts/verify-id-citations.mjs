@@ -110,7 +110,7 @@ const subjectIds = (subjects) => {
  *  every branch's answer depend on where it forked, which is the one-tree blindness this whole pass
  *  is about. `main` is where the claim ultimately has to be true, so `main` is always in scope. */
 const headSubjects = () => {
-  const run = (revs) => execFileSync('git', ['log', '--format=%s', '-n', '2000', ...revs], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
+  const run = (revs) => execFileSync('git', ['log', '--format=%s', '-n', '2000', ...revs], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 256 * 1024 * 1024 }).split('\n').filter(Boolean);
   try {
     try { return run(['HEAD', 'origin/main']); }
     catch { return run(['HEAD']); }   // no origin/main here (a fresh clone, a detached CI checkout)
@@ -246,7 +246,9 @@ if (subjects === null) {
   // Caught live: `#306` merged with its ledger row while this branch was being built, and the clause
   // flagged it — comparing MAIN'S HISTORY against THIS TREE'S LEDGER. That is the same
   // two-trees-one-comparison mistake this whole pass exists to stop, made by the cap written to stop it.
-  const mainFile = (f) => { try { return execFileSync('git', ['show', `origin/main:${f}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return ''; } };
+  // maxBuffer: the close-out ledger passed 1MB on 2026-09-12 and Node's default made this read throw
+  // ENOBUFS, which the catch turned into '' — a failed read wearing the face of an empty file (#182).
+  const mainFile = (f) => { try { return execFileSync('git', ['show', `origin/main:${f}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 256 * 1024 * 1024 }); } catch { return ''; } };
   const mainLedger = mainFile(LEDGER);
   const ledgerFiled = new Set([...ledgerIds, ...ledgerRowIds(mainLedger), ...ledgerReservedIds(mainLedger)]);
   const debtFiled = new Set([...filed, ...filedIds(mainFile(LOG))]);

@@ -79,6 +79,14 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### ✅ MERGED TO `main` 2026-09-12 — #304 · #305 · #307 · #309 (`d48dd84`)
+
+- ✅ **`main` now carries:** the breakpoint vocabulary (**#305**) · §6 r7 describing the tile grid + CARD 1 owner-proven (**#307**) · the id-claim rule minted as **R-148/R-149** with both mechanisms (**#309**) · the campaigns recon (**#304**, which **resolved the #304 dangle**).
+- 🔴 **BEFORE CLAIMING ANY ID: `npm run verify:id-sweep`** — next free is **#310** / tech-debt **#286** / **R-150**. **Then RESERVE AND PUSH before building** (R-149). The sweep does not close the race and says so.
+- ⚠️ **`origin/main` MOVED TWICE MID-MERGE** — another session landed `efc02f8` while this was rebasing, so the stack was rebased **twice**. Both rebases silently damaged bookkeeping (a duplicate `## #281` heading, three dropped SHA fills, §3 at **five** entries with an orphaned heading). **Every one was found by checking the rebase RESULT, not by trusting the resolver.**
+- 🔴 **AND THE SWEEP HAD THE BUG IT EXISTS TO CATCH.** `docs/CLOSE-OUT-LEDGER.md` is **1,049,133 bytes** — 25KB past Node's 1MB `execFileSync` default — so reading it from `origin/main` threw **ENOBUFS**, the catch returned `''`, and **an empty read is indistinguishable from a file with no rows.** The cap believed `main` claimed NOTHING and reported 60 ids as unclaimed **while HEAD was main**. Fixed: 256MB buffer, stderr piped so a failure can be *classified*, a missing file still returns `''`, and **any other read failure now FAILS the build** instead of passing quietly.
+- ⚠️ **The four merged branches were DELETED from origin** — a rebase rewrites SHAs, so a branch and its own rebased twin read as rivals to the sweep until the stale ref is gone.
+
 ### 🟡 THE CAMPAIGN LIFECYCLE — EDIT SCOPE, CANCEL, APPEND (2026-09-12, ledger #306 · R-145 · R-146 · R-147)
 
 - 🟡 **MERGED TO `main` — `496ac56`, rebased onto `eb4aad6` then fast-forward; `merge-base --is-ancestor` asserted (tech-debt #280 clause ①).** No migration · **api/ 12/12** · **no permission string minted** (edit/cancel/append all reuse `campaigns:update`). `npm run verify` exit 0 ZERO NET-NEW, re-run after the rebase · 102/102 files, 5,522 assertions · **25/25 mutants caught, 0 survived**.
