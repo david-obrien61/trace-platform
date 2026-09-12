@@ -668,8 +668,30 @@ export const sheetStyles = {
   // the three datasheet add-sheets (Add Inventory / Add Customer / Add Asset) — changing it here
   // centers all three at once (compliance-audit rows #3/#5/#6, convention A "always center").
   modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box' as const, zIndex: 100 } as React.CSSProperties,
-  sheet: { background: '#fff', borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto' as const } as React.CSSProperties,
-  sheetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' } as React.CSSProperties,
+  // 🔴 V4 (§8, R-148, 2026-09-12) — THE SHEET IS A BOUNDED FLEX COLUMN AND ITS ACTION ROW DOES NOT
+  // SCROLL. It used to be ONE box with `overflowY:'auto'`, so the header, the fields AND the Save/Cancel
+  // row scrolled together: a tall dialog pushed its own commit controls below the visible area and the
+  // reader had to scroll INSIDE the modal to find them. Reported live on Edit customer 2026-09-12.
+  //
+  // ⚠️ **THIS IS G2's 2026-09-07 AMENDMENT FOR THE THIRD TIME, NOT A NEW IDEA** — *"the bound must
+  // survive anything rendered above the box inside its own card … a fixed maxHeight is bounded but not
+  // robust: it cannot know about a banner, a notice or a second filter row added later."* Same defect,
+  // three surfaces: the inventory h-scrollbar (G2), the save-a-site panel (§8 V1–V3), a dialog's action
+  // row (V4). **The shape is the one already correct at DataSheet.tsx:580** — the card is a flex column
+  // carrying the bound, the scrolling region takes the remainder (`flex:1; minHeight:0`), and anything
+  // pinned is a sibling that SHRINKS the scroll box instead of displacing it. No magic number to re-tune.
+  //
+  // Consumers compose three parts: `sheetHeader` (pinned) · `sheetBody` (scrolls) · `sheetActions` (pinned).
+  // Padding moved OFF the sheet and onto the parts, so the scrollbar runs the full height of the body.
+  sheet: { background: '#fff', borderRadius: 16, width: '100%', maxWidth: 640, maxHeight: '85vh',
+           display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' as const,
+           boxSizing: 'border-box' as const } as React.CSSProperties,
+  /** The scrolling region. `minHeight:0` is load-bearing — without it a flex child refuses to shrink. */
+  sheetBody: { flex: 1, minHeight: 0, overflowY: 'auto' as const, padding: '0 1.5rem 1.25rem' } as React.CSSProperties,
+  /** The commit controls. Pinned: V4 — a dialog that hides its own Save is the §8 defect one level down. */
+  sheetActions: { flexShrink: 0, display: 'flex', gap: 10, padding: '1rem 1.5rem',
+                  borderTop: '1px solid #e5e7eb', background: '#fff' } as React.CSSProperties,
+  sheetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, padding: '1.5rem 1.5rem 1rem' } as React.CSSProperties,
   // expand-drawer inner used by inventory
   expandInner: { padding: '0.75rem 1rem', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 } as React.CSSProperties,
   metaGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: '0.8rem', color: '#374151', alignContent: 'start' as const } as React.CSSProperties,

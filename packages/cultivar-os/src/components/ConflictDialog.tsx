@@ -23,21 +23,33 @@ const DIALOG_BACKDROP: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+// 🔴 V4 (§8, R-148) — BOUNDED FLEX COLUMN, ACTIONS PINNED. This card used to be one box with
+// `overflowY:'auto'`, so the two buttons scrolled with the evidence above them. **Of the eleven
+// dialogs the 2026-09-12 survey measured, this is the one where a missed control costs most:**
+// `Save anyway — I've checked the receipt` records a DURABLE override on a money discrepancy, and it
+// sits below the numbers the reader must scroll through to judge it. G2's 2026-09-07 amendment,
+// third instance — the bound must survive anything rendered above it inside its own box.
 const DIALOG_CARD: React.CSSProperties = {
   background: '#fff',
   borderRadius: 16,
-  padding: '24px 20px',
   width: '100%',
   maxWidth: 480,
   maxHeight: '85vh',
-  overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
   boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
 };
+/** The evidence. Scrolls. */
+const DIALOG_BODY: React.CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 20px 8px' };
+/** The decision. Does NOT scroll — both paths are on screen whenever the dialog is. */
+const DIALOG_ACTIONS: React.CSSProperties = { flexShrink: 0, padding: '14px 20px 20px', borderTop: '1px solid #e5e7eb', background: '#fff' };
 
 export function ConflictDialog({ reconcileState, onClose, onSaveAnyway, btnPrimaryStyle, btnGhostStyle }: ConflictDialogProps) {
   return (
     <div style={DIALOG_BACKDROP} onClick={onClose}>
       <div style={DIALOG_CARD} onClick={e => e.stopPropagation()}>
+        <div style={DIALOG_BODY}>
         <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#A32D2D', marginBottom: 10 }}>
           ⚠️ Line items don't match total
         </div>
@@ -57,6 +69,9 @@ export function ConflictDialog({ reconcileState, onClose, onSaveAnyway, btnPrima
           Check the receipt and fix the numbers above, or save with the discrepancy recorded.
         </div>
 
+        </div>
+
+        <div style={DIALOG_ACTIONS}>
         {/* Preferred path — go back and fix */}
         <button
           style={{ ...btnPrimaryStyle, marginTop: 0 }}
@@ -72,6 +87,7 @@ export function ConflictDialog({ reconcileState, onClose, onSaveAnyway, btnPrima
         >
           Save anyway — I've checked the receipt
         </button>
+        </div>
       </div>
     </div>
   );

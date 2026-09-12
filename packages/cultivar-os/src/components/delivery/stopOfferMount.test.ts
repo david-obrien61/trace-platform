@@ -26,9 +26,15 @@
  *     save lands  →  await onChanged()  →  loading = true  →  {!loading && <StopCard/>}  ← UNMOUNTS
  *                                       →  loading = false →  fresh <StopCard/> mounts
  *
- * A2 is the regression probe: revert the fix (put the offer back in `StopCard`'s own `useState`)
- * and A2 goes RED, because the instance holding it was destroyed mid-await. It was RUN RED against
- * the pre-fix card before being trusted (§6 r19(b) — a check nobody has seen refuse is a claim).
+ * ✏️ **STRENGTHENED 2026-09-12 (§8 V1/V3/V4, R-148).** It used to assert only that the offer was ON
+ * SCREEN after the refresh — true of the panel that shipped inside the card, which was on screen and
+ * below the fold. The claim now is the one that matters: **the offer renders OUTSIDE the stop list
+ * subtree** (A3), which is what makes its position independent of how many stops sit above it. A2
+ * alone would still pass on a card-rendered panel; A3 would not.
+ *
+ * A2/A3 are the regression probes. A2 was RUN RED against the pre-fix card (the offer never appeared
+ * at all, #304); A3 goes red the day anything renders the offer back inside a row. §6 r19(b) — a
+ * check nobody has seen refuse is a claim.
  */
 import { JSDOM } from 'jsdom';
 
@@ -64,6 +70,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import type { StopActions } from './useStopActions';
 import type { StopCard as StopCardType } from './StopCard';
+import type { SaveSiteDialog as SaveSiteDialogType, SiteOffer, SiteResult } from './SaveSiteDialog';
 import type { StopRow, StopRead } from '../../lib/stopRead';
 
 let passed = 0; let failed = 0;
@@ -96,8 +103,8 @@ const read: StopRead = {
  */
 function Page({ permissions, onSaveShipTo }: { permissions: string[]; onSaveShipTo?: () => void }) {
   const [loading, setLoading] = useState(false);
-  const [siteOffer, setSiteOffer] = useState<{ stopId: string; label: string } | null>(null);
-  const [siteNote,  setSiteNote]  = useState<{ stopId: string; text: string } | null>(null);
+  const [siteOffer,  setSiteOffer]  = useState<SiteOffer | null>(null);
+  const [siteResult, setSiteResult] = useState<SiteResult | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -112,15 +119,16 @@ function Page({ permissions, onSaveShipTo }: { permissions: string[]; onSaveShip
     saveShipTo: async (d: StopRow) => {
       onSaveShipTo?.();
       if (permissions.includes('customers:create') && d.customer_id) {
-        setSiteNote(null); setSiteOffer({ stopId: d.id, label: '' });
+        setSiteResult(null);
+        setSiteOffer({ stopId: d.id, customerName: 'John Smith', address: '772 Oak Creek Dr', label: '' });
       }
       await refresh();
       return { kind: 'saved' as const, audited: true, auditError: null };
     },
     saveSite: async () => ({ kind: 'refused' as const, reason: 'not exercised here' }),
-    siteOffer, siteNote,
+    siteOffer, siteResult,
     setSiteOfferLabel: (label: string) => setSiteOffer(o => (o ? { ...o, label } : o)),
-    dismissSiteOffer: () => { setSiteOffer(null); setSiteNote(null); },
+    dismissSiteOffer: () => { setSiteOffer(null); setSiteResult(null); },
   } as unknown as StopActions;
 
   const ctx = {
@@ -130,10 +138,18 @@ function Page({ permissions, onSaveShipTo }: { permissions: string[]; onSaveShip
 
   // The list lives behind the loading flag exactly as DeliverySchedule.tsx:176 does. This is the
   // line that destroys the card mid-save, and it is reproduced rather than described.
+  // The page shape, reproduced: a LIST that unmounts behind the loading flag
+  // (DeliverySchedule.tsx:176), and the overlays fragment rendered beside it — never inside it.
   return React.createElement(BusinessContext.Provider, { value: ctx },
     React.createElement('div', null,
-      loading ? React.createElement('p', null, 'Loading…')
-              : read.stops.map(s => React.createElement(StopCard, { key: s.id, stop: s, read, actions })),
+      React.createElement('div', { id: 'stop-list' },
+        loading ? React.createElement('p', null, 'Loading…')
+                : read.stops.map(s => React.createElement(StopCard, { key: s.id, stop: s, read, actions }))),
+      React.createElement(SaveSiteDialog, {
+        offer: siteOffer, result: siteResult, busy: false,
+        onLabelChange: (label: string) => setSiteOffer(o => (o ? { ...o, label } : o)),
+        onSave: () => {}, onDismiss: () => { setSiteOffer(null); setSiteResult(null); },
+      }),
     ));
 }
 
@@ -174,6 +190,7 @@ async function driveTheCard(host: HTMLElement) {
 }
 
 let StopCard: typeof StopCardType;
+let SaveSiteDialog: typeof SaveSiteDialogType;
 // Typed loosely on purpose: this is only ever a Provider wrapper in this file, and the context's
 // real shape is the app's business, asserted where the app uses it.
 let BusinessContext: React.Context<unknown>;
@@ -182,6 +199,7 @@ void (async () => {
   // Both deferred on purpose — see the env note at the top of this file. A static import would
   // hoist ABOVE the `process.env` lines and take the supabase client down with it.
   ({ StopCard } = await import('./StopCard'));
+  ({ SaveSiteDialog } = await import('./SaveSiteDialog'));
   const shared = await import('@trace/shared/context');
   BusinessContext = shared.BusinessContext as unknown as React.Context<unknown>;
 
@@ -194,12 +212,27 @@ void (async () => {
     ok(OFFER.test(host.textContent ?? ''),
       'A2 🔴 after a save that UNMOUNTED the card list, the offer is on screen (CARD 4, the live failure)');
 
+    // 🔴 A3 IS THE CLAUSE, MADE FALSIFIABLE. §8 V3: feedback inside a repeated row has a position
+    // set by the rows above it. The offer must therefore live OUTSIDE the list subtree entirely —
+    // not merely "on screen", which the panel that shipped also was, below the fold.
+    const list  = host.querySelector('#stop-list')!;
     const boxes = host.querySelectorAll('input[placeholder="Job site A"]');
-    ok(boxes.length === 1, `A3 the offer renders on ONE card, not on every card (found ${boxes.length})`);
+    ok(boxes.length === 1, `A3a exactly one offer is open, not one per card (found ${boxes.length})`);
+    ok(boxes.length === 1 && !list.contains(boxes[0]),
+      'A3b 🔴 the offer renders OUTSIDE the stop list — its position cannot depend on the rows above it (§8 V3)');
     // Guarded: when A2/A3 fail there is no box, and a crash here would bury the assertion that
     // actually explains the failure. A red must stay readable.
     ok(boxes.length === 1 && (boxes[0] as HTMLInputElement).value === '',
       'A4 the name box is BLANK — no label is guessed on the owner\'s behalf');
+
+    // §8 V4 — the dialog is bounded and its commit controls are NOT inside what scrolls.
+    const saveBtn = byText(host, /^Save as a site$/);
+    ok(!!saveBtn, 'A5 the dialog carries its Save control');
+    const scrollers = Array.from(host.querySelectorAll<HTMLElement>('*'))
+      .filter(el => el.style.overflowY === 'auto');
+    ok(scrollers.length >= 1, `A6 the dialog has a bounded scrolling region (found ${scrollers.length})`);
+    ok(!!saveBtn && scrollers.every(sc => !sc.contains(saveBtn)),
+      'A7 🔴 and Save is NOT inside it — the action row is pinned, never scrolled away (§8 V4)');
     act(() => { root.unmount(); });
   }
 

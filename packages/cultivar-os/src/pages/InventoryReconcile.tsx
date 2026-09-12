@@ -527,6 +527,9 @@ function AcceptSheet(props: {
           </button>
         </div>
 
+        {/* V4 (§8) — the body scrolls; the action row below is pinned. */}
+        <div style={SS.sheetBody}>
+
         {err && <div style={SS.error}>{err}</div>}
 
         <div style={ST.numbers}>
@@ -611,7 +614,12 @@ function AcceptSheet(props: {
             <div style={SS.muted}>These lines cannot be edited or deleted once written.</div>
           </div>
         )}
-        {!plan.ok && <div style={SS.error}>{plan.error}</div>}
+        </div>
+
+        {/* V4 — pinned. The refusal rides WITH the button it blocks: a reason the reader cannot see
+            beside the disabled control it explains is the §8 defect in miniature (D-9). */}
+        <div style={{ ...SS.sheetActions, flexDirection: 'column', gap: 8 }}>
+        {!plan.ok && <div style={{ ...SS.error, marginBottom: 0 }}>{plan.error}</div>}
 
         <button
           onClick={() => void accept()}
@@ -620,6 +628,7 @@ function AcceptSheet(props: {
         >
           {busy ? 'Stamping…' : res.mode === 'baseline' ? 'Accept — stamp as on-hand' : 'Accept — record on the ledger'}
         </button>
+        </div>
       </div>
     </div>
   );

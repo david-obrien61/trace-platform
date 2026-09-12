@@ -40,10 +40,13 @@ import type { StopRow } from '../../lib/stopRead';
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../customers/customerFieldRegistry';
 import { CustomerPartyEditor, type PartyCustomer } from '../customers/CustomerPartyEditor';
 import { ReviewAskSheet } from './ReviewAskSheet';
+import { SaveSiteDialog, type SiteOffer, type SiteResult } from './SaveSiteDialog';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
-export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }) {
+export function useStopActions(
+  { onChanged, stops = [] }: { onChanged: () => Promise<void>; stops?: StopRow[] },
+) {
   const { businessId, can } = useBusinessContext();
 
   const [savingId, setSavingId]         = useState<string | null>(null);
@@ -72,8 +75,14 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
   // offer here makes it survive the refresh BY CONSTRUCTION rather than by every consumer remembering
   // not to unmount its list — the fix belongs at the ONE place all three screens share (STD-017).
   // Keyed by stop id so it can only ever render on the card it belongs to.
-  const [siteOffer, setSiteOffer] = useState<{ stopId: string; label: string } | null>(null);
-  const [siteNote,  setSiteNote]  = useState<{ stopId: string; text: string } | null>(null);
+  // ✏️ §8 V1/V3 (R-148, 2026-09-12) — THE OFFER IS A DIALOG NOW, NOT A PANEL ON THE CARD, so this
+  // state carries what the DIALOG renders rather than a stop id the card matched on. It was moved
+  // OFF <StopCard> on 2026-09-11 to survive the refresh (#304); it is moved OUT OF THE LIST ENTIRELY
+  // here, because surviving the refresh and being VISIBLE are different properties and only the
+  // first was fixed. The outcome sentence rides in the same dialog — reporting it on the card would
+  // put the answer back in the place the question could not be seen.
+  const [siteOffer,  setSiteOffer]  = useState<SiteOffer | null>(null);
+  const [siteResult, setSiteResult] = useState<SiteResult | null>(null);
 
   // The editor prices from the configured tiers, same source the roster uses.
   useEffect(() => {
@@ -207,8 +216,13 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
       // raising it first means a refresh that THROWS still leaves the owner the offer they earned.
       // The gate is the same pair the card used, checked in one place now (§1.6 item 4).
       if (can('customers:create') && d.customer_id) {
-        setSiteNote(null);
-        setSiteOffer({ stopId: d.id, label: '' });
+        setSiteResult(null);
+        setSiteOffer({
+          stopId: d.id,
+          customerName: customerDisplayName(d.customers, 'this customer'),
+          address: [form.address_line1, form.city, form.state, form.zip].filter(Boolean).join(', '),
+          label: '',
+        });
       }
       await onChanged();
     }
@@ -221,10 +235,20 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
     setSiteOffer(o => (o ? { ...o, label } : o));
   }
 
-  /** "Not this one" — and the note goes with it, so a dismissed offer leaves no orphan sentence. */
+  /** "Not this one", and "Done" after an outcome — one dismissal, so nothing is left half-open. */
   function dismissSiteOffer() {
     setSiteOffer(null);
-    setSiteNote(null);
+    setSiteResult(null);
+  }
+
+  /** The dialog's Save. It owns the stop id it was raised for; the card is not consulted. */
+  async function saveOfferedSite(stops: StopRow[]) {
+    if (!siteOffer) return;
+    const stop = stops.find(x => x.id === siteOffer.stopId);
+    // The stop can genuinely be gone — a refresh may have dropped it from the day being viewed.
+    // Say so rather than closing silently on a question the reader answered.
+    if (!stop) { setSiteResult({ ok: false, text: 'That stop is no longer on screen, so the site was not saved.' }); return; }
+    await saveSite(stop, siteOffer.label);
   }
 
   /**
@@ -259,15 +283,13 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
     // await, and on two screens the card that asked for it is already gone by then. Keyed by stop.
     const who = customerDisplayName(d.customers, 'this customer');
     if (out.kind === 'saved') {
-      setSiteOffer(null);
-      setSiteNote({ stopId: d.id, text: `Saved as \u201c${out.site.label}\u201d. It will be offered next time you take an order for ${who}.` });
+      setSiteResult({ ok: true, text: `Saved as \u201c${out.site.label}\u201d. It will be offered next time you take an order for ${who}.` });
     } else if (out.kind === 'already_saved') {
       // Not an error. The answer to "save this?" for an address already in the book is "it already
       // is" — and naming the site they have beats both a duplicate row and a red refusal.
-      setSiteOffer(null);
-      setSiteNote({ stopId: d.id, text: `This address is already saved for ${who} as \u201c${out.site.label}\u201d.` });
+      setSiteResult({ ok: true, text: `This address is already saved for ${who} as \u201c${out.site.label}\u201d.` });
     } else {
-      setSiteNote({ stopId: d.id, text: out.kind === 'refused' ? out.reason : out.error });
+      setSiteResult({ ok: false, text: out.kind === 'refused' ? out.reason : out.error });
     }
     return out;
   }
@@ -296,6 +318,17 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
         onSkip={()  => { if (asking) void recordAsk(asking.id, REVIEW_ASK_SKIPPED); }}
         onClose={()  => setAsking(null)}
       />
+      {/* §8 V1 — the save-a-site offer renders HERE, at page level, beside the review ask: outside the
+          stop list, so its position cannot depend on how many stops are above it. V4 — bounded, with
+          its buttons pinned. It renders NOTHING when there is no offer. */}
+      <SaveSiteDialog
+        offer={siteOffer}
+        result={siteResult}
+        busy={savingId !== null}
+        onLabelChange={setSiteOfferLabel}
+        onSave={() => { void saveOfferedSite(stops); }}
+        onDismiss={dismissSiteOffer}
+      />
       {editing && (
         <CustomerPartyEditor
           customer={editing}
@@ -310,7 +343,10 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
   return {
     savingId, actionError, clearActionError: () => setActionError(null),
     markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
-    siteOffer, siteNote, setSiteOfferLabel, dismissSiteOffer,
+    // §8 V1/V3 — <StopCard> no longer renders the offer, so it no longer needs to read it. What it
+    // DOES need is whether an offer is open for its own stop, which nothing on the card depends on
+    // today; the surface is kept off the card deliberately (STD-011 — one renderer, one place).
+    siteOffer, siteResult, setSiteOfferLabel, dismissSiteOffer,
   };
 }
 

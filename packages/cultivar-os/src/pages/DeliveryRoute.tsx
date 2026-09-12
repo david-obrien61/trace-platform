@@ -386,6 +386,7 @@ export function DeliveryRoute() {
   // outlives the address it was built from is the stale-handoff defect (ledger #286) wearing a new coat.
   const [rebuildPending, setRebuildPending] = useState(false);
   const actions = useStopActions({
+    stops: stopData?.stops ?? [],
     onChanged: async () => {
       if (routeStops.length > 0) setRebuildPending(true);
       clearRoute();

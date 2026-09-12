@@ -205,6 +205,9 @@ export default function VendorEditor(props: {
           </button>
         </div>
 
+        {/* V4 (§8) — the body scrolls, the action row below does not. */}
+        <div style={SS.sheetBody}>
+
         {/* E3 — the copy states the commit model, and it is true of every field on this surface. */}
         <p style={{ ...SS.hint, marginTop: -8, marginBottom: 14 }}>
           Nothing is saved until you press Save. Cancel discards everything you have typed.
@@ -288,7 +291,9 @@ export default function VendorEditor(props: {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        </div>
+
+        <div style={SS.sheetActions}>
           <button style={saving ? SS.submitBtnDisabled : SS.submitBtn} disabled={saving} onClick={() => void save()}>
             {saving ? 'Saving…' : creating ? 'Save vendor' : 'Save changes'}
           </button>

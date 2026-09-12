@@ -197,6 +197,10 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
             <X size={20} color="#6b7280" />
           </button>
         </div>
+
+        {/* V4 (§8) — the body scrolls, the Save/Cancel row below does NOT. Reported live on this very
+            dialog 2026-09-12: six field groups pushed its own commit controls off the visible area. */}
+        <div style={SS.sheetBody}>
         {error && <div style={SS.error}>{error}</div>}
 
         {/* ── IDENTITY ── */}
@@ -364,17 +368,23 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
 
         {/* E3 — the copy states the model and the surface implements it. The old footer promised
             auto-save; this panel is a FORM in both modes, so it has one button in both modes. */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-          <button type="button" onClick={() => { void save(); }} disabled={savingNew}
-            style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, flex: 1 }}>
-            {savingNew ? 'Saving…' : creating ? 'Save Customer' : 'Save changes'}
-          </button>
-          <button type="button" onClick={cancel} disabled={savingNew}
-            style={{ ...SS.input, width: 'auto', padding: '0 18px', cursor: 'pointer', background: '#fff' }}>
-            Cancel
-          </button>
         </div>
-        <p style={SS.hint}>Nothing is saved until you press Save. Cancel discards your changes.</p>
+
+        <div style={{ ...SS.sheetActions, flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" onClick={() => { void save(); }} disabled={savingNew}
+              style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, flex: 1 }}>
+              {savingNew ? 'Saving…' : creating ? 'Save Customer' : 'Save changes'}
+            </button>
+            <button type="button" onClick={cancel} disabled={savingNew}
+              style={{ ...SS.input, width: 'auto', padding: '0 18px', cursor: 'pointer', background: '#fff' }}>
+              Cancel
+            </button>
+          </div>
+          {/* E3 — the copy states the commit model. It rides WITH the buttons, because a promise about
+              what Save does is worthless on a line the reader cannot see at the moment they press it. */}
+          <p style={{ ...SS.hint, margin: 0 }}>Nothing is saved until you press Save. Cancel discards your changes.</p>
+        </div>
       </div>
     </div>
   );

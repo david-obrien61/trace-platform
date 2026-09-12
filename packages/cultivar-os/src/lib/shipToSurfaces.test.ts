@@ -136,9 +136,15 @@ function main(): void {
     ok(/export function StopCard|function StopCard/.test(src), 'C7 StopCard was READ');
     ok(/can\('customers:create'\) && d\.customer_id/.test(acts),
       'C8 the HOOK gates raising the offer on customers:create AND a customer to save it for');
-    ok(/actions\.siteOffer\?\.stopId === d\.id/.test(src) && /siteOffer && \(/.test(src),
-      'C9 and the card renders that offer, keyed to its OWN stop — never another card\'s');
-    ok(/if \(out\.kind === 'saved'\) \{[\s\S]{0,900}?setSiteOffer\(\{ stopId: d\.id, label: '' \}\)/.test(acts),
+    // ✏️ C9 RE-AIMED AGAIN 2026-09-12 — AND IN THE OPPOSITE DIRECTION, WHICH IS THE POINT.
+    // It asserted the CARD renders the offer. §8 V3 (R-148) says it must not: feedback in a repeated
+    // row has a position set by the rows above it, and this offer sat below the fold twice on
+    // /delivery-schedule. The offer is a dialog in the hook's overlays now, so the claim inverts.
+    ok(!/siteOffer/.test(src),
+      'C9 🔴 the CARD does not render the offer at all — it is a dialog outside the list (§8 V3)');
+    ok(/<SaveSiteDialog/.test(acts) && /offer=\{siteOffer\}/.test(acts),
+      'C9b and the hook renders it in `overlays`, beside the review ask (C9 is not vacuous)');
+    ok(/if \(out\.kind === 'saved'\) \{[\s\S]{0,1400}?setSiteOffer\(\{[\s\S]{0,300}?stopId: d\.id/.test(acts),
       'C10 🔴 the offer is reachable ONLY from a save that landed — population is a by-product, never a chore');
     ok(!/setSiteOffer\(\{ stopId: d\.id, label: '[^']/.test(acts),
       'C11 the name starts BLANK — nothing auto-saves, and no label is guessed on the owner\'s behalf');
@@ -147,6 +153,10 @@ function main(): void {
     ok(!/setSiteOffer\(|setSiteNote\(/.test(src),
       'C11b 🔴 THE CARD HOLDS NO OFFER STATE OF ITS OWN — the regression guard for CARD 4, in source terms');
     ok(/setSiteOffer\(/.test(acts), 'C11c and the state it no longer holds is genuinely held by the hook (C11b is not vacuous)');
+    // §8 V2 — the one note the card still renders is SELF-ANCHORED: inside the editor, above the
+    // Save control that produced it. That is the compliant form, not an exception to V1.
+    ok(/\{addressNote && \(/.test(src) && /addressNote\?\.landed \? 'Close' : 'Cancel'/.test(src),
+      'C11d the ship-to note is rendered on the control that produced it, and the editor stays open to hold it (§8 V2)');
   }
   {
     const src = read(ACTIONS);
