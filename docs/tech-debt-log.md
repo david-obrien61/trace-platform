@@ -2812,7 +2812,15 @@ proven by `stopOfferMount.test.ts` A6/A7.
 
 ---
 
-## #289 — 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+## #289 — ✅ **RESOLVED 2026-09-12 BY DELETION (ledger #316, David's ruling — option (a)).** WAS: 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+
+✅ **THE RESOLUTION, IN DAVID'S WORDS:** ***"A number that is usually right is worse than no number, because it gets trusted."*** The cached next-free numbers are **GONE** from `TRACE-SESSION-BOOTSTRAP.md`. What replaces them is the instruction that was always beside them: **run `npm run verify:id-sweep`, FROM A BRANCH not from `main`, then reserve and push.** 🔴 **Option (a) of the three this entry named — chosen over (b) derive-at-read-time and (c) teach-the-sweep-to-assert-the-line, because the sweep ALREADY derives the answer at read time and the line was a second representation of it (STD-011). The convenient copy is the one that drifts, and it is the one that gets read.**
+
+✅ **AND TWO CAVEATS WENT IN WITH THE INSTRUCTION, BECAUSE AN INSTRUCTION WITH A SILENT FAILURE MODE IS THE NEXT VERSION OF THIS ENTRY:** ① **run it FROM A BRANCH** — from `main` the sweep excludes every branch cut from current `main` (tech-debt **#286**), which is exactly where a session that has just merged stands; ② **it cannot see an id claimed in an uncommitted working file, and that is the FLOOR, not a bug** — it reads refs, and reserve-and-push is what lifts a claim over that floor.
+
+⚠️ **WHAT THIS DOES NOT CLOSE, SAID PLAINLY:** the RACE is untouched — between the sweep and the push another session can still take the id ([[R-149]] says so and the sweep prints it). This entry was never about the race; it was about a cached ANSWER being trusted over a live one. **That is closed. The race is R-149's.**
+
+**THE EVIDENCE THAT DECIDED IT — three mechanisms in one day, every correction wrong within the hour:**
 
 **The line, on `main`, in the file every session opens first:**
 
