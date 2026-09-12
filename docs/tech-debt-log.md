@@ -2701,7 +2701,7 @@ reserve-and-push-first, and both caps say so in their output rather than implyin
 
 ---
 
-## #286 — 🔴 THE ALL-BRANCHES SWEEP EXCLUDES EVERY BRANCH CUT FROM `main`, SO RUN FROM `main` IT REPORTS A TAKEN ID AS FREE (NEW 2026-09-12, ledger #312)
+## #286 — ✅ **RESOLVED 2026-09-12 (ledger #314) — TWO POPULATIONS, AND INHERITANCE MOVED FROM THE BRANCH TO THE ID.** THE ALL-BRANCHES SWEEP EXCLUDED EVERY BRANCH CUT FROM `main`, SO RUN FROM `main` IT REPORTED A TAKEN ID AS FREE (was NEW 2026-09-12, ledger #312)
 
 **The instance, measured today.** `node scripts/verify-id-sweep.mjs` run from `main` printed:
 
@@ -2774,3 +2774,72 @@ case is `main`, which is where a session that has just merged, or one starting f
 the single most likely place for the gate to be run, and the only place where it degrades to
 `main`'s-max + 1. **Clauses C and D (`verify-id-citations.mjs`) are unaffected**: they read `HEAD ∪ origin/main`
 by design and make no free-id claim.
+
+---
+
+### ✅ HOW IT WAS FIXED (2026-09-12, ledger #314) — and the fix is NOT "delete the filter"
+
+🔴 **THE PROPOSED FIX IN THIS ROW WAS INCOMPLETE, AND SAYING SO IS THE POINT OF RE-READING IT.** It
+said *"keep `RIVALS` for COLLISION, add an unfiltered `ALL_REFS` for the NEXT-FREE max."* That repairs
+the maximum and **leaves the collision half blind from `main`** — which is where David's instruction
+pointed: *"run it from main against a known-taken id and watch it refuse."* A sweep that prints the
+right NEXT FREE and still passes a taken claim is the same false green, one layer over.
+
+**THE REAL DISCRIMINATOR: INHERITANCE IS A PROPERTY OF AN ID, NOT OF A BRANCH.** An id I claim is the
+SAME claim as another ref's **iff it was already claimed in our shared history — at
+`merge-base(HEAD, ref)`.** Exact in all four directions, and the fourth is the one that was missed:
+
+| Relationship | merge-base | Verdict |
+|---|---|---|
+| ref is an ANCESTOR of HEAD | = ref | every id it claims is inherited ✓ |
+| ref is DOWNSTREAM of HEAD | = HEAD | ids I claim are inherited — **no false positive, which is what the old filter was protecting** ✓ |
+| a SIBLING cut from `main` | = main | main does not claim my id → **COLLISION** ✓ |
+| **I am on `main`, ref downstream** | = main | a claim in my TREE is not at main → **COLLISION** — *the case that was missed* ✓ |
+
+So **the lineage filter is GONE, not loosened**, and every ref is swept for both questions.
+`selectPopulations()` takes **no lineage predicate at all** — the absence IS the fix, and probe **P1**
+fails the build if one reappears.
+
+**PROVEN BY MAKING IT FAIL, not by reasoning (§6 r19 · [[R-33]]).** One tree standing on `main`, one
+injected claim of **`#310`** — an id held by `origin/feat/channel-vocabulary` — and the two scripts run
+against it back to back, same tree, same id:
+
+```
+OLD (origin/main)  41 remote branches, 5 rivals …   NEXT FREE: #311
+                   ✅ no id claimed by this branch is claimed anywhere else.            exit 0
+NEW                41 refs for NEXT FREE, 40 for collisions …  NEXT FREE: #315
+                   held by: origin/fix/id-sweep-next-free-population (reserved)
+                   🔴 COLLISION — close-out #310 is claimed by THIS branch (HEAD)
+                      and by origin/feat/channel-vocabulary                             exit 1
+```
+
+⚠️ **THE OLD RUN WAS WRONG IN FOUR PLACES AT ONCE, NOT ONE.** It missed the collision, and it reported
+`#311`, tech-debt `#285` and `R-150` as free when the true answers were **#315**, **#290** and
+**R-154**. **A green line and four wrong numbers** — `origin/feat/channel-vocabulary`,
+`origin/docs/four-recovered-stories` and `origin/feat/action-feedback-visibility` are the three refs it
+could not see.
+
+🔴 **AND THE NEGATIVE CONTROL CAUGHT A REAL BUG IN THE FIX, WHICH IS EXACTLY WHY IT EXISTS.** Run from
+`8a76dde` — a commit that RESERVES `#312` — against `origin/docs/card-flips-and-leak-clause-split`,
+which is downstream of it and also claims `#312`, the first draft reported a **false COLLISION**: the
+merge-base read used the FILED-ROW matcher alone, so an inherited **RESERVATION** was invisible while
+the rival side counted it. **An asymmetry between two reads of one question** — and it reintroduced
+precisely the false positive the deleted filter existed to prevent. Both sides now go through **one**
+`fileClaims()`, so the asymmetry cannot be re-created by editing one of them; probe **P5** is that line.
+The control now reports *"1 overlapping claim(s) INHERITED at the merge-base, not collisions"*, exit 0.
+**It was found by running the probe, not by thinking about it.**
+
+**ALSO SHIPPED:** the highest id now **NAMES ITS HOLDER** (`held by: origin/feat/action-feedback-visibility`)
+— *a number with no holder gives a reader nothing to disagree with*, which is half of why this survived
+a day — and each ref's commit subjects are read **once** rather than twice per space (the old loop
+called `subjectsOf` for ledger and again for tech-debt).
+
+**PROBES: P1–P5, five of them POPULATION probes — #182's own prescription** (*"the mechanical fix is a
+mutant that changes the POPULATION, not the subject — none of our 13 do"*). **7/7 deliberate mutants
+caught:** a reintroduced lineage filter · a dropped `main` · an over-filtered rival set · `fileClaims`
+losing reservations · `collisionsOf` ignoring inheritance · `highestClaim` dropping the holder ·
+`highestClaim` returning the first instead of the max.
+
+⚠️ **WHAT IS STILL TRUE AND IS NOT A DEFECT:** the cap compares CLAIMS, never commit TIMES. R-148
+clause (4) needs a human to read two timestamps and decide; the cap **names the other holder so that
+comparison is possible, and deliberately does not perform it. Nothing in it moves an id.**

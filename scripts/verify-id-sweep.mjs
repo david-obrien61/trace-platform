@@ -20,6 +20,14 @@
 //   where the next session does not look. This is the PREVENTION; `verify-id-citations` clauses C
 //   and D are the NET that catches what has already landed.
 //
+// 🔴 AND THEN THIS CAP CAUSED ONE (2026-09-12, tech-debt #286, fixed in ledger #314)
+//   One day old, run from `main`, it printed `NEXT FREE: #310` in green — while `origin` held
+//   `reserve(#310)`, `reserve(#311)` AND a filed `#311` row, and was also two ids behind on tech-debt
+//   and one behind on rulings. ONE filtered population was answering TWO questions that need opposite
+//   ones; see the block above `highestClaim`. The lesson is not "the filter was wrong" — it was right
+//   about inheritance — it is that INHERITANCE IS A PROPERTY OF AN ID, NOT OF A BRANCH, and asking it
+//   of a whole branch gave the right answer for collisions and the wrong one for the maximum.
+//
 // 🔴 WHAT THIS CAP CANNOT DO, STATED SO NOBODY READS MORE INTO A GREEN THAN IS THERE:
 //   ① It reads remote-tracking refs, which are as fresh as your last `git fetch`. A stale sweep is a
 //      sweep against yesterday, so staleness is MEASURED and REPORTED on every run, and `--strict`
@@ -27,7 +35,13 @@
 //   ② It cannot close the race. Between this sweep and your push, another session can take the id.
 //      That is R-149's whole point and why the answer is RESERVE-AND-PUSH-FIRST, not check-harder.
 //   ③ A claim that exists only in an unpushed local branch of another worktree is invisible to
-//      everyone, including this. Push the reservation; that is the rule.
+//      everyone, including this. Push the reservation; that is the rule. ⚠️ MEASURED, not theoretical:
+//      `#310` was claimed by three commits (`reserve`/`fix`/`docs`) that are reachable from NO ref at
+//      all — that session renumbered itself to `#311` and left them orphaned. An orphaned claim is
+//      invisible here by design and SHOULD be: it is withdrawn, not held.
+//   ④ It compares CLAIMS, never commit TIMES. R-148 clause (4) — the later claim renumbers — needs a
+//      human to read two timestamps and decide; this cap names the other holder so that comparison is
+//      possible, and deliberately does not perform it. Nothing here moves an id.
 //
 // Run: node scripts/verify-id-sweep.mjs [--strict] [--fetch]
 //      node scripts/verify-id-sweep.mjs --self-test    — watch each check refuse
@@ -103,7 +117,10 @@ export const fileClaims = (src, cfg) => new Set([...idsIn(src, cfg.re), ...(cfg.
 // upstream, so main can never collide) and this branch's own pushed tip.
 export function selectPopulations(branches, { main, hereRemote }) {
   return {
-    all:    [...new Set([main, ...branches])],
+    // `main` is passed as null by the caller now (it is already inside `branches` as `origin/main`,
+    // and it is a RIVAL like any other ref — see the caller's note). The parameter is kept so the
+    // probes can assert main is never dropped from the maximum.
+    all:    [...new Set([...(main ? [main] : []), ...branches])],
     rivals: branches.filter(b => b !== main && b !== hereRemote),
   };
 }
@@ -117,9 +134,20 @@ export function highestClaim(claims) {
 }
 
 // PURE — an id I claim collides when another ref claims it and the claim is NOT inherited.
+// 🔴 EVERY holder is named, not the first one found. Learned live: the cap reported this very branch
+// colliding with `origin/feat/action-feedback-visibility` and stayed SILENT about `origin/main`, which
+// holds the same claim. Naming one arbitrary ref out of several sends the reader hunting for the rest,
+// and it hid the single most load-bearing fact about a collision: whether one side has SHIPPED.
+// ⚠️ The cap NAMES that and does not rule on it. R-148 clause (4) says the LATER claim renumbers and
+// says nothing about the later claim having already reached `main` — which is a live case, not a
+// hypothetical (tech-debt #286, 2026-09-12: the earlier claim by 30 minutes is the UNMERGED one).
+// Resolving that is David's, so the output states both facts and stops.
 export function collisionsOf(mine, held) {
   const out = [];
-  for (const id of mine) for (const h of held) if (h.id === id && !h.inherited) { out.push({ id, ref: h.ref }); break; }
+  for (const id of mine) {
+    const refs = held.filter(h => h.id === id && !h.inherited).map(h => h.ref);
+    if (refs.length) out.push({ id, refs: [...new Set(refs)] });
+  }
   return out;
 }
 
@@ -137,6 +165,15 @@ if (SELF_TEST) {
   // 🔴 THE PROBE THAT MATTERS: the collision detector must be able to SEE a collision.
   ok(collisionsOf([309], [{ id: 309, ref: 'origin/feat/other', inherited: false }]).length === 1, 'the collision detector cannot see a collision');
   ok(collisionsOf([310], [{ id: 309, ref: 'origin/feat/other', inherited: false }]).length === 0, 'the collision detector reports a false collision');
+  // EVERY holder is named. One arbitrary ref out of three sends the reader hunting for the rest, and
+  // it hid `origin/main` — the holder that decides who must move — on this cap's own live collision.
+  const multi = collisionsOf([286], [
+    { id: 286, ref: 'origin/main', inherited: false },
+    { id: 286, ref: 'origin/feat/other', inherited: false },
+    { id: 286, ref: 'origin/main', inherited: false },
+  ]);
+  ok(multi.length === 1 && multi[0].refs.length === 2, `a collision named ${multi[0] ? multi[0].refs.length : 0} holder(s); both distinct refs must be named and duplicates folded`);
+  ok(multi[0].refs.includes('origin/main'), 'origin/main was dropped from the holder list — the one holder that decides who moves');
 
   // ══ tech-debt #286's probes. The defect was never in a MATCHER — every matcher above was correct
   // while the cap handed out a taken id. It was in the POPULATION the matchers were run over, and
@@ -245,7 +282,16 @@ const anc = (a, b) => { try { git('merge-base', '--is-ancestor', a, b); return t
 // EVERY ref answers NEXT FREE, including main, including this branch's own lineage. An id claimed
 // anywhere is taken, whatever its relationship to me — that is what "taken" means.
 // Collisions sweep every ref too; inheritance is decided PER ID at the merge-base, below.
-const { all: ALL_REFS, rivals: RIVAL_REFS } = selectPopulations(branches, { main: MAIN, hereRemote: `origin/${HERE}` });
+// 🔴 MAIN IS A RIVAL, AND THIS WAS THE SAME DEFECT ONE LAYER OVER — FOUND LIVE, 2026-09-12.
+// The first fix still filtered this tree's claims with `!onMain.has(id)`: *anything on main now is
+// already mine.* That is true only while your base IS main's tip. Measured the same hour: this branch
+// filed tech-debt `#286`, then `main` MOVED and another session filed a DIFFERENT `#286` on it
+// (*"a NEXT FREE ID declaration cached in a file goes stale"*, ledger #308). A real collision, two
+// defects under one number — and the cap could not see it, because the id was "on main".
+// `onMain-now` is a per-BRANCH proxy for a per-ID question, which is #286's own shape. So main joins
+// the rival population and inheritance from it is decided at `merge-base(HEAD, main)` like every other
+// ref: if main gained the id after you branched, it is a COLLISION, not an inheritance.
+const { all: ALL_REFS, rivals: RIVAL_REFS } = selectPopulations(branches, { main: null, hereRemote: `origin/${HERE}` });
 
 // Inheritance, cached by the merge-base commit rather than by the ref: nearly every branch here
 // shares one merge-base (`main`), so 38 refs cost one read of a 1MB ledger, not 38.
@@ -288,11 +334,12 @@ for (const [space, cfg] of Object.entries(SPACES)) {
   const localSrc = existsSync(cfg.file) ? readFileSync(cfg.file, 'utf8') : '';
   const local = idsIn(localSrc, cfg.re);
   const localRes = cfg.resRe ? idsIn(localSrc, cfg.resRe) : new Set();
-  const onMain = idsIn(show(MAIN, cfg.file), cfg.re);
-
-  // What THIS tree claims that main does not yet know about — reservations included, because a
-  // reservation IS a claim and must be swept exactly like a filed row.
-  const claimedHere = [...new Set([...local, ...localRes])].filter(id => !onMain.has(id));
+  // What THIS tree claims that our SHARED HISTORY WITH MAIN does not already hold — reservations
+  // included, because a reservation IS a claim and must be swept exactly like a filed row.
+  // NOT `!onMain.has(id)`: see the note above `selectPopulations`'s call. An id main acquired AFTER
+  // you branched is a rival's claim, not your inheritance.
+  const sharedWithMain = idsAtBase(mergeBaseOf(MAIN), space, cfg);
+  const claimedHere = [...new Set([...local, ...localRes])].filter(id => !sharedWithMain.has(id));
 
   // ── POPULATION 1 · NEXT FREE — every ref, nothing filtered, each claim carrying its holder.
   const allClaims = [];
@@ -331,7 +378,14 @@ for (const [space, cfg] of Object.entries(SPACES)) {
   }
 
   for (const c of collisionsOf(claimedHere, held)) {
-    fail.push(`COLLISION — ${cfg.label} ${space === 'ruling' ? 'R-' + c.id : '#' + c.id} is claimed by THIS branch (${HERE}) and by ${c.ref}. R-148 clause (4): the LATER claim renumbers — compare commit times and move whichever came second.`);
+    const onMainToo = c.refs.some(r => r.startsWith(MAIN));
+    fail.push(`COLLISION — ${cfg.label} ${space === 'ruling' ? 'R-' + c.id : '#' + c.id} is claimed by THIS branch (${HERE}) and by: ${c.refs.join(' · ')}`
+      + `\n         R-148 clause (4): the LATER claim renumbers — compare commit times with`
+      + `\n           git log --all --reflog --pretty='%cI %h %s' | grep -- '#${c.id}' | sort`
+      + (onMainToo ? `\n         🔴 ONE HOLDER IS ${MAIN} — that claim has SHIPPED. Clause (4) ranks by TIME and says nothing`
+                   + `\n            about a later claim that already merged, so if yours is the EARLIER one this is a`
+                   + `\n            question for David, not a mechanical renumber. The cap names it and does not rule on it.` : '')
+      + `\n         This cap never moves an id.`);
   }
 
   const top = highestClaim(allClaims);

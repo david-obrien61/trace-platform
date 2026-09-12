@@ -1,4 +1,5 @@
-# Last updated: 2026-09-12 (**#312 — SIX OWNER-TEST CARDS FLIPPED `covered` FROM DAVID'S LIVE RUNS** — campaign-lifecycle 1/2/4, ship-to 1/3 (`customer_addresses` now APPLIED + catalog-verified), breakpoint CARD 1 already flipped in #307; the ship-to CARD 3 leak clause SPLIT so it no longer forbids `deliveries.address_line2` (tech-debt #279); tech-debt **#286** filed — the id sweep reports a taken id as free when run from `main`.) See also:
+# Last updated: 2026-09-12 (**#314 — THE SWEEP'S OWN BLIND SPOT IS CLOSED (tech-debt #286 RESOLVED).** Two populations, not one: NEXT FREE from every ref, collisions by per-id inheritance at `merge-base(HEAD, ref)`; `main` is a rival too. Proven by making it fail from `main` — old script exit 0, new exit 1, same tree. 9/9 mutants. See the *id-claim* entry.) See also:
+# (**#312 — SIX OWNER-TEST CARDS FLIPPED `covered` FROM DAVID'S LIVE RUNS** — campaign-lifecycle 1/2/4, ship-to 1/3 (`customer_addresses` now APPLIED + catalog-verified), breakpoint CARD 1 already flipped in #307; the ship-to CARD 3 leak clause SPLIT so it no longer forbids `deliveries.address_line2` (tech-debt #279); tech-debt **#286** filed — the id sweep reports a taken id as free when run from `main`.) See also:
 # (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
 # (**#309 — THE ID-CLAIM RULE IS MINTED AND GUARDED:** `R-148` + `R-149` in the ruling table, prose unrewritten; `verify-id-sweep` sweeps every remote branch before a claim; `verify-id-citations` gains ledger-duplicate and commit-subject clauses; the board TOTAL carries its tree)
 # (**#307 — §6 r7 NOW DESCRIBES THE TILE GRID:** 4/6/8 at every width, the phone-first origin recorded, *describes-not-decides* stated; **no pixel moved**; CARD 1 owner-proven; tech-debt #283 closed, **#284** filed — the id-claim rule exists, unnumbered since 2026-09-02)
@@ -3040,10 +3041,23 @@ been complete since 2026-09-02.
 2. Write a `⏳ **#N — RESERVED …**` row naming your branch, commit it **alone**, and **push it**.
 3. *Then* build. A claim nobody can see is not a claim.
 
-**`scripts/verify-id-sweep.mjs`** (in `npm run verify`) — sweeps every rival branch's ledger rows,
-tech-debt rows, ruling ids **and commit subjects**; fails naming the id and the branch. **Same-lineage
-excluded** (an inherited claim is not a competing one). **Staleness measured and reported**; `--strict`
-fails on stale refs. It states in its own output that it **does not close the race**.
+**`scripts/verify-id-sweep.mjs`** (in `npm run verify`) — sweeps every branch's ledger rows, tech-debt
+rows, ruling ids **and commit subjects**; fails naming the id and **every** ref that holds it, flagging
+when one of them is `origin/main`. **Staleness measured and reported**; `--strict` fails on stale refs.
+It states in its own output that it **does not close the race**, and that it **never moves an id**.
+✏️ **CORRECTED 2026-09-12 (ledger #314, tech-debt #286). THIS ENTRY SAID *"Same-lineage excluded (an
+inherited claim is not a competing one)"* AND THAT WAS THE DEFECT, NOT THE DESIGN.** The exclusion was
+per-BRANCH, so **run from `main` it excluded every branch cut from `main`** — 38 refs down to 6 — and
+the cap printed `NEXT FREE: #310` in green while `origin` held `reserve(#310)`, `reserve(#311)` and a
+filed `#311` row. **The gate built to prevent collisions caused one.** 🔴 **The fix is not "stop
+excluding inherited claims" — it is that INHERITANCE IS A PROPERTY OF AN ID, NOT OF A BRANCH**: every
+ref is now swept for both questions, and an overlapping claim is inherited only if it was already
+claimed at **`merge-base(HEAD, ref)`**. `selectPopulations()` takes **no lineage predicate at all** and
+probe **P1** fails the build if one reappears. **Proven by making it fail** — one tree on `main`, one
+injected claim of a held id, old script exit 0 / new script exit 1 — and the **negative control caught a
+real bug in the fix** (the merge-base read counted filed rows but not RESERVATIONS, reintroducing the
+false positive the old filter existed to prevent; both sides now call one `fileClaims`). **9/9 mutants
+caught, 5 of them POPULATION mutants** (#182's prescription).
 
 **`scripts/verify-id-citations.mjs`** — four clauses now: **A** duplicate tech-debt rows · **B**
 dangling tech-debt citations (ratchet) · **C** duplicate `| **#N**` ledger rows, where **a RESERVED
