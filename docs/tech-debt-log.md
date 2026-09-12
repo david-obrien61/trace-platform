@@ -2256,3 +2256,73 @@ audit row — and it would put a write against an unapplied column on a surface 
 
 **Adding a fifth address column to `deliveries` inside a build about a new table is the scope creep
 that makes a diff unreviewable** — which is the reason it was not taken, stated rather than assumed.
+
+---
+
+## #280 — 🔴 THE CLOSE-OUT GATES ACCEPT "PUSHED" AS SHIPPED: NEITHER ANCESTRY OF `origin/main` NOR A **PRODUCTION** DEPLOYMENT IS ASSERTED ANYWHERE (NEW 2026-09-12, ledger #303)
+
+**The instance, measured 2026-09-12.** `fc94309` (ledger **#303**, the ship-to address book) and
+`d48000c` (ledger **#261**) sit on `fix/pmi-suggest-auth`. `origin/main` is `ea9a047` and **has not
+moved since the branch diverged** — the merge-base IS `origin/main`, so a merge would be a pure
+fast-forward and **not one of those commits is an ancestor of `main`.** Production is still
+`ea9a047`; every Vercel deployment for that branch is a **Preview**. The ledger row for #303 carries
+`fc94309` and the bar **BUILDER-COMPLETE**, and every word of that is literally true. It reads as
+shipped. It is not shipped.
+
+🔴 **AND THE GATES ARE NOT BROKEN — THEY WERE NEVER WRITTEN TO ASK.** Quoted, not paraphrased:
+
+- CLAUDE.md §9 → *"**BUILDER-COMPLETE (Thunder):** code works, builds pass, `npm run verify` exit 0
+  zero net-new, **committed**."*
+- CLAUDE.md §9 → *"**DEPLOYED (Thunder):** **pushed to origin** AND **Vercel-deployed** AND the
+  new-code signal is visible in-app."*
+- CLAUDE.md §1 rule 9 → *"Every `git commit` is IMMEDIATELY followed by `git push` to origin — never
+  leave a commit sitting unpushed."*
+
+**Not one of those three names a BRANCH, and not one names an ENVIRONMENT.** A push to *any* branch
+satisfies "pushed to origin." Vercel builds a Preview for *every* branch, so "Vercel-deployed" is
+satisfied by a deployment **no customer can reach**. The `[TRACE:*]` signal is visible in-app — on
+the preview URL. Every clause passes, honestly, on work that never left a feature branch.
+
+✅ **WHAT CAUGHT IT WAS THE OWNER-TEST BOARD'S GATE 0, AND IT IS THE ONLY CLAUSE IN THE CORPUS THAT
+NAMES `origin/main`:** *"Match it to `git log --oneline origin/main -1` — **not to a SHA written in
+this file**, because Vercel deploys the TREE and *any* push to `main`, docs included, moves the
+stamp."* 🔴 **That clause fires at OWNER-PROVE time — after close-out, on David, at a screen.** The
+gate that is supposed to stop an unshipped build from being recorded as finished let it through, and
+the check that caught it runs on the human, hours later, and only because he happened to run it.
+
+**THE FIX IS TWO ASSERTIONS, AND THEY ARE DIFFERENT IN KIND:**
+
+① **`git merge-base --is-ancestor <sha> origin/main`** — exit 0, or the row is not DEPLOYED. This is
+mechanical, free, needs no credential, and could run inside `npm run verify` or a close-out script
+today. It is also the assertion that would have caught this exact instance **at close-out**.
+
+② **a deployment whose `target` is `production`, for that SHA.** 🔴 **This one is NOT checkable from
+the repo — nothing we own reads Vercel**, and that is the honest state, not an omission. It needs
+either a `vercel` CLI/API call with a token or David's eye on the dashboard. Naming it as unbuilt is
+the point; assuming ① implies ② is the next version of this defect.
+
+⚠️ **THE SHA STAMP DOES NOT CLOSE THIS EITHER, AND THAT IS WORTH STATING BEFORE SOMEBODY REACHES FOR
+IT.** OP-15's mechanical form (`built <time> · <sha>` in the footer) proves *what the bundle you are
+looking at was built from* — and a **Preview URL carries the stamp too**. A matching SHA read on a
+preview deployment proves the build succeeded and proves nothing about production. The stamp answers
+*"am I testing the code I think I am?"*; it does not answer *"is this code shipped?"* GATE 0's
+`origin/main` clause is what bridges that, and it lives on one board per capability rather than in
+the gate.
+
+**CLASS.** This is **tech-debt #60**'s family one layer further out. #60: *Vercel deploys the TREE,
+not the COMMIT, and a failed build is silent* — the commit was on `main` and the build died. Here
+the build **succeeded** and the commit was **never on `main`**. Both present identically: a green
+close-out, a working preview, and an app in production that is not what the record says it is.
+
+**BLAST RADIUS — MEASURED, AND IT IS ONE ROW.** Every SHA cited in `docs/CLOSE-OUT-LEDGER.md` was
+checked for `origin/main` ancestry on 2026-09-12. Three came back off-main and **only `fc94309` is a
+real instance**: `5fc41e4` is `origin/assets` (Andrew's branch, deliberately unmerged and recorded as
+such), and `4f8c5bb` is #281's **pre-amend** SHA cited in its own footnote — the amended `4cc26e7`
+IS on `main`. So this is a gap that has been open the whole time and has been hit once. It is filed
+now, while it is one row, rather than after it is a pattern.
+
+**NOT FIXED IN THIS PASS, AND THE REASON IS STATED:** ① is a change to the close-out gate text in
+three files (CLAUDE.md §9, `docs/operating-doctrine/end-of-session-protocol.md`, and whatever script
+hosts it) plus a new check; ② is a decision about whether we take a Vercel credential into the repo
+at all. **Both are David's calls, and the merge of `fix/pmi-suggest-auth` is a separate decision he
+has explicitly reserved.**
