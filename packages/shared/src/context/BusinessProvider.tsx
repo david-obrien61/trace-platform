@@ -184,7 +184,11 @@ export interface BusinessContextValue {
   can: (permissionId: string) => boolean;
 }
 
-const BusinessContext = createContext<BusinessContextValue>({
+// EXPORTED so a test can MOUNT a consumer under real permissions and drive its OWN controls,
+// instead of asserting about its source text (§6 r19(d) — prefer a seam that makes the condition
+// reachable over more assertions aimed near it). Application code uses `useBusinessContext()`;
+// nothing outside a test provides this directly.
+export const BusinessContext = createContext<BusinessContextValue>({
   business: null,
   businessId: null,
   businesses: [],
