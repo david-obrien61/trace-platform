@@ -325,7 +325,10 @@ document.getElementById('export').onclick = ()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`lawns-zone-walk-${new Date().toISOString().slice(0,10)}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();
+  // Revoking the blob URL in the same tick cancels the download on some Safari versions —
+  // the link is dead before Safari has read it. Hold it for 10s, then release. (Ledger #301.)
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
 document.getElementById('plantlist').innerHTML =
