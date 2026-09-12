@@ -57,6 +57,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { NotPermitted, requirementText } from '@trace/shared/components/SurfaceState';
+import { useBreakpoint } from '@trace/shared/hooks/useDevice';
 import { DeliverySchedule } from './DeliverySchedule';
 import {
   buildCalendarModel, parseYmd, WEEKDAY_NAMES, WEEKDAY_SHORT,
@@ -99,32 +100,24 @@ function monthDay(date: string): string {
 }
 
 /**
- * Is the viewport narrow enough that a dropdown is the wrong control?
+ * ⚠️ `useIsNarrow` LIVED HERE AND IS GONE (2026-09-12) — this surface now asks the ONE platform
+ * detector, `useBreakpoint()`. Its old comment argued, correctly, that it could not reuse
+ * `ReceiptKeeper.useIsMobile` because the two answered DIFFERENT QUESTIONS, and named itself "the
+ * SECOND — the rule-of-three extraction is not yet earned and is named here so the third one takes
+ * it rather than adding a fourth copy." The extraction was taken instead of the third copy.
  *
- * ⚠️ DELIBERATELY NOT `ReceiptKeeper.useIsMobile`, and the reason is that they answer
- * DIFFERENT QUESTIONS. That one asks "can this device take a photo" — pointer coarseness and
- * user-agent, because a camera-first capture screen turns on the hardware. This asks "is there
- * room for a select", which is a width question and nothing else. Reusing it would have made a
- * desktop browser with a touchscreen navigate by arrows. §6 r8 extracts the same OPERATION in
- * two places; these are two operations that happen to both call `matchMedia`, and this is the
- * SECOND — the rule-of-three extraction is not yet earned and is named here so the third one
- * takes it rather than adding a fourth copy.
- *
- * 768px is the platform's existing desktop/tablet line (§6 r7, the tile grid).
+ * 🔴 AND THE BOUNDARY MOVED, 767px → 1024px, WHICH IS A REAL BEHAVIOR CHANGE — READ THIS BEFORE
+ * REVERTING IT. The old query was `(max-width: 767px)`, justified in its own comment as "768px is
+ * the platform's existing desktop/tablet line (§6 r7, the tile grid)". THE TILE GRID HAS NEVER
+ * USED 768 — it breaks at 640 and 1024 (`TileGrid.tsx`), so that citation was false and the number
+ * came from nowhere the repo could support. Worse, it contradicted the intent stated three lines
+ * above the control itself: "Arrows are the whole interface on a phone OR THE TABLET IN THE YARD."
+ * A tablet in portrait is 768–834px wide, so at 767 the yard tablet got the DROPDOWN — the exact
+ * control that comment says it should not have. Binding on `wide` (>= 1024, tablet-landscape and
+ * desktop) makes the code do what its comment always said. The cost is named rather than buried:
+ * a browser window between 768 and 1023px now shows arrows where it used to show the select.
+ * To revert is one word — `band === 'compact'` — and it is David's call.
  */
-const NARROW_QUERY = '(max-width: 767px)';
-function useIsNarrow(): boolean {
-  const [narrow, setNarrow] = useState<boolean>(
-    () => (typeof window === 'undefined' ? false : window.matchMedia?.(NARROW_QUERY)?.matches ?? false));
-  useEffect(() => {
-    const mq = window.matchMedia?.(NARROW_QUERY);
-    if (!mq) return;
-    const recompute = () => setNarrow(mq.matches);
-    mq.addEventListener?.('change', recompute);
-    return () => mq.removeEventListener?.('change', recompute);
-  }, []);
-  return narrow;
-}
 
 /**
  * The window `offsetWeeks` steps from home, as bare bounds. Half-open [start, end).
@@ -158,7 +151,8 @@ export function OperationsCalendar() {
   const [writeError, setWriteError] = useState<string | null>(null);
   const [offsetWeeks, setOffsetWeeks] = useState(0);
 
-  const isNarrow = useIsNarrow();
+  // Arrows on a phone and on the yard tablet; the select at the desk. See the note above.
+  const atDesk = useBreakpoint() === 'wide';
   const dayRef = useRef<HTMLDivElement | null>(null);
 
   // The model is rebuilt from whatever we actually have. Rules that failed to load are an
@@ -357,7 +351,7 @@ export function OperationsCalendar() {
               already navigates by dropdown, they would be a third way to do what a
               select does better across a year. Both drive the same `moveWindow`.  */}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {isNarrow ? (
+            {!atDesk ? (
               <>
                 <button
                   onClick={() => moveWindow(offsetWeeks - WINDOW_STEP_WEEKS)}

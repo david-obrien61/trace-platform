@@ -1487,6 +1487,13 @@ id rather than re-telling it (STD-011 — one canonical narrative, this is the c
 `stories.html` (Cross-cutting) + the live `cultivar_demo_kanban.html` (grouped into Built / Building / Demo-op /
 Scoped-out columns)._
 
+### Device vocabulary — one detector, four axes (BUILT, as-built capture)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 3.4
+PIECES: useBreakpoint, useInput, useContainer, breakpoint_tokens, no_platform_detector
+ONE device detector for the whole platform, reading `matchMedia` against breakpoint tokens the CSS reads too — never a user-agent. The four questions a surface can ask are SEPARATE because they have different answers: VIEWPORT (how wide — decides layout), INPUT (finger or mouse — decides target size and whether a camera is offered), CONTAINER (browser, installed PWA, or native shell — decides chrome and safe areas), and PLATFORM (what the device IS). 🔴 **PLATFORM HAS NO DETECTOR AND WILL NOT GET ONE** — the only mechanism is a self-declared user-agent string (iPadOS reports itself as a Mac), so device INTENT is DECLARED by the surface, per David's 2026-08-23 ruling *"tile capability is declared, not accidental: `phone` | `desktop` | `either`"* — whose build is still OPEN and owed. _Written 2026-09-12 (ledger #305) as the **IN-CODE-NOT-ON-THE-BOARD** case: two rival detectors and a whole camera-first capture path had shipped with no story behind them._ ⚠️ **The BEHAVIOURAL mobile story is a different story and it is OWED TO DAVID, not written here** — Lauren reviews the delivery schedule on desktop because the phone calendar truncates, then re-runs the whole day on her phone because the send-to button lives there, then hands the crew printed orders. That narrative is David's to dictate; this line covers only the vocabulary built underneath it.
+
 ### Server-authoritative pricing & discount (BUILT)
 STATUS: written
 SCOPE: platform, vertical:cultivar

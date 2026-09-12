@@ -123,6 +123,46 @@ export const maxWidth = {
   full: '100%',
 } as const;
 
+// ─── Viewport breakpoints — THE ONE SOURCE OF THE NUMBERS ─────────────────────
+// Every width breakpoint in the platform — CSS and JS alike — resolves to these two
+// numbers. Nothing else may write a raw px width into an `@media` query; the CSS that
+// needs a breakpoint INTERPOLATES these (see `components/tiles/TileGrid.tsx`), so there
+// is no second copy to drift. `hooks/useDevice.ts` reads the same constants, and
+// `hooks/deviceDetector.test.ts` §E fails the build if a raw one appears anywhere else.
+//
+// WHY THESE NUMBERS AND NOT OTHERS: they are Tailwind's `sm` and `lg`, which this file
+// is already on — `spacing` is Tailwind's scale by its own comment, `maxWidth` is
+// Tailwind's scale, and `TileGrid` was already breaking at 640 and 1024. Adopting them
+// as the named bands INVENTS NO NEW NUMBER and leaves the tile grid's behavior byte-identical.
+// The two numbers that are NOT kept are named here so nobody re-derives them: `useIsMobile`'s
+// 820 (an iPad-portrait UA workaround, deleted with the hook) and `useIsNarrow`'s 767 (cited
+// in its own comment as "the tile grid's line" — the tile grid has never used 767).
+export const breakpoints = {
+  /** < 640 — phone portrait. One column, thumb reach, no hover. */
+  compact: 0,
+  /** 640–1023 — phone landscape, tablet portrait. The yard tablet lives here. */
+  medium: 640,
+  /** >= 1024 — tablet landscape and desktop. Lauren's desk. */
+  wide: 1024,
+} as const;
+
+export type Band = keyof typeof breakpoints;
+
+/** The bands, narrowest first. The ORDER is load-bearing: `bandFor` walks it downward. */
+export const BANDS: readonly Band[] = ['compact', 'medium', 'wide'] as const;
+
+/**
+ * Media-query strings built FROM `breakpoints`, so a query can never disagree with the
+ * number it is meant to express. These are the only strings any `matchMedia` call or
+ * injected stylesheet may use for a width.
+ */
+export const media = {
+  /** Matches when the viewport is in this band or wider. */
+  from: (b: Band): string => `(min-width: ${breakpoints[b]}px)`,
+  /** Matches when the viewport is NARROWER than this band. */
+  below: (b: Band): string => `(max-width: ${breakpoints[b] - 1}px)`,
+} as const;
+
 // ─── Ignition OS palette (dark navy/industrial theme) ─────────────────────────
 // All raw hex values. Opacity variants use rgba() inline at the call site.
 export const ignition = {

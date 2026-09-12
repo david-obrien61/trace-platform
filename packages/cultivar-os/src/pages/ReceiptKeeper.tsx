@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { authHeaders } from '@trace/shared/auth';
+import { useInput } from '@trace/shared/hooks/useDevice';
 import { useBusinessContext } from '@trace/shared/context';
 import {
   LineItem,
@@ -40,30 +41,16 @@ const CAPTURE_COPY = {
 // still reads correctly — its customer/delivery fields just come back empty (D-9).
 const OCR_SHAPE: 'receipt' | 'invoice' = 'invoice';
 
-// Device-aware capture: mobile → camera-first; desktop → file upload (no camera).
-// Combines a coarse-pointer/narrow-viewport check with a UA fallback so a phone in
-// landscape or a tablet still resolves to mobile.
-function detectMobile(): boolean {
-  if (typeof window === 'undefined') return false;
-  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
-  const narrow = window.matchMedia?.('(max-width: 820px)')?.matches ?? false;
-  const ua     = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent || '');
-  return (coarse && (narrow || ua)) || (ua && narrow);
-}
-function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState<boolean>(detectMobile);
-  useEffect(() => {
-    const recompute = () => setIsMobile(detectMobile());
-    window.addEventListener('resize', recompute);
-    const mq = window.matchMedia?.('(max-width: 820px)');
-    mq?.addEventListener?.('change', recompute);
-    return () => {
-      window.removeEventListener('resize', recompute);
-      mq?.removeEventListener?.('change', recompute);
-    };
-  }, []);
-  return isMobile;
-}
+// Device-aware capture: a finger → camera-first; a mouse → file upload (no camera).
+//
+// ⚠️ MIGRATED 2026-09-12 — this surface used to own `detectMobile`/`useIsMobile`, which mixed a
+// coarse-pointer test, an 820px width test and a USER-AGENT REGEX into one boolean. The question
+// it was really asking is INPUT, not viewport and not platform: "will a finger be doing this?"
+// `touchPrimary` (coarse pointer AND no hover) answers exactly that, and answers it BETTER — the
+// old code needed the UA regex to keep a phone in landscape on the camera path, because at 844px
+// wide the 820px test said desktop. Hover carries that case with no user-agent at all.
+// The camera path is only ever an AFFORDANCE: `Choose from photos / files` sits beside it on
+// every device, so a wrong guess here costs a tap, never a capability. See `useDevice.ts`.
 
 // Service-type inference for a scheduled delivery: a job that INSTALLS/PLANTS (or carries a
 // warranty implying installed work) is 'planting'; anything else is a 'delivery_only' drop.
@@ -158,7 +145,7 @@ export function ReceiptKeeper() {
   // 'direct' otherwise (the Receipts tile / nav). Observability only; behaviour is identical.
   const enteredFrom = (location.state as { from?: string } | null)?.from ?? 'direct';
   const { businessId } = useBusinessContext();
-  const isMobile = useIsMobile();
+  const { touchPrimary } = useInput();
   const fileInputRef   = useRef<HTMLInputElement>(null); // gallery / file picker (no camera)
   const cameraInputRef = useRef<HTMLInputElement>(null); // mobile camera (capture attr)
 
@@ -220,8 +207,8 @@ export function ReceiptKeeper() {
   const [deliveryWarn, setDeliveryWarn] = useState<string | null>(null);
 
   useEffect(() => {
-    if (TRACE_OCR) console.log('[TRACE:OCR] device-detect — isMobile:', isMobile, 'layout:', isMobile ? 'camera-first' : 'file-upload', 'shape:', OCR_SHAPE);
-  }, [isMobile]);
+    if (TRACE_OCR) console.log('[TRACE:OCR] device-detect — touchPrimary:', touchPrimary, 'layout:', touchPrimary ? 'camera-first' : 'file-upload', 'shape:', OCR_SHAPE);
+  }, [touchPrimary]);
 
   useEffect(() => {
     if (TRACE_ROUTER) console.log('[TRACE:ROUTER] invoice capture opened — entered-from:', enteredFrom, 'shape:', OCR_SHAPE);
@@ -301,7 +288,7 @@ export function ReceiptKeeper() {
     setMimeType(mt);
     setFileSizeBytes(sizeBytes);
 
-    if (TRACE_OCR) console.log('[TRACE:OCR] capture —', isMobile ? 'mobile' : 'desktop', 'name:', file.name, 'original:', file.size, 'compressed:', sizeBytes, 'type:', mt);
+    if (TRACE_OCR) console.log('[TRACE:OCR] capture —', touchPrimary ? 'touch' : 'pointer', 'name:', file.name, 'original:', file.size, 'compressed:', sizeBytes, 'type:', mt);
     if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] file selected — name:', file.name, 'original:', file.size, 'compressed:', sizeBytes, 'type:', mt);
   }
 
@@ -1042,7 +1029,7 @@ export function ReceiptKeeper() {
         {step === 'idle' && (
           <>
             {!imageBase64 ? (
-              isMobile ? (
+              touchPrimary ? (
                 // ── MOBILE: camera-first. Big tap target → straight to the camera. ──
                 <>
                   <button style={CAMERA_BTN} onClick={() => cameraInputRef.current?.click()}>
@@ -1114,7 +1101,7 @@ export function ReceiptKeeper() {
                   Read with AI →
                 </button>
                 <button style={BTN_GHOST} onClick={() => { setImageBase64(null); setImagePreview(null); setFileName(''); }}>
-                  {isMobile ? 'Retake / choose another' : 'Choose a different file'}
+                  {touchPrimary ? 'Retake / choose another' : 'Choose a different file'}
                 </button>
               </>
             )}

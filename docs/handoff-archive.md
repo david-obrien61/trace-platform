@@ -1,6 +1,7 @@
 # Handoff Archive — TRACE Platform
 
 <!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #306, OP-13 N=3) — verbatim, not summarized -->
+<!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #305, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **THE GOOGLE REVIEW ASK: THE LINK FIELD EXISTED, NOBODY COULD FIND IT, AND THE ASK COULD NEVER HAVE RUN ANYWAY. #300. TECH-DEBT #270.** 🔴 **THE HEADLINE IS THE PREMISE, CORRECTED BY THE RECON: three of four parts were wired AND SO WAS THE FIELD** — on `/settings/all` → *Asking for reviews*, stored in `business_modules.config.review_url`. What was actually missing was a way to turn the feature on: `followup_engine` is a `planned` tile and `/subscription` offers no Turn on for it, so the prompt could not fire on any tenant whatever David entered.
 

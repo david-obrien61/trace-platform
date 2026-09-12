@@ -2478,3 +2478,46 @@ happens to those, or it moves the collision rather than removing it.
 for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
 (*did it reach main and production?*). They are one family: **nothing in the corpus asserts where the
 work is, at any of the three moments** — and each was found by a different failure within one day.
+## #281 — 🟡 §6 RULE 7 IS A BINDING CODING RULE AND THE COMPONENT IT DESCRIBES HAS NEVER BEHAVED THAT WAY (NEW 2026-09-12, ledger #305)
+
+**CLAUDE.md §6 r7, verbatim and in full:** *"Tile grid: desktop/tablet only (768px+)."*
+
+**`TileGrid.tsx`, measured 2026-09-12 — the rule is wrong in BOTH of its two claims:**
+
+1. **The number.** The grid has no 768 anywhere. It breaks at **640** and **1024** (Tailwind's `sm`
+   and `lg`), and the file's history shows no 768 at any point.
+2. **"desktop/tablet only."** The grid renders at **every** width — below 640 it is a **4-column**
+   layout, which is the phone layout. It is not gated, hidden or suppressed on a narrow screen;
+   the base rule outside any media query IS `repeat(4, 1fr)`.
+
+🔴 **WHY THIS IS DEBT AND NOT A TYPO: A BINDING RULE WAS CITED AS EVIDENCE AND STEERED A DECISION.**
+`OperationsCalendar.useIsNarrow` pinned itself at **767px** and justified the number in its own
+comment as *"768px is the platform's existing desktop/tablet line (§6 r7, the tile grid)"* — a
+citation of this rule, for a number the tile grid does not contain. That boundary then contradicted
+the intent stated three lines above the control it governed (*"Arrows are the whole interface on a
+phone **or the tablet in the yard**"*), so a portrait tablet at 768–834px got the dropdown the
+comment says it should not have. **The rule did not merely sit there being wrong; it was read,
+believed and built on.** This is [[R-26]]'s shape — a written declaration nobody checked against
+reality, steering a decision — and it is the FIFTH comment-contradicts-its-own-repo finding in the
+log's recent run (#61, #145, #180, #188, this).
+
+**FIXED IN THIS PASS:** the false citation and the 767 boundary are gone (ledger #305); the calendar
+now binds on the shared `wide` token, and `deviceDetector.test.ts` §E fails the build if any raw px
+width appears in an `@media` again.
+
+🔴 **NOT FIXED, AND DELIBERATELY NOT: THE RULE ITSELF.** §6 r7 is one of nineteen binding rules in
+**David's** doc. Rewriting a rule in CLAUDE.md inside a hook refactor is exactly the drift the
+close-out gates exist to catch, and the correction is not purely mechanical — **it needs David to
+say which of two things he meant**, because they are different products:
+
+- **(a) The rule is stale prose and the code is right** — the tile grid is responsive from 4 columns
+  up, has always been, and r7 should read *"Tile grid: 4 / 6 / 8 columns at `compact` / `medium` /
+  `wide` (`design-system/tokens`)"* — which also stops the number being retyped.
+- **(b) The rule is INTENT and the code never met it** — tiles were meant to be a desk-and-tablet
+  surface, and the 4-column phone layout is an unimplemented decision, not a feature. **On a mobile
+  build this matters**: it decides whether the dashboard gets a phone treatment or a redirect.
+
+⚠️ **This is live for the next pass, not academic.** The mobile work now queued reads §6 r7 to learn
+what the dashboard does on a phone, and today the rule answers that question **wrongly and
+confidently** — the same failure mode as the inventory doc that reported a function slot free at
+12/12 (#178's class).

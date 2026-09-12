@@ -78,6 +78,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#305 — the breakpoint vocabulary (one device detector, four axes)**
+- 🔴 **Tech-debt #281 — §6 r7 is a BINDING RULE and it is wrong in both of its claims.** It reads *"Tile grid: desktop/tablet only (768px+)"*; the grid breaks at **640 and 1024** and renders **4 columns on a phone**. **Which did you mean — stale prose, or an intent the code never implemented?** It is not cosmetic: **the next mobile pass reads that rule to learn what the dashboard does on a phone**, and today it answers wrongly and confidently. Thunder did not edit it — rewriting one of nineteen binding rules in your doc inside a hook refactor is the drift the gates exist to catch.
+- 🔴 **THE BEHAVIOURAL MOBILE STORY IS OWED BY YOU.** Lauren reviews the schedule on desktop because the phone calendar truncates, re-runs the day on her phone because the send-to button lives there, then hands the crew printed orders. **That narrative is yours to dictate**; Thunder wrote only the as-built vocabulary line (the IN-CODE-NOT-ON-THE-BOARD case).
+- ⚠️ **Board CARD 2 is a judgement call, not a pass/fail** — the Operations calendar now shows arrows at tablet width (below **1024px**) instead of the dropdown (below 767px). The old number cited the tile grid for a breakpoint the tile grid has never had. **If you prefer the old feel, say so — it is a one-word revert.**
+- **Does the container axis stay a seam?** `useContainer()` can return `native`/`installed` and **neither can occur** — no wrap, and **no web-app manifest**, so the app cannot be installed. Adding a manifest is a decision nobody has made.
+
 **#303 — the ship-to address book (`customer_addresses`)**
 - 🔴 **A STORY IS OWED BY YOU, and Thunder did not write one.** `user_stories.md:1630` carries `customer_addresses` as `STATUS: scoped-out`; **this build inverts that row**, which is a status flip you make. `:524` and `:608` name the owed `conditional-address-on-delivery` sub-story.
 - 🔴 **Apply `20260911b_customer_addresses.sql`** — written, not applied. **Board CARD 2 is only runnable BEFORE you apply it**; everything else waits on it.

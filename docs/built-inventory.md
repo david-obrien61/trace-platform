@@ -1,4 +1,6 @@
 # Last updated: 2026-09-12 (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
+# (**#305 — THE BREAKPOINT VOCABULARY:** one device detector, four axes named apart; `useIsMobile`/`useIsNarrow` and the user-agent regex DELETED; breakpoints live once in `design-system/tokens.ts` and the CSS interpolates them; **no platform detector, deliberately** — see § Device vocabulary)
+# (**#303 — THE SHIP-TO ADDRESS BOOK (`customer_addresses`):** D-41's L2 hook taken up, additive; the order still snapshots onto the delivery row; `customers:*` reused and no string minted; NO backfill from history; migration WRITTEN, NOT APPLIED. See the *Ship-to address book* entry.) See also:
 # (**#301 — ONE STOP, THREE SCREENS:** the schedule, the route and the order render one `<StopCard>` over one `readStops`; the ship-to is editable from the stop and recorded; a checkout stop carries its order; fee lines listed, not filtered (R-144). See the *One stop, three screens* entry.) See also:
 # (**#300 — THE GOOGLE REVIEW LINK IS A BUSINESS PROFILE FIELD, AND NOTHING PROMPTS ON A PAST STOP:** same store, per-table Save, the door check; the ask still cannot be turned on — tech-debt #270. See the *Fulfilment tap + review ask* entry.) See also:
 # (**#298 — THE ZONE WALK IS A HOSTED CAPTURE TOOL, NOT APP CODE:** served from `packages/cultivar-os/public/tools/`; writes nothing to the database; its import target `business_inventory.zone` does not exist (#266). See the *Field Capture Tools* entry.) See also #297:
@@ -254,7 +256,7 @@
 - ⚠️ **The Receipt Keeper surface has NO id on the 24-capability board** (3.1 is Leakage; 4.2 is `/inventory/reconcile`) — checked this session, flagged, not minted.
 
 **Wave 2 — mobile-native invoice capture + infer-then-confirm router (2026-06-20, BUILDER-COMPLETE / owner-proof owed):**
-- **Device-aware capture** (`ReceiptKeeper.tsx` `useIsMobile`): MOBILE → camera-first (big "Take Photo", `<input capture="environment">`) + "choose from photos/files" secondary; DESKTOP → drag-drop file upload (no camera). `[TRACE:OCR]`.
+- **Device-aware capture** (`ReceiptKeeper.tsx`): TOUCH-PRIMARY → camera-first (big "Take Photo", `<input capture="environment">`) + "choose from photos/files" secondary; POINTER → drag-drop file upload (no camera). `[TRACE:OCR]`. ✏️ **CORRECTED 2026-09-12 (ledger #305) — THIS LINE NAMED `useIsMobile`, WHICH NO LONGER EXISTS.** That hook mixed `pointer:coarse`, an 820px width test and a **user-agent regex** into one boolean; it is deleted, and the surface now asks `useInput().touchPrimary` (coarse pointer AND no hover) from the ONE platform detector, `packages/shared/src/hooks/useDevice.ts`. **The decision is the INPUT axis, not viewport and not platform** — which is why a phone in **landscape at 844px** still gets the camera with **no user-agent read at all**, the case the regex used to carry.
 - **Relabel** — killed the "Capture truck receipts" Ignition leak. Copy now from `CAPTURE_COPY` (nursery default "Snap a receipt or invoice"); marked for VerticalConfig when that lands.
 - **Invoice-shape OCR** (`api/receipts/ocr.ts`): `shape` param (`receipt` default = unchanged for all existing callers | `invoice` new). Invoice prompt is a superset — keeps vendor/date/line_items(+sku)/subtotal/tax/total, ADDS customer_name/phone/email, bill_to + ship_to addresses, due_date, delivery_date. Same provider chain (Gemini→Haiku, platform_config models, image-to-Supabase write). UNKNOWN/null for absent fields (D-9, never 0/fabricated).
 - **Review-before-write**: the confirm screen now shows the invoice fields (customer, bill-to/ship-to, due/delivery dates) as editable inputs for human validation before any write.
@@ -2973,3 +2975,49 @@ Dave's with `scripts/seed-uppot-harness.mjs`, which refuses to run against LAWNS
 **Verified:** 39 self-test probes incl. negative controls in every verdict kind · 5 mutants (same-day ordering, last-word rule, renames, cascade, TABLE_GONE swallowing MISSING) each caught. **Measured 2026-09-11:** NOT_APPLIED 3 · APPLIED 108 · HOLDS 4 · SUPERSEDED 5 · INCONCLUSIVE 10 · TABLE_GONE 1 · COULD_NOT_CHECK 2 · NOTHING_TO_APPLY 1. Detail: `docs/decisions/2026-09-11-migration-apply-state.md`.
 
 **Limits, stated:** an INVARIANT that holds proves nothing is broken, not that the file ran. INCONCLUSIVE means present but asserted by more than one file. `--probe` (anon key) sees tables and columns only.
+
+---
+
+### PLATFORM UI · DEVICE VOCABULARY — ONE DETECTOR, FOUR AXES (2026-09-12, ledger #305) — **BUILDER-COMPLETE · 0 of 7 owner-test cards**
+
+**What it is.** The single place the platform asks anything about the device it is rendering on:
+`packages/shared/src/hooks/useDevice.ts`. Pass ① of the mobile build — the vocabulary the delivery
+and orders passes are meant to use.
+
+**The four axes, named apart because they have different answers:**
+- **VIEWPORT** → `useBreakpoint(): 'compact' | 'medium' | 'wide'`. `matchMedia` against the shared
+  tokens; reacts to resize and rotation. **This is the axis ~90% of callers want.**
+- **INPUT** → `useInput(): { coarse, hover, touchPrimary }`. `touchPrimary` = coarse **and** no
+  hover. True on a phone in **any orientation** and on a tablet; **false on a touchscreen laptop**,
+  which the old hook got wrong.
+- **CONTAINER** → `useContainer(): 'browser' | 'installed' | 'native'`. 🔴 **Returns `browser`
+  today and the other two are unreachable** — no wrap exists to set the handshake global, and the
+  app ships **no web-app manifest**, so `display-mode: standalone` cannot fire. The seam is built so
+  the wrap needs no refactor; it is not a claim that the wrap works.
+- **PLATFORM** → 🔴 **NO DETECTOR, DELIBERATELY.** The only mechanism is a self-declared user-agent
+  (iPadOS reports itself as a Mac; the deleted regex tested for `iPad` and on a current iPad that
+  test is FALSE). Device INTENT is **declared**, per David's 2026-08-23 ruling (`phone`/`desktop`/
+  `either`) — whose build is still **OPEN and owed**, and which this pass does not pre-empt.
+
+**The numbers live once.** `design-system/tokens.ts` → `breakpoints` (compact 0 / medium **640** /
+wide **1024**), `BANDS`, `media.from/below`. **Tailwind's `sm` and `lg`** — the scales this file was
+already on, and the two numbers `TileGrid` already broke at, so **no new number was invented and no
+pixel moved**. `TileGrid` — the platform's only CSS width breakpoints — now **interpolates**
+`${breakpoints.medium}px` into its injected stylesheet, so CSS and JS share the constants literally
+rather than agreeing by coincidence.
+
+**Migrated and deleted.** `ReceiptKeeper.useIsMobile` + `detectMobile` (and its user-agent regex) →
+`useInput().touchPrimary`. `OperationsCalendar.useIsNarrow` → `useBreakpoint() === 'wide'`. Both
+hooks are gone; nothing in the app reads a user-agent to decide layout.
+
+**Guard.** `hooks/deviceDetector.test.ts` — **57 assertions**. §C derives the population of
+`matchMedia` callers from the corpus and **states the expected count**, so a third detector fails
+the build until declared (#182); §D does the same for `navigator.userAgent`, declaring the five
+legitimate recorded-context readers; §E fails any raw px width in an `@media`. Self-pruning both
+directions. **7/7 deliberate mutants caught**, and the suite **went RED on its own first run** —
+catching a probe that graded its own file's prose rather than its code (#146's shape).
+
+⚠️ **One deliberate behaviour change:** the Operations calendar's window control switches to arrows
+below **1024px** rather than **767px**. The old number cited "§6 r7, the tile grid" — **the tile grid
+has never used 768** — and contradicted the intent three lines above it. Board **CARD 2**; David's
+to override in one word. Related: tech-debt **#281**.
