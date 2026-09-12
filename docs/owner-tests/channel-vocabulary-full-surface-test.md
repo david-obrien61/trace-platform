@@ -130,7 +130,10 @@ whose default ACL grants `anon` TRUNCATE and REFERENCES, and RLS cannot filter T
 ⚠️ **You said there is no PITR. Take your manual snapshot before this card.** The migration is
 additive — no column dropped, no row rewritten — and `campaign_posts` is empty, but `social_drafts`
 has 7 rows and `advert_channels` is live config on both tenants.
-STEPS: paste `supabase/migrations/20260912_channels_one_vocabulary.sql` whole and run it.
+STEPS: paste **`supabase/migrations/20260912_channels_one_vocabulary.sql`** whole and run it.
+⚠️ **THE REF MATTERS AND IS STATED, NOT ASSUMED (tech-debt #287):** that file exists on
+**`origin/feat/channel-vocabulary`** and is **not on `main`** until the branch merges. If your
+checkout does not have it, you are on a different ref — not missing a file.
 **PASS:** it completes, and you see the notice **`PRE-FLIGHT 0 PASSED`**.
 🔴 **FAIL:** any `PRE-FLIGHT 0 FAILED` message — it names the offending value and **nothing was
 applied**. That is the design; report the value.
@@ -141,10 +144,37 @@ LAST-PROVEN: never
 DEVICE: desktop
 RUNS: post-apply
 COVERS: R-150 ②
-STEPS: run verification queries ①–⑤ from the foot of the migration file.
-**PASS — all five:** six rows in `channels` · **both CHECKs gone and TWO FKs present** · `subject`
-exists and `is_nullable = YES` · RLS on with **exactly one policy, SELECT** · the trigger exists and
-its definition says **`BEFORE INSERT OR UPDATE`**.
+⚠️ **THIS CARD USED TO POINT AT "the verification queries at the foot of the migration file" AND THAT
+WAS WRONG TWICE OVER** — it asked David to open a file to find a query (pointing, not pasting), and the
+file was not in his tree (tech-debt **#287**). The queries are pasted here. Paste the whole block:
+
+```sql
+-- ① the vocabulary is one list, six rows
+SELECT name, kind, label, active, sort_order FROM public.channels ORDER BY sort_order;
+
+-- ② both CHECKs GONE, both FKs present (expect 2 rows, both contype 'f')
+SELECT conrelid::regclass AS tbl, conname, contype, pg_get_constraintdef(oid) AS def
+  FROM pg_constraint
+ WHERE conrelid IN ('public.campaign_posts'::regclass, 'public.social_drafts'::regclass)
+   AND conname LIKE '%platform%'
+ ORDER BY 1, 2;
+
+-- ③ the subject column exists and is NULLABLE
+SELECT column_name, data_type, is_nullable FROM information_schema.columns
+ WHERE table_name = 'campaign_posts' AND column_name = 'subject';
+
+-- ④ RLS on, exactly one policy, SELECT only
+SELECT relrowsecurity AS rls_on FROM pg_class WHERE oid = 'public.channels'::regclass;
+SELECT policyname, cmd FROM pg_policies WHERE schemaname = 'public' AND tablename = 'channels';
+
+-- ⑤ the trigger exists and fires on INSERT and UPDATE
+SELECT tgname, pg_get_triggerdef(oid) AS def FROM pg_trigger
+ WHERE tgrelid = 'public.business_modules'::regclass AND NOT tgisinternal;
+```
+
+**PASS — all five:** ① six rows · ② **two rows, both `contype = 'f'`, and NO `_check` row** · ③ one row,
+`is_nullable = YES` · ④ `rls_on = true` and **exactly one policy, `cmd = SELECT`** · ⑤ the trigger
+present and its `def` containing **`BEFORE INSERT OR UPDATE`**.
 
 ### CARD 6 — 🔴 the trigger actually REFUSES, and still accepts
 STATUS: owed
@@ -153,10 +183,32 @@ DEVICE: desktop
 RUNS: post-apply
 COVERS: R-150 ② · §6 r19
 WHY: **a check nobody has watched refuse is a claim.** And a trigger that refuses *everything* would
-pass the first half and be useless — hence both directions. Run verification ⑥ then ⑦; **both are
-wrapped in `BEGIN … ROLLBACK` and change nothing.**
+pass the first half and be useless — hence both directions. **Both blocks are wrapped in
+`BEGIN … ROLLBACK` and change nothing.** Pasted here rather than pointed at (tech-debt **#287**).
+
+```sql
+-- ⑥ THE REFUSAL. Expect an ERROR naming 'myspace'. Nothing is kept.
+BEGIN;
+  UPDATE business_modules
+     SET config = jsonb_set(config, '{advert_channels}',
+           (config->'advert_channels') || '[{"type":"social","name":"myspace","enabled":true}]'::jsonb)
+   WHERE module_key = 'social_media'
+     AND business_id = (SELECT id FROM businesses WHERE name = 'Test Dave''s Tree Nest');
+ROLLBACK;
+```
+
+```sql
+-- ⑦ THE NEGATIVE CONTROL. A legitimate write must still land. Expect UPDATE 1.
+BEGIN;
+  UPDATE business_modules SET config = config
+   WHERE module_key = 'social_media'
+     AND business_id = (SELECT id FROM businesses WHERE name = 'Test Dave''s Tree Nest');
+ROLLBACK;
+```
+
 **PASS:** ⑥ raises an error naming **`myspace`**; ⑦ reports **`UPDATE 1`**.
 🔴 **FAIL:** ⑥ succeeds — the vocabulary is not enforced and `advert_channels` can still drift.
+🔴 **ALSO FAIL:** ⑦ errors — a trigger that refuses a legitimate write is worse than none.
 
 ---
 
