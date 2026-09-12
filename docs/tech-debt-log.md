@@ -2752,3 +2752,56 @@ holds a copy of the shape, which is why it is on the consolidation list and not 
 **TRIGGER:** the next build that touches any of the five (consolidate-when-touched, AC-5's discipline
 applied to a style), or a dedicated pass. **Not blocked on anything** — the shared parts exist and are
 proven by `stopOfferMount.test.ts` A6/A7.
+
+---
+
+## #286 — 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+
+**The line, on `main`, in the file every session opens first:**
+
+> `TRACE-SESSION-BOOTSTRAP.md` — *"🔴 **BEFORE CLAIMING ANY ID: `npm run verify:id-sweep`** — next free is
+> **#310** / tech-debt **#286** / **R-150**."*
+
+It was **TRUE when written**. Ledger **#308** was in flight on a branch at that moment, holding **R-150**
+and **tech-debt #285**, and the line became **FALSE the instant that branch merged** — while reading
+exactly as authoritative as before.
+
+🔴 **THE DEFECT IS THE FORM, NOT THE NUMBER. IT IS AN ANSWER, NOT A CLAIM.**
+- **Nothing derives it at read time.** A session reads `R-150` and believes it, because there is no
+  moment at which the file recomputes.
+- **The sweep cannot catch it.** `verify:id-sweep` scans branches for ids that ARE claimed. This line
+  asserts an id that is *not* claimed — a **negative**, about the future, and the sweep has no
+  expectation to compare it against. A check that scans for what exists cannot see a promise about
+  what doesn't.
+- **It cannot be repaired by being more careful.** The writer was correct; the world moved.
+
+⚠️ **AND THE INSTRUCTION IMMEDIATELY BEFORE IT IS THE MITIGATION THAT WAS ALREADY THERE:** *"BEFORE
+CLAIMING ANY ID: `npm run verify:id-sweep`."* **A session that runs the command is safe; a session that
+reads the cached numbers beside it is not.** So the line actively competes with its own advice — the
+convenient half is the wrong half, and it is the half that will be read.
+
+**THIRD INSTANCE OF [[R-149]]'s CLASS TODAY, FROM A NEW DIRECTION.** Same day, same subject, three shapes:
+| | What happened |
+|---|---|
+| **1. The race** | #308 and #309 both reserved visibly, **six minutes apart**, and claimed the same `R-148`. Option (a) has no read step (filed on R-149's row). |
+| **2. The half-claim** | tech-debt **#282** — a commit landed on another session's branch; `main` never saw it. |
+| **3. This** | Nobody raced anybody. **A correct declaration was made false by a merge**, with no session present to notice. |
+
+**FIXED HERE, FOR THIS INSTANCE ONLY:** the merge of #308 corrected the line to `#310` / `#287` /
+`R-151`, **because the merge is what made it false** (David's instruction). 🔴 **THAT IS A PATCH, NOT A
+FIX** — the next branch carrying an id will do it again, and the correction depends on a human noticing
+at merge time, which is the thing that failed.
+
+**THE DIRECTIONS A REAL FIX COULD TAKE — none chosen, all David's:**
+- **(a) Delete the cached numbers, keep the command.** The line becomes *"run `npm run verify:id-sweep`"*
+  and nothing else. Cheapest, loses the glanceability that is presumably why the numbers are there.
+- **(b) Derive it at read time.** The bootstrap stops asserting and the sweep PRINTS the next free ids,
+  so the answer cannot be older than the moment it is read.
+- **(c) Make the sweep assert the line.** Teach `verify:id-sweep` to parse this sentence and fail the
+  build when a declared next-free id is already taken on any branch. Turns the answer back into a
+  **claim**, which is the only form a cap can check.
+
+⚠️ **(c) IS THE ONE THAT GENERALISES AND IT IS ALSO THE ONE THAT WILL ROT** unless the sweep derives the
+sentence's location rather than hardcoding it — #73's lesson, in a file that is loaded every session.
+
+**TRIGGER:** the next branch that consumes an id and merges — i.e. immediately, and repeatedly.
