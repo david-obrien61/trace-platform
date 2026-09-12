@@ -2296,18 +2296,35 @@ the check that caught it runs on the human, hours later, and only because he hap
 mechanical, free, needs no credential, and could run inside `npm run verify` or a close-out script
 today. It is also the assertion that would have caught this exact instance **at close-out**.
 
-② **a deployment whose `target` is `production`, for that SHA.** 🔴 **This one is NOT checkable from
-the repo — nothing we own reads Vercel**, and that is the honest state, not an omission. It needs
-either a `vercel` CLI/API call with a token or David's eye on the dashboard. Naming it as unbuilt is
-the point; assuming ① implies ② is the next version of this defect.
+② **a deployment of that SHA serving PRODUCTION, not Preview.**
 
-⚠️ **THE SHA STAMP DOES NOT CLOSE THIS EITHER, AND THAT IS WORTH STATING BEFORE SOMEBODY REACHES FOR
-IT.** OP-15's mechanical form (`built <time> · <sha>` in the footer) proves *what the bundle you are
+✏️ **CORRECTED 2026-09-12, SAME DAY, BY MEASUREMENT — THIS CLAUSE FIRST READ *"NOT checkable from the
+repo — nothing we own reads Vercel"* AND THAT WAS WRONG TWICE.** It was written without checking, inside
+an entry about gates that fail to check — **[[R-26]]'s shape in this very filing**, which is why it is
+corrected in place rather than quietly. What is actually true:
+
+- **`/usr/local/bin/vercel` v54.1.0 IS installed** and `.vercel/project.json` links this repo to project
+  **`cultivar-os`** (`prj_gQmtNobRXSzZ42ax8mVbhMXNreG8`). ⚠️ Unauthenticated in a headless session —
+  `vercel whoami` hangs with no prompt available — so the deployment **`target`** field was still never read.
+- 🔴 **AND THE USEFUL CHECK NEEDS NO CREDENTIAL AT ALL.** `curl https://cultivar-os.app/`, follow the
+  `/assets/index-*.js`, grep for the SHA. Measured on `fe24e68` minutes after the merge: the bundle carries
+  **`built 2026-09-12T15:08:39.580Z · fe24e68`**, and the five predecessor SHAs return **zero** occurrences.
+  That is **GATE 0 run mechanically, from a script, in one command** — the check this entry said did not exist.
+
+⚠️ **THE RESIDUAL IS REAL AND SMALLER THAN THE ORIGINAL CLAIM: reading the apex proves THE PRODUCTION ALIAS
+SERVES THAT SHA. It does not read Vercel's `target` field.** Those are two sentences and only the first is
+measured. For the defect this entry is about — *work recorded as shipped that no customer can reach* — the
+first sentence is the one that matters, and it is now cheap. **Assuming ① implies ② is still the next
+version of this defect; ② is just no longer unbuildable.
+
+⚠️ **THE SHA STAMP DOES NOT CLOSE THIS *BY ITSELF*, AND THE DISTINCTION IS THE WHOLE VALUE — IT IS
+**WHERE YOU READ THE STAMP**, NOT THE STAMP.** OP-15's mechanical form (`built <time> · <sha>` in the footer) proves *what the bundle you are
 looking at was built from* — and a **Preview URL carries the stamp too**. A matching SHA read on a
 preview deployment proves the build succeeded and proves nothing about production. The stamp answers
-*"am I testing the code I think I am?"*; it does not answer *"is this code shipped?"* GATE 0's
-`origin/main` clause is what bridges that, and it lives on one board per capability rather than in
-the gate.
+*"am I testing the code I think I am?"*; **read on the PRODUCTION APEX it also answers *"is this code
+shipped?"***, which is what makes ② mechanical. GATE 0's `origin/main` clause is what bridges the two —
+and it lives on one board per capability rather than in the gate, which is the placement defect this
+entry is really about.
 
 **CLASS.** This is **tech-debt #60**'s family one layer further out. #60: *Vercel deploys the TREE,
 not the COMMIT, and a failed build is silent* — the commit was on `main` and the build died. Here
@@ -2326,3 +2343,66 @@ three files (CLAUDE.md §9, `docs/operating-doctrine/end-of-session-protocol.md`
 hosts it) plus a new check; ② is a decision about whether we take a Vercel credential into the repo
 at all. **Both are David's calls, and the merge of `fix/pmi-suggest-auth` is a separate decision he
 has explicitly reserved.**
+
+---
+
+## #281 — 🟡 FOUR LEDGERS ON ONE BRANCH, NAMED FOR THE SECOND OF THEM — AND NOTHING ANYWHERE ASKS WHAT BRANCH WORK BELONGS ON (NEW 2026-09-12, ledgers #302 · #261 · #303)
+
+**The instance, measured.** `fix/pmi-suggest-auth`, six commits, **four** bodies of work:
+
+| Order | SHA | Ledger |
+|---|---|---|
+| 1 | `db299ff` | **#302** — docs, the ledger row that id never had |
+| 2 | `91b8ef1` | **#261** — `/api/pmi/suggest` auth |
+| 3 | `fc94309` | **#303** — `customer_addresses`, code + migration |
+| 4 | `4d0fb68` | **#303** — fill the close-out SHA |
+| 5 | `d48000c` | **#261** — the gate's proof |
+| 6 | `fe24e68` | **tech-debt #280** |
+
+🔴 **THE BRANCH IS NOT NAMED FOR ITS FIRST COMMIT, ITS LARGEST COMMIT, OR ITS LAST.** `git reflog show
+fix/pmi-suggest-auth` ends `ea9a047 …@{5}: branch: Created from HEAD` — an unnamed working branch whose
+**first** commit was #302 and which was named, mid-stream, after its **second** body of work. #261's two
+commits then sit either side of #303's two. **Nobody could tell from the name, and the undercount proves
+it:** the ask that surfaced this said *"two unrelated bodies of work appear to be sharing one branch" —
+and there were three.*
+
+**THE RULE WANTED: one branch per ledger, named for it. THE FINDING: nothing asks.** Quoted, not
+paraphrased, across every gate that fires around a build:
+
+- **§10 SESSION STARTER** — ten numbered confirmations (*story · shared modules · PLATFORM_STATE level ·
+  built-inventory date · inventory-doc dates · verify-before-build · STD-003 · story reconciliation ·
+  LAWNS discovery · RULINGS*), closing *"Do not start until you confirm all ten."* **Not one names a branch.**
+- **§1.6 BUILD-SPEC PRE-FLIGHT GATE** — eleven items reconciled before a spec fires. **Not one names a branch.**
+- **§9 close sequence** — step 3 is *"`git add CLAUDE.md && git commit && git push`"*. No branch.
+- **§2 SESSION HEALTH CHECK** — the one place it appears: *"`git branch --show-current` # 2. Confirm branch
+  (main or feature branch **as appropriate**)"*. 🔴 **"As appropriate" IS the rule, and it has no referent.**
+  It asks you to *look at* the branch. It never asks *what belongs on it*, so every answer is correct.
+
+**WHAT IT COST — TWO THINGS, ONE OF THEM LUCK.**
+① **#302 and #303 cannot be separated.** They overlap on four files — `TRACE-SESSION-BOOTSTRAP.md`,
+`CLOSE-OUT-LEDGER.md`, `built-inventory.md`, `tech-debt-log.md` — so a merge decision that should have been
+three independent calls collapsed into one all-or-nothing. ② **#261 *was* cleanly separable** (zero file
+overlap with #303's commits) — **and that was luck, not design**: an auth fix and an address book happened
+not to touch the same files. The next pair will not be so obliging.
+⚠️ **A third, quieter one:** `CLOSE-OUT-LEDGER.md`'s SHA column assumes **one commit per row**. #303 is two
+(`fc94309` + `4d0fb68`) and the row cites one — so the record of what a ledger *is* was already lossy before
+any branch question arose.
+
+**THE FIX — THREE LENSES, NEED → WANT (OP-8). None taken; all three are David's gate text.**
+- **NEED (prose only, no code).** Give §2's *"as appropriate"* a referent: **a branch carries ONE ledger and
+  is named for it.** Turns an unfalsifiable instruction into a checkable claim. Costs nothing and would have
+  made this branch visibly wrong at commit 2.
+- **MIDDLE (mechanical, free).** A close-out assertion: every commit since the merge-base cites the same
+  ledger id. `git log --format=%s origin/main.. | grep -oE '#[0-9]+' | sort -u` must yield exactly one.
+  🔴 **It would have flagged this branch at the FIRST off-ledger commit**, not after the sixth.
+- **WANT (the question answered before it can be got wrong).** STEP 0 mints the branch: a build claiming
+  ledger #NNN starts on a branch named for #NNN. Nothing to audit afterwards, because the name is issued
+  with the id.
+
+⚠️ **RELATIONSHIP TO #280, STATED SO NEITHER SWALLOWS THE OTHER.** **#280 is *"the close-out gate cannot
+tell PUSHED from SHIPPED"*** — a question about `main` and about *production*, fixed by two assertions **at
+close**. **This is *"nothing says what a branch is FOR"*** — a question about **build start**, fixed at
+**STEP 0**. They met in one incident and they **close independently**, which is why this is its own id and
+not a clause under #280. The MIDDLE option above and #280's ① want the same host — a close-out check script
+that **does not exist yet** — so filing both against one future build is the likely shape, and that is
+David's call, not this entry's.
