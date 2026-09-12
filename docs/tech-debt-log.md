@@ -2877,4 +2877,12 @@ only honest forms are DERIVE THEM AT READ TIME or DO NOT CACHE THEM AT ALL.** Th
 correct as of this commit and carries the same defect it describes; it was left as numbers rather
 than deleted because removing them is David's call, not a builder's.
 
+✏️ **THIRD CORRECTION THE SAME DAY, AND NOBODY DID ANYTHING WRONG THIS TIME.** Between the second
+correction and the merge of ledger #310 — about an hour — other sessions took more ids, and the sweep
+moved from `#314 / #288 / R-153` to `#315 / #291 / R-153`. The line was rewritten to `#316` / `#292` /
+`R-154`. **No merge falsified it and no survey was too shallow: it simply aged.** That is the third
+distinct mechanism in one day — stale by merge, stale by a survey that could not see far enough, and
+now stale by the passage of time on a busy tree — and it is the clearest argument yet that the
+quantity is not cacheable at all. 🔴 **Each correction has itself been wrong within the hour.**
+
 **TRIGGER:** the next branch that consumes an id and merges — i.e. immediately, and repeatedly.
