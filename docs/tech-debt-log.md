@@ -2225,3 +2225,34 @@ other 21 should lose theirs. That is a call about the boards' shape, not a repai
 ✏️ **SAME CLASS AS #73 AND #185** — a hand-maintained declaration nobody re-derives. It differs from
 both in being *checkable*: the cards are right there beside the claim, which is how this was caught.
 
+
+---
+
+## #279 — 🟡 `customer_addresses.line2` IS A LIVE COLUMN NO SURFACE WRITES, BY DECISION (NEW 2026-09-11, ledger #303)
+
+`20260911b_customer_addresses.sql` creates `line2` on David's explicit instruction — *"🔴 present
+from day one"* — because the QuickBooks importer does not read `BillAddr.Line2` (**tech-debt #254**),
+where **456 values sit and 453 are real streets**. When that fix lands the book needs somewhere to
+put them.
+
+🔴 **AND NOTHING CAN PUT A VALUE IN IT TODAY, WHICH IS ALSO BY DECISION.** `deliveries` has
+`address_line1 / city / state / zip` and **no `address_line2`** (`20260620_deliveries.sql:30`). So a
+`line2` typed into the book could not be snapshotted onto a stop — it would vanish silently between
+the picker and the truck. Rather than ship a field that loses what you type, **no surface offers it**:
+`SITE_ADDRESS_FIELDS` names four parts, `planSaveSite` writes `line2: null` unconditionally, and
+`customerAddresses.test.ts` A9 plus `shipToSurfaces.test.ts` B6 hold both ends.
+
+⚠️ **THIS IS #267's SHAPE AND IT IS FILED RATHER THAN HIDDEN.** `orders.install_date` is a live
+column nothing has ever written or read, and that is the class this joins. **The one difference that
+matters:** #267 was declared with no plan and no owner, while this column is declared BECAUSE a named,
+filed defect will fill it. If #254 is closed or abandoned without this being revisited, `line2`
+becomes #267 exactly — same column, same silence — so this entry exists to make that visible.
+
+**THE FIX, WHEN IT COMES, IS TWO DECISIONS AND NEITHER IS THIS BUILD'S:**
+① does `deliveries` gain an `address_line2`? That migrates the four-field ship-to surface #301 landed
+the same day — `SHIP_TO_FIELDS`, `<StopCard>`, the route's Maps link, the `delivery.ship_to_changed`
+audit row — and it would put a write against an unapplied column on a surface that works today.
+② or does the importer fold Line2 into Line1 on the way in, so the book never holds a fifth part?
+
+**Adding a fifth address column to `deliveries` inside a build about a new table is the scope creep
+that makes a diff unreviewable** — which is the reason it was not taken, stated rather than assumed.

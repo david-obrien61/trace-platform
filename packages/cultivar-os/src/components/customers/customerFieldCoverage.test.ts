@@ -373,13 +373,30 @@ const SRC = {
 // comment saying that is worth nothing the day submit changes — so read submit and check.
 {
   const sub = code(SRC.submit);
-  ok(/address_line1: pick\(c\.billing_line1, c\.address_line1\)/.test(sub)
-     && /city:\s+pick\(c\.billing_city,\s+c\.city\)/.test(sub)
-     && /state:\s+pick\(c\.billing_state, c\.state\)/.test(sub)
-     && /zip:\s+pick\(c\.billing_zip,\s+c\.zip\)/.test(sub),
-     'H1 🔴 submit.ts STILL resolves the delivery address billing-first on all four columns — the rule '
-     + 'customerOrderFill mirrors. If submit changes and this fails, the FORM and the TRUCK have started '
-     + 'disagreeing again, which is the divergence this build closed.');
+  // ✏️ REWORDED 2026-09-11 (ledger #303), AND IT WENT RED FIRST — which is the probe working.
+  // D-41's L2 picker gives the ORDER its own ship-to, so the four columns are now a TERNARY: the
+  // order's ship-to when it carries a street, else the customer record. The FALLBACK is the rule
+  // this probe has always been about and it is UNCHANGED — still billing-first, still `pick`,
+  // still the same four columns. What changed is that a fourth thing may now outrank it, and that
+  // thing is the address on the screen the operator is looking at. The probe is widened to the
+  // exact new shape rather than loosened: a bare `pick(...)` with no ternary now FAILS §J of
+  // `checkoutDelivery.test.ts` (mutant C1), and a ternary with the wrong fallback fails here.
+  ok(/address_line1: shipTo \? shipTo\.address_line1 : pick\(c\.billing_line1, c\.address_line1\)/.test(sub)
+     && /city:\s+shipTo \? shipTo\.city\s+: pick\(c\.billing_city,\s+c\.city\)/.test(sub)
+     && /state:\s+shipTo \? shipTo\.state\s+: pick\(c\.billing_state, c\.state\)/.test(sub)
+     && /zip:\s+shipTo \? shipTo\.zip\s+: pick\(c\.billing_zip,\s+c\.zip\)/.test(sub),
+     'H1 🔴 submit.ts STILL resolves the delivery address billing-first on all four columns WHEN IT '
+     + 'FALLS BACK TO THE CUSTOMER — the rule customerOrderFill mirrors. If submit changes and this '
+     + 'fails, the FORM and the TRUCK have started disagreeing again, which is the divergence this '
+     + 'build closed. The order\'s own ship-to (D-41 L2) outranks it, and nothing else may.');
+
+  // 🔴 THE OTHER HALF, ADDED 2026-09-11: the ship-to must be able to WIN. A ternary whose condition
+  // can never be true would satisfy H1 and still send every truck to the billing address — the
+  // exact defect ledger #303 closed, wearing the shape of the fix (R-33: could this have failed?).
+  ok(/const shipTo = st && shipField\(st\.line1\)/.test(sub),
+     'H1b the ship-to branch is taken on a REAL condition — a street on the order — not on a constant');
+  ok(/shipTo\?: \{ line1\?: unknown/.test(sub),
+     'H1c and the ship-to actually arrives as an argument, rather than being a local that is always null');
 
   // Every field a customer can be FOUND by is also a field the picker FETCHES — so a row that
   // matched can always be shown to the person who matched it. Not required by Postgres; required by

@@ -4,7 +4,7 @@ import type { CartItem, ServiceSelection } from '../types/order';
 import type { CustomerInput } from '../types/customer';
 import type { TransportChoice, TransportSelection } from '../lib/transport';
 import { anchorKey } from '../lib/stockLinePlant';
-import type { DiscountTier } from '@trace/shared/business-logic';
+import type { DiscountTier, ShipToInput } from '@trace/shared/business-logic';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -46,6 +46,14 @@ interface CartStore {
   // Owner/manager-entered delivery date (ISO 'YYYY-MM-DD') for a delivery order — the manual
   // precursor to the customer-facing scheduling calendar. Written to orders.delivery_date.
   deliveryDate:      string | null;
+  // 🔴 THE SHIP-TO FOR THIS ORDER — D-41's L2 picker (ledger #303). Where the load actually goes,
+  // which is NOT the same fact as the customer's billing address and must never be written back to
+  // it. Null ⇒ the server falls back to the customer's address exactly as it always has, so the
+  // anon QR path and every caller that sends none are unchanged.
+  // ⚠️ It is carried as the ADDRESS, never as a `customer_addresses.id`: the delivery row keeps its
+  // own snapshot, so what travels is the text, not a pointer that could later be edited underneath
+  // a past order.
+  shipTo:            ShipToInput | null;
 
   setItem:            (plant: Plant, qty: number) => void;   // REPLACE cart with a single line (profile entry)
   addLine:            (plant: Plant, qty: number) => void;   // APPEND / merge-by-anchor (scan loop)
@@ -66,6 +74,7 @@ interface CartStore {
   attachCustomer:     (args: { customerId: string | null; name: string; customer: CustomerInput; invokedTier: string | null; tierLabel: string | null; resolvedTier: DiscountTier | null }) => void;
   clearAttachedCustomer: () => void;
   setDeliveryDate:    (val: string | null) => void;
+  setShipTo:          (val: ShipToInput | null) => void;
   clear:              () => void;
 }
 
@@ -84,6 +93,7 @@ export const useCart = create<CartStore>((set) => ({
   orderTierLabel:       null,
   orderTier:            null,
   deliveryDate:      null,
+  shipTo:            null,
 
   // Single-item entry (PlantProfile "Add to cart"): replace the cart with just this line.
   // Preserves the proven N=1 flow exactly. A profile scan starts a fresh ANONYMOUS order —
@@ -215,6 +225,13 @@ export const useCart = create<CartStore>((set) => ({
     set({ deliveryDate: val });
   },
 
+  setShipTo: (val) => {
+    if (TRACE_CART) console.log('[TRACE:SITES] ship-to set for this order', {
+      source: val?.source ?? '(none)', line1: val?.line1 ?? null, city: val?.city ?? null,
+    });
+    set({ shipTo: val });
+  },
+
   clear: () => set({
     items:             [],
     transportChoice:   null,
@@ -230,5 +247,6 @@ export const useCart = create<CartStore>((set) => ({
     orderTierLabel:       null,
     orderTier:            null,
     deliveryDate:      null,
+    shipTo:            null,
   }),
 }));

@@ -26,7 +26,7 @@ export function CartReview() {
   const navigate = useNavigate();
   const {
     items, services, selectedTransport, plantingOffering, plantingSelected,
-    nettingDeclined, customer, deliveryDate,
+    nettingDeclined, customer, deliveryDate, shipTo,
     attachedCustomerId, invokedTier, orderTierLabel, orderTier,
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
@@ -313,6 +313,9 @@ export function CartReview() {
         serviceQuantities,
         serviceOverrides,
         deliveryDate,
+        // D-41 L2 (ledger #303): THIS ORDER's ship-to, as TEXT. Null ⇒ the server falls back to the
+        // customer's address exactly as it always has.
+        shipTo,
         // D-40: the per-order exemption OVERRIDE (owner-set). Null → server uses the customer's
         // persistent exemption. Honored server-side ONLY on a token-verified apply_tax_exempt path.
         orderExemption: orderExempt,

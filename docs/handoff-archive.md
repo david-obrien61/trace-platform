@@ -1,5 +1,18 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #303, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **`orders.install_date` IS NEVER SET, AND `business_inventory.location` ALREADY EXISTS — TWO BUILT-AND-EMPTY COLUMNS FROM DAVID'S SWEEP. #299. R-143. TECH-DEBT #267–#269.** 🔴 **THE HEADLINE IS THAT NO WARRANTY CODE EXISTS, SO NOTHING READS ANY OF THE THREE CANDIDATE DATES. THE ONE THAT WOULD RECORD PLANTING, `deliveries.completed_at`, IS 0 OF 57 — AND 7 OF 19 QUICKBOOKS STOPS ARE INSTALLS TYPED AS DELIVERY, SO THEY COULD NEVER START A CLOCK.**
+
+**Type:** RECON — DOCS ONLY, on `main`. No code, no migration, nothing applied; every live read via `supabase_read_only_user`. **§3 RETENTION: 1 archived verbatim (#296), 1 written — entries-in == entries-out.**
+
+✅ **A — `install_date` WAS NEVER WIRED:** 0 of 76, with no writer in any commit, declared on an `Order` interface nothing imports. Checkout's one *"Delivery date"* field writes both the order and the stop, and those two copies already disagree on 10 of 36 linked pairs (noted on row 108 of the tech-debt log). The prompt's done-tap warranty ruling was in no file → **R-143**, filed on its words.
+
+✅ **B — THE COLUMN IS THERE AND EMPTY:** `business_inventory.location`, `cost_objects.location` and `cultivar_plants.location_zone` are free text, no constraint, 0 rows each. No zone table exists anywhere. 🔴 **Inventory is one row per QuickBooks item (unique index), so any column on it names ONE zone.** Recommendation: build the zone record, retire `location`, and let the walk data choose a column (O2′) or a join (O3). 635 of 673 export ids resolve — resolve on `item_id`, never on the tool's `sku`. 🔴 **Do not land `qty_approx` through the count path: counting applies itself to on-hand.**
+
+**FLAGGED FOR DAVID:** **(a)** retire `install_date` once you confirm the clock reads the planting stop's `completed_at` · **(b)** R-143 is filed on the prompt's words; strike it to OWED if it was a paraphrase · **(c)** infer `planting` on QuickBooks stops, or let Lauren mark it (#268) · **(d)** zones need a story before any build · **(e)** ⚠️ this session and the review-ask session claimed #299 and tech-debt #267 at the same moment; that session took #300 and #270 · **(f)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#270**.
+
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-11 (close-out #301, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **THE ZONE WALK IS SERVED FROM A URL, AND THE PLACE ITS EXPORT IS FOR DOES NOT EXIST. #298. TECH-DEBT #266.** 🔴 **THE HEADLINE IS WHAT HOSTING IT TURNED UP: `status.html`, `owner-tests.html` AND `ui-standards.html` ARE NOT SERVED BY VERCEL — each URL on `cultivar-os.app` returns the 446-byte app shell.** Root HTML never reaches `dist/`. The tool went where Vite does copy files verbatim, `packages/cultivar-os/public/tools/` — the package's first `public/` folder.

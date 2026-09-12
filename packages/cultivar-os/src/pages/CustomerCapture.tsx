@@ -4,6 +4,7 @@ import { useCart } from '../hooks/useCart';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
 import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
+import { ShipToPicker } from '@trace/shared/components/customers/ShipToPicker';
 import { customerOrderFill } from '../components/customers/customerFieldRegistry';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
 import type { CustomerInput } from '../types/customer';
@@ -82,6 +83,7 @@ export function CustomerCapture() {
   const {
     setCustomer, customer: saved, items, selectedTransport,
     deliveryDate: savedDeliveryDate, setDeliveryDate,
+    attachedCustomerId, setShipTo,
   } = useCart();
   const { can, business, businessId } = useBusinessContext();
   const firstItem = items[0] ?? null;
@@ -97,6 +99,9 @@ export function CustomerCapture() {
   const [optIn,     setOptIn]     = useState(saved?.marketing_opt_in ?? true);
   const [delivDate, setDelivDate] = useState(savedDeliveryDate ?? '');
   const [touched,   setTouched]   = useState(false);
+  // The customer whose saved sites the picker may read. Set when an EXISTING customer is chosen
+  // at this screen; null for a new one, who has no book yet.
+  const [pickerCustomerId, setPickerCustomerId] = useState<string | null>(null);
   // Search first. An existing customer already in the cart context skips straight to the form so a
   // back-navigation does not force a re-search of someone already chosen.
   const [step, setStep] = useState<Step>(saved?.first_name ? { kind: 'add' } : { kind: 'search' });
@@ -213,6 +218,10 @@ export function CustomerCapture() {
     // 🔴 CONSENT. Never `?? true` — see the registry note on `marketing_opt_in`. A customer who
     // opted out was silently re-opted-in by every selection, because this box was not in the copy.
     setOptIn(f.marketing_opt_in);
+    // D-41 L2: the id the saved-sites picker reads. `attachedCustomerId` is set only on the
+    // customer-first door (ScanOrder); this covers the search-at-checkout door, which is where
+    // Lauren actually stands.
+    setPickerCustomerId(h.id);
     setTouched(false); // a fresh record: do not show validation errors the operator has not earned
     setStep({ kind: 'add' }); // same form, now pre-filled — the operator confirms and continues
   }
@@ -284,6 +293,25 @@ export function CustomerCapture() {
     console.log('[TRACE:PRICE] customer finalized — stored tier resolved for Review preview', { email: emailLower, priceTier });
     setCustomer(c);
     setDeliveryDate(showDeliveryDate ? (delivDate || null) : null);
+    // 🔴 D-41 L2 (ledger #303) — THIS ORDER's ship-to, carried separately from the customer record.
+    //
+    // ⚠️ IT IS SENT ONLY FOR A DELIVERY. On a self-collect order no stop is written at all, so a
+    // ship-to would describe a journey nobody makes. And what travels is the FIELDS AS THEY STAND,
+    // whether they were filled by the picker or typed over afterwards — the screen is the truth.
+    //
+    // 🔴 THIS ALSO CLOSES A LIVE DEFECT: before this line, a delivery address typed here for a
+    // customer who ALREADY had one on file never reached the stop. `customerUpsert` is
+    // fill-never-clobber, so the customer row kept the old address, and `scheduleCheckoutDelivery`
+    // read the stop's address back off that row. The typed address was silently discarded.
+    setShipTo(deliveryRequired && address.trim()
+      ? {
+          line1: address.trim() || null,
+          city:  city.trim()    || null,
+          state: state.trim()   || null,
+          zip:   zip.trim()     || null,
+          source: 'typed',
+        }
+      : null);
     navigate('/checkout/review');
   }
 
@@ -316,6 +344,12 @@ export function CustomerCapture() {
                 // Seed the name from what they searched — retyping it is the friction that makes a
                 // cashier skip the search next time.
                 if (query && !firstName.trim()) setFirstName(query);
+                // 🔴 CLEAR THE SAVED-SITES CUSTOMER (D-41 L2, ledger #303). Selecting an existing
+                // customer sets it; starting a NEW one must drop it, or the picker would offer the
+                // PREVIOUS customer's delivery sites while a different person is being typed in —
+                // one customer's address on another customer's order. A new customer has no book
+                // by definition, so null is not merely safe here, it is the true answer.
+                setPickerCustomerId(null);
                 console.log('[TRACE:customers] checkout add-new from no-match', { query });
                 setStep({ kind: 'add' });
               }}
@@ -411,6 +445,21 @@ export function CustomerCapture() {
             autoComplete="tel"
           />
         </Field>
+
+        {/* D-41 L2 (ledger #303) — the customer's SAVED SITES, offered first. Renders NOTHING when
+            the customer has none, so the form below is unchanged for every customer who has one
+            address. Choosing a site fills the four fields, so what is on screen is what the truck
+            gets. `attachedCustomerId` is the only id we can trust here: a brand-new customer has
+            no saved sites by definition. */}
+        {deliveryRequired && (
+          <ShipToPicker
+            db={supabase}
+            businessId={businessId ?? null}
+            customerId={attachedCustomerId ?? pickerCustomerId}
+            current={{ line1: address, city, state, zip }}
+            onChoose={(a) => { setAddress(a.line1); setCity(a.city); setState(a.state); setZip(a.zip); }}
+          />
+        )}
 
         <Field label={deliveryRequired ? 'Delivery address' : 'Address (optional)'} required={deliveryRequired} error={addressError}>
           <input

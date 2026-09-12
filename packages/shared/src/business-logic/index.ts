@@ -273,3 +273,15 @@ export type {
 // difference; this module is the ONE place that interprets it, so no surface re-derives the rule.
 export { describeDocumentNumber } from './documentNumber';
 export type { DocumentNumberProvenance, DocumentNumberVerdict } from './documentNumber';
+
+// D-41's L2 hook, taken up 2026-09-11 (ledger #303): the saved ship-to address book. A SOURCE for
+// the order-time picker, never the record of where a load went — the delivery row keeps its own
+// snapshot, which is why nothing in this module writes `deliveries` or `customers`.
+export {
+  SITE_ADDRESS_FIELDS, CUSTOMER_ADDRESS_COLUMNS,
+  addressOf, siteLine, normalizeAddressPart, sameAddress, findSameAddress, sortSites,
+  planSaveSite, readCustomerAddresses, saveCustomerAddress, retireCustomerAddress,
+} from './customerAddresses';
+export type {
+  CustomerAddress, SiteAddress, SiteAddressField, ShipToInput, SavePlan, SaveOutcome,
+} from './customerAddresses';

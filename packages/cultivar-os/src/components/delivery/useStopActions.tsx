@@ -9,10 +9,15 @@
  * DEPENDENCIES supabase client · useBusinessContext (can) · ../../lib/stopWrites (the ONE client write
  *              path to `deliveries`) · ../../lib/deliveryFulfilment (every decision about the tap and
  *              the ask) · ReviewAskSheet · CustomerPartyEditor.
- * OUTPUTS      { savingId, actionError, clearActionError, markStop, editDate, saveShipTo, openEditor,
+ * OUTPUTS      { savingId, actionError, clearActionError, markStop, editDate, saveShipTo, saveSite,
+ *                openEditor,
  *                overlays } — a page renders `overlays` ONCE.
  *
- * PERMISSIONS  Every stop write is gated on `deliveries:update` — the string the date move and the tap
+ * PERMISSIONS  Saving a stop's address as a named SITE is `customers:create` — a different and
+ *              STRICTER string than the edit beside it, which STAFF hold and which is
+ *              `deliveries:update`. No string was minted for the address book (D-41 L2, ledger
+ *              #302): a saved site is a field of the customer relationship, not a capability.
+ *              Every stop write is gated on `deliveries:update` — the string the date move and the tap
  *              already used, and the one the live `deliveries_member_update` policy enforces on the
  *              server (measured 2026-09-11). No string was minted. "Edit customer" stays on
  *              `customers:update`, the capability the editor exercises.
@@ -29,6 +34,7 @@ import {
   REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED, DELIVERY_STATUS_FULFILLED, type ReviewAskOffer,
 } from '../../lib/deliveryFulfilment';
 import { updateStop, saveShipTo as saveShipToRow, type ShipToForm, type ShipToSaveOutcome } from '../../lib/stopWrites';
+import { readCustomerAddresses, saveCustomerAddress, type SaveOutcome } from '@trace/shared/business-logic';
 import type { StopRow } from '../../lib/stopRead';
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../customers/customerFieldRegistry';
 import { CustomerPartyEditor, type PartyCustomer } from '../customers/CustomerPartyEditor';
@@ -181,6 +187,37 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
     return out;
   }
 
+  /**
+   * D-41 L2 (ledger #303) — SAVE THIS STOP'S ADDRESS AS A NAMED SITE FOR THIS CUSTOMER.
+   *
+   * 🔴 POPULATION IS A BY-PRODUCT, NEVER A CHORE. The book fills itself out of an edit somebody was
+   * already making, the same way zone assignment rides the count walk. Nothing here is automatic:
+   * David's redline is that *"a one-off delivery to a customer's mother is not a site, and a book
+   * full of one-offs is worse than no book"*, so a save needs a NAME a person chose — which is what
+   * `planSaveSite` refuses without.
+   *
+   * ⚠️ A DIFFERENT PERMISSION FROM THE EDIT BESIDE IT, AND THE GAP IS REAL. The ship-to edit is
+   * `deliveries:update`, which STAFF hold. Adding to the customer's book is `customers:create`,
+   * which they do NOT (`STAFF_DEFAULT_BUNDLE` carries `customers:read` only). So Joel can move a
+   * stop and cannot save the site — correct, and the card must not offer him a button that refuses.
+   */
+  async function saveSite(d: StopRow, label: string): Promise<SaveOutcome> {
+    if (!can('customers:create')) return { kind: 'refused', reason: requirementText('customers:create') };
+    if (!d.customer_id) return { kind: 'refused', reason: 'This stop has no customer, so there is nobody to save the site for.' };
+    setSavingId(d.id);
+    // Re-read the book immediately before planning: the twin check and the label check are only
+    // as good as the list they are made against, and another screen may have saved one since.
+    const book = await readCustomerAddresses(supabase, businessId!, d.customer_id);
+    const out = await saveCustomerAddress(supabase, {
+      businessId: businessId!, customerId: d.customer_id, label,
+      address: { line1: d.address_line1, city: d.city, state: d.state, zip: d.zip },
+      existing: book.ok ? book.sites : [],
+    });
+    if (TRACE_DELIVERY) console.log('[TRACE:SITES] save-site from a stop —', out.kind, { stopId: d.id, label });
+    setSavingId(null);
+    return out;
+  }
+
   // Open the ONE customer editor over the page. It fetches the FULL row rather than reusing the card's
   // join: the editor edits the whole party record, and a partial row would let a Save write defaults
   // over fields the page never loaded. Columns come from the field registry (A4) — deploy-window-safe.
@@ -218,7 +255,7 @@ export function useStopActions({ onChanged }: { onChanged: () => Promise<void> }
 
   return {
     savingId, actionError, clearActionError: () => setActionError(null),
-    markStop, editDate, saveShipTo, openEditor, overlays,
+    markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
   };
 }
 

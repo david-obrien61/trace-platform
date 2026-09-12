@@ -76,6 +76,14 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
+> ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#303 — the ship-to address book (`customer_addresses`)**
+- 🔴 **A STORY IS OWED BY YOU, and Thunder did not write one.** `user_stories.md:1630` carries `customer_addresses` as `STATUS: scoped-out`; **this build inverts that row**, which is a status flip you make. `:524` and `:608` name the owed `conditional-address-on-delivery` sub-story.
+- 🔴 **Apply `20260911b_customer_addresses.sql`** — written, not applied. **Board CARD 2 is only runnable BEFORE you apply it**; everything else waits on it.
+- **`line2` exists and no surface writes it** (tech-debt #279). When the Line2 importer fix (#254) lands: does `deliveries` gain an `address_line2`, or does the importer fold Line2 into Line1 on the way in? Neither was this build's call.
+- ⚠️ **You overrode a written trigger and it is recorded, not hidden** — the 2026-09-09 recon said *build the book when the count passes ~25*; it is 17 raw / 5 clean. Nothing needs answering here; it is logged so nobody later reads the trigger and calls it drift.
+
 **#299 — install date + inventory location (recon)**
 - Retire `orders.install_date` once you confirm the warranty clock reads the planting stop's `completed_at`? It is **0 of 76, with no writer in any commit.**
 - **R-143 is filed on the prompt's words** — strike it to OWED if that was a paraphrase rather than your ruling.

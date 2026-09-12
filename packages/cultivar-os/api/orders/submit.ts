@@ -254,6 +254,12 @@ export async function scheduleCheckoutDelivery(
     /** The order this stop carries. 🔴 REQUIRED, not optional: a stop without it renders no load. */
     orderId: string;
     customerRow: Record<string, any> | null;
+    /**
+     * 🔴 THE SHIP-TO CHOSEN FOR THIS ORDER (D-41 L2 · ledger #303). Where the load actually goes.
+     * Null ⇒ fall back to the customer's address, which is EXACTLY what this function did before
+     * the picker existed — so the anon QR path and every caller that sends none are unchanged.
+     */
+    shipTo?: { line1?: unknown; city?: unknown; state?: unknown; zip?: unknown } | null;
   },
 ): Promise<CheckoutDeliveryOutcome> {
   const serviceType = deliveryServiceType(args.transportMethod);
@@ -274,14 +280,35 @@ export async function scheduleCheckoutDelivery(
     return null;
   };
 
+  // 🔴 THE ORDER'S OWN SHIP-TO WINS, AND THIS IS THE SNAPSHOT D-41 RULED (ledger #303).
+  //
+  // ⚠️ IT ALSO CLOSES A LIVE DEFECT THAT NOBODY HAD NAMED. `custRow` is re-read from the database
+  // AFTER the upsert, and `customerUpsert` is FILL-NEVER-CLOBBER — so for a customer who ALREADY
+  // has an address on file, a different delivery address typed at checkout never reached the
+  // customer row and was then read back OFF that row into the stop. The typed address was silently
+  // discarded and the truck was sent to the billing address. Preferring the order's own ship-to is
+  // what makes the field mean what it says on the screen.
+  //
+  // The fallback below is untouched: no ship-to ⇒ the customer's address, billing-first, exactly as
+  // before. And what is stored is TEXT, never a `customer_addresses.id` — editing a saved site
+  // tomorrow cannot move this stop, because this stop does not point at it.
+  const st = args.shipTo ?? null;
+  const shipField = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  // An address is ONE fact, not four: a ship-to counts only if it carries a street, and then all
+  // four of its parts travel together. A half-filled ship-to must never be merged field-by-field
+  // over the customer's address — that is how a street from one place lands in a city from another.
+  const shipTo = st && shipField(st.line1)
+    ? { address_line1: shipField(st.line1), city: shipField(st.city), state: shipField(st.state), zip: shipField(st.zip) }
+    : null;
+
   const row: Record<string, unknown> = {
     business_id:   args.businessId,
     customer_id:   args.customerId,
     delivery_date: args.deliveryDate,                        // null = undated; the day view buckets it last
-    address_line1: pick(c.billing_line1, c.address_line1),
-    city:          pick(c.billing_city,  c.city),
-    state:         pick(c.billing_state, c.state),
-    zip:           pick(c.billing_zip,   c.zip),
+    address_line1: shipTo ? shipTo.address_line1 : pick(c.billing_line1, c.address_line1),
+    city:          shipTo ? shipTo.city          : pick(c.billing_city,  c.city),
+    state:         shipTo ? shipTo.state         : pick(c.billing_state, c.state),
+    zip:           shipTo ? shipTo.zip           : pick(c.billing_zip,   c.zip),
     status:        'scheduled',
     source:        'checkout',                               // distinguishable from 'ocr-invoice'
     service_type:  serviceType,
@@ -297,6 +324,9 @@ export async function scheduleCheckoutDelivery(
     businessId: args.businessId, customerId: args.customerId, transportMethod: args.transportMethod,
     serviceType, deliveryDate: row.delivery_date ?? '(undated)', invoiceNumber: args.invoiceNumber, orderId: args.orderId,
     addressPresent: !!row.address_line1,
+    // [TRACE:SITES] — which address the truck is being sent to, and where it came from. The one
+    // thing GATE 0 needs to read when owner-proving the picker.
+    addressFrom: shipTo ? 'the order\'s own ship-to' : 'the customer record',
   });
 
   try {
@@ -368,6 +398,7 @@ async function handleCreate(req: any, res: any) {
     serviceQuantities, // Record<offeringId, number> — owner-confirmed netted quantities
     serviceOverrides,  // Record<offeringId, {amount,reason}> — owner/manager PRICE overrides
     deliveryDate,      // string 'YYYY-MM-DD' | null — owner/manager-entered delivery date
+    shipTo,            // { line1, city, state, zip } | null — THIS ORDER's ship-to (D-41 L2 picker)
     orderExemption: orderExemptionRaw, // D-40: per-order tax-exemption OVERRIDE (owner/manager only)
   } = req.body;
   const businessId: string = req.body.businessId || lines?.[0]?.plant?.business_id;
@@ -1195,6 +1226,7 @@ async function handleCreate(req: any, res: any) {
       invoiceNumber,
       orderId,
       customerRow: (custRow as Record<string, any> | null) ?? null,
+      shipTo: shipTo ?? null,
     });
     console.log('[TRACE:DELIVERY] checkout scheduling outcome', { orderId, invoiceNumber, ...deliveryOutcome });
 

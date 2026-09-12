@@ -91,11 +91,20 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
   const [editingAddress, setEditingAddress] = useState(false);
   const [form, setForm] = useState<ShipToForm>(() => shipToFormOf(d));
   const [addressNote, setAddressNote] = useState<string | null>(null);
+  // D-41 L2 (ledger #303) — the save-this-site offer. Null = not offered. It appears ONLY after an
+  // address was actually saved, so the book fills as a by-product of work already being done.
+  const [siteOffer, setSiteOffer] = useState<{ label: string } | null>(null);
+  const [siteNote,  setSiteNote]  = useState<string | null>(null);
 
   const name = customerDisplayName(d.customers, 'Customer');
   const address = shipToLine(d);
   const busy = actions.savingId === d.id;
   const canEditStop = can('deliveries:update');
+  // 🔴 A STRICTER STRING THAN THE EDIT ABOVE IT, DELIBERATELY. Saving to the customer's address
+  // book is `customers:create`, which STAFF do not hold; the edit is `deliveries:update`, which
+  // they do. So Joel moves a stop and is never shown a Save-as-site button that would refuse him —
+  // an offer nobody can accept is a dead affordance (§1.6 item 5), not an explanation owed.
+  const canSaveSite = can('customers:create') && !!d.customer_id;
   const crew = crewStopModel(d);
   const notice = openOrderNotice({ deliveryStatus: d.status, orderId: d.order_id, orderStatus: orderStatusOf(read, d) });
 
@@ -108,6 +117,26 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
     setEditingAddress(false);
     // Saved but not recorded is its OWN outcome and it is said, not folded into success.
     if (!out.audited) setAddressNote(`The new address is saved, but the change was not recorded in the history (${out.auditError}).`);
+    // The offer rides the edit that just landed. It is a QUESTION with a blank name, never a
+    // pre-ticked box: David's rule is that nothing auto-saves, because a book full of one-off
+    // drops is worse than no book at all.
+    if (canSaveSite) { setSiteNote(null); setSiteOffer({ label: '' }); }
+  }
+
+  async function submitSite() {
+    if (!siteOffer) return;
+    const out = await actions.saveSite(d, siteOffer.label);
+    if (out.kind === 'refused')      { setSiteNote(out.reason); return; }
+    if (out.kind === 'failed')       { setSiteNote(out.error); return; }
+    if (out.kind === 'already_saved') {
+      // Not an error. The answer to "save this?" for an address already in the book is "it already
+      // is" — and naming the site they have beats both a duplicate row and a red refusal.
+      setSiteOffer(null);
+      setSiteNote(`This address is already saved for ${name} as “${out.site.label}”.`);
+      return;
+    }
+    setSiteOffer(null);
+    setSiteNote(`Saved as “${out.site.label}”. It will be offered next time you take an order for ${name}.`);
   }
 
   return (
@@ -187,6 +216,41 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
             </div>
           )}
           {addressNote && <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: RED, lineHeight: 1.45 }}>{addressNote}</p>}
+
+          {/* ── D-41 L2 — "Save this as a site for this customer?" ── */}
+          {siteOffer && (
+            <div style={{ marginTop: 8, padding: 10, border: '1px solid #d8e3c8', background: '#F6FAF0', borderRadius: 10 }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: DARK, lineHeight: 1.45 }}>
+                Save this address as a delivery site for <strong>{name}</strong>? Give it a name and it
+                will be offered next time you take their order.
+              </p>
+              <input
+                value={siteOffer.label}
+                onChange={e => { const v = e.target.value; setSiteOffer(o => (o ? { ...o, label: v } : o)); }}
+                placeholder="Job site A"
+                disabled={busy}
+                autoComplete="off"
+                style={inputStyle}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => { void submitSite(); }}
+                  disabled={busy}
+                  style={{ flex: 1, minHeight: 48, background: GREEN, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.875rem', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                >
+                  {busy ? 'Saving…' : 'Save as a site'}
+                </button>
+                <button
+                  onClick={() => { setSiteOffer(null); setSiteNote(null); }}
+                  disabled={busy}
+                  style={{ flex: 1, minHeight: 48, background: '#fff', color: DARK, border: '1px solid #d1d5db', borderRadius: 10, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}
+                >
+                  Not this one
+                </button>
+              </div>
+            </div>
+          )}
+          {siteNote && <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: GRAY, lineHeight: 1.45 }}>{siteNote}</p>}
 
           {d.customers?.phone && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>

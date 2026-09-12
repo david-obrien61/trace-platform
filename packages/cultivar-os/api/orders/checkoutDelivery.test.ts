@@ -255,6 +255,93 @@ async function main(): Promise<void> {
     ok(db.rows.deliveries.length === 0, 'I4 an untouched fixture counts zero (the stub can say "nothing happened")');
   }
 
+  // ══ J. 🔴 THE ORDER'S OWN SHIP-TO WINS — D-41 L2 (ledger #303) ═══════════════════════════════
+  // The picker fills the checkout address fields; THIS is the half that makes it mean something.
+  // Without it the picker is a lie: the stop would still be addressed from the customer record.
+  {
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '501 County Road 107', city: 'Georgetown', state: 'TX', zip: '78626' },
+    });
+    const r = db.rows.deliveries[0] ?? {};
+    ok(r.address_line1 === '501 County Road 107', `J1 the ORDER's ship-to is what the stop carries (got ${r.address_line1})`);
+    ok(r.city === 'Georgetown', 'J2 and its city');
+    ok(r.zip === '78626', 'J3 and its ZIP');
+    ok(r.address_line1 !== CUSTOMER_FULL.billing_line1,
+      'J4 🔴 the customer billing address did NOT win — this is the live defect the picker closes');
+  }
+  {
+    // THE NON-REGRESSION. No ship-to ⇒ exactly the behaviour that shipped before this build, so
+    // the anon QR path and every caller that sends none are untouched.
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery' });
+    ok(db.rows.deliveries[0]?.address_line1 === '400 Honeycomb Mesa',
+      'J5 NO ship-to ⇒ the customer address, billing-first, exactly as before');
+  }
+  {
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', shipTo: null });
+    ok(db.rows.deliveries[0]?.address_line1 === '400 Honeycomb Mesa', 'J6 an explicit null ship-to falls back too');
+  }
+  {
+    // 🔴 AN ADDRESS IS ONE FACT, NOT FOUR. A ship-to with no street is IGNORED WHOLE — it must
+    // never be merged field-by-field over the customer's, which is how a street from one place
+    // lands in a city from another.
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '   ', city: 'Liberty Hill', state: null, zip: null },
+    });
+    const r = db.rows.deliveries[0] ?? {};
+    ok(r.address_line1 === '400 Honeycomb Mesa', 'J7 a streetless ship-to is ignored WHOLE');
+    ok(r.city === 'Leander', 'J8 🔴 and its city does NOT leak over the customer\'s — no field-by-field merge');
+  }
+  {
+    // A ship-to carrying a street and nothing else clears the other three rather than inheriting
+    // them: the operator deleted the city, and re-filling it from the customer record would put
+    // back a value they removed on purpose (A9 — absent is not "use the old one").
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '9 Oak Ln', city: '', state: '', zip: '' },
+    });
+    const r = db.rows.deliveries[0] ?? {};
+    ok(r.address_line1 === '9 Oak Ln', 'J9 a street-only ship-to is honoured');
+    ok(r.city === null && r.zip === null, 'J10 and its blanks are NULL, never the customer\'s old values');
+  }
+  {
+    // Self-collect writes no stop at all, so a ship-to cannot smuggle one into existence.
+    const db = fakeDb();
+    const out = await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'self',
+      shipTo: { line1: '501 County Road 107', city: 'Georgetown', state: 'TX', zip: '78626' },
+    });
+    ok(db.rows.deliveries.length === 0, 'J11 a ship-to does not create a stop for a self-collect order');
+    ok(out.scheduled === false, 'J12 and the outcome still says so');
+  }
+  {
+    // NEGATIVE CONTROL — the J-probes must be able to SEE the customer address win, or J1 proves
+    // nothing (#182: a probe that cannot reach its subject reports the same as one that passed).
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', customerRow: CUSTOMER_LEGACY_ONLY });
+    ok(db.rows.deliveries[0]?.address_line1 === '1100 Ranch Rd',
+      'J13 the probe CAN observe the customer-record path producing a different street');
+  }
+  {
+    // 🔴 NO POINTER. The stop must never carry a `customer_addresses.id`, or a later edit of a
+    // saved site could rewrite where a past order went. The row is asserted to hold TEXT only.
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '501 County Road 107', city: 'Georgetown', state: 'TX', zip: '78626' },
+    });
+    const keys = Object.keys(db.rows.deliveries[0] ?? {});
+    ok(!keys.some(k => /site_id|address_id|customer_address/.test(k)),
+      `J14 🔴 the stop stores NO pointer to a saved site (keys: ${keys.join(',')})`);
+    ok(!keys.some(k => k.startsWith('shipping')), 'J15 and no shipping_* key');
+  }
+
   // ── SUMMARY ──────────────────────────────────────────────────────────────────────────────────
   console.log(`\ncheckoutDelivery: ${passed} passed, ${failed} failed`);
   if (failed) { for (const f of failures) console.log(`   ✗ ${f}`); process.exit(1); }

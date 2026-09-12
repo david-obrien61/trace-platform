@@ -7,7 +7,7 @@ import type { ServiceSelection } from '../types/order';
 import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
-import type { PricedLine } from '@trace/shared/business-logic';
+import type { PricedLine, ShipToInput } from '@trace/shared/business-logic';
 import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from '../lib/netting';
 
 // D-39: the server-authoritative per-line breakdown returned by submit — the Confirmation receipt
@@ -76,6 +76,9 @@ export interface SubmitPayload {
   // token-verified owner/manager path server-side; ignored (tamper defense) otherwise.
   serviceOverrides?: Record<string, { amount: number; reason: string }>;
   deliveryDate?:     string | null;   // owner/manager-entered delivery date (ISO 'YYYY-MM-DD')
+  // D-41 L2 (ledger #303) — THIS ORDER's ship-to, as TEXT. Null/absent ⇒ the server falls back to
+  // the customer's address exactly as it always has, so the anon QR path is unchanged.
+  shipTo?:           ShipToInput | null;
   // D-40: per-order tax-exemption OVERRIDE (owner/manager only). Honored server-side ONLY on a
   // token-verified apply_tax_exempt path; ignored (tamper defense) otherwise. Null/absent → the
   // customer's PERSISTENT exemption governs.
@@ -118,7 +121,7 @@ export function useSubmitOrder() {
     try {
       const {
         customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
-        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, orderExemption, businessId, business,
+        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, shipTo, orderExemption, businessId, business,
       } = payload;
 
       // Attach the caller's Bearer token when a session exists so the server can VERIFY an
@@ -133,7 +136,7 @@ export function useSubmitOrder() {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body:    JSON.stringify({
           customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
-          nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, orderExemption, businessId,
+          nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, shipTo, orderExemption, businessId,
         }),
       });
 
