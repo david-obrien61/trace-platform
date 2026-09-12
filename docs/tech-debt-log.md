@@ -2698,3 +2698,79 @@ convention — no cap reads a prompt or an author's intent — and **(6)** is gu
 `RULINGS.md` itself. **And neither mechanism closes the race**, which the ruling's own text predicted:
 between the sweep and the push, another session can still take the id. **The answer remains
 reserve-and-push-first, and both caps say so in their output rather than implying otherwise.**
+
+---
+
+## #286 — 🔴 THE ALL-BRANCHES SWEEP EXCLUDES EVERY BRANCH CUT FROM `main`, SO RUN FROM `main` IT REPORTS A TAKEN ID AS FREE (NEW 2026-09-12, ledger #312)
+
+**The instance, measured today.** `node scripts/verify-id-sweep.mjs` run from `main` printed:
+
+```
+verify-id-sweep — 38 remote branches, 6 rivals (same-lineage and main excluded) swept from main
+  close-out highest anywhere: #309  →  NEXT FREE: #310   (this tree claims none beyond main)
+✅ verify-id-sweep — no id claimed by this branch is claimed anywhere else.
+```
+
+🔴 **`#310` AND `#311` ARE BOTH ALREADY CLAIMED ON `origin`.** `2584197 reserve(#310)` on
+`origin/feat/channel-vocabulary`, and `b8e5bbd reserve(#311)` + `cb60f62 fix(#311)` + `c6898df docs(#311)`
+on `origin/fix/zone-walk-safari-blob-revoke` — the last of which carries a **filed `#311` ledger row**,
+not merely a subject. The true highest, derived by hand over `git log --all` subjects ∪ every remote
+branch's `CLOSE-OUT-LEDGER.md` rows, is **#311**. The sweep was two ids behind and said so in green.
+
+**THE MECHANISM, AND IT IS FOUR LINES.** `scripts/verify-id-sweep.mjs:139-141`:
+
+```js
+const sameLineage = (ref) => {
+  const anc = (a, b) => { try { git('merge-base', '--is-ancestor', a, b); return true; } catch { return false; } };
+  return anc(ref, 'HEAD') || anc('HEAD', ref);
+};
+```
+
+The second disjunct — `anc('HEAD', ref)`, *"HEAD is an ancestor of it"* — excludes every branch
+**downstream** of HEAD. **Run from `main`, that is every branch cut from current `main`**, which is
+where every fresh reservation lives: **38 remote branches collapsed to 6 rivals.** Confirmed directly:
+`git merge-base --is-ancestor origin/main origin/fix/zone-walk-safari-blob-revoke` and the same for
+`origin/feat/channel-vocabulary` both return true.
+
+⚠️ **THE EXCLUSION IS NOT THE BUG, AND DELETING IT WOULD BREAK THE CAP.** Its comment is right, and
+it was written against a real first-run failure: *"The first run flagged four 'collisions' against
+`feat/tile-grid-r7-describe` and `feat/breakpoint-vocabulary` — which this branch is BUILT ON. Those
+ids are the same claim, INHERITED … A cap that fires every time you branch off your own work is a cap
+people turn off."* **That reasoning holds for the COLLISION half and fails for the NEXT-FREE half**,
+because the two halves need opposite populations:
+
+| Half | Question it answers | Population it needs |
+|---|---|---|
+| **COLLISION** | *is an id I claim also claimed by a session competing with me?* | rivals only — lineage correctly excluded |
+| **NEXT FREE** | *what is the highest id claimed ANYWHERE?* | **every ref, lineage included** |
+
+`max` is computed over `local ∪ localRes ∪ onMain ∪ elsewhere(RIVALS)` (`:174`), so a downstream
+branch's claim can never enter it. **From `main`, NEXT FREE is therefore always `main`'s max + 1 — a
+number computed without consulting a single unmerged branch.**
+
+🔴 **AND THIS IS THE EXACT CLASS THE SWEEP WAS BUILT TO CLOSE, ARRIVING IN THE SWEEP.** Ledger #309
+built it after *"six collisions in 24 hours, every one by a session doing the right thing"*, and the
+defect it was built for is **a claim that is invisible to the session reading the file**. A session that
+does the newly-correct thing — run the gate, reserve, push — is handed `#310` and collides with a
+reservation that has been on `origin` for hours. **The honest form of the finding: the gate turns a
+careful session into a colliding one.** §6 r19 / [[R-33]] — *a check that cannot disagree is not a
+check* — in its #182 variant: **the scanner reports a count and never states an expectation for it**,
+and *"✅ no id claimed by this branch is claimed anywhere else"* is TRUE as written. It answers the
+collision question correctly and the one the reader is actually asking incorrectly, in the same breath.
+
+**THE FIX IS SMALL AND IT IS NOT TAKEN HERE, BY THE SAME REASONING THE SWEEP'S OWN AUTHOR USED:**
+split the populations — keep `RIVALS` for COLLISION, add an unfiltered `ALL_REFS` for the NEXT-FREE
+max, and have the sweep **name the ref holding the highest id** rather than only the number (`#311 —
+origin/fix/zone-walk-safari-blob-revoke`), so a wrong answer is visible rather than merely wrong.
+⚠️ **Rewriting a checker inside a card-flip pass is the drift the gate exists to catch**, so it is
+SURFACED, not repaired. **What this pass did instead, and what it proves:** derived the true highest by
+hand, took **#312**, and recorded the derivation in the reservation commit — i.e. the workaround is a
+human doing the sweep's job, which is where this platform was before #309.
+
+⚠️ **SCOPE — WHAT IS AND IS NOT AFFECTED.** Run from a **feature branch** whose HEAD is not an ancestor
+of the other live branches, the exclusion drops far fewer refs and the NEXT-FREE figure is much closer
+to true — which is why #309's own run was clean and why this went unnoticed for a day. 🔴 **The worst
+case is `main`, which is where a session that has just merged, or one starting fresh, is standing** —
+the single most likely place for the gate to be run, and the only place where it degrades to
+`main`'s-max + 1. **Clauses C and D (`verify-id-citations.mjs`) are unaffected**: they read `HEAD ∪ origin/main`
+by design and make no free-id claim.

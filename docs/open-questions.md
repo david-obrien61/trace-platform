@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-11** — created at David's request (ledger #302).
+**Last updated: 2026-09-12** (ledger #312 — the #312 block added; the counts below are still measured 2026-09-11 and say so) — created at David's request (ledger #302).
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#312 — the card flips, the leak-clause split, and the sweep's blind spot**
+- 🔴 **OPEN — tech-debt #286, and it reopens a question you thought you closed yesterday.** `verify-id-sweep` reported **`NEXT FREE: #310`** while `origin` held `reserve(#310)` AND `reserve(#311)` + a filed `#311` row: `sameLineage()` excludes every branch cut from current `main`, so **run from `main` the gate hands a careful session a taken id.** The fix is small (split the populations; name the ref holding the highest id) and was **deliberately not taken inside a card-flip pass.** **Until it lands, a sweep run from `main` is not evidence.** Owner: `docs/tech-debt-log.md` → **#286**.
+- 🔴 **OPEN — `#310` is a live DOUBLE claim.** `feat/channel-vocabulary` reserved it and so did an unreachable local commit; R-148 clause (4) says the later renumbers, and **neither is Thunder's to move.** Owner: `docs/CLOSE-OUT-LEDGER.md`.
+- ⚠️ **NOT A QUESTION, A RECORD: `deliveries.address_line2` is no longer forbidden by any board.** The ship-to CARD 3 clause was split on your instruction; the dropped half is a note and **tech-debt #279 is its only owner.** When you decide ① (`deliveries` gains the column) or ② (the importer folds Line2 into Line1), **#279 is the row that closes and no card needs changing** — which is the point of moving it out of one. Owner: `docs/tech-debt-log.md` → **#279**.
+- ⚠️ **AWAITING YOUR RUN, not your answer:** campaign **CARD 3** (runnable now — its SQL needed no repair, both defects were fixed in `efc02f8` itself) · ship-to **CARD 4 on the delivery SCHEDULE**, not `/orders/:id` · breakpoint **CARD 2**, the only card that asks you to decide rather than observe.
+- ✅ **ANSWERED BY MEASUREMENT, NOTHING OWED:** *did the 2026-09-09 card reconciliation run?* **Yes — `ac6d0ce`, merged to `main`, 32 → 51 covered over 598 cards on 31 boards, and it refused three flips with stated reasons.** Nothing to re-send.
 
 **#309 — the id-claim rule, minted and guarded**
 - ✅ **ANSWERED — you minted it.** `R-148` + `R-149` are rulings; both mechanisms are built and in `npm run verify`.
