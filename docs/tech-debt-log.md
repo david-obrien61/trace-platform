@@ -2755,7 +2755,7 @@ proven by `stopOfferMount.test.ts` A6/A7.
 
 ---
 
-## #286 — 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+## #289 — 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
 
 **The line, on `main`, in the file every session opens first:**
 
@@ -2803,5 +2803,21 @@ at merge time, which is the thing that failed.
 
 ⚠️ **(c) IS THE ONE THAT GENERALISES AND IT IS ALSO THE ONE THAT WILL ROT** unless the sweep derives the
 sentence's location rather than hardcoding it — #73's lesson, in a file that is loaded every session.
+
+🔴 **AND THE PATCH FAILED WITHIN THIRTY MINUTES, WHICH IS THE ENTRY'S OWN ARGUMENT ARRIVING AS EVIDENCE.**
+The merge of #308 rewrote the line to `#310` / `#287` / `R-151`. **Every one of those three numbers was
+already wrong when written**, because they came from a MANUAL survey of remote docs — and
+`npm run verify:id-sweep`, run minutes later, reported the truth: **close-out highest anywhere #314,
+tech-debt #288, ruling R-153** across *41 remote branches*. The manual survey could not see them; the
+sweep could. ⚠️ **The same run caught a live collision the survey had also missed** — this very entry
+was filed as **#286**, already claimed 29 minutes earlier by `origin/docs/card-flips-and-leak-clause-split`,
+and renumbered to **#289** under R-148 clause (4) (later claim moves).
+
+**So the cached line has now been wrong twice in one hour, by two different mechanisms** — stale by
+merge, then stale by a survey that could not see far enough. 🔴 **This is the argument for (a) or (b)
+over (c) and over patching: the numbers are only ever correct at the instant of a full sweep, so the
+only honest forms are DERIVE THEM AT READ TIME or DO NOT CACHE THEM AT ALL.** The current line is
+correct as of this commit and carries the same defect it describes; it was left as numbers rather
+than deleted because removing them is David's call, not a builder's.
 
 **TRIGGER:** the next branch that consumes an id and merges — i.e. immediately, and repeatedly.
