@@ -2556,6 +2556,53 @@ than decides, so the 4/6/8 ladder cannot be mistaken for a ruling that the deskt
 ---
 
 ---
+## #287 — 🔴 NOTHING ASSERTS THAT A BUILD'S RUNNABLE ARTIFACTS ARE IN THE TREE THE PERSON RUNNING THEM LOOKS AT (NEW 2026-09-12, ledger #310)
+
+**David's words, and they are the general rule rather than a complaint about one file:** *"the rule is
+not 'put migrations in the folder' — it is that anything I am expected to RUN lives at a path I can
+find without being told."*
+
+**The occurrence, measured.** `20260912_channels_one_vocabulary.sql` was written to
+`supabase/migrations/` — **the correct path** — inside a scratchpad worktree, and committed to an
+unmerged branch. David's checkout is detached at a commit that predates the branch, so in **his** tree
+the file did not exist. The close-out said *"Migration in supabase/migrations as a file"* and was
+**true of a tree he was not in.** 🔴 **THE PATH WAS RIGHT AND THE TREE WAS WRONG, and every report
+said the path.**
+
+🔴 **THIRD INSTANCE OF ONE SHAPE IN ONE AFTERNOON, WHICH IS WHY IT IS A CLASS AND NOT A SLIP:**
+
+| | What was asserted | Where it was true | Where David was |
+|---|---|---|---|
+| the owner-test board | *"12 cards, rendered by `owner-tests.html`"* | `origin/main` | a checkout 7 commits behind — the page was blank |
+| `verify-owner-test-boards` | **`✅ every board on disk is reachable`** · 37/37 | his stale tree, internally consistent | the same tree — the cap **cannot see** staleness, so it went green while the page was blank |
+| this migration | *"in `supabase/migrations` as a file"* | a scratchpad worktree + an unmerged branch | his tree, where the folder had no such file |
+
+**The common form: a claim about a PATH, made without asserting the TREE.** All three reported success,
+because each was measured where the work was rather than where the person is.
+
+**WHAT THE EXISTING CAPS DO AND DO NOT DO.** #309's `verify-id-sweep` and the board cap's new
+`[branch @ sha]` stamp fixed the *reporting* half — output now says which tree it describes.
+**Neither asserts that a runnable artifact has REACHED the reader's tree**, and nothing can from inside
+a worktree: the builder's tree is the only one it can see.
+
+**THE SHAPE OF A FIX, NOT A FIX (filed, not built).** Three candidates, none costed:
+  **(a)** a close-out gate listing every runnable artifact a build produced (migration, rollback,
+      script) and asserting each is an **ancestor of `origin/main`** rather than merely committed
+      somewhere — **#280's clause ① applied to files instead of to the build**;
+  **(b)** the inverse, and cheaper: a build that produces a runnable artifact **states the ref** the
+      reader must be on, so *"it is in `supabase/migrations`"* is never said without *"on `<ref>`"*;
+  **(c)** hand the artifact over by CONTENT rather than by path — a close-out that pastes the SQL
+      cannot be wrong about where the file is.
+⚠️ **(c) COLLIDES WITH A STANDING PREFERENCE AND DAVID HAS TO SETTLE IT.** *Paste, do not point* is his
+own earlier instruction; this message's rule is *runnable things live at findable paths.* A migration is
+a file he runs as a file; a three-line read-only query is not. **The boundary is unruled** — and two
+cards on the `channel-vocabulary` board (CARD 5, CARD 6) were written pointing at *"the verification
+queries at the foot of the migration file"*, which is pointing, and which failed twice over when the
+file was not in his tree. Those two are fixed to paste; the RULE is still owed.
+
+**Blast radius: every build that has ever handed over a file to run.** Not measured. The three
+instances above are one afternoon's worth, and **all three were found by David, not by anything we
+own.**
 
 ## #284 — ✅ **RESOLVED 2026-09-12 (ledger #309) — MINTED AS R-148 + R-149, AND BOTH PROPOSALS BUILT.** THE ID-CLAIM RULE EXISTED, WAS UNNUMBERED, DISQUALIFIED ITSELF IN ITS OWN TEXT, AND LIVED IN THE ONE FILE THAT IS NO LONGER READ IN FULL (was NEW 2026-09-12, ledger #307)
 
