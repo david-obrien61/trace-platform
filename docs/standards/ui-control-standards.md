@@ -258,6 +258,70 @@ gains a second long operation is measured against W1–W5 before it ships.
 
 ---
 
+## 8. ACTION FEEDBACK (a confirmation nobody can see is one that does not exist)
+
+✅ **BINDING — ruled by David 2026-09-12 (R-148), in the doc BEFORE the component, per R-74:**
+*"where the doc is SILENT it is AMENDED BEFORE the widget is touched — silence is not permission to
+decide locally."* This section did not exist when the save-a-site offer was built, and the offer was
+placed inside a list item by default rather than by decision.
+
+🔴 **THE SENTENCE THE WHOLE SECTION RESTS ON, IN DAVID'S WORDS:** *"A REQUIRED DECISION IS NOT PAGE
+CONTENT. Page content can be scrolled past; a decision cannot."* That is why placement inside a list
+item was **wrong by construction rather than by bad luck about where the fold landed** — the defect
+is not that the panel happened to sit low, it is that **its position was a function of unrelated
+content** (how many stops sit above it, and how tall each one is), which nobody can reason about at
+build time. A layout whose correctness depends on the data volume above it is not a layout decision.
+
+Applies to any feedback that FOLLOWS an action the reader took — a confirmation, an outcome, a
+refusal, or an offer that asks them to decide something next. It does **not** apply to page content,
+to a banner describing standing state, or to a passive status a reader may legitimately scroll past.
+
+| # | Standard | Descends from | Why |
+|---|---|---|---|
+| **V1** | **VISIBLE WITHOUT SCROLLING FROM WHERE THE ACTION WAS TAKEN.** Feedback that follows an action is on screen, from the scroll position the reader was already at when they acted — either a modal (§2, M1: centered, so it cannot land below the fold on any viewport) or an equivalent that is anchored so it **cannot** be displaced by content rendered above it. | G2's 2026-09-07 amendment and G10's rationale, generalised off the horizontal axis. Every design system puts a required decision in a dialog. | **An offer nobody can see is indistinguishable from one that does not exist** — and it reads as a FAILURE, not as an absence. Measured: the save-a-site offer was below the fold twice on `/delivery-schedule` on 2026-09-12 and was read as broken both times. |
+| **V2** | 🟢 **SELF-ANCHORING FEEDBACK SATISFIES V1, AND THIS CARVE-OUT IS BINDING, NOT A CONCESSION.** A confirmation rendered **on, or replacing, the control just pressed** — `Copy caption` → `✓ Copied!`, `Save` → `Saving…` — is compliant **wherever it appears, including inside a list item**, because it occupies the control the reader's eye and finger are already on. Its position cannot drift relative to the action: it *is* the action. | The label-swap pattern in every list UI (Gmail, GitHub, Linear). | 🔴 **A rule written as *"post-save confirmation must be a modal"* would convert a dozen CORRECT controls into dialogs** — `CampaignDetail.tsx:366`, `Dashboard.tsx:1005`, `Settings.tsx:1204`, and every `Saving…` button label. The clause must name what is already right, or it makes the platform worse while claiming to improve it. |
+| **V3** | 🔴 **FEEDBACK RENDERED ELSEWHERE INSIDE A LIST ITEM DOES NOT SATISFY V1 — BY CONSTRUCTION.** A panel, note or offer rendered in a repeated row, anywhere other than on the control that was pressed, has a screen position determined by how many rows precede it and how tall they are. That is unreasonable at build time and it is not fixed by making the row shorter, the list smaller, or the copy tighter. **Scroll-into-view is not a remedy** — it moves the reader's viewport without their asking, and it still fails when the row is the last one. | — | Page content can be scrolled past; **a required decision cannot.** The fix is to move the feedback OUT of the row (§2 modal, or V2 self-anchoring), never to tune where the row sits. |
+
+**Descent, stated because this is a GENERALISATION and not a new idea.** The same defect was ruled
+twice on the **horizontal** axis and never carried across:
+- **G2, amended 2026-09-07** — *"THE BOUND MUST SURVIVE ANYTHING RENDERED ABOVE THE BOX INSIDE ITS OWN
+  CARD … it cannot know about a banner, a notice or a second filter row added later, so each of those
+  pushes the box's bottom edge — and its h-scrollbar — below the fold."* Its live case: the `needs a
+  look` banner pushed the inventory h-scrollbar off screen, and the columns past the fold were *"price,
+  size and variant group, the exact three the banner tells the owner to edit — **a flag naming a fix
+  she cannot reach**."*
+- **G10's rationale** — *"A trailing toggle is invisible exactly when it is most needed: on a wide grid
+  it sits past the horizontal fold, so the control that reveals the row's detail is the one control you
+  must scroll to find."*
+
+Both say: **a control whose position is a function of content around it will be unreachable exactly
+when it matters.** §8 is that on the vertical axis, for feedback. R-108's shape applies to this
+section's own existence — *"the G-clauses cover sort, filter and the read-only mark and say NOTHING
+about column order, which is why four grids have three different shapes"* — here, §2 covered how a
+modal behaves once you have one and said nothing about **when feedback must be one.**
+
+**Current implementation:** V1/V2/V3 met on the delivery stop (ledger #308) — the save-a-site offer is
+a centered dialog in `useStopActions`' `overlays` fragment beside `ReviewAskSheet` (M1), its outcome
+is reported **inside that dialog** rather than as a third surface, and the ship-to save's
+partial-failure note is **self-anchored to the Save control** (V2). The label-swap surfaces named in
+V2 were compliant already and were NOT changed.
+
+**Known gap (inherited, honest amber — NOT a regression of this section):** a new dialog inherits the
+platform-wide **M3 / M4 / M5** gaps (escape-to-close, defined backdrop behaviour, focus management),
+which are open for every modal and are tracked on the compliance board. §8 does not close them and
+does not pretend to.
+
+**Enforcement:** the clause list is DERIVED from this doc by
+`scripts/verify-ui-standard-divergence.mjs`, so §8 is answerable by any surface that declares a
+divergence from it. ⚠️ **No cap detects a V1 violation on its own** — whether feedback is reachable
+from where the reader acted is a judgement about layout, and the three live declarations diverge from
+§§1/3/4 only, so adding this section invalidated none of them (checked, not assumed). The mechanical
+half that DOES exist: `shipToSurfaces.test.ts` §C asserts the offer is not rendered inside `StopCard`,
+and `stopOfferMount.test.ts` mounts the real components and asserts it renders OUTSIDE the card
+subtree — which is the V3 prohibition, made falsifiable for one surface rather than for the platform.
+
+---
+
 ## System-managed field registry (the F2/F3 set — David to confirm)
 
 The canonical locked set in `systemManagedFields.ts`, keyed by DB field name (a grid locks the field wherever it shows it):
