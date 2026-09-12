@@ -82,11 +82,17 @@
 ### ✅ MERGED TO `main` 2026-09-12 — #304 · #305 · #307 · #309 (`d48dd84`)
 
 - ✅ **`main` now carries:** the breakpoint vocabulary (**#305**) · §6 r7 describing the tile grid + CARD 1 owner-proven (**#307**) · the id-claim rule minted as **R-148/R-149** with both mechanisms (**#309**) · the campaigns recon (**#304**, which **resolved the #304 dangle**).
-- 🔴 **BEFORE CLAIMING ANY ID: `npm run verify:id-sweep`, AND RUN IT FROM A BRANCH — NOT FROM `main`.** The
-  command is the answer; **no next-free numbers are written here on purpose.** Read them off the run.
-  **Then RESERVE AND PUSH before building** (R-149) — the sweep does not close the race and says so.
-  - ⚠️ **FROM A BRANCH, because run from `main` the sweep excludes every branch cut from current `main`**
-    (`sameLineage()`) — which is exactly where a session that has just merged is standing. Tech-debt **#286**.
+- 🔴 **BEFORE CLAIMING ANY ID: `npm run verify:id-sweep`.** The command is the answer; **no next-free
+  numbers are written here on purpose.** Read them off the run. **Then RESERVE AND PUSH before building**
+  (R-149) — the sweep does not close the race and says so.
+  - ✏️ **THE *"RUN IT FROM A BRANCH, NOT FROM `main`"* CAVEAT WAS REMOVED 2026-09-12 — ITS REASON IS GONE, NOT
+    ITS WORDING.** It existed because `sameLineage()` excluded every branch cut from current `main`, so a session
+    standing on `main` was blind to live claims (**tech-debt #286**). Ledger **#314** deleted that filter:
+    inheritance is now decided **per id at the merge-base**, not per branch. **Proven by differential, not taken
+    from the branch's own description** — one tree standing exactly on `main`, one rival cut from `main` claiming
+    `#400`: **OLD → *"8 rivals (same-lineage and main excluded)"*, `NEXT FREE: #317`, exit 0, blind. NEW → *"43
+    refs for NEXT FREE (nothing filtered), 43 for collisions"*, `NEXT FREE: #401`, `held by: origin/zz-proof-rival`.**
+    A rule kept past its reason is §6 r7's shape — true when written, left standing until it reads as authoritative.
   - ⚠️ **IT CANNOT SEE AN ID CLAIMED IN AN UNCOMMITTED WORKING FILE. THAT IS THE FLOOR, NOT A BUG** — it reads
     refs, and an id typed into a file nobody has committed is in no ref. **Reserve-and-push exists to lift a
     claim over that floor**, which is why it is the next instruction and not a nicety.
