@@ -89,6 +89,16 @@
 - ✅ **THE CLAIM THAT HID IT:** `draft_count` counted only drafts and **no total was ever fetched**. Now `campaignPostClaim` answers `total === 0` first, before status. **The negative control is BUILT, not implied** (CARD 5).
 - 🟡 **STILL NOT BUILT, named so it is not mistaken for a pass:** the ASK (`campaign_call_to_action`), the sales grounding, the sellability guard, channel codes — **David scoped all of them to a separate pass.** Arbor Day's STATUS stays `needs-input` for exactly that reason; only its EDIT clause flipped.
 - 🟡 **David's, none blocking:** should `name`/`description` be editable after all · the residual overclaim (*published* means *copied* on the done claim and the per-post chip) · the **TWO** `arbor day` rows on Test Dave's (0 posts each) are **left alone by instruction** — ✏️ the recon said ONE because its GROUP BY collapsed two byte-identical rows, which is this build's own defect class.
+### ✅ THE ID-CLAIM RULE IS A RULE — R-148 + R-149 MINTED, BOTH MECHANISMS BUILT (2026-09-12, ledger #309)
+
+- ✅ **`R-148`** (who owns an id, when it is claimed) and **`R-149`** (**RESERVE VISIBLY**) are in `RULINGS.md`'s table. **Prose unrewritten** — only the not-filed framing removed. They had been complete and correct since **2026-09-02**, *telling their own reader they were proposals*, while **six collisions happened in 24 hours**.
+- ✅ **BEFORE YOU CLAIM ANY ID: `npm run verify:id-sweep`.** It prints the next free close-out, tech-debt and ruling id **across every remote branch**, and fails if this branch claims one a rival holds. **Then RESERVE AND PUSH before building** — that is R-149, and no cap can replace it.
+- ✅ **`verify-id-citations` now has four clauses:** duplicate tech-debt rows · dangling citations · **duplicate ledger rows** · **ids claimed in a COMMIT SUBJECT with no row in either log**. `--self-test` shows each refusing.
+- 🔴 **`#304` IS A REAL DANGLING CLAIM ON `main` RIGHT NOW** — `eb4aad6 fix(#304)` merged and main carries no `#304` row; the only one in existence is on `recon/campaigns-2026-09-12` and describes something else. Baselined and **printed by name every run**; resolves when that branch merges.
+- ⚠️ **Neither mechanism closes the race, and R-149's own text says so** — between the sweep and the push another session can still take the id. R-148 clauses (1)/(3)/(5) remain **convention**; no cap reads a prompt.
+- ✅ **`verify-owner-test-boards`'s TOTAL now carries `branch @ sha (+uncommitted)`** — yesterday's 35/36/37 board spread was six windows counting different trees, **nobody wrong**.
+- ⚠️ **§10 step 10 corrected** — `RULINGS.md` is **grepped, and the report must SAY WHAT IT GREPPED FOR**. **How the file is FOUND rather than searched is David's, and was not designed here.**
+
 ### 🟡 THE BREAKPOINT VOCABULARY — ONE DEVICE DETECTOR, FOUR AXES (2026-09-12, ledger #305) · **pass ① of the mobile build**
 
 - 🟡 **BUILDER-COMPLETE on its own branch `feat/breakpoint-vocabulary`** (the delivery-stop build is live in this tree) · no migration · no schema · no permission string · api/ 12/12 untouched · **7 owner-test cards, 0 COVERED** → `docs/owner-tests/breakpoint-vocabulary-full-surface-test.md`.

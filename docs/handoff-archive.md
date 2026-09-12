@@ -1,6 +1,20 @@
 # Handoff Archive — TRACE Platform
 
 <!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #306, OP-13 N=3) — verbatim, not summarized -->
+<!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #309, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **ONE STOP, THREE SCREENS: THE SCHEDULE, THE ROUTE AND THE ORDER NOW RENDER THE SAME STOP, ITS SHIP-TO IS EDITABLE FROM IT, AND A CHECKOUT STOP CARRIES ITS ORDER. #301. R-144. TECH-DEBT #271–#277.** 🔴 **THE HEADLINE IS WHAT THE PROMPT ASSUMED AND THE DATABASE DOES NOT HOLD: NOTHING STORED SAYS WHETHER AN ORDER LINE IS A TREE OR A TRIP CHARGE.** `order_items` keeps `sku` and `description` text and no link to the QuickBooks item, so the fee filter had nothing to read. David chose **show every line, labelled** (R-144) and re-scoped #139: QuickBooks already classifies the item; the link is what is missing.
+
+**Type:** BUILD, on `main`. `452d684`. **BUILDER-COMPLETE** — no migration, api/ 12/12, no new permission string. `npm run verify` exit 0, ZERO NET-NEW, unpiped · 98/98 test files · 5,271 assertions · four new test files, 108 assertions, surface probes each beside a mutant. **§3 RETENTION: 1 archived verbatim (#298), 1 written — entries-in == entries-out.**
+
+✅ **ONE STOP:** `readStops` + `<StopCard>` + `useStopActions` on `/delivery-schedule`, `/deliveries?date=` and `/orders/:id`; `stopSurfaces.test.ts` fails a page that composes its own. **On real LAWNS rows:** 39 stops, 38 show their lines (128 lines, the trip charge on 28), and the 39th — David Forero, 2026-09-08 — says it has no order. That is the prompt's "one of 38 with no items": it has no order at all.
+
+✅ **SHIP-TO EDIT:** from the stop on every screen, gated on `deliveries:update` (the live policy enforces it). It writes the stop and a `delivery.ship_to_changed` audit row with the customer and both addresses — never `customers` — and the route rebuilds its Maps link. 🔴 **Distance pricing does not exist**: the trip charge is priced at checkout before any stop exists, so a later edit would not reach it.
+
+✅ **CHECKOUT:** `scheduleCheckoutDelivery` writes `order_id`. The test that asserted it did NOT was guarding the defect, and is flipped.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **run the stop board's CARD 1 first** — read-only SQL · **(b)** route board CARDS 1, 2 and 7 are back to `owed`: the stop list feeding the link was rebuilt · **(c)** the select strings were not probed against live PostgREST (the anon key on disk is rejected); stop CARD 2 is that proof · **(d)** retire or convert the legacy `/deliveries` order list (#277) · **(e)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#277**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #307, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **`customer_addresses` — THE SHIP-TO ADDRESS BOOK. D-41's L2 HOOK, TAKEN UP, ADDITIVE. #303. TECH-DEBT #279.** 🔴 **THE HEADLINE IS A LIVE DEFECT THE BUILD FOUND ON ITS WAY TO THE FEATURE: A DELIVERY ADDRESS TYPED AT CHECKOUT FOR A CUSTOMER WHO ALREADY HAD ONE ON FILE NEVER REACHED THE STOP.** `customerUpsert` is fill-never-clobber, so the customer row kept the old address — and `scheduleCheckoutDelivery` then read the stop's address back off that row. The typed address was silently discarded and the truck went to the billing address. The picker could not have worked without fixing it.

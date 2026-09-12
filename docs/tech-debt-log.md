@@ -2551,7 +2551,7 @@ than decides, so the 4/6/8 ladder cannot be mistaken for a ruling that the deskt
 
 ---
 
-## #284 — 🔴 THE ID-CLAIM RULE EXISTS, IS UNNUMBERED, DISQUALIFIES ITSELF IN ITS OWN TEXT, AND LIVES IN THE ONE FILE THAT IS NO LONGER READ IN FULL (NEW 2026-09-12, ledger #307)
+## #284 — ✅ **RESOLVED 2026-09-12 (ledger #309) — MINTED AS R-148 + R-149, AND BOTH PROPOSALS BUILT.** THE ID-CLAIM RULE EXISTED, WAS UNNUMBERED, DISQUALIFIED ITSELF IN ITS OWN TEXT, AND LIVED IN THE ONE FILE THAT IS NO LONGER READ IN FULL (was NEW 2026-09-12, ledger #307)
 
 **SIX COLLISIONS IN 24 HOURS, ALL ONE MECHANISM: THE CLAIM IS MADE WHERE THE NEXT SESSION DOES NOT LOOK.**
 Every one of them was made by a session doing the right thing.
@@ -2651,3 +2651,51 @@ asserted for tech-debt.
 are edits to a binding gate and to a cap every build runs; choosing one in code is the kind of
 default the OWED register exists to stop. **The unnumbered rule at `RULINGS.md:272` is still
 David's to mint, and neither proposal above should be read as minting it.**
+
+
+---
+
+✅ **RESOLVED 2026-09-12 (ledger #309). DAVID MINTED THE RULE AND ORDERED BOTH MECHANISMS BUILT.**
+
+**① THE TWO ROWS ARE NOW RULINGS.** `R-148` (who owns an id, and when it is claimed — five clauses)
+and `R-149` (a ledger id cannot be claimed atomically; **RESERVE VISIBLY**, option (a), in its (a′)
+form) sit in `RULINGS.md`'s table proper. **The prose was NOT rewritten, on instruction** — only the
+*"DRAFTED FOR DAVID, NOT FILED"* framing was removed and the numbers added. ⚠️ R-148's own text says
+*five clauses* and lists **six**; left exactly as written and noted in the row rather than silently
+corrected.
+
+**② (A) THE ALL-BRANCHES SWEEP IS A GATE** — `scripts/verify-id-sweep.mjs`, in `npm run verify`.
+Every id this branch claims beyond `origin/main` is swept against every **rival** branch's ledger
+rows, tech-debt rows, ruling ids **and commit subjects**; a collision fails and names the branch.
+🔴 **SAME-LINEAGE IS EXCLUDED, and getting that wrong would have made the cap useless:** the first
+run reported four "collisions" against the branches this one is built on — the same claim
+*inherited*, not two sessions competing. **A cap that fires every time you branch off your own work
+is a cap people turn off.** Live: 40 branches, **9 rivals**, clean.
+
+**③ (B) CLAUSES C AND D** in `verify-id-citations.mjs`. **C** — no two `| **#N**` close-out rows;
+**a RESERVED row is deliberately NOT a duplicate**, because counting one would make a correct
+reservation look like a collision and teach sessions to stop reserving, which is the exact behaviour
+R-149 exists to produce. **D** — an id claimed in a **commit subject** with no row in either log,
+scoped to the conventional-commit scope so a bare `#N` in prose stays a reference; routed by the
+marker inside the scope, because **the id-spaces overlap** (`#281` is simultaneously a live ledger id
+and a live tech-debt id).
+
+🔴 **AND D DID NOT SEE ITS OWN TEST CASE AT FIRST, WHICH IS THE FINDING INSIDE THE FIX.** `#304` is
+claimed by `eb4aad6 fix(#304)` on `main`, which carries no `#304` row. This branch forked *before*
+that commit, so reading `HEAD` alone reported **clean while the defect sat on `main`** — every
+branch's answer depending on where it forked, which is the one-tree blindness this whole pass is
+about. The clause now reads **HEAD ∪ `origin/main`**, and `#304` appears. **The backlog is NAMED, not
+counted** — 35 claims printed in full every run, because a backlog nobody can see is a backlog nobody
+shrinks.
+
+**④ §10 STEP 10 NOW MATCHES THE PRACTICE.** It said *"read IN FULL, every session"* and *"short
+enough that reading it is free"*; the file is **342 lines / 425KB** and is grepped. The obligation
+**moved rather than shrank**: a targeted read is honest only if the report **names the terms**.
+⚠️ **How the file is FOUND rather than searched is a separate decision David reserved, and none was
+designed here.**
+
+🔴 **WHAT IS STILL NOT GUARDED, STATED PLAINLY.** R-148 clauses **(1)**, **(3)** and **(5)** are
+convention — no cap reads a prompt or an author's intent — and **(6)** is guarded only by the shape of
+`RULINGS.md` itself. **And neither mechanism closes the race**, which the ruling's own text predicted:
+between the sweep and the push, another session can still take the id. **The answer remains
+reserve-and-push-first, and both caps say so in their output rather than implying otherwise.**

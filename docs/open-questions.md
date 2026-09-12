@@ -78,6 +78,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#309 — the id-claim rule, minted and guarded**
+- ✅ **ANSWERED — you minted it.** `R-148` + `R-149` are rulings; both mechanisms are built and in `npm run verify`.
+- 🔴 **OPEN, and it is the one the rule does not cover:** R-148 clauses **(1)**, **(3)**, **(5)** are **convention — no cap reads a prompt or an author's intent.** Is that acceptable, or does clause (1) (*Lightning never writes an id into a prompt*) need a mechanism of its own?
+- 🔴 **OPEN — `#304` is dangling on `main` right now.** `eb4aad6 fix(#304)` merged; main carries no `#304` row. It resolves when `recon/campaigns-2026-09-12` merges — **or it needs a `withdrawn` row under R-148 clause (3), NEVER LEAVE A GAP.** Your call which.
+- ⚠️ **RESERVED, NOT ANSWERED: how `RULINGS.md` is FOUND rather than searched.** §10 step 10 now says grep-and-declare-your-terms, which matches practice — but **the rule sat findable-only-by-the-already-informed for ten days**, and that is a retrieval problem no wording fixes.
+
 **#307 — §6 r7, CARD 1, and the id-claim rule**
 - ✅ **ANSWERED — §6 r7.** Neither option offered: *"the tile grid was designed phone-first and carried over to desktop; the 768px claim dates from the phone design and was never revisited when it moved."* Rewritten to describe; behaviour untouched. **The desktop grid layout is still yours, explicitly reserved in the rule's text.**
 - ✅ **ANSWERED — CARD 1 covered**, 2026-09-12, build `13d64aa`. **CARD 2 is next and it is a decision, not an observation.**

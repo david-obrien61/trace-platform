@@ -240,9 +240,18 @@ if (subjects === null) {
   note.push('git could not be read — clause D SKIPPED. It reports SKIPPED rather than passing, because a check that cannot reach its target must not look like one that passed (#182).');
 } else {
   const claimed = subjectIds(subjects);
-  const ledgerFiled = new Set(ledgerIds);
+  // 🔴 SCOPE MUST MATCH ON BOTH SIDES, AND THE FIRST VERSION OF THIS CLAUSE GOT IT WRONG.
+  // Subjects are read over HEAD ∪ origin/main, so the FILED set must be too — otherwise a claim that
+  // merged to `main` WITH its row reads as dangling on any branch that forked before the merge.
+  // Caught live: `#306` merged with its ledger row while this branch was being built, and the clause
+  // flagged it — comparing MAIN'S HISTORY against THIS TREE'S LEDGER. That is the same
+  // two-trees-one-comparison mistake this whole pass exists to stop, made by the cap written to stop it.
+  const mainFile = (f) => { try { return execFileSync('git', ['show', `origin/main:${f}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return ''; } };
+  const mainLedger = mainFile(LEDGER);
+  const ledgerFiled = new Set([...ledgerIds, ...ledgerRowIds(mainLedger), ...ledgerReservedIds(mainLedger)]);
+  const debtFiled = new Set([...filed, ...filedIds(mainFile(LOG))]);
   currentSubjects.ledger = [...claimed.ledger].filter(id => !ledgerFiled.has(id) && !ledgerReserved.includes(id)).sort((a, b) => a - b);
-  currentSubjects.techdebt = [...claimed.techdebt].filter(id => !filed.has(id)).sort((a, b) => a - b);
+  currentSubjects.techdebt = [...claimed.techdebt].filter(id => !debtFiled.has(id)).sort((a, b) => a - b);
   const knownL = new Set(base.subjects?.ledger ?? []), knownD = new Set(base.subjects?.techdebt ?? []);
   const freshL = currentSubjects.ledger.filter(id => !knownL.has(id));
   const freshD = currentSubjects.techdebt.filter(id => !knownD.has(id));

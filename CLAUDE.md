@@ -3,6 +3,7 @@
 # Last updated: 2026-09-12 — #306 the campaign lifecycle (R-145 edit scope · R-146 cancel · R-147 append) — see §3
 # Last updated: 2026-09-12 — #305 the breakpoint vocabulary (one device detector, four axes) — see §3
 # Last updated: 2026-09-12 — #307 §6 r7 describes the tile grid; CARD 1 proven; the id-claim rule (tech-debt #284) — see §3
+# Last updated: 2026-09-12 — #309 the id-claim rule minted (R-148 · R-149) and both mechanisms built — see §3
 # ⚠️ THIS LINE IS A POINTER, NEVER A SUMMARY (OP-13 / STD-011) — the narrative lives in §3 and ONLY in §3. Do not restate it here.
 # Current AI: Claude Code
 
@@ -281,6 +282,21 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 **FLAGGED FOR DAVID:** **(a)** 🔴 **board CARD 1 IS A STOP-GATE — run it first**: the live CHECK must contain `'cancelled'` (tech-debt #91's class). Board is 0 of 12 · **(b)** should `name`/`description` be editable after all · **(c)** the residual overclaim: *published* still means *copied* on the done claim and the per-post chip · **(d)** the **TWO** `arbor day` rows on Test Dave's (0 posts each, ends 2026-10-30) are **left alone by instruction** — ✏️ **the recon said ONE: its query grouped by the display columns, which are byte-identical across both rows, so the GROUP BY collapsed two into one. A check that cannot distinguish one campaign from two identical campaigns is the defect class this very build fixes** · **(e)** 🔴 **A SOFT ID COLLISION TO SETTLE: `eb4aad6`'s message says `fix(#304)` and main's ledger has NO #304 row, while the unmerged `recon/campaigns-2026-09-12` branch holds the real #304.** Two things answer to one number; the recon row is the one with a ledger entry · **(f)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#282**.
 ### 2026-09-12 — THUNDER **THE BREAKPOINT VOCABULARY: ONE DETECTOR, FOUR AXES, AND NOTHING READS A USER-AGENT TO DECIDE LAYOUT. #305. TECH-DEBT #281.** 🔴 **THE HEADLINE IS THAT THE SECOND DETECTOR'S OWN COMMENT HAD ALREADY DIAGNOSED THIS AND ASKED FOR THE FIX.** `OperationsCalendar.useIsNarrow` named itself *"the SECOND — the rule-of-three extraction is not yet earned and is named here so the third one takes it rather than adding a fourth copy."* This pass took the extraction instead of adding the third copy. `ReceiptKeeper.useIsMobile` mixed `pointer:coarse`, an 820px width test and a **user-agent regex** into ONE boolean, so a narrow desktop window and an iPad answered the same.
+### 2026-09-12 — THUNDER **THE ID-CLAIM RULE IS MINTED (R-148 + R-149) AND BOTH MECHANISMS ARE BUILT. #309. TECH-DEBT #284 CLOSED.** 🔴 **THE RULE HAD BEEN COMPLETE AND CORRECT SINCE 2026-09-02 AND DISQUALIFIED ITSELF IN ITS OWN TEXT** — *"deliberately NOT written into the table above as a ruling in his voice… held here until he numbers them"* — so every session that found it was correctly told it was a proposal. **Its only home is a file now grepped rather than read (342 lines / 425KB), and you only grep for an id-claiming rule if you already know one exists.** In the ten days it sat there, **six collisions happened in 24 hours, every one by a session doing the right thing.**
+
+**Type:** DOCS + two caps + one script, on `feat/id-claim-rulings-and-caps`. **BUILDER-COMPLETE** — no migration, no schema, no permission string, api/ 12/12. `npm run verify` exit 0 ZERO NET-NEW. **§3 RETENTION: 1 archived verbatim, 1 written — entries-in == entries-out.**
+
+✅ **MINTED, PROSE UNREWRITTEN ON INSTRUCTION:** **R-148** (who owns an id, when it is claimed) and **R-149** (**RESERVE VISIBLY** — option (a) in its (a′) form). Only the not-filed framing was removed and the numbers added. ⚠️ **R-148's text says *five clauses* and lists SIX** — left exactly as written and noted in the row, not silently corrected.
+
+✅ **(A) THE SWEEP IS A GATE** — `verify-id-sweep.mjs` in `npm run verify`: every id claimed beyond `origin/main`, swept against every rival branch's ledger rows, tech-debt rows, ruling ids **and commit subjects**. 🔴 **Same-lineage is EXCLUDED, and that was a correctness fix, not a silencer** — the first run flagged four "collisions" against the branches this one is built on, which is one claim INHERITED. **A cap that fires whenever you branch off your own work is a cap people turn off.** Live: 40 branches, 9 rivals, clean.
+
+✅ **(B) CLAUSES C + D** — no duplicate `| **#N**` ledger rows (**a RESERVED row is deliberately not a duplicate**, or reserving would look like colliding), and an id claimed in a **COMMIT SUBJECT** with no row in either log. 🔴 **D COULD NOT SEE ITS OWN TEST CASE AT FIRST:** `#304` sits on `main` and this branch forked before it, so reading HEAD alone reported **clean while the defect sat on `main`**. Now **HEAD ∪ `origin/main`**. **The 35-claim backlog is NAMED every run, not counted** — a backlog nobody can see is one nobody shrinks.
+
+✅ **§10 step 10 matches the practice** — grep, **and say what you grepped for**. The obligation moved rather than shrank. ⚠️ **How the file is FOUND rather than searched is yours and was explicitly not designed here.** ✅ **And the board TOTAL now carries `branch @ sha`** — yesterday's 35/36/37 was six windows counting different trees, nobody wrong.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **STILL UNGUARDED and named rather than implied:** R-148 clauses **(1)**, **(3)**, **(5)** are convention — no cap reads a prompt or an author's intent — and **(6)** is guarded only by `RULINGS.md`'s own shape · **(b)** 🔴 **neither mechanism closes the race, exactly as R-149's text predicted** — between the sweep and the push another session can take the id; **reserve-and-push-first remains the rule and both caps say so in their output** · **(c)** ⚠️ **`#304` is a REAL dangling claim on `main` right now** — `eb4aad6 fix(#304)` merged and main carries no #304 row; it is baselined and printed every run, and it resolves when `recon/campaigns-2026-09-12` merges · **(d)** ⚠️ **I lost ~20 minutes of this build to my own `git reset --hard` with uncommitted work** — the caps were rewritten from the transcript and are byte-for-byte what was proven; recorded because the close-out should say it happened · **(e)** ⚠️ **CLAUDE.md is now 669 lines / 139KB**, over its own ~600 budget — flagged, not trimmed · **(f)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#284**.
+
+
 ### 2026-09-12 — THUNDER **§6 r7 NOW DESCRIBES THE TILE GRID · CARD 1 OWNER-PROVEN · AND THE ID-CLAIM RULE TURNS OUT TO EXIST, UNNUMBERED, SINCE 2026-09-02. #307. TECH-DEBT #283 CLOSED · #284 NEW.** 🔴 **DAVID'S RULING CORRECTED THE QUESTION THE TECH-DEBT ITEM ASKED.** It offered two readings — stale prose, or an intent never implemented. **Neither:** *"the tile grid was designed phone-first and carried over to desktop; the 768px claim dates from the phone design and was never revisited when it moved."* **That is a third shape and the worse one: the rule was TRUE WHEN WRITTEN and invalidated by a change that never came back to it** — nobody was ever wrong, and nothing marked the text as belonging to a superseded design. **A rule that was once true reads exactly like a rule that is true.**
 
 **Type:** DOCS + one comment line, on `feat/tile-grid-r7-describe` (off `feat/breakpoint-vocabulary`). **No code behaviour, no migration, no schema.** `npm run verify` exit 0 ZERO NET-NEW. **§3 RETENTION: 1 archived verbatim, 1 written — entries-in == entries-out.**
@@ -310,18 +326,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 **FLAGGED FOR DAVID:** **(a)** 🔴 **run CARD 1 then CARD 2** — desk browser, no SQL, no console, any tenant including LAWNS since this pass **writes nothing** · **(b)** CARDS 3 and 4 need a phone; **CARD 4 is landscape**, the 844px case the deleted regex used to carry · **(c)** tech-debt **#283** (filed as #281; renumbered — that id was already held by `docs/tech-debt-281-branch-hygiene`, claimed 2h47m earlier, so the LATER claim renumbers) — **§6 r7 itself** says the tile grid is *"desktop/tablet only (768px+)"* and it is wrong in both claims; **stale prose or unimplemented intent is your ruling**, and it decides what the dashboard does on a phone · **(d)** 🔴 **the BEHAVIOURAL mobile story is OWED TO YOU** — Lauren running delivery day twice is yours to dictate; Thunder wrote only the as-built vocabulary line · **(e)** ⚠️ **the shared tree's gate shows `tsc 5→6` / `eslint 244→245` and NEITHER IS THIS PASS** — both trace to another session's untracked `stopOfferMount.test.ts`; proven by re-running the gate on an isolated worktree, and **nothing was re-baselined** · **(f)** ⚠️ **ID COLLISION, YIELDED:** this pass took **#304**, wrote every doc, then found another session had committed `9fd1d15` **`fix(#304)`** into this same checkout — **and had switched the checkout onto its own branch mid-session.** The ledger held no #304 row when either of us looked, because **a commit-message claim is invisible in the file the next session reads.** Thunder yielded to the commit already in history and renumbered to **#305**; their work was never staged here. **A fourth shape for the OWED id-claiming question.** · **(g)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#284**.
 
-
-### 2026-09-11 — THUNDER **ONE STOP, THREE SCREENS: THE SCHEDULE, THE ROUTE AND THE ORDER NOW RENDER THE SAME STOP, ITS SHIP-TO IS EDITABLE FROM IT, AND A CHECKOUT STOP CARRIES ITS ORDER. #301. R-144. TECH-DEBT #271–#277.** 🔴 **THE HEADLINE IS WHAT THE PROMPT ASSUMED AND THE DATABASE DOES NOT HOLD: NOTHING STORED SAYS WHETHER AN ORDER LINE IS A TREE OR A TRIP CHARGE.** `order_items` keeps `sku` and `description` text and no link to the QuickBooks item, so the fee filter had nothing to read. David chose **show every line, labelled** (R-144) and re-scoped #139: QuickBooks already classifies the item; the link is what is missing.
-
-**Type:** BUILD, on `main`. `452d684`. **BUILDER-COMPLETE** — no migration, api/ 12/12, no new permission string. `npm run verify` exit 0, ZERO NET-NEW, unpiped · 98/98 test files · 5,271 assertions · four new test files, 108 assertions, surface probes each beside a mutant. **§3 RETENTION: 1 archived verbatim (#298), 1 written — entries-in == entries-out.**
-
-✅ **ONE STOP:** `readStops` + `<StopCard>` + `useStopActions` on `/delivery-schedule`, `/deliveries?date=` and `/orders/:id`; `stopSurfaces.test.ts` fails a page that composes its own. **On real LAWNS rows:** 39 stops, 38 show their lines (128 lines, the trip charge on 28), and the 39th — David Forero, 2026-09-08 — says it has no order. That is the prompt's "one of 38 with no items": it has no order at all.
-
-✅ **SHIP-TO EDIT:** from the stop on every screen, gated on `deliveries:update` (the live policy enforces it). It writes the stop and a `delivery.ship_to_changed` audit row with the customer and both addresses — never `customers` — and the route rebuilds its Maps link. 🔴 **Distance pricing does not exist**: the trip charge is priced at checkout before any stop exists, so a later edit would not reach it.
-
-✅ **CHECKOUT:** `scheduleCheckoutDelivery` writes `order_id`. The test that asserted it did NOT was guarding the defect, and is flipped.
-
-**FLAGGED FOR DAVID:** **(a)** 🔴 **run the stop board's CARD 1 first** — read-only SQL · **(b)** route board CARDS 1, 2 and 7 are back to `owed`: the stop list feeding the link was rebuilt · **(c)** the select strings were not probed against live PostgREST (the anon key on disk is rejected); stop CARD 2 is that proof · **(d)** retire or convert the legacy `/deliveries` order list (#277) · **(e)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#277**.
 
 > **§3 RETENTION — N=3 (binding; OP-13).** §3 holds the **most recent THREE entries**, no more. At every close-out, **BEFORE** writing the new entry, move every entry beyond the newest three — **verbatim, never summarized** — to [docs/handoff-archive.md](docs/handoff-archive.md) (newest-first, under a dated provenance comment). The new entry is #1. Nothing is deleted or condensed; the archive is append-and-preserve and is **NOT loaded at session start** — it holds the full history (185 entries as of 2026-07-17). Verification is arithmetic: **entries-in == entries-out**. Canonical "is X closed / owner-proof owed" state does NOT live here — it lives in `docs/CLOSE-OUT-LEDGER.md`, `docs/DECISIONS-INDEX.md`, and `docs/built-inventory.md`, each with its own gate. §3 is the narrative of the last three sessions; it was never the system of record. Full statement of force: `docs/operating-doctrine/end-of-session-protocol.md` → **GATE — CLAUDE.md §3 HANDOFF RETENTION**; close sequence step 0 (§9).
 
@@ -645,9 +649,24 @@ Before writing any code confirm:
    checked and must not be promoted to fact.** Two sections carry an `⚠️ CORRECTED AT FILING` block
    (§4.1, §7.3) — read the correction, not the original.
 
-10. **RULINGS (binding gate — read `docs/RULINGS.md` IN FULL, every session, before any build):** one line
+10. **RULINGS (binding gate — read `docs/RULINGS.md` before any build, and SAY WHAT YOU GREPPED FOR):** one line
    per ruling David has made, newest first, each marked IMPLEMENTED / PARTIAL / OPEN / OWED with the
-   cap that guards it. It is deliberately short enough that reading it is free. **A build that
+   cap that guards it.
+   ✏️ **CORRECTED 2026-09-12 (ledger #309). THIS STEP SAID *"read IN FULL, every session"* AND *"it is
+   deliberately short enough that reading it is free"* — THE SECOND CLAUSE STOPPED BEING TRUE AND THE
+   FIRST STOPPED HAPPENING.** Measured today: **342 lines and 425KB** — roughly a third of a working
+   context spent before any work begins, in the file created to make rulings cheap to carry. David
+   ruled the practice on 2026-09-04: *"330KB read every session is OP-13's tax in the file OP-13
+   pointed at. Grep for what you need and say in the report what you grepped for."* **The sentence now
+   matches what sessions actually do.** 🔴 **The obligation moved, it did not shrink: a targeted read is
+   honest ONLY if the report NAMES THE TERMS**, so a reader can see what the session could not have
+   known. A build that reports no query has not done this step.
+   ⚠️ **The cost of the targeted read is REAL and is recorded rather than waved past — it has already
+   been paid once.** `R-148`/`R-149` sat in this file, complete and correct, from 2026-09-02 until
+   2026-09-12 while **six id collisions happened in 24 hours** — because the rule was findable only by
+   someone who already knew to grep for it. **HOW the file is FOUND rather than searched is a separate
+   decision David has explicitly reserved; do not design one here.**
+   **A build that
    contradicts an IMPLEMENTED ruling STOPS and surfaces; a build that lands an OPEN one flips its
    line in the same commit.** WHY: four rulings evaporated between the session that made them and
    the session that built against them (2026-07-30) — not disputed, forgotten, because they lived

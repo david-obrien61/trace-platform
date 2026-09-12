@@ -1,4 +1,5 @@
 # Last updated: 2026-09-12 (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
+# (**#309 — THE ID-CLAIM RULE IS MINTED AND GUARDED:** `R-148` + `R-149` in the ruling table, prose unrewritten; `verify-id-sweep` sweeps every remote branch before a claim; `verify-id-citations` gains ledger-duplicate and commit-subject clauses; the board TOTAL carries its tree)
 # (**#307 — §6 r7 NOW DESCRIBES THE TILE GRID:** 4/6/8 at every width, the phone-first origin recorded, *describes-not-decides* stated; **no pixel moved**; CARD 1 owner-proven; tech-debt #283 closed, **#284** filed — the id-claim rule exists, unnumbered since 2026-09-02)
 # (**#305 — THE BREAKPOINT VOCABULARY:** one device detector, four axes named apart; `useIsMobile`/`useIsNarrow` and the user-agent regex DELETED; breakpoints live once in `design-system/tokens.ts` and the CSS interpolates them; **no platform detector, deliberately** — see § Device vocabulary)
 # (**#303 — THE SHIP-TO ADDRESS BOOK (`customer_addresses`):** D-41's L2 hook taken up, additive; the order still snapshots onto the delivery row; `customers:*` reused and no string minted; NO backfill from history; migration WRITTEN, NOT APPLIED. See the *Ship-to address book* entry.) See also:
@@ -3022,3 +3023,34 @@ catching a probe that graded its own file's prose rather than its code (#146's s
 below **1024px** rather than **767px**. The old number cited "§6 r7, the tile grid" — **the tile grid
 has never used 768** — and contradicted the intent three lines above it. Board **CARD 2**; David's
 to override in one word — ✅ **CARD 1 of that board is COVERED (David, 2026-09-12, build `13d64aa`)**. ✅ **§6 r7 has since been rewritten to DESCRIBE this grid** (ledger #307): 4/6/8 at every width, with the phone-first origin recorded and an explicit *describes-not-decides* clause — **behaviour unchanged, no pixel moved, the desktop layout still David's separate decision.** Related: tech-debt **#283** (filed as #281, renumbered 2026-09-12 — that id was already held by `docs/tech-debt-281-branch-hygiene`, claimed 2h47m earlier).
+
+
+---
+
+### PLATFORM BOOKKEEPING · ID CLAIMING — THE RULE, AND THE TWO CAPS THAT KEEP IT (2026-09-12, ledger #309) — **BUILDER-COMPLETE**
+
+**The rule.** `RULINGS.md` → **R-148** (who owns an id, and when it is claimed — five clauses, its own
+text; note it says *five* and lists six, left as written) and **R-149** (a ledger id cannot be claimed
+atomically — **RESERVE VISIBLY**, option (a) in its (a′) form). Minted 2026-09-12 from rows that had
+been complete since 2026-09-02.
+
+**The order of operations, which is the whole rule:**
+1. `npm run verify:id-sweep` — the next free close-out / tech-debt / ruling id **across every remote branch**.
+2. Write a `⏳ **#N — RESERVED …**` row naming your branch, commit it **alone**, and **push it**.
+3. *Then* build. A claim nobody can see is not a claim.
+
+**`scripts/verify-id-sweep.mjs`** (in `npm run verify`) — sweeps every rival branch's ledger rows,
+tech-debt rows, ruling ids **and commit subjects**; fails naming the id and the branch. **Same-lineage
+excluded** (an inherited claim is not a competing one). **Staleness measured and reported**; `--strict`
+fails on stale refs. It states in its own output that it **does not close the race**.
+
+**`scripts/verify-id-citations.mjs`** — four clauses now: **A** duplicate tech-debt rows · **B**
+dangling tech-debt citations (ratchet) · **C** duplicate `| **#N**` ledger rows, where **a RESERVED
+row is deliberately not a duplicate** · **D** an id claimed in a **commit subject** with no row in
+either log, read over **HEAD ∪ `origin/main`**, ratcheted, and **named rather than counted**.
+
+**`scripts/verify-owner-test-boards.mjs`** — the TOTAL line now carries `branch @ sha (+uncommitted)`.
+A board count that does not say which tree it came from cannot be compared to another board count.
+
+⚠️ **Not guarded:** R-148 clauses (1), (3), (5) are convention — no cap reads a prompt or an author's
+intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes the race.**
