@@ -2698,3 +2698,11 @@ convention — no cap reads a prompt or an author's intent — and **(6)** is gu
 `RULINGS.md` itself. **And neither mechanism closes the race**, which the ruling's own text predicted:
 between the sweep and the push, another session can still take the id. **The answer remains
 reserve-and-push-first, and both caps say so in their output rather than implying otherwise.**
+
+---
+
+## #288 — ⏳ RESERVED (NEW 2026-09-12, ledger #313)
+
+Claimed before writing, per R-149 (a′). A forecast of a ruling reached `user_stories.md` and the
+ruling itself never reached the story it forecast. Real entry arrives on branch
+`docs/four-recovered-stories`.
