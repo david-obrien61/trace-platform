@@ -1,24 +1,53 @@
 {
   "_comment": "Tech-debt ids CITED in a watched doc with no row in docs/tech-debt-log.md. This is DEBT, not permission: it shrinks, never grows. The cap fails on NET-NEW only (verify-write-paths's shape). Re-record with `npm run id-citations:baseline` ONLY after filing rows, never to silence a new one.",
-  "stamped": "2026-09-11",
+  "stamped": "2026-09-12",
   "dangling": {
-    "CLAUDE.md": [
-      59
-    ],
+    "CLAUDE.md": [],
     "docs/CLOSE-OUT-LEDGER.md": [
       2,
-      4,
-      58,
-      90
+      4
     ],
     "docs/built-inventory.md": [
-      2,
-      58,
-      90
+      2
     ],
-    "docs/RULINGS.md": [
-      59,
-      90
+    "docs/RULINGS.md": []
+  },
+  "subjects": {
+    "ledger": [
+      79,
+      81,
+      82,
+      121,
+      141,
+      142,
+      143,
+      148,
+      149,
+      150,
+      152,
+      153,
+      155,
+      170,
+      171,
+      232,
+      233,
+      234,
+      235,
+      236,
+      237,
+      238,
+      240,
+      241,
+      242,
+      243,
+      244,
+      285,
+      288,
+      304
+    ],
+    "techdebt": [
+      281,
+      282
     ]
   }
 }

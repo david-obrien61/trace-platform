@@ -28,6 +28,7 @@
  *      a check nobody has watched refuse is a claim (§6 r19).
  */
 import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const HTML = 'owner-tests.html';
 const DIR  = 'docs/owner-tests';
@@ -160,6 +161,23 @@ for (const key of onDisk) {
   note(`  ✓ ${String(parsed.length).padStart(4)} cards · ${String(by('covered')).padStart(2)} covered  ${key}${drift}`);
 }
 
-note(`\nTOTAL · ${onDisk.length} boards · ${cards} cards · ${covered} covered`);
+// 🔴 WHICH TREE THIS COUNT CAME FROM. A board count with no tree on it cannot be compared to
+// another board count — and on 2026-09-12 six windows reported 35, 36 and 37 boards from four
+// counting methods, with NOBODY WRONG: `origin/main` held 37 and a feature branch held 38, because
+// a board lives on the branch that wrote it until that branch merges. The spread was never an
+// arithmetic problem, it was an unlabelled-tree problem. Same class as the build's SHA stamp
+// (OP-15): the number is not evidence until it says what it is a number OF.
+// Degrades LOUDLY, never silently — `tree unknown` is an honest answer; omitting the stamp is not (#182).
+const treeStamp = () => {
+  const git = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  try {
+    const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
+    const sha = git('rev-parse', '--short', 'HEAD');
+    let dirty = '';
+    try { if (git('status', '--porcelain', '--', 'docs/owner-tests', 'owner-tests.html')) dirty = ' +uncommitted'; } catch { dirty = ' +unknown-worktree-state'; }
+    return `${branch === 'HEAD' ? 'detached' : branch} @ ${sha}${dirty}`;
+  } catch { return 'tree unknown — git could not be read'; }
+};
+note(`\nTOTAL · ${onDisk.length} boards · ${cards} cards · ${covered} covered   [${treeStamp()}]`);
 if (fail.length) { console.log(`\n🔴 verify-owner-test-boards FAILED — ${fail.length} problem(s) above.`); process.exit(1); }
 console.log('\n✅ verify-owner-test-boards — every board on disk is reachable by owner-tests.html.');

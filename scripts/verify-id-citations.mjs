@@ -36,8 +36,10 @@
 //               node scripts/verify-id-citations.mjs --self-test   — watch each check refuse
 // ============================================================
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const LOG = 'docs/tech-debt-log.md';
+const LEDGER = 'docs/CLOSE-OUT-LEDGER.md';
 const BASELINE = 'id-citations-baseline.json';
 const UPDATE = process.argv.includes('--update');
 // Watched docs: where an id gets CITED. Deliberately narrow — the places a number is claimed.
@@ -70,6 +72,51 @@ const citedIds = (src) => {
   return out;
 };
 
+// ── C's matcher — a REAL close-out row. `| **#307** | …` ────────────────────────────────────────
+// ⏳ rows are EXCLUDED and the distinction is load-bearing: a `⏳ … RESERVED` row is a CLAIM that the
+// real row is inbound on a branch (R-149), and a `⏳ #302 — WHY THIS ROW WAS LATE` commentary row is
+// neither. Counting either as a filing would make a correctly-reserved id look like a duplicate of
+// itself, which would teach sessions to stop reserving — the exact behaviour R-149 exists to produce.
+const ledgerRowIds = (src) => [...src.matchAll(/^\| \*\*#(\d+)\*\*/gm)].map(m => +m[1]);
+const ledgerReservedIds = (src) => [...src.matchAll(/^\| ⏳ \*\*#(\d+) — RESERVED/gmu)].map(m => +m[1]);
+
+// ── D's matcher — an id claimed in a COMMIT SUBJECT. `feat(#305): …` / `docs(tech-debt #280): …` ──
+// This is the space NOTHING has ever watched, and it is where #304 was claimed twice (9fd1d15 at
+// 12:52:10 and 161e7a6 at 12:56:45, 4m35s apart) while no file the next session reads showed either.
+// The CLAIM SITE is the conventional-commit SCOPE — the `(...)` before the colon — and nothing else.
+// A bare `#305` in the prose of a subject is a REFERENCE, not a claim. Which log a claim belongs to
+// is decided by the marker INSIDE the scope, because the two id-spaces overlap: `#281` is
+// simultaneously a live ledger id and a live tech-debt id.
+const subjectIds = (subjects) => {
+  const ledger = new Set(), techdebt = new Set();
+  for (const line of subjects) {
+    const scope = /^[a-z]+\(([^)]*)\)\s*:/i.exec(line);
+    if (!scope) continue;
+    const ids = [...scope[1].matchAll(/#(\d+)/g)].map(m => +m[1]);
+    if (!ids.length) continue;
+    const target = /tech[-\s]debt/i.test(scope[1]) ? techdebt : ledger;
+    for (const id of ids) target.add(id);
+  }
+  return { ledger, techdebt };
+};
+/** Commit subjects reachable from HEAD **or from `origin/main`**. Returns null when git cannot
+ *  answer — NEVER an empty list, because "no claims found" and "could not look" must not report the
+ *  same (#182).
+ *
+ *  🔴 THE UNION IS THE POINT, AND IT WAS FOUND BY THIS CLAUSE FAILING TO SEE ITS OWN TEST CASE.
+ *  `#304` is claimed by `eb4aad6 fix(#304)` on `main` with no `#304` row there — the live instance
+ *  this clause was written for. On a branch that forked BEFORE that commit it is not reachable from
+ *  HEAD, so the clause reported clean while the defect sat on `main`. Reading only HEAD would make
+ *  every branch's answer depend on where it forked, which is the one-tree blindness this whole pass
+ *  is about. `main` is where the claim ultimately has to be true, so `main` is always in scope. */
+const headSubjects = () => {
+  const run = (revs) => execFileSync('git', ['log', '--format=%s', '-n', '2000', ...revs], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
+  try {
+    try { return run(['HEAD', 'origin/main']); }
+    catch { return run(['HEAD']); }   // no origin/main here (a fresh clone, a detached CI checkout)
+  } catch { return null; }
+};
+
 const fail = [];
 const note = [];
 
@@ -100,8 +147,24 @@ if (SELF_TEST) {
   console.log('SELF-TEST — each check, shown refusing a crafted violation then accepting a clean input:\n');
   const a1 = rowIds('## #7 — a\n## #7 — b\n'); const a1dup = a1.length !== new Set(a1).size;
   console.log(`  A duplicate rows     — violation: ${a1dup ? '✅ caught' : '🔴 MISSED'} · clean: ${rowIds('## #7 — a\n## #8 — b\n').length === 2 ? '✅ accepted' : '🔴 rejected'}`);
+  // ── C's probes — a duplicate ledger row is seen, and a reservation is NOT a duplicate ──
+  if (new Set(ledgerRowIds('| **#7** | a |\n| **#7** | b |\n')).size === 2) { console.error('CAP PROBE FAILED: duplicate ledger rows not seen'); process.exit(2); }
+  if (ledgerRowIds('| ⏳ **#7 — RESERVED 2026-09-12** | x |\n').length !== 0) { console.error('CAP PROBE FAILED: a RESERVED row was counted as a real ledger row — reserving would look like colliding'); process.exit(2); }
+  if (ledgerRowIds('| ⏳ **#302 — WHY THIS ROW WAS LATE** | x |\n').length !== 0) { console.error('CAP PROBE FAILED: a ⏳ commentary row was counted as a real ledger row'); process.exit(2); }
+  if (ledgerReservedIds('| ⏳ **#7 — RESERVED 2026-09-12** | x |\n')[0] !== 7) { console.error('CAP PROBE FAILED: a RESERVED row is not recognised as a reservation'); process.exit(2); }
+  if (ledgerRowIds('see | **#7** | mid-line').length !== 0) { console.error('CAP PROBE FAILED: a ledger row not at line start was counted'); process.exit(2); }
+  // ── D's probes — a commit-subject claim is seen, prose is not, and the two id-spaces are split ──
+  if (!subjectIds(['feat(#305): the breakpoint vocabulary']).ledger.has(305)) { console.error('CAP PROBE FAILED: a commit-subject claim is invisible'); process.exit(2); }
+  if (!subjectIds(['docs(tech-debt #280): pushed is not shipped']).techdebt.has(280)) { console.error('CAP PROBE FAILED: a tech-debt-marked scope is not routed to the tech-debt space'); process.exit(2); }
+  if (subjectIds(['docs(tech-debt #280): x']).ledger.size !== 0) { console.error('CAP PROBE FAILED: a tech-debt claim leaked into the ledger space — the id-spaces overlap and must not be merged'); process.exit(2); }
+  if (subjectIds(['fix: repair the #305 handling']).ledger.size !== 0) { console.error('CAP PROBE FAILED: a bare in-prose #N was read as a subject CLAIM — only the scope form is a claim'); process.exit(2); }
+  if (headSubjects() === null) note.push('git could not be read — clause D will report SKIPPED rather than passing silently (#182)');
   const b1 = citedIds('tech-debt #9001').has(9001);
   console.log(`  B dangling citation  — violation: ${b1 ? '✅ caught' : '🔴 MISSED'} · clean: ${citedIds('| #9001 | build row').size === 0 ? '✅ accepted (bare id ignored)' : '🔴 false positive'}`);
+  const c1 = new Set(ledgerRowIds('| **#7** | a |\n| **#7** | b |\n')).size === 1;
+  const d1 = subjectIds(['feat(#9002): x']).ledger.has(9002);
+  console.log(`  C duplicate ledger   — violation: ${c1 ? '✅ caught' : '🔴 MISSED'} · clean: ${ledgerRowIds('| ⏳ **#7 — RESERVED 2026-09-12** |').length === 0 ? '✅ accepted (a reservation is not a duplicate)' : '🔴 false positive'}`);
+  console.log(`  D subject claim      — violation: ${d1 ? '✅ caught' : '🔴 MISSED'} · clean: ${subjectIds(['fix: touch the #9002 path']).ledger.size === 0 ? '✅ accepted (bare id ignored)' : '🔴 false positive'}`);
   process.exit(0);
 }
 
@@ -132,21 +195,11 @@ if (rowIds('| 139 | 🟡 **x** |').length !== 0) { console.error('CAP PROBE FAIL
 const filed = filedIds(log);
 const base = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : { _comment: '', stamped: null, dangling: {} };
 const current = {};
+const currentSubjects = { ledger: [], techdebt: [] };
 for (const doc of WATCHED) {
   if (!existsSync(doc)) { note.push(`watched doc absent, skipped: ${doc}`); continue; }
   const cited = citedIds(readFileSync(doc, 'utf8'));
   current[doc] = [...cited].filter(id => !filed.has(id)).sort((a, b) => a - b);
-}
-if (UPDATE) {
-  writeFileSync(BASELINE, JSON.stringify({
-    _comment: 'Tech-debt ids CITED in a watched doc with no row in docs/tech-debt-log.md. This is DEBT, '
-      + 'not permission: it shrinks, never grows. The cap fails on NET-NEW only (verify-write-paths\'s shape). '
-      + 'Re-record with `npm run id-citations:baseline` ONLY after filing rows, never to silence a new one.',
-    stamped: new Date().toISOString().slice(0, 10),
-    dangling: current,
-  }, null, 2) + '\n');
-  console.log(`baseline re-recorded → ${BASELINE}`);
-  process.exit(0);
 }
 let backlog = 0, netNew = 0;
 for (const doc of WATCHED) {
@@ -156,6 +209,64 @@ for (const doc of WATCHED) {
   const fresh = cur.filter(id => !known.has(id));
   netNew += fresh.length;
   if (fresh.length) fail.push(`NET-NEW DANGLING CITATION — ${doc} cites tech-debt ${fresh.map(n => '#' + n).join(', ')} and ${LOG} has NO ROW for ${fresh.length === 1 ? 'it' : 'them'}. File the row, or cite an id that exists. (This is the #195 → #213 → #288(e) failure, and it happened four times on 2026-09-10 alone.)`);
+}
+
+// ── C — no duplicate CLOSE-OUT LEDGER rows (hard gate, A's sibling) ─────────────
+// R-149's backstop. It catches a collision that has ALREADY landed in one tree; it cannot catch the
+// shape that actually bites (two claims in two trees) — that is the all-branches sweep's job, and
+// the two are deliberately complementary: the sweep PREVENTS, this one NETS.
+let ledgerIds = [], ledgerReserved = [];
+if (!existsSync(LEDGER)) { note.push(`ledger absent, clause C SKIPPED: ${LEDGER}`); }
+else {
+  const ledgerSrc = readFileSync(LEDGER, 'utf8');
+  ledgerIds = ledgerRowIds(ledgerSrc);
+  ledgerReserved = ledgerReservedIds(ledgerSrc);
+  const lseen = new Set(), ldup = new Set();
+  for (const id of ledgerIds) (lseen.has(id) ? ldup : lseen).add(id);
+  for (const id of [...ldup].sort((a, b) => a - b)) {
+    fail.push(`DUPLICATE LEDGER ROW — close-out #${id} has more than one \`| **#${id}**\` row in ${LEDGER}. Two bodies of work under one number: the later row silently becomes the one everybody reads.`);
+  }
+  for (const id of ledgerReserved.filter(id => lseen.has(id))) note.push(`reservation #${id} has been CONSUMED — its real row is filed; the ⏳ row can be removed`);
+}
+
+// ── D — an id claimed in a COMMIT SUBJECT with no row in EITHER log (ratchet) ───
+// The space nothing has ever watched. #304 is the live case: `eb4aad6 fix(#304)` is on `main` and
+// main carries no #304 ledger row — the only one in existence is on `recon/campaigns-2026-09-12`
+// and describes something else entirely. Ratcheted, not a hard gate, for the reason clause B is:
+// a cap that fails every build on an inherited backlog gets worked around within a day.
+const subjects = headSubjects();
+let subjectNetNew = 0, subjectBacklog = 0;
+if (subjects === null) {
+  note.push('git could not be read — clause D SKIPPED. It reports SKIPPED rather than passing, because a check that cannot reach its target must not look like one that passed (#182).');
+} else {
+  const claimed = subjectIds(subjects);
+  const ledgerFiled = new Set(ledgerIds);
+  currentSubjects.ledger = [...claimed.ledger].filter(id => !ledgerFiled.has(id) && !ledgerReserved.includes(id)).sort((a, b) => a - b);
+  currentSubjects.techdebt = [...claimed.techdebt].filter(id => !filed.has(id)).sort((a, b) => a - b);
+  const knownL = new Set(base.subjects?.ledger ?? []), knownD = new Set(base.subjects?.techdebt ?? []);
+  const freshL = currentSubjects.ledger.filter(id => !knownL.has(id));
+  const freshD = currentSubjects.techdebt.filter(id => !knownD.has(id));
+  subjectBacklog = (currentSubjects.ledger.length - freshL.length) + (currentSubjects.techdebt.length - freshD.length);
+  subjectNetNew = freshL.length + freshD.length;
+  if (freshL.length) fail.push(`NET-NEW SUBJECT CLAIM WITH NO ROW — commit subject(s) claim close-out ${freshL.map(n => '#' + n).join(', ')} and ${LEDGER} has no row and no reservation for ${freshL.length === 1 ? 'it' : 'them'}. A number claimed ONLY in a commit message is invisible to every session that reads the files — this is exactly how #304 was taken twice, 4m35s apart.`);
+  if (freshD.length) fail.push(`NET-NEW SUBJECT CLAIM WITH NO ROW — commit subject(s) claim tech-debt ${freshD.map(n => '#' + n).join(', ')} and ${LOG} has no row for ${freshD.length === 1 ? 'it' : 'them'}.`);
+}
+
+// 🔴 THE BASELINE IS WRITTEN HERE, AFTER CLAUSES C AND D HAVE RUN — NOT BEFORE THEM. The first
+// version of this change wrote the baseline from the top of the file, so `currentSubjects` was still
+// empty, the recorded backlog was `[]`, and the very next run failed on 32 "net-new" claims it had
+// just been asked to remember. A baseline recorded before the thing it baselines is not a baseline.
+if (UPDATE) {
+  writeFileSync(BASELINE, JSON.stringify({
+    _comment: 'Tech-debt ids CITED in a watched doc with no row in docs/tech-debt-log.md. This is DEBT, '
+      + 'not permission: it shrinks, never grows. The cap fails on NET-NEW only (verify-write-paths\'s shape). '
+      + 'Re-record with `npm run id-citations:baseline` ONLY after filing rows, never to silence a new one.',
+    stamped: new Date().toISOString().slice(0, 10),
+    dangling: current,
+    subjects: currentSubjects,
+  }, null, 2) + '\n');
+  console.log(`baseline re-recorded → ${BASELINE}`);
+  process.exit(0);
 }
 
 // ── REPORTED, never asserted: the next free id, so nobody has to do arithmetic ──
@@ -170,6 +281,16 @@ console.log(`  ⚠️ the ledger shares this number space — build #${max} and 
 note.forEach(n => console.log(`  note: ${n}`));
 
 console.log(`  BACKLOG (baselined ${base.stamped ?? 'never'}, DEBT — shrinks, never grows): ${backlog} cited-but-unfiled ids across ${WATCHED.length} watched docs.`);
+console.log(`  LEDGER: ${ledgerIds.length} close-out rows${ledgerReserved.length ? ` · ${ledgerReserved.length} open reservation(s): ${ledgerReserved.map(n => '#' + n).join(' ')}` : ''}`);
+if (subjects === null) console.log('  clause D: SKIPPED (git unreadable) — not passed, SKIPPED.');
+else {
+  // 🔴 NAMED, not merely counted. Clause B prints a bare number and its baselined ids are invisible
+  // in practice; a backlog nobody can see is a backlog nobody shrinks.
+  const all = [...currentSubjects.ledger.map(n => 'close-out #' + n), ...currentSubjects.techdebt.map(n => 'tech-debt #' + n)];
+  console.log(`  SUBJECT CLAIMS with no row (baselined ${base.stamped ?? 'never'}, DEBT — shrinks, never grows): ${all.length}`);
+  if (all.length) console.log(`    ${all.join(' · ')}`);
+  console.log('    ℹ a number claimed only in a commit message is invisible to every session that READS THE FILES (R-149).');
+}
 
 if (fail.length) { console.error('\n🔴 ' + fail.join('\n🔴 ')); process.exit(1); }
-console.log(`\n✅ no duplicate rows · ${netNew} net-new dangling citations · ${backlog} baselined (visible, not forgotten).`);
+console.log(`\n✅ no duplicate rows (tech-debt AND ledger) · ${netNew + subjectNetNew} net-new dangling claims · ${backlog + subjectBacklog} baselined (visible, not forgotten).`);
