@@ -2478,7 +2478,6 @@ happens to those, or it moves the collision rather than removing it.
 for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
 (*did it reach main and production?*). They are one family: **nothing in the corpus asserts where the
 work is, at any of the three moments** — and each was found by a different failure within one day.
-## #281 — 🟡 §6 RULE 7 IS A BINDING CODING RULE AND THE COMPONENT IT DESCRIBES HAS NEVER BEHAVED THAT WAY (NEW 2026-09-12, ledger #305)
 ## #283 — ✅ **RESOLVED 2026-09-12 (ledger #307) — DAVID RULED, AND THE ANSWER WAS NEITHER OF THE TWO OPTIONS OFFERED.** §6 RULE 7 IS A BINDING CODING RULE AND THE COMPONENT IT DESCRIBES HAS NEVER BEHAVED THAT WAY (was NEW 2026-09-12, ledger #305; RENUMBERED #281 → #283 on 2026-09-12 — see the note at the foot)
 
 **CLAUDE.md §6 r7, verbatim and in full:** *"Tile grid: desktop/tablet only (768px+)."*

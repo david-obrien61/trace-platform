@@ -38,7 +38,7 @@
 
 ### CARD 1 — the calendar control follows the WINDOW, not the machine
 STATUS: covered
-LAST-PROVEN: 2026-09-12 (David, build `13d64aa`)
+LAST-PROVEN: 2026-09-12 (David, build `13d64aa` — ⚠️ that commit was REBASED onto `main` the same day and is now `11dd23d`; the code it carries is identical, and the SHA he actually read is kept here because a proof records what was RUN, not what it was later renamed to)
 DEVICE: desktop
 COVERS: ledger #305
 
