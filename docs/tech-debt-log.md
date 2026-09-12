@@ -2911,7 +2911,7 @@ scroll and this is the register** (David's instruction, same session).
 
 ---
 
-## #291 — 🟡 EXPORTED LABELS CARRY A TRAILING SPACE, AND AN EXACT JOIN IS WHAT WILL READ THEM (NEW 2026-09-12, ledger #311)
+## #291 — ✅ **RESOLVED 2026-09-12 (ledger #311) — ONE TRIM, ON THE WAY OUT, WHILE IT WAS STILL FREE.** EXPORTED LABELS CARRIED A TRAILING SPACE, AND AN EXACT JOIN IS WHAT WILL READ THEM (was NEW 2026-09-12)
 
 **Where.** `packages/cultivar-os/public/tools/zone-walk.html` — the label written into the export
 retains a trailing space, so a row exports as `"Live Oak 30gal "` rather than `"Live Oak 30gal"`.
@@ -2936,3 +2936,38 @@ trailing spaces has been imported once, the same space has to be tolerated forev
 or the stored rows need repairing. **The window is open because the importer does not exist.**
 
 **Named by David 2026-09-12; not fixed in `#311`, which committed the Safari blob-revoke fix only.**
+
+
+---
+
+✅ **RESOLVED 2026-09-12 (ledger #311). David: *"Fix #291 now — `.trim()` on the way out. Nothing
+consumes the export yet, so this is the last moment it is free. One line."***
+
+**The fix, in `zone-walk.html`'s export map:** `const label = x.label.trim();` — and the two
+references below it now read `label` rather than `x.label`. Three functional lines; the rest of the
+diff is the reason, written where the next person will meet it.
+
+🔴 **AND IT WAS BREAKING MORE THAN THE EXPORTED STRING — FOUND BY READING THE EXPORT PATH BEFORE
+EDITING IT, NOT BY THE ORIGINAL REPORT.** The label is also the join key **inside the file**:
+
+```js
+const hit = PLANTS.find(pl => pl.label === x.label);   // ← ran on the UNTRIMMED value
+```
+
+So a plant typed with a trailing space exported as **`matched:false` with null `item_id` and null
+`sku`** — the in-file catalogue match silently failed, and the row carried *"we don't know what this
+is"* into a file that was otherwise correct. **One trim at the read point fixes the lookup and the
+exported string together.** Verified: `'Live Oak 30gal '` now resolves to `matched:true` with a real
+`item_id`, where before it returned nulls.
+
+⚠️ **TRIMMED ON THE WAY OUT, NOT AT CAPTURE, AND THAT WAS THE DECISION IN THE ORIGINAL ROW.** What the
+walker typed stays as typed in local state; only the value handed to a machine is normalised.
+
+⚠️ **NOT WIDENED, AND SAID RATHER THAN LEFT QUIET:** the `filter(x=>x.label)` above it is unchanged, so
+a whitespace-only entry still passes the filter and now exports as `label:""` instead of `label:"   "`.
+Both are junk; neither is a join hazard. **Changing the filter is a behaviour change to capture and
+was not in scope.**
+
+✅ **The window closed as it opened: free.** Nothing consumes the export (**#266** — `business_inventory.zone`
+and the irrigation zone records both measured absent), so no stored row needed repairing and no read
+side had to learn to tolerate the space.
