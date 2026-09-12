@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import type { Campaign } from '@trace/shared/campaigns/types';
+import { campaignPostClaim } from '@trace/shared/business-logic/campaignLifecycle';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -24,7 +25,15 @@ const inputStyle: React.CSSProperties = {
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
 
-interface CampaignWithCount extends Campaign { draft_count: number; }
+// 🔴 `total_count` is the field whose ABSENCE was the defect (R-147's hiding place). The old shape
+// carried draft_count ALONE, so "no drafts" was indistinguishable from "no posts" and a zero-post
+// campaign claimed every post was published. The claim is now derived from all three by the one
+// shared function — this page no longer decides what is true, it renders what that function says.
+interface CampaignWithCount extends Campaign {
+  draft_count:     number;
+  total_count:     number;
+  published_count: number;
+}
 
 export function Campaigns() {
   const navigate                     = useNavigate();
@@ -55,18 +64,29 @@ export function Campaigns() {
 
     if (!data) { setLoading(false); return; }
 
-    // Count draft posts per campaign
-    const counts = await Promise.all(
-      data.map(async c => {
-        const { count } = await supabase
-          .from('campaign_posts')
-          .select('id', { count: 'exact', head: true })
-          .eq('campaign_id', c.id)
-          .eq('status', 'draft');
-        return { ...c, draft_count: count ?? 0 } as CampaignWithCount;
-      }),
-    );
-    setCampaigns(counts);
+    // Every post status for this business in ONE read, then tallied per campaign. The previous shape
+    // was one COUNT query per campaign for drafts alone; answering the honest claim needs three
+    // numbers, and three N+1 queries to replace one is the wrong direction. Scoped by business_id so
+    // the tally cannot borrow another tenant's rows (AC-3) — RLS agrees, and the filter is not left
+    // to it alone.
+    const { data: postRows } = await supabase
+      .from('campaign_posts')
+      .select('campaign_id, status')
+      .eq('business_id', businessId);
+
+    const tally = new Map<string, { total: number; draft: number; published: number }>();
+    for (const row of postRows ?? []) {
+      const t = tally.get(row.campaign_id) ?? { total: 0, draft: 0, published: 0 };
+      t.total += 1;
+      if (row.status === 'draft')     t.draft += 1;
+      if (row.status === 'published') t.published += 1;
+      tally.set(row.campaign_id, t);
+    }
+
+    setCampaigns(data.map(c => {
+      const t = tally.get(c.id) ?? { total: 0, draft: 0, published: 0 };
+      return { ...c, draft_count: t.draft, total_count: t.total, published_count: t.published } as CampaignWithCount;
+    }));
     setLoading(false);
   }
 
@@ -244,17 +264,28 @@ export function Campaigns() {
                   {TYPE_LABELS[c.campaign_type]} · {formatDateRange(c.start_date, c.end_date)}
                 </p>
 
-                {c.draft_count > 0 ? (
-                  <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: GREEN, margin: 0 }}>
-                    {c.draft_count} post{c.draft_count !== 1 ? 's' : ''} ready to review →
-                  </p>
-                ) : c.status === 'draft' ? (
-                  <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0 }}>
-                    No posts yet — open to generate
-                  </p>
-                ) : (
-                  <p style={{ fontSize: '0.8125rem', color: '#9ca3af', margin: 0 }}>All posts published ✓</p>
-                )}
+                {/* 🔴 ONE claim, from ONE function, for every row state. The branch this replaces
+                    ended in an unconditional everything-is-done claim — true of a finished campaign
+                    and FALSE of a campaign with no posts, which is how two duplicate "arbor day"
+                    rows hid for three hours (§6 r18: a claim must hold for every row it can cover).
+                    `campaignPostClaim` answers total === 0 FIRST, before status is consulted.
+                    The wording itself now lives in campaignLifecycle.ts and nowhere else, so this
+                    file cannot drift back into asserting something the counts do not support. */}
+                {(() => {
+                  const claim = campaignPostClaim({
+                    total: c.total_count, draft: c.draft_count, published: c.published_count,
+                  });
+                  const tone = claim.tone === 'ready'
+                    ? { color: GREEN,     fontWeight: 600 as const }
+                    : claim.tone === 'empty'
+                    ? { color: GRAY,      fontWeight: 400 as const }
+                    : { color: '#9ca3af', fontWeight: 400 as const };
+                  return (
+                    <p data-claim={claim.tone} style={{ fontSize: '0.8125rem', margin: 0, ...tone }}>
+                      {claim.text}
+                    </p>
+                  );
+                })()}
               </div>
             );
           })

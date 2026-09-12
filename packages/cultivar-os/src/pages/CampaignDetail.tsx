@@ -5,8 +5,19 @@ import { authHeaders } from '@trace/shared/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import type { Campaign, CampaignPost } from '@trace/shared/campaigns/types';
 import { REAL_BUSINESS_PGRST } from '@trace/shared/business-logic/orderKind';
+import {
+  campaignEditLock, campaignEditPlan, campaignCancelPlan,
+} from '@trace/shared/business-logic/campaignLifecycle';
+import { CAMPAIGN_EDIT_ECHO_COLUMNS } from '@trace/shared/business-logic/campaignFields';
 
 const ADVERT_DEBUG = false;
+
+const editInput: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+  border: '1.5px solid #d1d5db', borderRadius: 8, fontSize: '0.875rem',
+  outline: 'none', fontFamily: 'inherit', color: '#111827', background: '#fff',
+  minHeight: 48,
+};
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -44,6 +55,14 @@ export function CampaignDetail() {
   const [copiedId, setCopiedId]           = useState<string | null>(null);
   const [copyError, setCopyError]         = useState<Record<string, string>>({});
   const [generating, setGenerating]       = useState(false);
+  const [genError, setGenError]           = useState('');
+  const [editingCampaign, setEditing]     = useState(false);
+  const [editForm, setEditForm]           = useState({ start_date: '', end_date: '', target_category: '' });
+  const [editError, setEditError]         = useState('');
+  const [savingCampaign, setSavingCamp]   = useState(false);
+  const [cancelling, setCancelling]       = useState(false);
+  const [cancelError, setCancelError]     = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
     if (!id || !businessId) return;
@@ -145,30 +164,115 @@ export function CampaignDetail() {
       });
   }
 
+  // ── R-147 · APPEND ──────────────────────────────────────────────────────────────────────────
+  // The button says "for this campaign", so it sends THIS campaign's id and nothing else. The old
+  // version sent a full campaign payload with no id, which took the CREATE branch, minted a second
+  // row and navigated onto it — David produced two identical "arbor day" rows three hours apart.
+  //
+  // Three things changed and each one was a separate half of the defect:
+  //   1. `campaignId` is sent, so the server appends.
+  //   2. There is NO navigate — the owner stays on the campaign they asked about.
+  //   3. The catch no longer swallows. "with no error surface at all" was the story's own phrase.
   async function handleGenerateMore() {
-    if (!campaign || !businessId) return;
+    if (!campaign || !businessId || !id) return;
     setGenerating(true);
+    setGenError('');
     try {
       const resp = await fetch('/api/campaigns', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({
-          action: 'generate',
-          businessId,
-          campaign: {
-            name:            campaign.name,
-            campaign_type:   campaign.campaign_type,
-            start_date:      campaign.start_date,
-            end_date:        campaign.end_date,
-            target_category: campaign.target_category,
-            description:     campaign.description,
-          },
-        }),
+        body: JSON.stringify({ action: 'generate', businessId, campaignId: id }),
       });
       const data = await resp.json();
-      if (resp.ok) navigate(`/campaigns/${data.campaignId}`);
-    } catch { /* silent */ }
+      if (!resp.ok) throw new Error(data.error ?? 'Could not generate more posts.');
+
+      // A server that appended must say so. If it reports CREATE against an id we sent, the defect
+      // is back and the screen says it rather than quietly showing a campaign that moved.
+      if (data.mode !== 'append' || data.campaignId !== id) {
+        throw new Error('The server created a new campaign instead of adding to this one. Nothing was changed here — tell David.');
+      }
+      if (ADVERT_DEBUG) console.log('[TRACE:CAMPAIGN] appended', data.postCount, 'posts to', id);
+      await load();
+    } catch (e: any) {
+      setGenError(e.message ?? 'Could not generate more posts.');
+    }
     setGenerating(false);
+  }
+
+  // ── R-145 · EDIT SCOPE ──────────────────────────────────────────────────────────────────────
+  function openCampaignEdit() {
+    if (!campaign) return;
+    setEditError('');
+    setEditForm({
+      start_date:      campaign.start_date      ?? '',
+      end_date:        campaign.end_date        ?? '',
+      target_category: campaign.target_category ?? '',
+    });
+    setEditing(true);
+  }
+
+  async function saveCampaignEdit() {
+    if (!campaign || !id) return;
+    const plan = campaignEditPlan({
+      current:  campaign as unknown as Record<string, unknown>,
+      proposed: editForm,
+      posts,
+    });
+    if (!plan.allowed) { setEditError(plan.reason ?? 'Cannot save.'); return; }
+
+    setSavingCamp(true);
+    setEditError('');
+    // R-12 / E5: a PostgREST update matching ZERO rows returns success with no error, so the write
+    // proves itself by returning the row. No returned row = the write did not land, and the screen
+    // says so instead of showing the new value over an unchanged record.
+    // EXACT-COUNT, not maybeSingle. A PostgREST update matching ZERO rows returns SUCCESS with no
+    // error, so the affected-row count IS the proof (R-12: "a write must prove it wrote — check the
+    // count"). `=== 1` rather than `> 0`: a one-id update that touched two rows is also wrong, and
+    // rounding that to "fine" is how a silent clobber survives.
+    const { data: rows, error } = await supabase
+      .from('campaigns')
+      .update(plan.patch)
+      .eq('id', id)
+      .select(CAMPAIGN_EDIT_ECHO_COLUMNS);
+    setSavingCamp(false);
+
+    if (error) { setEditError(error.message); return; }
+    if (rows?.length !== 1) {
+      setEditError('That did not save — you may not have permission to change this campaign.');
+      return;
+    }
+
+    console.log('[TRACE:CAMPAIGN] edit saved', { campaignId: id, fields: Object.keys(plan.patch) });
+    setEditing(false);
+    await load();
+  }
+
+  // ── R-146 · CANCEL ──────────────────────────────────────────────────────────────────────────
+  async function cancelCampaign() {
+    if (!campaign || !id) return;
+    const plan = campaignCancelPlan(campaign);
+    if (!plan.allowed) { setCancelError(plan.reason ?? 'Cannot cancel.'); return; }
+
+    setCancelling(true);
+    setCancelError('');
+    // Same exact-count proof as the edit above. A cancel that silently matched no row would leave
+    // the campaign active while the screen moved on — the precise shape R-12 was ruled against.
+    const { data: rows, error } = await supabase
+      .from('campaigns')
+      .update({ status: plan.nextStatus })
+      .eq('id', id)
+      .select('id, status');
+    setCancelling(false);
+
+    if (error) { setCancelError(error.message); return; }
+    if (rows?.length !== 1) {
+      setCancelError('That did not save — you may not have permission to cancel this campaign.');
+      return;
+    }
+
+    console.log('[TRACE:CAMPAIGN] cancelled', { campaignId: id, status: rows[0].status });
+    setConfirmCancel(false);
+    await load();
   }
 
   function formatDate(d: string | null) {
@@ -185,6 +289,11 @@ export function CampaignDetail() {
 
   const draftCount     = posts.filter(p => p.status === 'draft').length;
   const publishedCount = posts.filter(p => p.status === 'published').length;
+  // R-145: the lock, derived from the posts themselves. `published` means COPIED OUT OF TRACE — the
+  // refusal copy inside campaignEditLock is careful about that and this page must not restate it
+  // more confidently than the function does.
+  const editLock       = campaignEditLock(posts);
+  const cancelPlan     = campaignCancelPlan(campaign ?? { status: 'draft' });
 
   if (loading) {
     return (
@@ -236,6 +345,124 @@ export function CampaignDetail() {
                 {revenue.orders > 0 ? `${revenue.orders} orders` : 'No orders yet'}
               </p>
             </div>
+          )}
+        </div>
+
+        {/* ── LIFECYCLE · R-145 edit · R-146 cancel ──────────────────────────────────────────
+            Both live here rather than in a menu: the 2026-08-23 scoping found edit and cancel were
+            blocked by NOTHING but a missing UI — the policy, the permission string and the status
+            vocabulary all already existed. */}
+        <div style={{ background: '#fff', borderRadius: 14, padding: '14px 16px', border: '1px solid #e5e7eb', marginBottom: 12 }}>
+
+          {editingCampaign ? (
+            <>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: GREEN, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
+                Edit campaign
+              </p>
+              {/* The scope is NAMED on the surface, not just enforced behind it — a field that is
+                  absent without explanation reads as a missing feature (D-9). */}
+              <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 12px' }}>
+                You can change the dates and the focus. The name stays, so last season's campaign is
+                still findable by what you called it.
+              </p>
+
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="camp-start" style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, display: 'block', marginBottom: 4 }}>Start date</label>
+                  <input id="camp-start" type="date" value={editForm.start_date}
+                    onChange={e => setEditForm(f => ({ ...f, start_date: e.target.value }))} style={editInput} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="camp-end" style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, display: 'block', marginBottom: 4 }}>End date</label>
+                  <input id="camp-end" type="date" value={editForm.end_date}
+                    onChange={e => setEditForm(f => ({ ...f, end_date: e.target.value }))} style={editInput} />
+                </div>
+              </div>
+
+              <label htmlFor="camp-focus" style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, display: 'block', marginBottom: 4 }}>Product focus</label>
+              <input id="camp-focus" value={editForm.target_category}
+                onChange={e => setEditForm(f => ({ ...f, target_category: e.target.value }))}
+                placeholder="e.g. shade trees, fruit trees" style={{ ...editInput, marginBottom: 12 }} />
+
+              {editError && (
+                <p role="alert" style={{ fontSize: '0.8125rem', color: '#991b1b', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', margin: '0 0 10px' }}>
+                  {editError}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => void saveCampaignEdit()} disabled={savingCampaign}
+                  style={{ flex: 1, minHeight: 48, borderRadius: 10, border: 'none', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: savingCampaign ? 'default' : 'pointer' }}>
+                  {savingCampaign ? 'Saving…' : 'Save changes'}
+                </button>
+                <button onClick={() => { setEditing(false); setEditError(''); }} disabled={savingCampaign}
+                  style={{ minHeight: 48, padding: '0 16px', borderRadius: 10, border: '1.5px solid #d1d5db', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 🔴 LOCKED — and the copy claims only what TRACE can actually know. It does not say
+                  "published to your feed" or "your customers have seen this": a copied post's fate is
+                  invisible to us (user_stories.md:1250-1252). It names the route out instead. */}
+              {editLock.locked ? (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
+                  <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#92400e', margin: '0 0 4px' }}>
+                    The dates and focus are locked
+                  </p>
+                  <p data-lock-reason style={{ fontSize: '0.8125rem', color: '#92400e', margin: 0, lineHeight: 1.5 }}>
+                    {editLock.reason}
+                  </p>
+                </div>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {!editLock.locked && (
+                  <button onClick={openCampaignEdit}
+                    style={{ flex: '1 1 auto', minHeight: 48, borderRadius: 10, border: `1.5px solid ${GREEN}`, background: '#fff', color: GREEN, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                    Edit dates &amp; focus
+                  </button>
+                )}
+
+                {cancelPlan.allowed && !confirmCancel && (
+                  <button onClick={() => { setConfirmCancel(true); setCancelError(''); }}
+                    style={{ flex: '1 1 auto', minHeight: 48, borderRadius: 10, border: '1.5px solid #fca5a5', background: '#fff', color: '#991b1b', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                    Cancel campaign
+                  </button>
+                )}
+              </div>
+
+              {/* R-146: the confirm says what cancel DOES — it shelves, it does not delete. That is
+                  the whole reason delete was scoped out, so the screen had better not imply it. */}
+              {confirmCancel && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+                  <p style={{ fontSize: '0.8125rem', color: '#991b1b', margin: '0 0 10px', lineHeight: 1.5 }}>
+                    Cancelling shelves this campaign. It <strong>stays on your list</strong>, marked cancelled,
+                    with its posts — next September what you didn't run is as useful as what you did.
+                  </p>
+                  {cancelError && (
+                    <p role="alert" style={{ fontSize: '0.8125rem', color: '#991b1b', fontWeight: 600, margin: '0 0 10px' }}>{cancelError}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => void cancelCampaign()} disabled={cancelling}
+                      style={{ flex: 1, minHeight: 48, borderRadius: 10, border: 'none', background: '#991b1b', color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: cancelling ? 'default' : 'pointer' }}>
+                      {cancelling ? 'Cancelling…' : 'Yes, cancel it'}
+                    </button>
+                    <button onClick={() => { setConfirmCancel(false); setCancelError(''); }} disabled={cancelling}
+                      style={{ minHeight: 48, padding: '0 16px', borderRadius: 10, border: '1.5px solid #d1d5db', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* A cancelled campaign says so here too, because the button is gone and a control that
+                  vanished without a word is the six-state ruling's defect. */}
+              {!cancelPlan.allowed && (
+                <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0 }}>{cancelPlan.reason}</p>
+              )}
+            </>
           )}
         </div>
 
@@ -401,7 +628,13 @@ export function CampaignDetail() {
           })
         )}
 
-        {/* Generate more */}
+        {/* Generate more — R-147. The error surface is NOT optional: "with no error surface at all"
+            is the story's description of what made the duplicate invisible. */}
+        {genError && (
+          <p role="alert" style={{ fontSize: '0.8125rem', color: '#991b1b', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', margin: '0 0 10px' }}>
+            {genError}
+          </p>
+        )}
         <button
           onClick={handleGenerateMore}
           disabled={generating}

@@ -1103,7 +1103,7 @@ SCOPE: platform, vertical:cultivar, vertical:kinna
 BUILD: active
 MAPS-TO: —
 PIECES: campaign_create, campaign_call_to_action, campaign_edit, campaign_cancel, campaign_generate_more, campaign_list_honest_read
-NEEDS: David to rule EDIT is limited to dates and focus BEFORE publication, and that a published campaign which lands badly is ANSWERED AND RESTARTED rather than silently rewritten (Regina's bad-press scenario, 2026-08-23 — "my bad, we didn't give you all the details, thank you for bringing that to our attention"). Lauren to confirm the scene and the ask Wednesday.
+NEEDS: ✅ **RULED 2026-09-12 — R-145: edit IS limited to dates and focus, and only BEFORE publication; a published campaign is ANSWERED AND RESTARTED, never silently rewritten** (Regina's bad-press scenario, 2026-08-23 — "my bad, we didn't give you all the details, thank you for bringing that to our attention"). BUILT and BUILDER-COMPLETE, ledger #306 — `campaign_edit`, `campaign_cancel` (R-146) and `campaign_generate_more` (R-147) all ship; owner-proof owed on `campaign-lifecycle-full-surface-test.md` (0 of 12). 🔴 **STILL needs-input for the REST, which is why this STATUS has not flipped:** `campaign_call_to_action` has no column and the ASK is a separate pass (David's scoping), the copy is not written off her real sales, nothing stops a campaign featuring stock that cannot leave — and **Lauren still has to confirm the scene and the ask.**
 It is early September and Lauren has forty minutes. July and August were dead — heat,
 vacations, back to school — and fall is when people actually plant. **Texas Arbor Day is
 the first Friday in November** (Nov 6 in 2026), and it exists on that date precisely
@@ -1138,19 +1138,26 @@ A campaign never features stock that cannot leave. **Under production is not for
 a block potted up in August is six to eight months from being sellable, and promoting it
 sells a tree that can't go on a truck.
 
-### Generating "more posts for this campaign" creates a second campaign, silently (fix owed)
-STATUS: needs-input
+### Generating "more posts for this campaign" creates a second campaign, silently (FIXED 2026-09-12)
+STATUS: written
 SCOPE: platform, vertical:cultivar
 BUILD: active
 MAPS-TO: —
 PIECES: campaign_generate_more
-NEEDS: David to rule whether generate-more appends to the open campaign or is removed until it can.
+NEEDS: ✅ **RULED AND BUILT 2026-09-12 — R-147: it APPENDS to the open campaign, and the button stays.** David: *"Do not remove the button; build the append."* Shipped in ledger #306 — the id is sent, the server branches on it, the campaign INSERT is reached only on CREATE, the page does not navigate, and the silent `catch` is gone. Owner-proof owed: board CARDS 9, 10 and 11 (**11 is the arithmetic one — the campaign count must not move**). ⚠️ The two `arbor day` rows this produced: ONE survives, on Test Dave's, 0 posts, ending 2026-10-30 — **David is deciding its fate and nothing in the build touches it.**
 The button on a campaign's own page reads *"✦ Generate more posts for this campaign."*
 It takes the CREATE branch, mints a **second** campaign, and navigates onto it — with no
 error surface at all. David produced two identical "arbor day" rows three hours apart
 this way and neither appeared in the list, because that screen renders a zero-post
 campaign as "All posts published ✓". A missing lifecycle does not stay missing; it gets
 impersonated by the path that exists. This is the story-shaped half of that finding.
+
+✅ **FIXED 2026-09-12 (R-147 + the claim, ledger #306).** The list's claim now comes from one shared
+function that answers `total === 0` FIRST, before status is consulted — a campaign with no posts says
+it has no posts, whatever its status. The old branch asked only about DRAFT posts and never fetched a
+total, so "no drafts and not a draft campaign" was indistinguishable from "no posts at all". The
+negative control is built too (board CARD 5): a genuinely finished campaign still says so, because a
+fix that makes the true claim disappear is not a fix.
 
 ### Deleting a campaign — deliberately not built
 STATUS: scoped-out

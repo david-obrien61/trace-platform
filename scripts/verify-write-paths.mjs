@@ -114,6 +114,43 @@ const ALLOWED_DIVERGENCE = {
   //    `buildServiceRows` produces; it never touches a row it did not create in that press, and
   //    it REFUSES a name already on the menu (case-insensitively, against a list re-read
   //    immediately before the write) rather than overwriting one.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // DECLARED 2026-09-12 (the campaign lifecycle — R-145/R-146/R-147, ledger #306). ONE table, ONE file.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE EXISTING PATH IS THE SERVICE KEY, AND THAT IS EXACTLY WHY EDIT AND CANCEL MUST NOT USE IT.
+  //    `api/campaigns.ts` writes through `adminDb()` — `SUPABASE_SERVICE_KEY`, which bypasses RLS
+  //    entirely — and takes `businessId` off the REQUEST BODY. It is gated by an explicit
+  //    `callerCan(..., 'campaigns:update')` check precisely because nothing else would stop a caller
+  //    naming another tenant's id. Routing a one-field owner edit through it would add a second
+  //    service-key surface to maintain that gate on, to save a client call that RLS already secures
+  //    for free: `campaigns_member_update` enforces `is_active_member` AND `campaigns:update` on the
+  //    caller's own session. The stricter path is the client one.
+  //
+  // ⚠️ AND THE COLUMN SETS CANNOT COLLIDE. The endpoint only ever INSERTS a campaign (status
+  //    'active', at creation). This file only ever UPDATEs, and only `start_date`/`end_date`/
+  //    `target_category` (R-145's scope, enforced by `campaignEditPlan`) or `status` → 'cancelled'
+  //    (R-146, enforced by `campaignCancelPlan`). Neither writer can reach the other's fields.
+  //
+  // ⚠️ `campaign_posts` ALREADY CARRIES THIS SAME FILE as a declared writer, for the same reason —
+  //    a post's copy edit is a client UPDATE under the owner's own RLS. This entry makes the
+  //    campaign row consistent with the posts hanging off it rather than splitting one surface's
+  //    writes across two mechanisms.
+  //
+  // ⚠️ BOTH WRITES ARE REAL — they are not tech-debt #185's shape (a declared writer that writes
+  //    nothing). `campaignLifecycle.test.ts` §F12 asserts both call `.maybeSingle()` and surface a
+  //    'did not save' message, which is only meaningful because the writes exist.
+  'campaigns': {
+    reason: 'Edit (dates + focus, R-145) and cancel (R-146) are one-field owner UPDATEs issued from '
+          + 'the campaign detail page under the CALLER\'S OWN session, so RLS enforces them: '
+          + 'campaigns_member_update requires is_active_member AND campaigns:update. The existing '
+          + 'path, api/campaigns.ts, writes through the SERVICE KEY with businessId taken off the '
+          + 'request body — it needs an explicit callerCan() gate to be safe at all, and adding a '
+          + 'second service-key write surface to save a client call RLS already secures would be a '
+          + 'net loss in authority. The column sets cannot collide: the endpoint only INSERTs a '
+          + 'campaign, this file only UPDATEs start_date/end_date/target_category or status. '
+          + 'campaign_posts already declares this same file for the same reason.',
+    paths: ['packages/cultivar-os/src/pages/CampaignDetail.tsx'],
+  },
   'service_offerings': {
     reason: 'The services review INSERTS the offerings an owner accepted from her own books, and '
           + 'is deliberately built WITHOUT the ability to update one. David\'s ruling is '
