@@ -2479,6 +2479,7 @@ for?*). This is the **commit instant** (*which branch am I on right now?*). #280
 (*did it reach main and production?*). They are one family: **nothing in the corpus asserts where the
 work is, at any of the three moments** — and each was found by a different failure within one day.
 ## #281 — 🟡 §6 RULE 7 IS A BINDING CODING RULE AND THE COMPONENT IT DESCRIBES HAS NEVER BEHAVED THAT WAY (NEW 2026-09-12, ledger #305)
+## #283 — ✅ **RESOLVED 2026-09-12 (ledger #307) — DAVID RULED, AND THE ANSWER WAS NEITHER OF THE TWO OPTIONS OFFERED.** §6 RULE 7 IS A BINDING CODING RULE AND THE COMPONENT IT DESCRIBES HAS NEVER BEHAVED THAT WAY (was NEW 2026-09-12, ledger #305; RENUMBERED #281 → #283 on 2026-09-12 — see the note at the foot)
 
 **CLAUDE.md §6 r7, verbatim and in full:** *"Tile grid: desktop/tablet only (768px+)."*
 
@@ -2521,3 +2522,132 @@ say which of two things he meant**, because they are different products:
 what the dashboard does on a phone, and today the rule answers that question **wrongly and
 confidently** — the same failure mode as the inventory doc that reported a function slot free at
 12/12 (#178's class).
+
+
+---
+
+✅ **RESOLVED 2026-09-12 (ledger #307). DAVID'S RULING, AND IT CORRECTS THE QUESTION THIS ENTRY ASKED.**
+The entry offered two readings — **(a)** stale prose, or **(b)** an intent the code never implemented.
+**David: neither.** In his words: *"the tile grid was designed phone-first and carried over to
+desktop; the 768px claim dates from the phone design and was never revisited when it moved."*
+
+🔴 **THAT IS A THIRD SHAPE, AND IT IS THE MORE DANGEROUS ONE.** Under (a) the rule would have been
+wrong from birth; under (b) the code would have been in debt to the rule. Under what actually
+happened, **the rule was TRUE WHEN WRITTEN and was invalidated by a change that never came back to
+it** — so there was no moment at which anyone was wrong, and nothing in the repo marked the text as
+belonging to a superseded design. **A rule that was once true reads exactly like a rule that is
+true**, which is why it was cited as evidence for a live boundary (ledger #305) rather than
+questioned.
+
+**FIXED:** §6 r7 now DESCRIBES the grid — 4 columns on a phone, 6 from 640, 8 from 1024, rendering
+at every width — and **records the phone-first origin**, so the next reader learns why 768 was ever
+there instead of rediscovering it. The `OperationsCalendar` comment that quoted the old text now
+says the rule has been corrected, so it cannot be read as a live citation.
+
+⚠️ **BEHAVIOUR UNCHANGED, DELIBERATELY, ON DAVID'S INSTRUCTION** — *"Describe, do not change
+behaviour. The desktop grid layout is a separate decision David is taking up later."* Not a single
+pixel of `TileGrid` moved in this pass, and r7 now says in its own text that it describes rather
+than decides, so the 4/6/8 ladder cannot be mistaken for a ruling that the desktop layout is settled.
+
+---
+
+## #284 — 🔴 THE ID-CLAIM RULE EXISTS, IS UNNUMBERED, DISQUALIFIES ITSELF IN ITS OWN TEXT, AND LIVES IN THE ONE FILE THAT IS NO LONGER READ IN FULL (NEW 2026-09-12, ledger #307)
+
+**SIX COLLISIONS IN 24 HOURS, ALL ONE MECHANISM: THE CLAIM IS MADE WHERE THE NEXT SESSION DOES NOT LOOK.**
+Every one of them was made by a session doing the right thing.
+
+| # | id | Who | Measured |
+|---|---|---|---|
+| 1 | `#302` | a session later overwritten and restored | the id survived in `open-questions.md` while the rows backing it did not — **half-claimed: visible to the next reader, backed by nothing** |
+| 2 | `#302` | — | the ledger row it never had; filed late as its own `⏳` row |
+| 3 | `#304` | `fix/stop-site-offer-unmount` | `9fd1d15`, **12:52:10** — claimed in a **commit subject**, no ledger row |
+| 4 | `#304` | `recon/campaigns-2026-09-12` | `161e7a6`, **12:56:45** — **4m35s later**, and this one holds the only `#304` ledger ROW |
+| 5 | `#305` | `feat/breakpoint-vocabulary` | found TAKEN by the `feat/campaign-lifecycle` sweep, which moved to `#306` — **a collision AVOIDED, and only because that session swept all branches** |
+| 6 | `#281` | `docs/tech-debt-281-branch-hygiene` vs `feat/breakpoint-vocabulary` | `9cb27ca` **10:13** vs `13d64aa` **13:00** — **2h47m apart, both live**; found by this session's sweep and renumbered to `#283` under clause (4) |
+
+🔴 **#3 AND #4 PRODUCED A LANDED CONTRADICTION, WHICH IS THE SHARPEST EVIDENCE HERE.** The commit
+that reached `origin/main` (`eb4aad6`, the save-a-site fix) claims `#304`, and **`main` holds no
+`#304` ledger row at all** — the only one in existence is on `recon/campaigns-2026-09-12` and
+describes *a campaign recon at LAWNS for Texas Arbor Day*. So the history says `#304` is one thing
+and the ledger says it is another, **and neither record is wrong on its own terms.**
+
+### ① THE RULE EXISTS AND HAS NEVER BEEN MINTED
+
+`docs/RULINGS.md:272`, plus the OWED row *"A LEDGER ID CANNOT BE CLAIMED ATOMICALLY"*. Both sit in
+the **"DRAFTED FOR DAVID, NOT FILED"** block, unnumbered since **2026-09-02**. The rule is complete
+— claim at file time verified against `main` · **NEVER LEAVE A GAP** (an abandoned id filed
+*withdrawn, with its reason*) · **the LATER claim renumbers at merge** · a prompt naming an id is a
+DESCRIPTION · an `OWED` row carries no number.
+
+🔴 **AND IT DISQUALIFIES ITSELF IN ITS OWN TEXT.** The block says it is *"deliberately NOT written
+into the table above as a ruling in his voice… held here until he numbers them."* **A reader who
+reaches it is told it is a proposal.** Nothing in any close-out gate says to follow it, so the
+correct behaviour for a session that FINDS it is to note it and move on — which is what has
+happened for ten days.
+
+### ② ITS ONLY HOME IS NOW READ BY KEYWORD
+
+`CLAUDE.md` §10 step 10 says `RULINGS.md` is read **IN FULL, every session** because *"it is
+deliberately short enough that reading it is free."* That stopped being true: the 2026-09-04
+drafted row (ledger #274) records David's own instruction — *"330KB read every session is OP-13's
+tax in the file OP-13 pointed at. Grep for what you need."*
+
+🔴 **SO THE RULE'S ONE HOME IS A FILE NOW SEARCHED BY KEYWORD, AND YOU ONLY GREP FOR AN
+ID-CLAIMING RULE IF YOU ALREADY KNOW ONE EXISTS.** That is the trap: not unread doctrine, but
+doctrine in a file whose reading protocol changed out from under it. Measured today:
+`RULINGS.md` is **342 lines / 425KB** — it has grown ~95KB since that row measured it at 330KB.
+
+### ③ NO SCRIPT CHECKS LEDGER-ROW IDS FOR DUPLICATES
+
+`scripts/verify-id-citations.mjs` is wired into `npm run verify` and is the **only** mechanical id
+check in the repo. Its own constants bound it:
+- `LOG = 'docs/tech-debt-log.md'` — clause A (no duplicate `## #N` headings) runs against **that
+  file alone**.
+- `WATCHED = ['CLAUDE.md', 'docs/CLOSE-OUT-LEDGER.md', 'docs/built-inventory.md', 'docs/RULINGS.md']`
+  — these are opened **only** to find *tech-debt* citations that dangle (clause B, a ratchet).
+
+**So it reads the close-out ledger and never checks the ledger's own ids.** It is a cap over a
+different id-space. It also cannot see, by construction: a claim in a **commit subject** (#3 above),
+a claim on an **unmerged branch** (#5, #6), or a **ruling** id.
+
+⚠️ **AND `#281` PROVES A SECOND HAZARD THE CAP CANNOT ADDRESS: THE ID-SPACES OVERLAP.** `#281` is
+simultaneously a live **ledger** id (the G11 grid standard, 2026-09-07) and a live **tech-debt** id.
+A bare `#281` in prose is ambiguous, and renumbering this session's item required hand-checking
+**23 occurrences** across nine files to separate the two senses — a blind replace would have
+corrupted real references.
+
+### 🔴 PROPOSED — NOT BUILT. TWO MECHANISMS, AND THEY ARE COMPLEMENTARY, NOT ALTERNATIVES.
+
+**(A) THE ALL-BRANCHES RESERVATION SWEEP, AS A CLOSE-OUT GATE.** Today's sweep is what worked
+twice: `feat/campaign-lifecycle` ran one and avoided colliding with `#305`; this session ran one and
+caught `#281`. Neither is required by anything. The gate would read: *before an id is written into
+any file, sweep **every remote branch** — ledger rows, tech-debt rows AND commit subjects — take the
+next free id, and push a `⏳ RESERVED` row naming the branch the real row will arrive on.*
+- ✅ **The mechanism already exists and is proven**: the `⏳ RESERVED — CLAIMED, NOT LOST` row
+  invented for `#255`, honoured by the 2026-09-03 merge; and `75e9e04` (`#306`) and `eee5491`
+  (`#307`) today. No new artefact, no new tooling.
+- ⚠️ **`origin/main` is NOT sufficient and today proves it** — main holds none of `#304`'s row,
+  `#305` or `#306`. A main-only check would have collided three times over.
+- ⚠️ **COST, stated:** the reservation is pushed to a **branch**, not `main`, because **`main`
+  auto-deploys to Vercel** and a bookkeeping push there ships a production deploy (#60/#280's
+  class). A branch reservation is therefore discoverable **only by an all-branches sweep** — which
+  is circular unless the sweep is mandatory. **That circularity is the argument for the gate, not
+  an objection to it.**
+- ⚠️ It does not close the race, it shrinks it to the seconds between sweep and push. `#304`'s two
+  claims were 4m35s apart; both sessions would have swept clean.
+
+**(B) A LEDGER-ID DUPLICATE CLAUSE IN `verify-id-citations.mjs`.** Extend clause A from one file to
+two id-spaces: no two `| **#N**` rows in `docs/CLOSE-OUT-LEDGER.md`, exactly as `## #N` is already
+asserted for tech-debt.
+- ✅ **Cheap and in the idiom** — the parser, the self-test probes and the false-duplicate negative
+  controls all exist; this is a second `rowIds()` pattern and a second call.
+- 🔴 **BUT IT CATCHES ONLY WHAT HAS ALREADY LANDED IN ONE TREE.** It would NOT have caught any of
+  the six above, because every one of them was two claims in **two different trees**. It is a
+  backstop for the merge, not a defence at claim time. **(A) is the prevention; (B) is the net.**
+- ⚠️ A third clause is worth considering with it: **an id cited in a commit subject with no row in
+  either log** — that is exactly `#304` on `main`, and it is dangling there right now.
+
+**NOT BUILT, and the reason is David's own instruction** — *"PROPOSE, do not build."* Both changes
+are edits to a binding gate and to a cap every build runs; choosing one in code is the kind of
+default the OWED register exists to stop. **The unnumbered rule at `RULINGS.md:272` is still
+David's to mint, and neither proposal above should be read as minting it.**

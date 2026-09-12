@@ -110,7 +110,10 @@ function monthDay(date: string): string {
  * REVERTING IT. The old query was `(max-width: 767px)`, justified in its own comment as "768px is
  * the platform's existing desktop/tablet line (§6 r7, the tile grid)". THE TILE GRID HAS NEVER
  * USED 768 — it breaks at 640 and 1024 (`TileGrid.tsx`), so that citation was false and the number
- * came from nowhere the repo could support. Worse, it contradicted the intent stated three lines
+ * came from nowhere the repo could support. ✏️ §6 r7 HAS SINCE BEEN CORRECTED (2026-09-12, ledger
+ * #307): it now describes the real 4/6/8 ladder and records that the 768 dated from the grid's
+ * phone-first design and was never revisited when it moved to desktop. The quoted text above is
+ * what THIS FILE used to say, kept so the reasoning is legible — it is no longer what r7 says. Worse, it contradicted the intent stated three lines
  * above the control itself: "Arrows are the whole interface on a phone OR THE TABLET IN THE YARD."
  * A tablet in portrait is 768–834px wide, so at 767 the yard tablet got the DROPDOWN — the exact
  * control that comment says it should not have. Binding on `wide` (>= 1024, tablet-landscape and

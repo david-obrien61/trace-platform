@@ -1,6 +1,22 @@
 # Handoff Archive — TRACE Platform
 
 <!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #306, OP-13 N=3) — verbatim, not summarized -->
+<!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #307, OP-13 N=3) — verbatim, not summarized -->
+
+### 2026-09-11 — THUNDER **`customer_addresses` — THE SHIP-TO ADDRESS BOOK. D-41's L2 HOOK, TAKEN UP, ADDITIVE. #303. TECH-DEBT #279.** 🔴 **THE HEADLINE IS A LIVE DEFECT THE BUILD FOUND ON ITS WAY TO THE FEATURE: A DELIVERY ADDRESS TYPED AT CHECKOUT FOR A CUSTOMER WHO ALREADY HAD ONE ON FILE NEVER REACHED THE STOP.** `customerUpsert` is fill-never-clobber, so the customer row kept the old address — and `scheduleCheckoutDelivery` then read the stop's address back off that row. The typed address was silently discarded and the truck went to the billing address. The picker could not have worked without fixing it.
+
+**Type:** BUILD, on `main`. **BUILDER-COMPLETE** — migration WRITTEN and **NOT APPLIED**, api/ 12/12, no permission string minted, no column added to `customers` or `deliveries`. `npm run verify` exit 0 ZERO NET-NEW, unpiped · 100/100 test files · 5,415 assertions · **33/33 mutants caught, 0 survived**. **§3 RETENTION: 1 archived verbatim (#299), 1 written — entries-in == entries-out.**
+
+✅ **THE INVARIANT SURVIVES INTO L2 AND IS PROVED BY ACT:** the order still SNAPSHOTS the chosen address onto the delivery row, so editing "Job site A" tomorrow cannot move last month's load. The module names ONE table; every write it offers is driven against a recording client and the set of tables touched is asserted to be exactly one. **No `shipping_*` column exists anywhere** — checked across the whole migration corpus, both directions.
+
+✅ **NO STRING WAS MINTED.** The policies reuse `customers:read` / `:create` / `:update` — a saved site is a field of the customer relationship, not a capability (2026-07-31 ruling, tech-debt #84), and under R-22 a new string would have shipped a table nobody could write on day one. **No raw `owner_id` policy** — `20260910b` took 49 → 12 three days ago. **No DELETE policy**: retiring is an UPDATE of `active` (R-133), so DELETE is fail-closed by design. Three partial indexes, two UNIQUE — 🔴 **they land cleanly because the table is EMPTY BY CONSTRUCTION**, the one circumstance where #54/#58/#143/#183's blocker does not bite.
+
+✅ **④ THE SEQUENCING DECISION, PLAINLY: THIS BUILD DOES NOT BACKFILL FROM HISTORY AT ALL.** The importer does not read `BillAddr.Line2` (#254), so seeding the book from those strings would turn AGAVE's four spellings of one yard into four CURATED sites and make the drift permanent instead of fixing it. It is true in the code, not just promised: a probe parses the whole migration corpus and goes red the day anything seeds the table.
+
+⚠️ **DAVID OVERRODE A WRITTEN TRIGGER AND IT IS RECORDED RATHER THAN QUIETLY CROSSED.** The 2026-09-09 recon recommended *"A now, B on a measured trigger"* — *build B when the count passes ~25.* It is 17 raw / 5 clean. His reason: *"building it now with a customer willing to work with me and identify errors and has good will beats some signal."*
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **run board CARD 2 BEFORE applying the migration** — it is the only card that cannot be run afterwards · **(b)** apply `20260911b`, then CARD 3 · **(c)** 🔴 **the story gate is NO MATCH and a story is OWED TO YOU, not written by Thunder**: `user_stories.md:1630` carries this table as `STATUS: scoped-out` and this build inverts that row · **(d)** tech-debt **#279** — `line2` exists and no surface writes it, by decision; it becomes #267's shape exactly if #254 is dropped · **(e)** ⚠️ another session took **#302** and tech-debt **#278** while this ran; this build took **#303** / **#279** and committed only its own hunks · **(f)** ⚠️ **STILL OPEN:** `origin/assets` · tech-debt **#143**–**#145** · **#148**–**#157** · **#179**–**#279**.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-12 (close-out #305, OP-13 N=3) — verbatim, not summarized -->
 
 ### 2026-09-11 — THUNDER **THE GOOGLE REVIEW ASK: THE LINK FIELD EXISTED, NOBODY COULD FIND IT, AND THE ASK COULD NEVER HAVE RUN ANYWAY. #300. TECH-DEBT #270.** 🔴 **THE HEADLINE IS THE PREMISE, CORRECTED BY THE RECON: three of four parts were wired AND SO WAS THE FIELD** — on `/settings/all` → *Asking for reviews*, stored in `business_modules.config.review_url`. What was actually missing was a way to turn the feature on: `followup_engine` is a `planned` tile and `/subscription` offers no Turn on for it, so the prompt could not fire on any tenant whatever David entered.

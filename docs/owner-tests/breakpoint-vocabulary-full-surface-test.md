@@ -11,7 +11,7 @@
 **Story:** `user_stories.md` → PLATFORM STANDARD CAPABILITIES → *Device vocabulary — one detector, four axes*. Written by Thunder this pass as the **IN-CODE-NOT-ON-THE-BOARD** case (§9 story gate); the **behavioural** mobile story — Lauren running delivery day twice — is **OWED TO DAVID** and is not Thunder's to dictate.
 **Surfaces:** the Operations calendar's window control · the Receipt Keeper capture screen · the dashboard tile grid.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 7 covered** (7 `owed`).
+**Board: 1 of 7 covered** (1 `covered` · 6 `owed`). ✅ **CARD 1 — David, 2026-09-12, build `13d64aa`.**
 
 > 🔴 **THIS PASS CHANGED ONE BEHAVIOUR ON PURPOSE, AND CARD 2 IS THAT BEHAVIOUR.**
 > The Operations calendar's window control used to switch from a dropdown to arrows below **767px**.
@@ -30,15 +30,24 @@
 > It changes which control is drawn, never what is stored, so there is no way to spoil live data.
 > **Nothing here needs a login David does not hold.**
 
-> **🔴 ORDER: CARD 1 → CARD 2 (the change) → the rest in any order.**
+> **🔴 ORDER: ~~CARD 1~~ ✅ → CARD 2 (the behaviour change, a judgement call) → the rest in any order.**
+> **NEXT: CARD 2.** It is the only card on this board that asks you to decide something rather than
+> observe it — everything else is pass/fail.
 
 ---
 
 ### CARD 1 — the calendar control follows the WINDOW, not the machine
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David, build `13d64aa`)
 DEVICE: desktop
 COVERS: ledger #305
+
+> ✅ **COVERED 2026-09-12 — DAVID RAN IT, on build `13d64aa`.** His words: *"Two arrows appearing as
+> you drag and the dropdown returning to the range you arrowed to is the whole proof: nothing is
+> reading the machine's name."* 🔴 **That is the right reading of this card, and it is worth keeping
+> as the record of WHY it counts:** a desktop browser reports "desktop" at every width, so a layout
+> that changes *as you drag* cannot be coming from a user-agent — and the arrowed-to range surviving
+> the swap proves the two controls drive one `moveWindow`, not two states that happen to agree.
 
 **On the desk browser, any tenant.** Open **Operations calendar**.
 
