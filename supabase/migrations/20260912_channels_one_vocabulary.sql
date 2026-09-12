@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- ONE SHARED CHANNEL VOCABULARY — the `channels` lookup table
--- Ledger #310 · R-150 · tech-debt #91's actual complaint, not a per-table patch
+-- Ledger #310 · R-152 · tech-debt #91's actual complaint, not a per-table patch
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 --
 -- WHAT THIS FIXES, AND WHY IT IS NOT A CONSTRAINT EDIT.
@@ -29,7 +29,7 @@
 --   A. CREATE `channels` — one row per channel, the single vocabulary.
 --   B. SEED six rows: instagram, facebook, tiktok, twitter, sms, email.
 --   C. REPLACE both CHECK constraints with FOREIGN KEYS to `channels(name)`.
---   D. ADD `campaign_posts.subject` — nullable. Email is a subject and a body (R-150 ①).
+--   D. ADD `campaign_posts.subject` — nullable. Email is a subject and a body (R-152 ①).
 --   E. ADD a TRIGGER validating `business_modules.config->'advert_channels'` names.
 --
 -- ─── ⚠️ THE NAMING SPLIT, FLAGGED DELIBERATELY (David's instruction) ───────────────────────────
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
 );
 
 COMMENT ON TABLE public.channels IS
-  'The ONE channel vocabulary (ledger #310, R-150). campaign_posts.platform and '
+  'The ONE channel vocabulary (ledger #310, R-152). campaign_posts.platform and '
   'social_drafts.platform are FOREIGN KEYS to this table; business_modules.config->''advert_channels'' '
   'is validated against it by trigger, because Postgres cannot FK into jsonb. Adding a channel is a '
   'row. NOT tenant data — global reference.';
@@ -125,7 +125,7 @@ COMMENT ON TABLE public.channels IS
 
 -- ─── B · THE SEED ──────────────────────────────────────────────────────────────────────────────
 -- Six rows. The five the config UI already offers, plus EMAIL.
--- 🔴 EMAIL IS NOT "COMING SOON" AND NO SURFACE MAY SAY SO (R-150 ①). It works exactly as every
+-- 🔴 EMAIL IS NOT "COMING SOON" AND NO SURFACE MAY SAY SO (R-152 ①). It works exactly as every
 -- other channel works and always has: TRACE drafts, the owner copies, the owner sends.
 -- `api/campaigns.ts:180` already records that model in as many words — *"Mark as reviewed — owner
 -- copied it, NOT auto-published."* An email is a subject line and a body instead of a caption; that
@@ -187,7 +187,7 @@ ALTER TABLE public.social_drafts
 -- deleted, so history never loses the name it was published under. Retirement is `active=false`.
 
 
--- ─── D · EMAIL NEEDS A SUBJECT (R-150 ①) ───────────────────────────────────────────────────────
+-- ─── D · EMAIL NEEDS A SUBJECT (R-152 ①) ───────────────────────────────────────────────────────
 -- Additive and nullable. NULLABLE is correct and not laziness: a caption has no subject, so a
 -- NOT NULL column would force every Instagram row to carry an empty string — which is exactly the
 -- "absent rendered as present" failure A9 forbids. A reader distinguishes "no subject because this
@@ -202,7 +202,7 @@ ALTER TABLE public.campaign_posts
 COMMENT ON COLUMN public.campaign_posts.subject IS
   'Email subject line. NULL for every channel whose post is a caption (A9: absent must not render '
   'as present). The owner copies subject + body and sends it themselves — there is no outbound '
-  'send path and no surface may imply one is coming (R-150).';
+  'send path and no surface may imply one is coming (R-152).';
 
 
 -- ─── E · THE TRIGGER — advert_channels, enforced at write time ──────────────────────────────────

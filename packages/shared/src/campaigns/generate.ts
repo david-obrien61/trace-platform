@@ -40,7 +40,7 @@ interface PostDraft {
 // CONFIGURATION and call it covered, which is STD-025's exact shape — deliberately not written.
 const SYSTEM_PROMPT = 'You write content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department. Specific means grounded in the facts you were given, never invented: no statistic, percentage, dollar figure, date, award, certification or comparative claim unless it appears in the supplied data. If a number would strengthen a post and you do not have one, write the sentence without it — a fabricated figure publishes under the name of the business, and the owner carries the liability.';
 
-// 🔴 `CHANNEL_GUIDANCE` WAS HERE AND IS DELETED (ledger #310, R-150). It was a hardcoded map keyed
+// 🔴 `CHANNEL_GUIDANCE` WAS HERE AND IS DELETED (ledger #310, R-152). It was a hardcoded map keyed
 // by channel name, and the moment `public.channels` gained a `guidance` column it would have become a
 // SECOND copy of the same fact — replacing four copies of the list with three copies plus a new copy
 // of the guidance is not a fix. Guidance now arrives ON the channel, read from the table by the

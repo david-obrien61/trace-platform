@@ -1,7 +1,7 @@
 /**
  * ── channelVocabulary — ONE list, and the cap that makes the TS copy unable to drift ──────────
  *
- * WHY THIS FILE EXISTS (ledger #310 · R-150). A channel name was written in FOUR places. Two were
+ * WHY THIS FILE EXISTS (ledger #310 · R-152). A channel name was written in FOUR places. Two were
  * updated on 8 June 2026 and two were not, so the only UI that can enable a channel offered tiktok
  * and twitter while the table storing the generated post forbade them. The insert is one atomic
  * multi-row statement, so every batch died and `campaign_posts` was EMPTY on every tenant for three
@@ -71,7 +71,7 @@ ok(new Set(seeded).size === seeded.length, 'A6 (negative) no duplicate in the se
 // these are the exact names the defect turned on.
 ok(inTs.has('tiktok') && inSql.has('tiktok'),   'A7 tiktok is in BOTH — the value the old union rejected');
 ok(inTs.has('twitter') && inSql.has('twitter'), 'A8 twitter is in BOTH — ditto');
-ok(inTs.has('email') && inSql.has('email'),     'A9 email is in BOTH — it STAYS (R-150 ①)');
+ok(inTs.has('email') && inSql.has('email'),     'A9 email is in BOTH — it STAYS (R-152 ①)');
 
 // ══ §B · THE RUNTIME GUARD ══════════════════════════════════════════════════════════════════
 console.log('\n§B — isChannelName');
@@ -96,7 +96,7 @@ ok((msql.match(/REFERENCES public\.channels\(name\)/g) ?? []).length === 2,
   'C3 🔴 BOTH tables get the FK — campaign_posts and social_drafts');
 ok(/DROP CONSTRAINT IF EXISTS campaign_posts_platform_check/.test(msql), 'C4 drops the auto-named CHECK');
 ok(/DROP CONSTRAINT IF EXISTS social_drafts_platform_check/.test(msql),  'C5 drops the named CHECK');
-ok(/ADD COLUMN IF NOT EXISTS subject text/.test(msql), 'C6 adds the subject column (R-150 ①)');
+ok(/ADD COLUMN IF NOT EXISTS subject text/.test(msql), 'C6 adds the subject column (R-152 ①)');
 ok(!/subject text NOT NULL/.test(msql), 'C7 (negative) subject is NULLABLE — a caption has no subject (A9)');
 ok(/CREATE TRIGGER business_modules_advert_channels_known/.test(msql), 'C8 the advert_channels trigger exists');
 ok(/BEFORE INSERT OR UPDATE OF config/.test(msql), 'C9 it fires on INSERT and UPDATE, not just one');
@@ -142,9 +142,9 @@ ok(!/const SOCIAL_CHANNELS/.test(setup), 'D4 🔴 COPY 3 GONE — SocialSetup ho
 ok(/from\('channels'\)/.test(setup), 'D5 SocialSetup READS the table');
 ok(/CHANNEL_COLUMNS/.test(setup), 'D6 it imports the column list rather than restating it (A4)');
 ok(/reconcile\(/.test(setup), 'D7 a saved config is reconciled against the catalog, both directions');
-// R-150's copy rule, asserted on the file rather than trusted.
+// R-152's copy rule, asserted on the file rather than trusted.
 ok(!/sending soon|coming soon|send it for you|auto-send/i.test(setup),
-  'D8 🔴 NO surface copy implies direct send is coming (R-150)');
+  'D8 🔴 NO surface copy implies direct send is coming (R-152)');
 ok(/You send it; TRACE doesn/.test(setup), 'D9 it says plainly who sends');
 
 ok(!/const CHANNEL_GUIDANCE/.test(gen), 'D10 🔴 the guidance map is GONE — it would have been a new copy');

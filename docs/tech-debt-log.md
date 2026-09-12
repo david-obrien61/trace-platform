@@ -2596,12 +2596,19 @@ a worktree: the builder's tree is the only one it can see.
       reader must be on, so *"it is in `supabase/migrations`"* is never said without *"on `<ref>`"*;
   **(c)** hand the artifact over by CONTENT rather than by path — a close-out that pastes the SQL
       cannot be wrong about where the file is.
-⚠️ **(c) COLLIDES WITH A STANDING PREFERENCE AND DAVID HAS TO SETTLE IT.** *Paste, do not point* is his
-own earlier instruction; this message's rule is *runnable things live at findable paths.* A migration is
-a file he runs as a file; a three-line read-only query is not. **The boundary is unruled** — and two
-cards on the `channel-vocabulary` board (CARD 5, CARD 6) were written pointing at *"the verification
-queries at the foot of the migration file"*, which is pointing, and which failed twice over when the
-file was not in his tree. Those two are fixed to paste; the RULE is still owed.
+✅ **THE BOUNDARY IS RULED — [[R-153]], 2026-09-12, and it closes the half this entry called owed.**
+*If David runs it, it is a file at a path in HIS tree and the handover names the ref. If Thunder runs it,
+or it is a few lines pasted into the SQL editor, it comes inline.* In his words: *"A migration is a file
+I apply as a file. A three-line discovery SELECT is text I paste. The rollback is a file I would run
+under pressure — so it is a file."* CARD 5 and CARD 6 pointed at *"the verification queries at the foot
+of the migration file"* and are fixed to paste; CARD 4 legitimately points at a file and now names the
+ref.
+
+🔴 **WHAT REMAINS OPEN IS THE MECHANICAL HALF, AND IT IS R-153's SECOND CLAUSE: *never state a path
+without the ref.*** *"'It is in supabase/migrations' is not a location. Every report that misled me
+today had a true path and a missing ref."* **Nothing asserts that.** A close-out can still name a path
+with no ref and every cap will pass — which is exactly how all three of today's instances reported
+success. That is this entry's remaining scope.
 
 **Blast radius: every build that has ever handed over a file to run.** Not measured. The three
 instances above are one afternoon's worth, and **all three were found by David, not by anything we

@@ -1,5 +1,5 @@
 // ============================================================
-// channelVocabulary — THE ONE TYPESCRIPT HOME FOR THE CHANNEL LIST (ledger #310 · R-150)
+// channelVocabulary — THE ONE TYPESCRIPT HOME FOR THE CHANNEL LIST (ledger #310 · R-152)
 //
 // PURPOSE:      TypeScript's half of the one-vocabulary rule. `public.channels` is the SOURCE;
 //               this file is the only place the names are written in TS, and a test binds the two.
