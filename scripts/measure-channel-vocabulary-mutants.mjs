@@ -41,7 +41,7 @@ const MUTANTS = [
     from: "  'tiktok',\n", to: '' },
   { id: 'D2', file: VOCAB, why: '🔴 THE MIRROR — the TS list gains a channel the table does not seed',
     from: "  'email',\n] as const;", to: "  'email',\n  'myspace',\n] as const;" },
-  { id: 'D3', file: MIG, why: '🔴 the MIGRATION loses email while TS keeps it (R-150 ① silently reversed)',
+  { id: 'D3', file: MIG, why: '🔴 the MIGRATION loses email while TS keeps it (R-152 ① silently reversed)',
     from: "  ('email',     'email',  'Email',", to: "  ('no_email',  'email',  'Email'," },
   { id: 'D4', file: VOCAB, why: 'a duplicate in the TS list masks a missing name (counts still match)',
     from: "  'twitter',\n  'sms',", to: "  'twitter',\n  'twitter'," },

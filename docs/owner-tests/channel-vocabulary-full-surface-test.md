@@ -24,7 +24,7 @@ that stores the generated post **forbade** them; and the insert is one atomic mu
 three committed zero-post campaigns that each looked fine. The campaign row commits separately; only
 the posts fail.
 
-🔴 **THE COPY RULE, BECAUSE IT IS THE EASIEST THING HERE TO GET WRONG (R-150).** Email works the way
+🔴 **THE COPY RULE, BECAUSE IT IS THE EASIEST THING HERE TO GET WRONG (R-152).** Email works the way
 every channel works: **TRACE drafts, the owner copies, the owner sends.** No screen may hint that
 TRACE will one day send for them, or present direct send as forthcoming. That is the design, not an
 unfinished version of one — and it is why email needs no consent model: **the owner is the sender.**
@@ -55,7 +55,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 RUNS: pre-apply
-COVERS: R-150 · tech-debt #91 · ledger #310
+COVERS: R-152 · tech-debt #91 · ledger #310
 WHY: this is the defect, in one result set. Run it first so the after-state means something.
 
 ```sql
@@ -143,7 +143,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 RUNS: post-apply
-COVERS: R-150 ②
+COVERS: R-152 ②
 ⚠️ **THIS CARD USED TO POINT AT "the verification queries at the foot of the migration file" AND THAT
 WAS WRONG TWICE OVER** — it asked David to open a file to find a query (pointing, not pasting), and the
 file was not in his tree (tech-debt **#287**). The queries are pasted here. Paste the whole block:
@@ -181,7 +181,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 RUNS: post-apply
-COVERS: R-150 ② · §6 r19
+COVERS: R-152 ② · §6 r19
 WHY: **a check nobody has watched refuse is a claim.** And a trigger that refuses *everything* would
 pass the first half and be useless — hence both directions. **Both blocks are wrapped in
 `BEGIN … ROLLBACK` and change nothing.** Pasted here rather than pointed at (tech-debt **#287**).
@@ -219,7 +219,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
 RUNS: post-apply
-COVERS: R-150 — the third copy
+COVERS: R-152 — the third copy
 STEPS: open the social channel setup on Test Dave's.
 **PASS:** the social channels are listed, **and a section you-send-these-yourself lists SMS *and*
 Email.** Email appearing at all is the proof: it was in the database's vocabulary and in no UI, so
@@ -231,7 +231,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
 RUNS: post-apply
-COVERS: R-150 ① — **this card fails on WORDING ALONE**
+COVERS: R-152 ① — **this card fails on WORDING ALONE**
 STEPS: read the you-send-these-yourself section for both SMS and Email.
 **PASS — all three:** it says TRACE **drafts** and **you send**, in the present tense · it gives email
 as **a subject line and a body** · and it says **nothing** about sending being added later.
@@ -262,7 +262,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
 RUNS: post-apply
-COVERS: R-150 ①
+COVERS: R-152 ①
 STEPS: enable Email, generate, open the campaign, find the email post.
 **PASS:** it shows a subject line distinct from the body, both copyable. One message, not three — an
 email is a single send like SMS, not a feed cadence.

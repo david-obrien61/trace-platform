@@ -20,12 +20,12 @@ export interface CampaignPost {
   // 🔴 WAS a hand-typed union holding the PRE-8-JUNE list ('instagram'|'facebook'|'sms'|'email'),
   // which rejected `tiktok` at COMPILE time as well as at write time — the fourth copy of one
   // vocabulary, and the one nothing could grep for. Now derived from the single TS list, which a
-  // test binds to the migration's seed in both directions (ledger #310, R-150).
+  // test binds to the migration's seed in both directions (ledger #310, R-152).
   platform: ChannelName;
   scheduled_date: string | null;
   copy_text: string;
   // Email is a subject line and a body; every other channel's post is a caption and carries
-  // NULL here (A9 — absent must not render as present). Ledger #310, R-150 ①.
+  // NULL here (A9 — absent must not render as present). Ledger #310, R-152 ①.
   subject: string | null;
   image_prompt: string | null;
   edited_copy: string | null;

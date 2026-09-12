@@ -101,7 +101,7 @@ export default async function handler(req: any, res: any) {
         .eq('module_key', 'social_media')
         .maybeSingle();
 
-      // 🔴 ONE VOCABULARY (ledger #310, R-150). The tenant's config says WHICH channels are on; the
+      // 🔴 ONE VOCABULARY (ledger #310, R-152). The tenant's config says WHICH channels are on; the
       // `channels` table says what a channel IS and how to write for it. Guidance is joined on here
       // rather than held in a map in `generate.ts` — that map is deleted, because storing guidance in
       // the table and also in code would replace one drift with another.
