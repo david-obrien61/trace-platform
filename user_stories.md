@@ -501,6 +501,24 @@ Lauren walks the lot with one order open. She scans a tree — Add. Scans the ne
 
 _Schedule → day-group → select stops → bookend (business→stops→business) → Google Maps handoff._
 
+### The delivery day load list — the yard person's copy of the day, on paper
+STATUS: written
+SCOPE: vertical:cultivar
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 3.4, 3.6
+PIECES: load_list_print_view, bill_of_materials, unresolved_is_printed, deer_fence_capture, size_before_trailing_remark
+NEEDS: 🔴 **`deer_fence_capture` is OWED and blocks nothing.** Measured 2026-09-12 across the whole LAWNS tenant: **zero** order lines and **zero** stop notes mention deer, fence, T-post or stake, and `order_service_selections` holds two rows in total. `DF` — *Deer Fencing* — exists only as a QuickBooks CATALOGUE item nothing points at. David's instruction was explicit: *"DO NOT STOP ON THE DEER FENCE QUESTION … a line the yard person adds by hand is fine for v1."* 🔴 **`size_before_trailing_remark` is tech-debt #292** — 9 real trees whose text plainly states a gallon size the resolver cannot reach. ⚠️ **Written by Thunder 2026-09-12 (ledger #315) from David's dictated prompt**: the §9 gate found no story for the LOAD half — the delivery arc's stories all cover the ROUTE, the stop and the tap, and none covers what physically goes on the trailer.
+_David, 2026-09-12: "The crew's copy of the day is paper — the route goes digitally to the driver, the load goes on paper. This is the load half."_
+
+Lauren hand-assembles this every delivery morning from several printouts. The yard person loading the trailer needs one sheet: **consolidated is the headline, per-stop breakdown underneath** — he needs *"14 T-posts"*, and the per-stop detail is what he needs when a stop gets dropped. **Special mix is the first line because it loads first, trees on top.** Trees read by **name and size** — *"Live Oak 45 gal ×2"* — because he is matching against what is physically printed on the tag, not against a SKU.
+
+The bill of materials is **computed from the container, never looked up**: about one container volume of special mix per tree at every size, 2 T-posts up to and including 65 gallon and 4 above with no upper bound, about 4 ft of rope per post, one bubbler per tree. **The T-posts ARE the stake kit** — there is no separate stake row — and **there is no mulch**, only the ingredients in the mix.
+
+🔴 **And the sheet never silently omits something it could not compute.** David: *"Blank is indistinguishable from zero, and a yard person cannot tell the difference between 'no T-posts needed' and 'we could not work it out.'"* A line whose size cannot be read is printed under **COULD NOT WORK OUT** with the text it failed on; a stop whose order is withheld or unreadable says which, and never *"no items"*; a day holding either announces that every total above it is a **floor**. On paper this matters more than on a screen — nobody can click a blank to ask what it meant.
+
+✅ **BUILT 2026-09-12 (ledger #315), FOUR OF FIVE PIECES** — all but `deer_fence_capture`, which has nothing to capture from. `loadList.ts` (the pure model — 82 probes, 31/32 mutants) · `/load-list?date=` gated on `deliveries:read` · the print stylesheet. It reads through the existing `readStops`, adds no table, no migration and no api function. Proof: `docs/owner-tests/load-list-full-surface-test.md`.
+
 ### One stop, the same on every screen — and where it goes can change
 STATUS: written
 SCOPE: vertical:cultivar, platform

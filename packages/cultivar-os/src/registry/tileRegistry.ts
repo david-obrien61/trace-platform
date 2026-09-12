@@ -761,6 +761,13 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_vendors',         section: 'dashboard', parent: 'sec_dashboard',       label: 'Vendors', route: '/vendors', matchRoute: '/vendors', required_permission: 'member' },
   { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
   { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'deliveries.route:read' },
+  // The LOAD half, sibling of Route and deliberately beside it: David's own framing is that the
+  // ROUTE goes to the driver digitally and the LOAD goes on paper. Gated on `deliveries:read`, the
+  // same string as the schedule it prints — NOT `deliveries.route:read`, which gates the Maps
+  // handoff and is a different act. ⚠️ Added because the nav-integrity cap caught the route as a
+  // URL-only orphan (ledger #315): a printable sheet nobody can find is a sheet nobody prints,
+  // which is the whole defect this build exists to fix, one layer out.
+  { key: 'nav_load_list',       section: 'dashboard', parent: 'nav_delivery',        label: 'Load list', route: '/load-list', matchRoute: '/load-list', required_permission: 'deliveries:read' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
   { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
   // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.

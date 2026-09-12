@@ -1,4 +1,5 @@
 # Last updated: 2026-09-12 (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
+# (**#315 — THE DELIVERY DAY LOAD LIST (`/load-list?date=`):** the yard person's printable copy of the day — consolidated bill of materials first, per-stop breakdown underneath, special mix as line 1 because it loads first. Print view over existing data: NO table, NO migration, NO api function. The T-post rule is a COMPUTED threshold, not a five-row table — the defect it replaced dropped a 200 gallon tree off the end. Nothing it cannot compute is omitted; tech-debt **#290**/**#291** filed against the install cost model, **#292** against the size resolver. **NOT MERGED.**) See also:
 # (**#309 — THE ID-CLAIM RULE IS MINTED AND GUARDED:** `R-148` + `R-149` in the ruling table, prose unrewritten; `verify-id-sweep` sweeps every remote branch before a claim; `verify-id-citations` gains ledger-duplicate and commit-subject clauses; the board TOTAL carries its tree)
 # (**#307 — §6 r7 NOW DESCRIBES THE TILE GRID:** 4/6/8 at every width, the phone-first origin recorded, *describes-not-decides* stated; **no pixel moved**; CARD 1 owner-proven; tech-debt #283 closed, **#284** filed — the id-claim rule exists, unnumbered since 2026-09-02)
 # (**#305 — THE BREAKPOINT VOCABULARY:** one device detector, four axes named apart; `useIsMobile`/`useIsNarrow` and the user-agent regex DELETED; breakpoints live once in `design-system/tokens.ts` and the CSS interpolates them; **no platform detector, deliberately** — see § Device vocabulary)
@@ -3054,3 +3055,46 @@ A board count that does not say which tree it came from cannot be compared to an
 
 ⚠️ **Not guarded:** R-148 clauses (1), (3), (5) are convention — no cap reads a prompt or an author's
 intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes the race.**
+
+
+## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315)
+
+**What it is.** `/load-list?date=YYYY-MM-DD` — a printable sheet for the person loading the trailer.
+**Consolidated is the headline, per-stop breakdown underneath** (David's ruling): the yard person
+needs *"24 T-posts"*; the per-stop detail is what he needs when a stop gets dropped. **Special mix is
+section 1 because it loads first, trees on top.** Trees read as **name and size**, never a SKU — he
+is matching against what is printed on the tag.
+
+**Where it lives.** `packages/cultivar-os/src/lib/loadList.ts` (the PURE model — every number and
+every refusal) · `packages/cultivar-os/src/pages/LoadList.tsx` (render + print stylesheet) ·
+route in `router.tsx` inside the existing `deliveries:read` block, beside the schedule it prints.
+**In `cultivar-os`, NOT `shared`, deliberately (AC-1):** tree, special mix, T-post, bubbler and deer
+fence are a tree farm's vocabulary. The two general things — reading a size out of a sentence,
+naming a unit — are IMPORTED from shared (`readProductFromDescription`, `parseUnitOfMeasure`,
+`normalizeSize`) rather than re-implemented (R-27, §6 r8). The day is read through the existing
+`readStops`, so the load list, the schedule, the route and the order screen compose one stop.
+
+**The bill of materials — David's, 2026-09-12, NOT the install cost model's.** ~1 container volume
+of special mix per tree at every size · **2 T-posts up to and including 65 gallon, 4 above, no upper
+bound** (the T-posts ARE the stake kit) · ~4 ft rope per post · 1 bubbler per tree · **no mulch.**
+🔴 **The rule is COMPUTED, not looked up.** The first cut used a five-row table and the 200 gallon
+Live Oak on Saturday 2026-08-29 fell off the end into a hand-work note. Mutant **A2d** re-applies
+the table and is caught.
+
+**🔴 It never silently omits what it could not compute.** Four line kinds, all printed: `tree` ·
+`other_goods` · `no_size_stated` (**a statement about what we could READ, never a claim the line is
+a fee** — R-144/#139) · `unresolved`, which carries the raw text it failed on. A withheld order says
+**withheld**; a failed read is not an empty one; either makes every total a declared **FLOOR**.
+
+**STATE.** 🔨 **BUILDER-COMPLETE on `feat/delivery-day-load-list` — NOT MERGED, on David's
+instruction.** `npm run verify` exit 0 ZERO NET-NEW · **82 + 34 assertions** · **31/32 mutants
+caught, 0 never applied** (the 1 survivor is a declared reach control, proven CAUGHT by the page
+suite) · **NO migration · NO schema · NO permission string · api/ 12/12** · `[TRACE:LOADLIST]` ON.
+**Reproduces Saturday 2026-08-29 from live data: 6 stops · 11 trees · 2½ yd mix · 24 T-posts ·
+96 ft rope · 11 bubblers**, 1 unresolved line printed.
+**Owner-proof owed → `docs/owner-tests/load-list-full-surface-test.md` (12 cards, 0 covered).**
+
+**⚠️ KNOWN GAPS, each filed:** deer fence is recorded NOWHERE (the page prints the rule for a hand
+add) · **tech-debt #292** — 9 real trees state a gallon size the resolver cannot reach, printed
+honestly and not counted · **#290/#291** — the install cost model's mulch line and 0.7 mix ratio,
+which pull opposite ways and must be corrected together.
