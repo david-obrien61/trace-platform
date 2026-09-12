@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { callerCan } from '../../../shared/src/auth/callerPermission';
 
 const PROMPT = `You are a preventive maintenance (PMI) expert for small business equipment.
 Given an asset's name and details, return a JSON object with a list of recommended maintenance tasks.
@@ -22,6 +23,25 @@ export default async function handler(req: any, res: any) {
 
   if (!businessId || !name) {
     return res.status(400).json({ ok: false, error: 'businessId and name are required' });
+  }
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-09-11 (tech-debt #261); this endpoint had NONE.
+  // `businessId` comes off the REQUEST BODY and the only thing below it is a BILLABLE Anthropic
+  // call. Until this gate existed, anyone who knew the URL could fire Claude at our cost, as many
+  // times as they liked, while naming any tenant they liked — the id was never checked against the
+  // caller, so it also mis-attributed every `[TRACE:ai]` line to a business the caller may not
+  // belong to. `pmi:read` is the authority, and it is the string the CALLING SURFACE already
+  // requires: `/pmi` is gated `pmi:read` (router.tsx:249). This endpoint WRITES NOTHING — it
+  // returns a preview the owner then accepts — so gating it on `pmi:update` would be a bar
+  // stricter than the act, and would lock out the manager this module's own header describes as
+  // legitimately holding `pmi:read` and not more.
+  //
+  // Pattern and wording copied from `api/social/generate-posts.ts:31-38`, which is the SAME defect
+  // already fixed on an AI-billing route (2026-07-27) — not a new pattern. `callerCan` resolves the
+  // caller from the Bearer token and never from the body, so a forged `businessId` refuses.
+  if (!(await callerCan(req.headers?.authorization, businessId, 'pmi:read'))) {
+    console.log('[TRACE:AUTHORITY] pmi/suggest REFUSED — caller lacks pmi:read/owner', { businessId });
+    return res.status(403).json({ ok: false, error: 'Not authorized to suggest maintenance for this business', code: 'FORBIDDEN' });
   }
 
   const claudeKey = process.env.ANTHROPIC_API_KEY ?? '';

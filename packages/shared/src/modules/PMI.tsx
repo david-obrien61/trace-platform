@@ -9,6 +9,7 @@
 // ============================================================
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
+import { authHeaders } from '../auth/authHeaders';
 import {
   deriveIntervalDays,
   isUsageBasedInterval,
@@ -357,9 +358,13 @@ export function PMI({
       businessId, assetId: selected.id, name: selected.name, asset_type: selected.asset_type,
     });
     try {
+      // 🔴 THE TOKEN IS THE OTHER HALF OF THE GATE (tech-debt #261, 2026-09-11). The endpoint
+      // proves the CALLER server-side with `callerCan` — it can only do that if the browser sends
+      // the session. Without this header a signed-in user reads, to the server, as anonymous and
+      // gets a 403. `authHeaders()` is the ONE shared attachment (§6 r8); never hand-roll it.
       const res = await fetch('/api/pmi/suggest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           businessId,
           name:       selected.name,
