@@ -231,3 +231,73 @@ cannot see (#60: `313de44` sat dead ~20 hours).
 already open at the right directory, guarding a failure mode that is invisible by construction.
 
 ---
+## F4 — 🔴 A TEST THAT WILL NOT COMPILE REPORTS **GREEN** IN 18 OF 24 MUTANT HARNESSES — AND THE REPO ALREADY KNOWS WHY
+
+**The fact:** *how you run a bundled test file and can still tell that it ran.*
+**Its 25 homes:** one hand-written `esbuild … | node` shell string per harness, plus `run-tests.mjs`,
+plus `package.json`.
+
+`scripts/run-tests.mjs:62` records the defect in its own voice, dated **2026-09-07**:
+
+> 🔴 *"`set -o pipefail` IS LOAD-BEARING, NOT HYGIENE — ADDED 2026-09-07 AFTER THIS RUNNER REPORTED ✅
+> ON A FILE THAT WOULD NOT COMPILE. Without it, bash returns only the LAST command's status: esbuild
+> writes its error to STDERR and nothing to stdout, so `node` reads an EMPTY program, exits 0, and the
+> pipeline succeeds. … [[R-33]] in the runner that certifies every other check."*
+
+🔴 **THE KNOWLEDGE WAS WRITTEN DOWN. THE FIX WAS NOT PROPAGATED. [MEASURED]**
+
+```
+24 scripts pipe esbuild into node
+ 6 carry `set -o pipefail`   (customer-addresses · grid-standard · pricing-config-clobber ·
+                              service-review · transport-binding · route-handoff)
+18 do NOT
+```
+
+The six are the harnesses written *after* 2026-09-07. **The fix propagated forward in time and never
+backward.** `package.json:15` — `verify:write-wall` — carries the defective form too.
+
+✅ **PROVEN BY MAKING IT FAIL (§6 r19 · [[R-33]]).** Three files in a scratch directory: one that
+passes, one whose assertion fails, one that is not valid TypeScript. The `suiteIsGreen()` body copied
+verbatim out of `measure-channel-vocabulary-mutants.mjs:30`:
+
+```
+passing.ts     suiteIsGreen() = true      ← correct
+failing.ts     suiteIsGreen() = false     ← correct
+broken.ts      suiteIsGreen() = true      ← 🔴 does not compile, reports GREEN
+```
+
+and the same broken file through both pipelines:
+
+```
+WITHOUT pipefail (18 harnesses):   true
+WITH    pipefail (run-tests.mjs):  false
+```
+
+⚠️ **AND THE POLARITY IS THE OPPOSITE OF WHAT I EXPECTED WHEN I STARTED THIS GREP, WHICH IS WHY IT
+WAS WORTH RUNNING RATHER THAN REASONING ABOUT.** I went in expecting `catch { return false; }` to
+mean *an unreachable harness scores its mutant CAUGHT*. It is the reverse: the `catch` is never
+reached, because the pipeline **succeeds**. So:
+
+- **A mutant that breaks compilation is scored `SURVIVED 🔴`** — a false alarm that sends the author
+  to harden a probe that was already correct. **This has already happened and is on the record:**
+  ledger #310 — *"M10 claimed to remove the pre-flight and only renamed a comment, manufacturing a
+  false SURVIVED and sending me to harden a probe that was already right."*
+- 🔴 **Worse, and the reason this is Tier 1: the BASELINE guard cannot see it either.** Every harness
+  opens with `if (!suiteIsGreen()) { console.log('RED — aborting…'); }` at `:119`. That guard exists
+  to prove the harness can reach its target before any CAUGHT is believed. **On a tree where the test
+  file does not compile, it returns `true` and the run proceeds.** The one check written to prevent
+  #182 is defeated by the same pipeline it is checking through.
+
+**Who is authoritative:** `run-tests.mjs:70` — the one call site that is right, and says why.
+**What breaks when they disagree:** a mutation score. Which is the evidence every `npm run verify`
+close-out cites (*"9/9 mutants caught"*, *"25/25 mutants caught, 0 survived"*) to claim a probe is
+real. **A number produced by a harness that cannot distinguish "did not build" from a verdict.**
+**Would anything catch it?** **No — and note what that means for #182.** Tech-debt #182 asks for *"a
+mutant that changes the POPULATION, not the subject"*. This is the population defect one level below
+the population: not *which files were scanned*, but *whether the scan ran at all*.
+**WOULD FIX.** It is `set -o pipefail; ` prepended in 19 places, and the correct string with its
+reason is already in the repo to copy. ⚠️ **Expect the mutation scores to move when it lands** — some
+mutants currently scored SURVIVED will become CAUGHT and vice versa. That is the fix working, and a
+close-out that re-quotes an old score afterwards would be quoting a number from the broken harness.
+
+---
