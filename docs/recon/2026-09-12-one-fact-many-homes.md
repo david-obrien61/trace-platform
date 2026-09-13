@@ -301,3 +301,112 @@ mutants currently scored SURVIVED will become CAUGHT and vice versa. That is the
 close-out that re-quotes an old score afterwards would be quoting a number from the broken harness.
 
 ---
+# TIER 2 — LOUD, OR LOAD-BEARING BUT VISIBLE
+
+## F5 — 🔴 "IS THIS MIGRATION APPLIED?" IS ANSWERED BY HAND IN THREE DOCS AND HAS BEEN WRONG THREE TIMES IN THREE DAYS — WHILE THE DERIVATION SITS IN THE REPO, UNPOINTED AT THE DATABASE
+
+**The fact:** whether a migration is in the database.
+**The authority:** the catalog. **The copies:** `docs/CLOSE-OUT-LEDGER.md`, `docs/tech-debt-log.md`,
+`docs/built-inventory.md`, ⚡ ACTIVE STATUS — each carrying a hand-written verdict per migration.
+
+**[MEASURED 2026-09-12, `verify-migration-apply-state.mjs --catalog`, exit 0, 137 files:]**
+
+```
+NOT_APPLIED 1 · VIOLATED 0 · STALE_DECLARATION 0 · MIXED 0 · TABLE_GONE 1 · DATA 0 ·
+NOTHING_TO_APPLY 2 · COULD_NOT_CHECK 2 · INCONCLUSIVE 10 · SUPERSEDED 6 · HOLDS 4 · APPLIED 111
+```
+
+**Exactly one file is NOT_APPLIED — `20260727d_drop_losses_and_nurseries.sql`, the GATED drop that
+waits on David by design.** Everything else has run. Against that, three written records:
+
+| Record | Says | Truth [MEASURED] |
+|---|---|---|
+| `CLOSE-OUT-LEDGER.md` #310 | `20260912_channels_one_vocabulary.sql` **"WRITTEN, NOT APPLIED"** | applied — 2 FKs + 6-row `channels` |
+| `CLOSE-OUT-LEDGER.md` #312 | `customer_addresses` **"WRITTEN, NOT APPLIED"** (corrected in-pass) | applied — RLS on, 3 policies, 14 cols |
+| `tech-debt-log.md` **#253** | 🔴 **"SHIPPED CODE READS AND WRITES THREE TABLES THAT DO NOT EXIST"** | **all three live** |
+
+#253 in full: *"`20260905_production_planning.sql` creates `business_operations_config`,
+`production_plans` and `production_plan_lines`. **It is not applied** (measured 2026-09-11) … **So
+Settings → Operations cannot save and the Uppot plan page cannot commit, on every tenant, today.**"*
+
+**[MEASURED 2026-09-12]:**
+
+```
+business_operations_config   rls=true  policies=4  cols=4
+production_plans             rls=true  policies=4  cols=12
+production_plan_lines        rls=true  policies=4  cols=19
+```
+
+**All three exist, with RLS and four policies each.** #253's measurement was true when taken and the
+row has not moved since. It is the highest-severity open row in the log, it names two surfaces as
+broken on every tenant, and **it is describing yesterday.**
+
+🔴 **AND HERE IS THE PART THAT MAKES THIS A DUPLICATION FINDING RATHER THAN A STALE-ROW FINDING.**
+The derivation exists, is excellent, takes about a minute, and **the gate never points it at the
+database.** `package.json:45`:
+
+```json
+"verify:migration-apply-state": "node scripts/verify-migration-apply-state.mjs --self-test"
+```
+
+`--self-test` is the **offline** probe — crafted histories, proving the classifier works. `--catalog`
+is the mode that reads the live database, and **nothing in `npm run verify` runs it.** So on every
+build the repo proves it *could* answer the question and does not ask it.
+
+**Who is authoritative:** the catalog, via `--catalog`.
+**What breaks when they disagree:** work is done twice, or not done. A session reading #253 would
+schedule an apply that already happened; a session reading #310 would not trust a column that is live.
+**Both cost a session, and #253 additionally mis-states the platform's state to anyone auditing it.**
+**Would anything catch it?** **Only if someone runs `--catalog` by hand.** No gate does.
+**Tier 2 rather than Tier 1** because the failure is a wasted session, not a wrong number in front of
+a customer — and because a session that *acts* on the stale claim hits a live table and finds out.
+**WOULD FIX** — but as a **report, not a gate**: this run took ~60s of network and needs the PAT, so
+folding it into `npm run verify` would make every build need a credential and a minute. The honest
+shape is a separate `npm run verify:applied` that a close-out runs before it writes an apply-state
+claim into a doc. ⚠️ **I did not re-measure #253's two named surfaces** — that the tables exist does
+not prove `OperationsSettings.tsx` now saves. [INFERRED] That still wants one live check.
+
+---
+
+## F6 — 🟡 `verify-universals` READS THE MIGRATION CORPUS TO ASSERT THINGS ABOUT POLICIES, AND THE CORPUS AND THE CATALOG DISAGREE ON FIFTY
+
+Tech-debt **#241** already names this for one function — *"`tableHasOwnerPolicy` is a plain corpus
+grep with no drop-tracking: it reads `CREATE` statements the applied migration removed. **Passing on
+history.**"* What was not measured is **how big the gap between the two copies is.**
+
+**[MEASURED 2026-09-12]** — every `CREATE POLICY` name in `supabase/migrations/` against `pg_policies`:
+
+```
+corpus CREATE POLICY names : 196
+corpus DROP POLICY names   : 109
+live policies              : 156
+
+live policy with NO create anywhere in the corpus :  5
+corpus-created, not live                          : 45   (40 explained by a corpus DROP, 5 not)
+```
+
+The five live-but-uncreated are all on the pre-`businesses` generation — `addons_select_public`,
+`losses_all_owner`, `modules readable by authenticated users`, `nurseries_select_public`,
+`nurseries_update_owner` — i.e. **tech-debt #39's class, already filed**, on tables pending DROP.
+
+The five corpus-created-but-absent-with-no-DROP are `tone_samples_owner`, `pmi_assets_owner`,
+`pmi_service_logs_owner` (from `20260529_pmi_shared.sql`, which never ran — tech-debt #248, retired in
+place) and `business_assets_owner_all` / `business_assets_member_all` (the table was **renamed** to
+`cost_objects`, ledger #297).
+
+**So every individual item is explained, and that is exactly the finding.** Each of the 50 has a good
+reason; none of them is visible to a checker that greps `CREATE POLICY` out of `.sql` files. The
+corpus is a **second representation of the live policy set**, it is wrong about 50 of them for
+defensible reasons, and `verify-universals` treats it as the truth.
+
+**Who is authoritative:** `pg_policies`.
+**What breaks:** a policy assertion that passes on a policy that no longer exists — #241's exact
+words, now with a population attached.
+**Would anything catch it?** **No.** `verify-universals.mjs` reads repo `.sql` and cannot read the
+catalog; its own header says so.
+**WOULD NOT FIX AS A REWRITE.** Rewriting `verify-universals` to read the catalog would make the
+whole gate need a PAT and a network, which is the cost F5 already argues against. The proportionate
+move is the same one: a separate catalog-mode report, run at close-out. #241 stays open and correct;
+this is its blast radius, measured.
+
+---
