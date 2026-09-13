@@ -466,3 +466,116 @@ named file is in the current diff. That converts six invisible deferrals into si
 at the moment they are standing in the right file, which is the only moment they are cheap.
 
 ---
+## F8 — 🔴 **THE 12-FUNCTION COUNT IS STILL WRONG, IN THE DANGEROUS DIRECTION, IN THE DOC SESSIONS ARE TOLD TO READ FIRST.** (F3's fourth home — promoted out of Tier 3 when I found it)
+
+`PLATFORM_STATE.md:96` [MEASURED, unchanged today]:
+
+> `| **Vercel functions (11 of 12)** | WIRED | api/*.ts + subdirs | **11 live functions (1 slot
+> headroom):** …`
+
+**The true count is 12. There is no headroom.** This is the identical error that
+`docs/inventory-functions.md` corrected on **2026-09-02**, in its own words —
+
+> *"THIS BLOCK SAID `11 of 12 — ✅ 1 SLOT HEADROOM` AND IT WAS WRONG IN THE DANGEROUS DIRECTION."*
+
+— and **the correction was applied to that doc and not to this one.** Ten days later the wrong value
+is still sitting in `PLATFORM_STATE.md`, which is the file CLAUDE.md's Scope & Hierarchy names as
+*"verified current state of every platform item (LEVEL + LOCATION + EVIDENCE) — read this first every
+session before writing any code."*
+
+🔴 **This is the exact failure mode §6 r11 exists to prevent, one layer up.** A session that reads
+PLATFORM_STATE first — as instructed — learns it has a free slot, and mints `api/` file #13. The deploy
+then fails silently and Vercel serves the last-good bundle.
+
+⚠️ **Two more dead pointers on the same file, same class, lower stakes:** rows 77 and 102 both give
+`api/qbo/status.ts` as a LOCATION / EVIDENCE. **That file does not exist** — it was folded into
+`qbo-connector.ts` behind `?_route=status` (§6 r11's own consolidation list). A LOCATION column whose
+value is a deleted path is the doc's single job, failing.
+
+⚠️ **And its own stamp says how old it is:** `<!-- Last verified: 2026-06-13 -->` — **91 days.**
+
+**Who is authoritative:** `find api -name '*.ts' | wc -l`.
+**Would anything catch it?** **No.** Nothing counts `api/`; nothing checks a LOCATION resolves.
+**WOULD FIX — this is the one item in this document I would fix tonight if I were fixing anything.**
+It is a wrong number, in the dangerous direction, in the first doc a session reads, guarding a silent
+failure. The fix is to delete the number and point at the command.
+
+---
+
+# TIER 3 — COSMETIC
+
+## F9 — 🟡 CLAUDE.md STILL LISTS SEVEN COMPLETED EXTRACTIONS UNDER "DO NEXT AVAILABLE SESSION"
+
+`CLAUDE.md` → **Shared Extraction Roadmap** → *"Immediate (LOW complexity, do next available
+session)"*, dated 2026-05-29. **[MEASURED] all seven exist and all seven have at least one importer
+outside their own definition:**
+
+```
+MarginEngine.ts     EXISTS   5 importing files      ProgressBar.tsx   EXISTS   2
+statusColors.ts     EXISTS   1                      dateHelpers.ts    EXISTS   1
+FormField.tsx       EXISTS   1                      formatCurrency.ts EXISTS   1
+Skeleton.tsx        EXISTS   2
+```
+
+The **"Before KINNA-OS Phase 1"** block below it is the opposite and is correct — all five of those
+(`useTrialStatus`, `TrialProvider`, `LeakageDetector`, `useModuleState`, `OnboardingShell`) are
+genuinely absent, as is `config/VerticalConfig.ts`. So the section is **half true, with no marker
+separating the halves**, which is worse than being wholly stale: a reader who spot-checks one line
+and finds it accurate will trust the rest.
+
+**What breaks:** a session rebuilds something that exists. **Mitigated by CORE MANDATE rule 1**
+(*"Before writing ANY new module, check `packages/shared/src/` first"*), which is why this is Tier 3
+rather than Tier 1 — the platform's own first rule catches it.
+**Would anything catch it?** No, but the cost is one `ls`.
+**WOULD FIX** — strike the seven done lines. It is a deletion, and it shortens a file that is 675 lines
+against its own ~600 budget.
+
+---
+
+## F10 — 🟢 BOARD HEADER COUNTS ARE HAND-MAINTAINED AND CURRENTLY **ALL CORRECT** — REPORTED BECAUSE THE NEGATIVE RESULT IS THE USEFUL PART
+
+The prompt named *"board headers claiming 0 of N"* as a suspected instance. **It is not one today.**
+
+**[MEASURED]** — every board's prose header claim against `verify-owner-test-boards.mjs`'s derived count:
+
+```
+40 boards · 703 cards · 53 covered
+header claims a count : 28   →  28 agree, 0 disagree
+header claims none    : 12   →  the safe option
+```
+
+**Zero drift.** Two boards carry an in-file record of having drifted before and been repaired by hand
+— `authority-model` (*"Denominator corrected 2026-09-11 (33 → 36): the module OFF-switch surface added
+CARDS 34–36 and this claim was not bumped with them"*) and `operations-calendar` (*"15 → 16"*) — so the
+class is real, has fired twice, and is currently clean because someone swept it.
+
+🔴 **The residual is that the checker already computes every one of these numbers and never compares
+them to the header it is printing beside.** `verify-owner-test-boards.mjs` prints
+`✓ 12 cards · 3 covered campaign-lifecycle` while `campaign-lifecycle-full-surface-test.md:69` says
+`**Board: 3 of 12 covered**`, and nothing asserts the two agree.
+
+**WOULD FIX, cheaply, and it is the best cost/benefit in Tier 3** — the cap is already holding both
+numbers. But it is genuinely cosmetic today: 28 of 28 correct.
+
+---
+
+## F11 — 🟡 TWO ENUM DRIFTS THAT ARE REAL, LATENT, AND NOT WORTH FIXING YET
+
+Found by the same catalog sweep as F1, reported for completeness and **explicitly not recommended**:
+
+| Fact | DB CHECK | The code copy | Live rows affected |
+|---|---|---|---|
+| `cost_objects.status` | `ACTIVE · IN_REPAIR · OFFLINE · RETIRED · IDLE · UNASSIGNED` | `STATUS_OPTIONS` in `BusinessAssets.tsx` has **4** — no `IDLE`, no `UNASSIGNED` | **0** — all 11 rows are `ACTIVE` |
+| `cost_objects.cadence` | `ONE_OFF · WEEKLY · MONTHLY · QUARTERLY · ANNUAL` | `CADENCE_OPTS` in `OperatingCosts.tsx` and `CostToProduceSettings.tsx` have **4** — no `ONE_OFF`; `CountOnceSeam.ts`'s `Cadence` union has all 5 | **0** — all 11 rows are NULL |
+
+So the database can hold a value the editor cannot display or re-select, in two places. **Nothing is
+broken today because nothing has ever written those values.** ⚠️ Note the shape though: `Cadence` is
+declared **three times under the same name** in three files, and **one of the three disagrees with the
+other two** — which is how you get a function that accepts a value its caller's type says is
+impossible.
+
+**WOULD NOT FIX.** Zero affected rows, and the right time is when `cost_objects` first gets a
+non-`ACTIVE` row — at which point it is visible immediately (a dropdown with no matching option is a
+loud defect, not a silent one). Filing it now buys a row on a board and nothing else.
+
+---
