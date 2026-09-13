@@ -66,7 +66,7 @@ the records a session reads to decide whether to trust the column:
 | Where | What it says | Truth |
 |---|---|---|
 | `docs/CLOSE-OUT-LEDGER.md` #310 | *"MIGRATION … WRITTEN, NOT APPLIED"* | applied |
-| ⚡ ACTIVE STATUS / `built-inventory.md` | see F7 below — not re-checked at read time | — |
+| ⚡ ACTIVE STATUS / `built-inventory.md` | see **F5** below — not re-checked at read time | — |
 | `packages/shared/src/campaigns/types.ts` | still carries a hand-written `platform` union | see **F2** |
 
 This is the same class as ledger #312's finding that `customer_addresses` was recorded WRITTEN-NOT-
@@ -81,11 +81,19 @@ cannot say. Only the shape can be observed, and it is there.
 ## THE RANKING
 
 **Tier 1 — SILENT AND LOAD-BEARING.** A copy goes stale, something real stops working, and no screen,
-log, test or cap says so. **F1 · F2 · F3 · F4.**
-**Tier 2 — LOUD AND LOAD-BEARING.** A copy goes stale and it breaks, but it breaks visibly. **F5 · F6.**
-**Tier 3 — COSMETIC.** Wrong, cheap to fix, nothing depends on it. **F7 · F8 · F9.**
+log, test or cap says so. **F1 · F2 · F3 · F4 · F8.**
+**Tier 2 — LOAD-BEARING, BUT IT SHOWS.** The failure costs a session rather than a customer. **F5 · F6 · F7.**
+**Tier 3 — COSMETIC.** Wrong or hand-maintained, cheap, nothing depends on it today. **F9 · F10 · F11.**
 
 **Would NOT fix** is stated per finding and collected at the end.
+
+✏️ **THIS LINE WAS WRONG FOR ABOUT AN HOUR AND IS CORRECTED IN PLACE RATHER THAN QUIETLY.** It was
+written before the findings were, and said *"Tier 2: F5 · F6 / Tier 3: F7 · F8 · F9"* — then **F8 was
+promoted OUT of Tier 3 when the `PLATFORM_STATE.md` count turned out to be wrong in the dangerous
+direction**, and F7 moved up with the measurement behind it. 🔴 **A hand-written index of a list that
+grew underneath it — the exact shape of F3, F8 and F10, committed by the document complaining about
+it.** Recorded because a recon that silently repaired its own instance would be arguing from an
+example it had erased.
 
 ---
 
@@ -131,7 +139,7 @@ subscription | Landscaper and Contractor Wholesale Account        | $0.00 | orde
 subscription | Seasonal Fertilization Program                     | $0.00 | visit
 ```
 
-**4 of that tenant's 11 active at-checkout offerings never reach the screen.** And the tell is in the
+**4 of that tenant's 13 active at-checkout offerings never reach the screen** — 6 `addon` and 3 `transport` render, the other 4 do not. And the tell is in the
 same list: a row literally named **"Tree inspection"** *does* appear — because it is miscategorised
 as `addon`. So the surface shows a fake inspection and hides two real ones.
 
