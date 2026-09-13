@@ -579,3 +579,107 @@ non-`ACTIVE` row — at which point it is visible immediately (a dropdown with n
 loud defect, not a silent one). Filing it now buys a row on a board and nothing else.
 
 ---
+# METHOD — INCLUDING THE TWO PLACES MY OWN PROBES COULD NOT SEE WHAT THEY WERE ABOUT
+
+⚠️ **RECORDED BECAUSE TECH-DEBT #182 IS EXACTLY THIS AND BOTH HAPPENED INSIDE ONE SESSION.**
+*"A harness that cannot reach its target reports the same as one that passed."*
+
+**① THE `.ts` / `.tsx` ALTERNATION.** Checking whether the ratchet baselines reference files that
+still exist, my pattern ended `\.(?:ts|tsx|mjs|sql|md|json)`. Regex alternation is **first-match, not
+longest-match**, so `Dashboard.tsx` matched as `Dashboard.ts` and the check reported **58 dead
+references across four baseline files.** Every one was a phantom. With the alternation reordered
+`(?:tsx|ts|…)`:
+
+```
+authority-grants-baseline.json   paths=18   MISSING=0
+field-lists-baseline.json        paths=22   MISSING=0
+write-paths-baseline.json        paths=47   MISSING=0
+zero-row-writes-baseline.json    paths=30   MISSING=0
+--- total dead references: 0
+```
+
+🔴 **The near-miss is the finding: the wrong version produced a LOUD, CONFIDENT, WRONG result that
+looked exactly like a major discovery.** It would have been filed. #182's prescription — *a mutant
+that changes the POPULATION* — is what catches this, and the negative control that saved me was
+trivial: *does this file I can see with my own eyes appear in the "missing" list?*
+
+**② THE WRITE-PATHS CHECK COULD NOT SEE RPCs, AND SO IT CANNOT SETTLE #185.** I then checked whether
+each declared `(table, file)` pair in `write-paths-baseline.json` still holds — does the file still
+mention the table? **10 of 84 pairs came back stale**, including the one tech-debt **#185** names
+(`invitations.ts` declared an `audit_log` writer with zero occurrences of `audit_log`).
+
+**That result is not usable, and `verify-write-paths.mjs`'s own header says why** — `:22`:
+
+> *"FLOOR, NOT TOTAL: this cap reads SOURCE. An RPC's target table lives in the DATABASE, so ~11 RPC
+> writes are invisible to it… **the rpc→table map is the cap's own next build — it is owed.**"*
+
+Checked directly: `invitations.ts` calls `create_invitation` and `reset_invitation_expiry`;
+`moduleState.ts` calls `set_business_module_state`. **These are RPC-mediated writes recorded
+correctly by a baseline that deliberately records them.** So the declaration is right and the string
+is absent, both at once.
+
+🔴 **WHICH MEANS #185 IS UNRESOLVED IN BOTH DIRECTIONS AND SHOULD SAY SO.** Its observation is
+factually true (the string is absent) and its conclusion — *"an audit write from that file lands
+without the cap noticing"* — may be **the cap working as designed**. Settling it needs the rpc→table
+map the cap's own header calls owed. **[INFERRED — I did not settle it, and neither a grep nor a read
+of the source can.]** That map is itself this recon's subject: *which tables an RPC writes* is a fact
+that lives in the database and is copied into a JSON file by hand.
+
+---
+
+# WHAT I WOULD **NOT** FIX
+
+| | Why not |
+|---|---|
+| **F11** — `cost_objects.status` / `cadence` enum drift | Zero affected rows. A dropdown with no matching option is a **loud** defect the day it appears. Filing it buys a board row and nothing else. |
+| **F6 as a rewrite** — making `verify-universals` read the catalog | It would put a PAT and a network round-trip in front of every `npm run verify`. The 50-policy gap is real and its blast radius is now measured; the proportionate answer is F5's catalog-mode **report**, not a rewrite. |
+| **The `service_offerings` vocabulary itself (F1's seven homes)** | 🔴 **Do NOT chase this into a `channels`-style lookup table right now.** The DB CHECK already enforces it, all seven copies agree, and **the live damage is entirely on the consumer side** — one missing complement bucket in `useServices.ts`. Fix the bucket; leave the seven copies. Consolidating them is a good idea *later* and it is not what is broken. |
+| **The 167 `12/12` strings in `CLOSE-OUT-LEDGER.md`** | They are historical build records — each one was true when written. Rewriting history to fix a count is worse than the count. **Fix `PLATFORM_STATE.md` (F8) and leave the ledger alone.** |
+| **Dead markdown links in `docs/RULINGS.md`** (9 links written as `](2026-09-10-….md)` that resolve only from `docs/decisions/`) | Cosmetic. A reader finds the file in one grep. Not worth a commit of its own; fix them the next time that file is edited — ⚠️ *and yes, that is precisely the "next time X is touched" deferral **F7** is about, which is the honest reason it is listed here rather than as a finding.* |
+
+---
+
+# SUMMARY
+
+| | Finding | Homes | Authoritative | Caught by | Fix |
+|---|---|---|---|---|---|
+| **F1** | 🔴 4 active service offerings fetched and dropped on a live tenant | 7 + 2 consumer buckets | DB CHECK | **nothing** | one complement bucket |
+| **F2** | 🔴 unknown `price_unit` silently coerced to `order`; the identical coercion was removed for `category` 25 lines above | 2 twins, 1 fixed | DB CHECK | **nothing** | 4 lines, pattern in-file |
+| **F3** | 🔴 the 12-function ceiling derived by nothing; already stale once, dangerously | ~170 | the filesystem | **nothing** | `readdirSync().length <= 12` |
+| **F4** | 🔴 a non-compiling test reports **green** in 18 of 24 mutant harnesses | 25 | `run-tests.mjs:70` | **nothing** — incl. their own baseline guard | `set -o pipefail; ` ×19 |
+| **F5** | 🔴 apply-state hand-written in 3 docs, wrong 3× in 3 days; **tech-debt #253's three "missing" tables are live** | 4 | the catalog | `--catalog`, which no gate runs | a close-out report |
+| **F6** | 🟡 corpus vs catalog disagree on 50 policies | 2 | `pg_policies` | **nothing** | see F5 |
+| **F7** | 🔴 *"fix it next time the order path is touched"* — touched 10×; `sale` is 9-of-9 NULL, newest 2026-09-09 | 3 + 6 like it | the emit site | **nothing** | a `TOUCHES:` field |
+| **F8** | 🔴 **`PLATFORM_STATE.md` still says 11 of 12, 1 slot headroom** — in the doc read first every session | F3's 4th home | the filesystem | **nothing** | delete the number |
+| **F9** | 🟡 7 completed extractions listed as "do next available session" | 1 | `ls` | CORE MANDATE r1 | delete 7 lines |
+| **F10** | 🟢 board header counts — **28 of 28 correct**, hand-maintained, drifted twice before | 2 | the cap's own output | **nothing compares them** | one comparison |
+| **F11** | 🟡 two latent enum drifts, 0 rows | 3 | DB CHECK | **nothing** | — |
+
+**If only one thing is done: F8.** A wrong number, in the dangerous direction, in the first document
+a session reads, guarding the one failure mode this platform has proven it cannot see.
+**If two: F8 and F4.** F4 is what decides whether every *"N/N mutants caught"* in the ledger means
+anything.
+
+---
+
+# OPEN QUESTIONS — WRITTEN DOWN RATHER THAN ASKED, PER THE RUN'S OWN RULE
+
+1. 🔴 **Is tech-debt #253 closed?** Its three tables are live with RLS and four policies each. What I
+   did **not** check is whether `OperationsSettings.tsx` now saves and `UppotPlan.tsx` now commits —
+   that needs a live click, not a catalog read. **The row should not simply be marked resolved on my
+   measurement alone.**
+2. 🔴 **Should `useServices.ts` render `maintenance` / `inspection` / `subscription` at checkout, or
+   filter them out deliberately?** F1 proves they are dropped *silently*; it does not prove they
+   *should* appear. Two different fixes: a third bucket, or an explicit `.in('category', [...])` on
+   the query so the exclusion is stated. **The second is honest and smaller; the first may be what
+   the discovery seeder intended when it wrote those rows.** Your call.
+3. 🟡 **Does `#185` stand?** See Method ②. It needs the rpc→table map, which its own cap calls owed.
+4. 🟡 **`count_reconcile` is 7-of-11 NULL `reason`** and no row names it. Is that a second instance of
+   #72, or already fixed at the emit site with old rows left behind? Its newest row is 2026-08-26.
+5. 🟡 **`PLATFORM_STATE.md` is stamped `Last verified: 2026-06-13` — 91 days.** F8 is one wrong row in
+   it. **I did not audit the other rows.** Given what one row turned out to be, that audit is worth
+   scheduling on its own.
+
+---
+
+*Recon #317 · `recon/one-fact-many-homes` · report only — nothing built, nothing fixed, nothing merged.*
