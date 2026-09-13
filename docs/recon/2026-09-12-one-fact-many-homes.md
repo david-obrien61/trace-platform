@@ -410,3 +410,59 @@ move is the same one: a separate catalog-mode report, run at close-out. #241 sta
 this is its blast radius, measured.
 
 ---
+## F7 — 🔴 THE FORECAST SHAPE: "FIX IT NEXT TIME THE ORDER PATH IS TOUCHED." THE ORDER PATH HAS BEEN TOUCHED TEN TIMES.
+
+This is the shape the prompt asked for specifically — **a line saying work is coming, with nothing
+linking it to the work** — and it has a clean, measurable instance.
+
+**Tech-debt #72, filed 2026-07-22**, cited verbatim in CLAUDE.md:233, `docs/tech-debt-log.md:404`
+and `docs/handoff-archive.md:1941` — **three copies of one deferral**:
+
+> *"the `sale` ledger row's `reason` is NULL while every neighbouring kind explains itself; **carry the
+> order number at the emit sites next time the order path is touched.**"*
+
+**[MEASURED] The trigger has fired TEN times.** `git log --since=2026-07-22 -- …/api/orders/submit.ts`
+→ **10 commits**, including `#303` (the ship-to address book) and `#301` (one stop, three screens),
+both this week.
+
+**[MEASURED] The defect is untouched, and still being written.** `business_inventory_ledger`, by kind:
+
+```
+kind               rows   reason NULL   newest row
+adjust               19        0        2026-09-07
+order_cancelled       2        0        2026-09-03
+order_committed      15        0        2026-09-09
+order_created        15        0        2026-09-09
+order_deleted         2        0        2026-09-08
+order_fulfilled      12        0        2026-09-09
+opening_balance     571        0        2026-08-25
+sale                  9        9        2026-09-09      🔴
+count_reconcile      11        7        2026-08-26      ⚠️ not named by #72
+```
+
+**`sale` is the only kind where every single row is unexplained**, and the newest one is dated
+**2026-09-09** — three days ago, inside the window in which the order path was being rewritten twice.
+Five sibling `order_*` kinds sitting beside it in the same table all explain themselves, 0 NULL out of
+47 rows. **So the fix is not hard and the shape to copy is adjacent; nothing has ever told anyone
+standing in that file that the deferral existed.**
+
+⚠️ **AND THE SWEEP FOUND A SECOND INSTANCE #72 DOES NOT NAME:** `count_reconcile` is **7 of 11 NULL**.
+Its newest row is 2026-08-26, so it may already be fixed at the emit site with the old rows left
+behind — [INFERRED, not checked]. Either way it is not in the row that would have caught it.
+
+**Who is authoritative:** the emit site. **The copies:** three documents describing an intention.
+**What breaks when the forecast is never claimed:** an inventory ledger where nine sales cannot be
+attributed to an order. Small today; permanent, because the table is append-only and its trigger
+refuses `UPDATE` even to `postgres` (tech-debt #70's finding).
+**Would anything catch it?** **No, and this is the structural half of the finding.** *"Next time X is
+touched"* names no file, no branch and no gate. Nothing reads the tech-debt log at the moment X is
+touched. The same phrasing appears in **four more places** — CLAUDE.md:597, tech-debt #294, #405, #411
+(*"Next time `verify-universals.mjs` is touched"*, *"next time the ledger is touched"*, *"next time
+either undo is touched"*) — plus AC-5's **"consolidate-when-touched"** in CLAUDE.md:101. **Six standing
+deferrals conditioned on an event nothing observes.**
+**WOULD FIX THE MECHANISM, NOT THE INSTANCES.** The instances are each small. The mechanism is one
+line in a tech-debt row — a `TOUCHES:` field naming the file — and a cap that prints any open row whose
+named file is in the current diff. That converts six invisible deferrals into six things a builder sees
+at the moment they are standing in the right file, which is the only moment they are cheap.
+
+---
