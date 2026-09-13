@@ -474,7 +474,11 @@ named file is in the current diff. That converts six invisible deferrals into si
 at the moment they are standing in the right file, which is the only moment they are cheap.
 
 ---
-## F8 — 🔴 **THE 12-FUNCTION COUNT IS STILL WRONG, IN THE DANGEROUS DIRECTION, IN THE DOC SESSIONS ARE TOLD TO READ FIRST.** (F3's fourth home — promoted out of Tier 3 when I found it)
+## F8 — 🔴 **THE 12-FUNCTION COUNT IS STILL WRONG, IN THE DANGEROUS DIRECTION, IN THE DOC SESSIONS ARE TOLD TO READ FIRST.**
+
+> ⚠️ **TIER 1 BY CONSEQUENCE, PRINTED HERE BY ACCIDENT OF ORDER.** It is F3's fourth home and was
+> drafted as a Tier 3 line; the measurement moved it. It is left in sequence rather than renumbered,
+> because F-numbers are already cited in the commit log and in the close-out row.
 
 `PLATFORM_STATE.md:96` [MEASURED, unchanged today]:
 
