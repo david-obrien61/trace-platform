@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
+**Last updated: 2026-09-14** (ledger #329 — two BOM rulings; the mix half of the install-cost pair is CLOSED and the mulch half is not, so the net effect has moved further from zero. Prior: #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,15 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#329 — two BOM rulings (R-155 one mix ratio · R-156 the ring function)**
+- ✅ **ANSWERED IN-SESSION 2026-09-14 — the √ fit.** *"Through"* both anchors needs `d = a√g + b`; no single-coefficient `d = k√g` hits both (k from 15 → 12.58 ft at 95; k from 95 → 4.77 ft at 15). **You confirmed the through-both reading.** Recorded because **no owner-test on real LAWNS sizes can tell the readings apart** — both are exact at 15 and 95. Owns: `docs/RULINGS.md` R-156.
+- 🔴 **OPEN AND IT IS THE ONE THAT COSTS MONEY — WHERE IS THE INSTALL COST MODEL?** R-155 fixed the RATIO; the model holding the old 0.7 **is not in this repo** (whole-tree grep: `7.49`/`43.12`/`23.55` → one unrelated hit; `thirds` → none). **Until it is found, tech-debt #299 cannot be worked**, and the net effect on install cost is not merely uncomputed — **mix went UP ~30% at every size and mulch has not come OUT.** Owns: `docs/tech-debt-log.md` #299.
+- 🔴 **OPEN — THE RENUMBER IS THE CALL TO OVERRULE.** The load-list branch's tech-debt `#290`/`#291`/`#292` collided with three different items on `main`. Under [[R-148]] clause (4) the unmerged claim moved: **#290→#299 · #291→#300 · #292→#301.** Owns: `docs/tech-debt-log.md`.
+- 🟡 **OPEN — SHOULD THE DUPLICATE CHECK SEE BOTH ROW FORMATS?** I fixed the NEXT-FREE arithmetic (it was handing out taken ids) and **deliberately did not widen clause A**: a `## #N` heading and a `| N |` table row sharing one id still passes. The cap's own comment records the opposite intent, and a cap red on arrival against 270 rows is one people switch off (#73). **Measure the live duplicate count first, then widen or declare.** Owns: `docs/tech-debt-log.md` #303.
+- 🟡 **OPEN — TEN COPIES OF THE COMMENT-STRIPPER, EIGHT WITH NO REACH CONTROL.** Not urgent, none known broken; a stripper that quietly stops working turns every negative probe downstream of it green. Owns: `docs/tech-debt-log.md` #302.
+- ✏️ **DISCLOSED, NOT A QUESTION:** this branch was **rebased onto `origin/main` mid-build**. It was cut from `origin/feat/delivery-day-load-list` (unmerged, your hold) because `BOM_RULES` exists nowhere else, and that branch was 2 days stale — archiving §3 from it would have produced three byte-identical duplicates, auto-merged with no conflict, which is the defect #325's hook exists to catch.
+- ✏️ **DISCLOSED:** ledger row **#315** is declared in `handoff-entry-declarations.json` as carrying no §3 entry. **It was invisible to the 2026-09-14 sweep because that sweep read `main` and its branch is unmerged** — the gate finds these only when a branch arrives, which is what happened on the rebase.
 
 **#325 — the pre-commit hook (one check)**
 - 🔴 **NOT A QUESTION, A STANDING LIMIT YOU SHOULD KNOW: THE HOOK IS NOT ENFORCEMENT.** `git commit --no-verify` fires no hook at all and the broken state commits cleanly — **measured, not asserted**. No server-side check, no CI, no audit notices. A fresh clone that never runs `npm install` has no hook either. **It catches the accident; it stops nobody who means it.**

@@ -259,6 +259,19 @@ export function LoadList() {
               <div style={S.flag} className="ll-flag">
                 <strong>Deer fence — add by hand</strong>
                 <div style={S.note}>{LOAD_LIST_COPY.deerFenceGap}</div>
+                <div style={S.note}>{LOAD_LIST_COPY.ringRule}</div>
+                {/* 🔴 R-156: the FEET, per size, so the hand-add is read off rather than worked
+                    out on a trailer. Every figure comes from the model — `ringDiameterFeet` is
+                    total, so a size we have never sold still prints a number here. */}
+                {model.trees.map(t => (
+                  <div key={`fence|${t.name}|${t.gallons}`} style={S.row} className="ll-row">
+                    <span>{t.name} {t.sizeText} × {t.quantity}</span>
+                    <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
+                      {t.ringDiameterFeet.toFixed(1)} ft ring · {Math.ceil(t.fenceFeetPerTree)} ft fence per tree
+                      {' · '}{Math.ceil(t.fenceFeetPerTree) * t.quantity} ft if all {t.quantity} fenced
+                    </span>
+                  </div>
+                ))}
                 <div style={S.note}>{LOAD_LIST_COPY.deerFence95Open}</div>
               </div>
 

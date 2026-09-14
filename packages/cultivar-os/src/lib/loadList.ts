@@ -22,7 +22,8 @@
 //               @trace/shared/utils/sizeLabel (normalizeSize). Otherwise PURE — no db, no clock,
 //               no DOM, no env.
 // OUTPUTS:      LoadItemKind · ResolvedLoadItem · LoadStop · LoadListModel · BOM_RULES ·
-//               LOAD_LIST_COPY · GALLONS_PER_CUBIC_YARD · resolveLoadItem · buildLoadList.
+//               RING_ANCHORS · ringDiameterFeet · ringCircumferenceFeet · LOAD_LIST_COPY ·
+//               GALLONS_PER_CUBIC_YARD · resolveLoadItem · tPostsFor · buildLoadList.
 //
 // AC-1: this file lives in `cultivar-os`, NOT in `shared`, and deliberately. Its vocabulary —
 //       tree, special mix, T-post, bubbler, deer fence — is a TREE FARM's bill of materials, and
@@ -42,26 +43,40 @@ import type { StopOrderItem } from './stopLoad';
 export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
 
 /**
- * 🔴 DAVID'S BILL OF MATERIALS, 2026-09-12 — FROM HIM, NOT FROM THE INSTALL COST MODEL.
+ * 🔴 DAVID'S BILL OF MATERIALS — dictated 2026-09-12, CORRECTED BY TWO RULINGS 2026-09-14.
  *
- * The cost model and this list DISAGREE, twice, and the disagreements are filed as tech-debt
- * #290 and #291 rather than reconciled here:
- *   · SPECIAL MIX — the cost model uses a 0.7 ratio (23.55 gal at 45G). David: approximately ONE
- *     container volume per tree, and *"err large, do not skimp."* This list uses 1.0.
- *   · MULCH — the cost model carries a mulch line ($7.49 at 15G to $43.12 at 95G). Lauren states
- *     mulch is NOT used; only the ingredients in the special mix (tech-debt #290). There is no
- *     mulch row here and there must not be one.
+ * [[R-155]] — ONE MIX RATIO, AND IT IS 1.0. *"1 gal of mix per 1 gal of container. One ratio, not
+ * two. A 45 gallon tree takes 45 gallons of mix, for loading AND for costing."* His reasoning is
+ * physical rather than a tolerance: *"fill it to the top, it settles on the drive, water it and it
+ * compacts. The container volume is not an overestimate, it is roughly what goes in."*
+ *   🔴 **SO THERE IS NO COSTING RATIO AND NO LOADING RATIO. Do not re-split this key.** The split
+ *     was a live proposal — `mixRatioCosting` / `mixRatioLoading` — and the ruling removes a key
+ *     rather than adding one. A second ratio would be two representations of one fact (STD-011),
+ *     and the copy that drifts is always the one nobody loads against.
+ *   🔴 **`OPERATIONS_DEFAULTS.tradeGallonFactor = 0.7` IS A DIFFERENT FACT AND STAYS AT 0.7.** It
+ *     is trade gallons vs true gallons — a statement about the POT, used by the uppot production
+ *     model (`productionMath.ts`). It is NOT a mix ratio, it never was, and the fact that both
+ *     numbers were 0.7 is a coincidence that has already cost one reconciliation. **The BOM does
+ *     not touch it.** Anyone "unifying" the two 0.7s is merging a pot measurement into a recipe.
+ *
+ * ⚠️ MULCH — still absent, and now on the ruling as well as on Lauren's statement. The install cost
+ * model carries a mulch line ($7.49 at 15G to $43.12 at 95G); mulch is NOT used, only the
+ * ingredients in the special mix. There is no mulch row here and there must not be one. That model
+ * is NOT in this repo (grepped: zero hits for either figure) — see tech-debt #299.
  */
 export const BOM_RULES = {
-  /** Container volumes of special mix per tree. 1.0, not the cost model's 0.7 (tech-debt #291). */
-  mixRatioOfContainerVolume: 1.0,
+  /**
+   * Container volumes of special mix per tree. **1.0 — the only ratio there is** ([[R-155]]).
+   * A 45 gallon tree takes 45 gallons, for loading and for costing alike.
+   */
+  mixContainerVolumesPerTree: 1.0,
   /** 🔴 T-POSTS ARE COMPUTED FROM THE CONTAINER, NOT LOOKED UP. 2 per tree up to and INCLUDING
    *  65 gallon; 4 per tree at 95 gallon AND ANYTHING LARGER. There is no upper bound and no
    *  hand-work case. See `tPostsFor` for why the table this replaced was the defect. */
   tPostsSmallThresholdGallons: 65,
   tPostsAtOrBelowThreshold: 2,
   tPostsAboveThreshold: 4,
-  /** Feet of rope per T-post. */
+  /** Feet of rope per T-post. This is the STAKING rope and has nothing to do with the ring. */
   ropeFeetPerTPost: 4,
   /** Bubblers per tree. */
   bubblersPerTree: 1,
@@ -72,6 +87,62 @@ export const BOM_RULES = {
    *  person to apply by hand, which is what David asked for rather than a stop. */
   deerFenceTPostsPerTree: 4,
 } as const;
+
+/**
+ * 🔴 [[R-156]] — THE RING DIAMETER IS A TOTAL FUNCTION OF CONTAINER GALLONS, NEVER A TABLE.
+ *
+ * David, 2026-09-14: *"Ring diameter scales with the square root of container gallons, through
+ * 15 gal → 5 ft and 95 gal → 12 ft. A total function, never a table — a lookup that stops at 95 is
+ * what dropped the 200 gallon Live Oak on 2026-08-29, and rope is a quantity so a missing one reads
+ * as zero."*
+ *
+ * ⚠️ **THAT LAST CLAUSE IS THE REASON THIS IS A FUNCTION AND NOT A LOOKUP, AND IT IS THE SAME
+ * DEFECT `tPostsFor` ALREADY CARRIES A SCAR FROM.** A table answers only for the sizes somebody
+ * thought to type. Every size nobody typed returns nothing, and **nothing printed beside a
+ * quantity heading reads as zero** — the yard person loads no fence and nothing on the page said
+ * it could not work one out. So the rule is total: a 200 gallon, a 300 gallon and a size nobody
+ * has sold yet all resolve, and the ANCHORS are the parameters rather than the answers.
+ *
+ * 🔴 **WHY √ NEEDS TWO PARAMETERS AND NOT ONE, RECORDED BECAUSE IT IS A CHOICE.** The simplest
+ * reading of *"scales with the square root"* is `d = k·√g`, and **no single k passes through both
+ * anchors**: k from 15 gal gives 12.58 ft at 95 (the anchor says 12); k from 95 gal gives 4.77 ft
+ * at 15 (the anchor says 5). David gave both anchors and said *through*, so the curve is fitted
+ * THROUGH both — `d = a·√g + b` — which is exact at 15 and at 95 and √-shaped between and beyond.
+ * ⚠️ **The two readings differ by up to ~6% away from the anchors** (at 200 gal: 17.2 ft here,
+ * 18.3 ft for k-from-15, 17.4 ft for k-from-95). ✅ **PUT TO DAVID RATHER THAN ASSUMED, AND
+ * CONFIRMED 2026-09-14: through BOTH anchors.** Recorded here because the three readings are
+ * **exact at 15 and 95 alike**, so no owner-test on a size LAWNS actually sells can tell them
+ * apart — the anchors are the only place the curve is pinned, and everything between and beyond
+ * rests on that one word.
+ */
+export const RING_ANCHORS = [
+  { gallons: 15, diameterFeet: 5 },
+  { gallons: 95, diameterFeet: 12 },
+] as const;
+
+/** `a` and `b` in `d = a·√g + b`, DERIVED from the two anchors rather than typed. Change an anchor
+ *  and the curve moves with it; there is no second place holding a stale coefficient. */
+const RING_FIT = (() => {
+  const [lo, hi] = RING_ANCHORS;
+  const a = (hi.diameterFeet - lo.diameterFeet) / (Math.sqrt(hi.gallons) - Math.sqrt(lo.gallons));
+  return { a, b: lo.diameterFeet - a * Math.sqrt(lo.gallons) };
+})();
+
+/**
+ * Watering-ring diameter in feet for a tree in a container of this many gallons. **TOTAL — every
+ * non-negative gallon figure gets a number, at every size, with no upper bound and no hand-work
+ * case.** Exact at both anchors by construction.
+ */
+export function ringDiameterFeet(gallons: number): number {
+  const g = gallons > 0 ? gallons : 0;
+  return RING_FIT.a * Math.sqrt(g) + RING_FIT.b;
+}
+
+/** Feet around the ring — what deer fence is measured in, because it is bought by the roll.
+ *  David, 2026-09-12: *"Fence material is by the roll, measured as the circumference of the ring."* */
+export function ringCircumferenceFeet(gallons: number): number {
+  return Math.PI * ringDiameterFeet(gallons);
+}
 
 /** What one line turned out to be. Four outcomes, all of them printed — see the header. */
 export type LoadItemKind =
@@ -112,6 +183,12 @@ export interface TreeTally {
   quantity: number;
   /** T-posts for this row. Always a number — every readable container size has a rule. */
   tPosts: number;
+  /** Watering-ring diameter in feet for ONE tree of this size ([[R-156]]). Always a number. */
+  ringDiameterFeet: number;
+  /** Feet of deer fence for ONE tree of this size — the ring's circumference, bought by the roll.
+   *  🔴 NOT added into any day total: nothing in the data says which trees are fenced. It is here
+   *  so the printed page carries a NUMBER for the hand-add instead of a rule to work out. */
+  fenceFeetPerTree: number;
 }
 
 export interface LoadStop {
@@ -300,6 +377,8 @@ function tallyTrees(items: ResolvedLoadItem[]): TreeTally[] {
       gallons: it.gallons,
       quantity: it.quantity,
       tPosts: tPostsFor(it.gallons),
+      ringDiameterFeet: ringDiameterFeet(it.gallons),
+      fenceFeetPerTree: ringCircumferenceFeet(it.gallons),
     });
   }
   // Biggest first: the yard person loads big trees before small ones, and the exceptions (the
@@ -345,7 +424,7 @@ export function buildLoadList(date: string, input: LoadStopInput[]): LoadListMod
     const items = s.items.map(resolveLoadItem);
     const trees = tallyTrees(items);
     const treeCount = trees.reduce((n, t) => n + t.quantity, 0);
-    const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixRatioOfContainerVolume, 0);
+    const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixContainerVolumesPerTree, 0);
     const tPosts = trees.reduce((n, t) => n + t.tPosts * t.quantity, 0);
     const unresolvedCount = items.filter(i => i.kind === 'unresolved').length;
 
@@ -359,7 +438,7 @@ export function buildLoadList(date: string, input: LoadStopInput[]): LoadListMod
   const allItems = stops.flatMap(s => s.items);
   const trees = tallyTrees(allItems);
   const treeCount = trees.reduce((n, t) => n + t.quantity, 0);
-  const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixRatioOfContainerVolume, 0);
+  const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixContainerVolumesPerTree, 0);
   const tPosts = trees.reduce((n, t) => n + t.tPosts * t.quantity, 0);
   const unresolved = allItems.filter(i => i.kind === 'unresolved');
 
@@ -386,17 +465,22 @@ export function buildLoadList(date: string, input: LoadStopInput[]): LoadListMod
 /** Every sentence the printed page can say, in ONE place (STD-011). None of them is a blank. */
 export const LOAD_LIST_COPY = {
   mixFirst: 'Loads FIRST — trees on top.',
-  mixRule: 'About one container volume of mix per tree (a 45 gallon tree takes about 45 gallons).',
+  mixRule: 'One container volume of mix per tree — a 45 gallon tree takes 45 gallons. Fill to the top: it settles on the drive and compacts when watered.',
   tPostRule: 'T-posts are the stake kit — 2 per tree up to and including 65 gallon, 4 per tree at 95 gallon and anything larger.',
   ropeRule: 'About 4 ft of rope per T-post.',
   bubblerRule: 'One bubbler per tree.',
   noMulch: 'No mulch. Only the ingredients in the special mix.',
+  /** The ring rule, in the yard person's words. The NUMBER is printed per tree row beside it. */
+  ringRule: 'Ring diameter grows with the square root of container gallons — 5 ft at 15 gallon, 12 ft at 95 gallon, and a figure for every size above and between.',
   /** 🔴 The deer-fence gap, printed rather than hidden. Measured 2026-09-12: nothing in the data
-   *  marks a stop as needing fence — zero order lines and zero stop notes across the tenant. */
+   *  marks a stop as needing fence — zero order lines and zero stop notes across the tenant.
+   *  ✏️ WHAT CHANGED 2026-09-14 ([[R-156]]): the page used to print the RULE and stop. It now
+   *  prints the FEET, per tree size, because the ring function is total — so the hand-add is a
+   *  number to read off rather than an arithmetic problem on a trailer. */
   deerFenceGap:
     'DEER FENCE — nothing recorded. Nothing in the system marks which stops need deer fence, so none is counted above. '
     + 'Add by hand: a fenced tree needs 4 T-posts in total, so a tree that already has 2 needs 2 MORE. '
-    + 'Fence material is by the roll, measured as the circumference of the ring.',
+    + 'Fence material is by the roll, measured as the circumference of the ring — the feet per tree are listed against each size below.',
   deerFence95Open:
     'At 95 gallon and above a tree already has 4 T-posts — whether deer fence needs 4 more or reuses them is not settled. Ask before loading.',
   floorsNote:

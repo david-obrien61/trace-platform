@@ -79,6 +79,35 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #329 (`fix/bom-one-mix-ratio-and-ring-function`, 2026-09-14)
+
+- 🔴 **TWO BOM RULINGS APPLIED — [[R-155]] REMOVES A CONFIG KEY, [[R-156]] REPLACES A TABLE THAT WAS
+  NEVER WRITTEN.** BUILDER-COMPLETE, owner-proof **OWED** (`load-list` **CARD 13 new · CARD 5
+  rewritten**, board 0 of 13). No migration, no schema, no permission string, api/ 12/12.
+  **① ONE MIX RATIO, AND IT IS 1.0** — one gallon of mix per gallon of container, *for loading AND
+  for costing*. The reasoning is physical, not a safety margin: *"it settles on the drive and
+  compacts."* **So the ruling REMOVES a key** — the `mixRatioCosting`/`mixRatioLoading` split is
+  dead (*"One key or none"*) — and `tradeGallonFactor = 0.7` stays untouched as a fact about the POT.
+  **② RING DIAMETER IS A TOTAL √ FUNCTION OF CONTAINER GALLONS**, through 15 gal → 5 ft and
+  95 gal → 12 ft. **The `tPostsFor` five-row-table defect, caught one quantity over before it was
+  written** — the 200 gallon Live Oak reads ~17.2 ft ring / ~55 ft fence where a lookup prints
+  nothing, and *"rope is a quantity so a missing one reads as zero."*
+  - 🔴 **THE HALF THAT COSTS MONEY IS STILL OPEN AND THE PAIR HAS MOVED FURTHER FROM ZERO.**
+    R-155 closed MIX (up ~30% at every size); **tech-debt #299 has not closed MULCH**, and nobody has
+    computed the net. 🔴 **The install cost model is NOT IN THIS REPO** — grep for `7.49`/`43.12`/
+    `23.55` returns one unrelated hit, `thirds` returns none. **Locating it is step one**, and R-155
+    requires it ship **printing OLD AND NEW SIDE BY SIDE**: *"a pricing event, not a refactor."*
+    ⚠️ `BOM_RULES` was already 1.0, so **nothing a customer is charged moved.**
+  - 🔴 **A CAP WAS HANDING OUT TAKEN IDS, AND THAT IS WHY THIS BRANCH RENUMBERED THREE.**
+    `verify-id-citations` computed NEXT FREE over `## #N` headings only while the log also holds
+    ~163 legacy TABLE rows its own clause B has counted since 2026-09-11. **Rows 107 → 270; the
+    "unused ids" list 187 → 28.** The load-list branch's `#290`/`#291`/`#292` had collided with three
+    different items on `main` — **#290→#299 · #291→#300 · #292→#301** under [[R-148]] clause (4).
+  - ⚠️ **BRANCHED OFF THE UNMERGED `feat/delivery-day-load-list` (David's hold), THEN REBASED ONTO
+    `main`.** `BOM_RULES` exists nowhere else. The rebase was deliberate: archiving §3 from a 2-day-old
+    base would have re-archived three entries `main` already held — **byte-identical duplicates,
+    auto-merged with no conflict**, which is the defect #325's hook exists to catch.
+
 ### 🟡 PUSHED, NOT MERGED — #322 (`fix/import-preview-field-checks`, 2026-09-14)
 
 - 🔴 **THE IMPORT PREVIEW NOW RUNS TWO FIELD CHECKS BEFORE ANYTHING IS WRITTEN** — BUILDER-COMPLETE,

@@ -1,4 +1,5 @@
-# Last updated: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
+# Last updated: 2026-09-14 (**#329 — TWO BOM RULINGS: [[R-155]] ONE mix ratio at 1.0 container volumes (no costing/loading split — the ruling REMOVES a key), [[R-156]] ring diameter as a TOTAL √ function of container gallons.** No migration, no schema, no permission string, api/ 12/12. See the *Delivery day load list* entry.) See also:
+# (prior line, preserved: **#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
 # (prior line, preserved: **#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
 # (prior line, preserved: **#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
 # (prior line, preserved: **#321 — THE PRODUCTION STAMP, MERGED AND READ LIVE.** `origin/main` = `15fe4f2`; `cultivar-os.app` renders **`built Sep 14, 12:28p · 15fe4f2 · prod`** — quiet, no amber chip — **traced through the shipped minified bundle** (`jJ("production","main")` → `{label:"prod", loud:false}`), not inferred from source. The bundle carries its **deployment target**, not only its SHA: `vite.config.ts` bakes `VERCEL_ENV`/`VERCEL_GIT_COMMIT_REF`, the pure `src/lib/deployStamp.ts` turns them into `{label, loud, reason}`, `<VersionStamp>` renders it on every screen. **GATE 0 on all 40 boards now requires the last token to read `prod`.** ⚠️ **Not rendered in a browser — under OP-14 the card flip is David's.** ⚠️ **tech-debt #280 → 🟡 PARTIAL: ② is OBSERVABLE, NO CAP ASSERTS IT; ① still owed and now carries this session's own unpushed-merge incident.** **#294a** separated out — a shell pipe inside inline code splits a ledger row and GFM discards the overflow silently, **a defect #320 made more likely** — with a **check PROPOSED, not built**.)
@@ -3240,7 +3241,7 @@ A board count that does not say which tree it came from cannot be compared to an
 intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes the race.**
 
 
-## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315)
+## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315) · **corrected by two rulings 2026-09-14 (#329)**
 
 **What it is.** `/load-list?date=YYYY-MM-DD` — a printable sheet for the person loading the trailer.
 **Consolidated is the headline, per-stop breakdown underneath** (David's ruling): the yard person
@@ -3257,12 +3258,31 @@ naming a unit — are IMPORTED from shared (`readProductFromDescription`, `parse
 `normalizeSize`) rather than re-implemented (R-27, §6 r8). The day is read through the existing
 `readStops`, so the load list, the schedule, the route and the order screen compose one stop.
 
-**The bill of materials — David's, 2026-09-12, NOT the install cost model's.** ~1 container volume
-of special mix per tree at every size · **2 T-posts up to and including 65 gallon, 4 above, no upper
-bound** (the T-posts ARE the stake kit) · ~4 ft rope per post · 1 bubbler per tree · **no mulch.**
-🔴 **The rule is COMPUTED, not looked up.** The first cut used a five-row table and the 200 gallon
-Live Oak on Saturday 2026-08-29 fell off the end into a hand-work note. Mutant **A2d** re-applies
-the table and is caught.
+**The bill of materials — David's, dictated 2026-09-12, RULED 2026-09-14.** **Exactly 1 container
+volume of special mix per tree at every size** · **2 T-posts up to and including 65 gallon, 4 above,
+no upper bound** (the T-posts ARE the stake kit) · 4 ft rope per post · 1 bubbler per tree · **no
+mulch** · **a watering-ring diameter at every size, and deer fence as its circumference.**
+
+🔴 **[[R-155]] — ONE MIX RATIO, AND IT IS 1.0, FOR LOADING AND FOR COSTING ALIKE.** *"1 gal of mix
+per 1 gal of container. One ratio, not two."* The reasoning is physical, not a safety margin, and
+that is what makes it a single number: *"fill it to the top, it settles on the drive, water it and
+it compacts."* **The ruling REMOVES a key rather than adding one** — a proposed
+`mixRatioCosting`/`mixRatioLoading` split is forbidden at the code (*"One key or none"*), guarded by
+probe **A1b** and mutant **A1b**. ⚠️ **`tradeGallonFactor = 0.7` is a DIFFERENT fact and is left
+alone** — trade gallons vs true gallons, about the POT, owned by the uppot production model; probe
+**A1c** refuses any read of it from the BOM, because the two numbers being equal is a coincidence
+that had already cost one reconciliation.
+
+🔴 **BOTH SIZE RULES ARE COMPUTED, NOT LOOKED UP — AND THE SECOND ONE EXISTS BECAUSE OF THE FIRST.**
+The T-post rule's first cut was a five-row table and the 200 gallon Live Oak on Saturday 2026-08-29
+fell off the end into a hand-work note. **[[R-156]] applies the same lesson to the ring before it
+could be repeated:** diameter scales with the **square root of container gallons**, fitted THROUGH
+David's two anchors (15 gal → 5 ft, 95 gal → 12 ft), total at every size with no upper bound.
+His reason is the load sheet's whole thesis in one line: *"rope is a quantity so a missing one reads
+as zero."* Mutants **A2d** (the T-post table) and **H2** (the same table one quantity over, in the
+ring) are both caught. ⚠️ **Reading *"through"* as passing through BOTH anchors is an INFERENCE** —
+it needs `d = a√g + b`; a single-parameter `d = k√g` hits neither pair and differs by up to ~6%
+away from the anchors. Recorded, and flagged to David.
 
 **🔴 It never silently omits what it could not compute.** Four line kinds, all printed: `tree` ·
 `other_goods` · `no_size_stated` (**a statement about what we could READ, never a claim the line is
@@ -3270,14 +3290,24 @@ a fee** — R-144/#139) · `unresolved`, which carries the raw text it failed on
 **withheld**; a failed read is not an empty one; either makes every total a declared **FLOOR**.
 
 **STATE.** 🔨 **BUILDER-COMPLETE on `feat/delivery-day-load-list` — NOT MERGED, on David's
-instruction.** `npm run verify` exit 0 ZERO NET-NEW · **82 + 34 assertions** · **31/32 mutants
-caught, 0 never applied** (the 1 survivor is a declared reach control, proven CAUGHT by the page
-suite) · **NO migration · NO schema · NO permission string · api/ 12/12** · `[TRACE:LOADLIST]` ON.
+instruction** — plus `fix/bom-one-mix-ratio-and-ring-function` (#329), branched off it because
+`BOM_RULES` exists nowhere else. `npm run verify` exit 0 ZERO NET-NEW · **97 + 34 assertions** ·
+**39/40 mutants caught, 0 never applied** (the 1 survivor is a declared reach control, proven CAUGHT
+by the page suite) · **NO migration · NO schema · NO permission string · api/ 12/12** ·
+`[TRACE:LOADLIST]` ON.
 **Reproduces Saturday 2026-08-29 from live data: 6 stops · 11 trees · 2½ yd mix · 24 T-posts ·
-96 ft rope · 11 bubblers**, 1 unresolved line printed.
-**Owner-proof owed → `docs/owner-tests/load-list-full-surface-test.md` (12 cards, 0 covered).**
+96 ft rope · 11 bubblers**, 1 unresolved line printed — **and now ~17.2 ft of ring / ~55 ft of fence
+on that 200 gallon Live Oak**, where a lookup would have printed nothing.
+**Owner-proof owed → `docs/owner-tests/load-list-full-surface-test.md` (13 cards, 0 covered).**
+**CARD 5 was rewritten and its proof reset** (the deer-fence block now prints feet, not a rule);
+**CARD 13 is new** (the mix ruling).
 
-**⚠️ KNOWN GAPS, each filed:** deer fence is recorded NOWHERE (the page prints the rule for a hand
-add) · **tech-debt #292** — 9 real trees state a gallon size the resolver cannot reach, printed
-honestly and not counted · **#290/#291** — the install cost model's mulch line and 0.7 mix ratio,
-which pull opposite ways and must be corrected together.
+**⚠️ KNOWN GAPS, each filed:** deer fence **CAPTURE** is recorded NOWHERE — nothing says WHICH trees
+need it, so the page prints a per-size figure for a hand add and **no day total, deliberately** ·
+**tech-debt #301 (was #292)** — 9 real trees state a gallon size the resolver cannot reach, printed
+honestly and not counted · 🔴 **tech-debt #299 (was #290) — the install cost model's mulch line is
+STILL OPEN while its sibling is closed**, so **the net effect on install cost is not merely
+uncomputed, it has moved further from zero**: mix went UP ~30% at every size and mulch has not come
+OUT. **And the model holding those numbers is not in this repo** (grepped: `7.49`/`43.12`/`23.55`
+return one unrelated hit; `thirds` returns none) — locating it is step one, and [[R-155]] requires
+it ship **printing OLD AND NEW SIDE BY SIDE**, *"a pricing event, not a refactor."*

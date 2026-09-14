@@ -19,14 +19,34 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  BOM_RULES, GALLONS_PER_CUBIC_YARD, LOAD_LIST_COPY,
-  buildLoadList, resolveLoadItem, tPostsFor,
+  BOM_RULES, GALLONS_PER_CUBIC_YARD, LOAD_LIST_COPY, RING_ANCHORS,
+  buildLoadList, resolveLoadItem, tPostsFor, ringDiameterFeet, ringCircumferenceFeet,
   type LoadStopInput,
 } from './loadList';
 import type { StopOrderItem } from './stopLoad';
 
 const SELF = join(process.cwd(), 'packages/cultivar-os/src/lib/loadList.ts');
 const src = readFileSync(SELF, 'utf8');
+
+/**
+ * The source with comments removed. 🔴 EVERY "this must NOT appear" CHECK RUNS AGAINST THIS, NOT
+ * AGAINST `src` — and this file earned that the hard way within an hour of the rulings landing.
+ *
+ * The [[R-155]] probes went RED against correct code, because the ruling's own explanation names
+ * the very strings it forbids (*"there is no `mixRatioCosting` and no `mixRatioLoading`"*,
+ * *"`tradeGallonFactor` is a DIFFERENT fact"*). The probe was reading its subject's PROSE as its
+ * subject — **tech-debt #146**, and the sibling `loadListPage.test.ts` carries the identical scar
+ * from the identical cause. **Documenting a defect is a reliable way to commit it.**
+ *
+ * ⚠️ Deliberately crude: block and line comments and nothing else. Not a parser, and never used
+ * for a POSITIVE assertion, where a false negative would silently pass.
+ * ⚠️ **ELEVENTH COPY OF THIS FIVE-LINE IDIOM IN THE REPO** — five test files and five `scripts/`
+ * caps carry their own. Matching the sibling in this directory rather than minting an eleventh
+ * shape; the class is filed as **tech-debt #302** (§6 r8), not fixed inside a rulings pass.
+ */
+const code = src
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n').map(l => l.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -48,17 +68,39 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   orderId: 'o1', canReadLines: true, linesRead: true, items, ...over,
 });
 
-// ══ §A THE BILL OF MATERIALS IS DAVID'S, AND IT DISAGREES WITH THE COST MODEL ══════
+// ══ §A THE BILL OF MATERIALS IS DAVID'S, AND TWO RULINGS HAVE CORRECTED IT ════════
 {
-  // A1 — the mix ratio. 🔴 The install cost model uses 0.7 (23.55 gal at 45G); David ruled ~1.0
-  // and *"err large, do not skimp."* If this ever silently becomes 0.7 again, every load is short.
-  ok(BOM_RULES.mixRatioOfContainerVolume === 1.0,
-    '🔴 A1: the mix ratio is 1.0 container volumes per tree — NOT the cost model’s 0.7 (tech-debt #291)');
+  // A1 — 🔴 [[R-155]]: ONE mix ratio, and it is 1.0. *"1 gal of mix per 1 gal of container. One
+  // ratio, not two — for loading AND for costing."* If this ever silently becomes 0.7, every load
+  // is short and every install cost is understated by ~30%.
+  ok(BOM_RULES.mixContainerVolumesPerTree === 1.0,
+    '🔴 A1: the mix ratio is 1.0 container volumes per tree, for loading AND costing ([[R-155]])');
+
+  // A1b (negative) — 🔴 THE RULING REMOVES A KEY RATHER THAN ADDING ONE. The live proposal was to
+  // split this into `mixRatioCosting` and `mixRatioLoading`; David: *"One key or none."* Asserted
+  // over the SOURCE because the regression is a SHAPE — a second ratio — not a wrong number, and
+  // two representations of one fact drift apart silently (STD-011).
+  ok(!/mixRatioCosting|mixRatioLoading/.test(code),
+    '🔴 A1b (negative): there is NO costing/loading ratio split — one key or none ([[R-155]])');
+
+  // A1c (negative) — 🔴 AND THE OTHER 0.7 IS A DIFFERENT FACT. `tradeGallonFactor = 0.7` is trade
+  // gallons vs true gallons, a statement about the POT, owned by the uppot production model. The
+  // BOM does not touch it, and merging the two 0.7s would put a pot measurement in a recipe.
+  ok(!/tradeGallonFactor/.test(code),
+    '🔴 A1c (negative): the BOM never reads tradeGallonFactor — it is a pot fact, not a mix ratio');
+
+  // A1d — 🔴 THE REACH CONTROL, and it is not decoration: A1b and A1c BOTH failed against `src`
+  // because the ruling's own explanation names the strings it forbids. Without this probe, a
+  // stripper that silently stopped working would turn A1b/A1c green on a file that had the split
+  // back in it (tech-debt #182 — a check that cannot reach its target reports the same as a pass).
+  ok(/mixRatioCosting/.test(src) && !/mixRatioCosting/.test(code)
+     && /tradeGallonFactor/.test(src) && !/tradeGallonFactor/.test(code),
+    '🔴 A1d: the comment stripper is REACHING — both forbidden names are in the prose and NOT in the code');
 
   // A2 (negative) — the cost model's mulch line is materials that are never bought. Lauren states
   // mulch is not used. Asserted over the SOURCE so nobody can add one back quietly.
   ok(!/\bmulch\s*[:=]/i.test(src) && !/mulchPerTree|mulchYards|mulchBags/i.test(src),
-    '🔴 A2 (negative): there is NO mulch quantity anywhere in the model (tech-debt #290)');
+    '🔴 A2 (negative): there is NO mulch quantity anywhere in the model (tech-debt #299)');
   ok(/no mulch/i.test(LOAD_LIST_COPY.noMulch),
     'A3: the page says so out loud rather than merely omitting it');
 
@@ -96,6 +138,75 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   // trailer, so it is pinned to the definition (46,656 in³ / 231 in³) rather than a typed decimal.
   ok(Math.abs(GALLONS_PER_CUBIC_YARD - 201.974025974) < 1e-6,
     'A11: 201.974 US gallons per cubic yard, from the cubic-inch definition');
+}
+
+// ══ §H THE RING IS A TOTAL FUNCTION ([[R-156]]) ════════════════════════════════════
+// 🔴 THE SAME DEFECT SHAPE AS THE T-POST TABLE, ONE QUANTITY OVER. A lookup that stops at 95
+// returns nothing for a 200 gallon tree, and *nothing printed beside a quantity heading reads as
+// zero* — the yard person loads no fence and the page never said it could not work one out. So
+// every probe below is about TOTALITY first and the anchors second.
+{
+  // H1 — exact at both anchors, by construction rather than by rounding luck.
+  ok(Math.abs(ringDiameterFeet(15) - 5) < 1e-9,
+    '🔴 H1: 15 gallon → 5 ft, David’s first anchor, exactly');
+  ok(Math.abs(ringDiameterFeet(95) - 12) < 1e-9,
+    '🔴 H1b: 95 gallon → 12 ft, David’s second anchor, exactly');
+
+  // H2 — 🔴 THE PROPERTY THAT REPLACES A TABLE. Every size answers with a finite positive number,
+  // including sizes nobody has ever sold. A lookup cannot satisfy this; only a rule can.
+  const everySize = Array.from({ length: 500 }, (_, i) => i + 1);
+  ok(everySize.every(g => Number.isFinite(ringDiameterFeet(g)) && ringDiameterFeet(g) > 0),
+    '🔴 H2: EVERY container size from 1 to 500 gallon resolves to a real diameter — no gap, no null');
+
+  // H2b — the 2026-08-29 Live Oak specifically. This is the tree the T-post table dropped, and it
+  // is named here so the ring can never repeat that failure quietly.
+  ok(Number.isFinite(ringDiameterFeet(200)) && ringDiameterFeet(200) > 12,
+    '🔴 H2b: the 200 gallon Live Oak gets a ring bigger than the 95 gallon anchor — it does not fall off the end');
+
+  // H3 — monotonic. A bigger container never gets a smaller ring, at any size.
+  ok(everySize.slice(1).every((g, i) => ringDiameterFeet(g) > ringDiameterFeet(everySize[i])),
+    'H3: the diameter strictly increases with gallons across the whole range');
+
+  // H4 — it is √-shaped, not linear. Doubling gallons must NOT double the ring; the whole reason
+  // David gave a square root is that a linear rule over-orders fence badly at the big end.
+  const d45 = ringDiameterFeet(45), d90 = ringDiameterFeet(90);
+  ok(d90 < d45 * 2 - 1,
+    '🔴 H4: doubling the container does NOT double the ring — the rule is square-root, not linear');
+
+  // H5 (negative) — no table. Asserted over the SOURCE, because the regression is a shape.
+  ok(!/ringByGallons|RING_TABLE/.test(src) && !/\{\s*15:\s*5,\s*95:\s*12/.test(src),
+    '🔴 H5 (negative): there is NO size→diameter lookup table anywhere in the model');
+
+  // H6 — the anchors are PARAMETERS, not answers: the fit is derived from RING_ANCHORS, so moving
+  // an anchor moves the curve. Proven by reading the anchors back and re-deriving both endpoints.
+  ok(RING_ANCHORS.length === 2
+     && RING_ANCHORS.every(a => Math.abs(ringDiameterFeet(a.gallons) - a.diameterFeet) < 1e-9),
+    '🔴 H6: the curve is FITTED THROUGH the declared anchors — change an anchor and it moves');
+
+  // H7 — fence is the circumference of the ring. David: *"by the roll, measured as the
+  // circumference of the ring."* π·d, not 2πd and not the diameter.
+  ok(Math.abs(ringCircumferenceFeet(15) - Math.PI * 5) < 1e-9,
+    'H7: deer fence per tree is the ring CIRCUMFERENCE — π × diameter');
+
+  // H8 — the page carries the rule in words as well as the number (D-9: a bare figure on a
+  // printout cannot be questioned by the person holding it).
+  ok(/square root/i.test(LOAD_LIST_COPY.ringRule) && /15 gallon/.test(LOAD_LIST_COPY.ringRule),
+    'H8: the printed ring rule states the shape and both anchors');
+
+  // H9 — 🔴 a tree row CARRIES its ring, so the page never re-derives one (the D4 rule).
+  const day = buildLoadList('2026-08-29', [stop('s1', 'A', [line(1, 'Live Oak - 200 Gallon')])]);
+  ok(day.trees.length === 1
+     && Math.abs(day.trees[0].ringDiameterFeet - ringDiameterFeet(200)) < 1e-9
+     && Math.abs(day.trees[0].fenceFeetPerTree - ringCircumferenceFeet(200)) < 1e-9,
+    '🔴 H9: every tree row carries its own ring diameter and fence feet, computed once in the model');
+
+  // H10 (negative) — 🔴 fence feet are NOT folded into any day total. Nothing in the data says
+  // which trees are fenced (measured 2026-09-12: zero lines, zero stop notes across the tenant),
+  // so a day total would be a number nobody can stand behind. Printing a per-tree figure for a
+  // hand-add is honest; printing a day total is a fabricated quantity.
+  ok(!Object.prototype.hasOwnProperty.call(day, 'fenceFeet')
+     && !Object.prototype.hasOwnProperty.call(day, 'deerFenceFeet'),
+    '🔴 H10 (negative): no day-level fence total — nothing records which trees are fenced');
 }
 
 // ══ §B RESOLVING ONE LINE — INCLUDING EVERY WAY IT CAN FAIL ════════════════════════
@@ -355,8 +466,11 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
 {
   ok(/AC-1/.test(src) && /NOT in `shared`/.test(src),
     'F1: the AC-1 reasoning for living in cultivar-os is recorded at the code');
-  ok(/tech-debt #290/.test(src) && /tech-debt #291/.test(src),
-    'F2: both cost-model corrections are cited by number beside the rules that contradict them');
+  // ✏️ WAS "#290 and #291". Both renumbered (#299/#300 — they collided with `main`), and the mix
+  // half is CLOSED by [[R-155]] rather than reconciled, so what must be cited now is the RULING
+  // beside the mix rule and the still-open MULCH item beside the absent mulch row.
+  ok(/R-155/.test(src) && /tech-debt #299/.test(src),
+    'F2: the mix ruling and the still-open mulch item are both cited beside the rules they govern');
   ok(/R-144|tech-debt #139/.test(src),
     'F3: the "nothing stored classifies a line" ruling is cited where the kinds are defined');
 }

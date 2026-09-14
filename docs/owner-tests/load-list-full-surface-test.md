@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 12.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 13.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated.
 
 **Why this exists.** The route goes to the driver digitally; the LOAD goes on paper, and nothing
@@ -119,8 +119,12 @@ if it blames a tree size, which is a state that no longer exists.
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: the capture gap, measured 2026-09-12
-SIGNAL: —
+COVERS: the capture gap, measured 2026-09-12 · [[R-156]] the ring figures, 2026-09-14
+SIGNAL: a **ft ring · ft fence per tree** figure against each tree size in the deer-fence block
+
+✏️ **THIS CARD CHANGED ON 2026-09-14 AND ITS PROOF RESET WITH IT ([[R-156]], OP-14 clause 3).** It
+used to ask only that the page print the RULE. The page now prints the **FEET**, per tree size, so
+the hand-add is read off rather than worked out on a trailer.
 
 Same page.
 **PASS:** a block reads **DEER FENCE — nothing recorded**, states that nothing in the system marks
@@ -128,7 +132,17 @@ which stops need it, gives the hand rule (*a fenced tree needs 4 T-posts in tota
 already has 2 needs 2 MORE*), says fence material is **by the roll, measured as the circumference
 of the ring**, and states the open question at **95 gallon and above** (4 more, or reuse the 4 it
 has?) as **open**.
+**PASS also — new:** the ring rule is stated (*grows with the square root of container gallons —
+5 ft at 15 gallon, 12 ft at 95 gallon*), and **every tree size on the day carries its own figure**:
+a ring diameter in feet, feet of fence for one tree, and feet if every tree of that size were
+fenced. On Saturday 2026-08-29 that means the **200 gallon Live Oak reads about 17.2 ft ring and
+55 ft of fence** — not a blank, not a zero, not a hand-work note.
 **🔴 FAIL if** the page is silent about deer fence. Silence on a printout reads as *none needed*.
+**🔴 FAIL if** any tree size shows a blank or a **0** where a fence figure should be — that is the
+exact failure [[R-156]] exists to prevent (*"rope is a quantity so a missing one reads as zero"*),
+and it is the T-post table's defect one quantity over.
+**FAIL if** a DAY TOTAL for fence appears. There must not be one: nothing records which trees are
+fenced, so a day total would be a fabricated quantity.
 ⚠️ Measured across the whole LAWNS tenant: **zero** order lines and **zero** stop notes mention
 deer, fence, T-post or stake. `DF` — *Deer Fencing* — exists only as a QuickBooks **catalogue**
 item nothing points at.
@@ -154,7 +168,7 @@ renderer).
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: tech-debt #290 — the install cost model's mulch line
+COVERS: tech-debt #299 (was #290) — the install cost model's mulch line
 SIGNAL: —
 
 Same page. Search the printed sheet for the word **mulch**.
@@ -162,6 +176,9 @@ Same page. Search the printed sheet for the word **mulch**.
 the special mix."** There is no mulch QUANTITY anywhere.
 **FAIL if** any number is attached to mulch. Lauren states mulch is not used; the cost model's
 mulch line ($7.49 at 15G to $43.12 at 95G) is materials that are never bought.
+⚠️ **STILL OPEN AFTER 2026-09-14.** [[R-155]] closed the MIX half of that pair; the mulch half is
+tech-debt **#299** and is untouched, so **the net effect on install cost is still uncomputed and has
+moved further from zero** — mix went UP and mulch has not come OUT.
 
 ### CARD 8 — AN EMPTY DAY SAYS SO AND OFFERS NO PRINT
 STATUS: owed
@@ -237,18 +254,44 @@ NOT WORK OUT** — i.e. it is VISIBLE and not counted as a tree.
 **🔴 This card passes on a page that is INCOMPLETE, and that is deliberate.** Measured 2026-09-12
 over all 130 LAWNS order lines: **9 real trees state a gallon size in plain text that the resolver
 cannot reach**, because a remark trails *after* the size without brackets. The page is honest about
-them; it does not yet read them. **The fix is tech-debt #292, not this card.**
+them; it does not yet read them. **The fix is tech-debt #301 (was #292), not this card.**
 **FAIL if** such a line is silently absent from the page altogether.
+
+### CARD 13 — 🔴 ONE MIX RATIO, AND IT IS THE CONTAINER SIZE ([[R-155]])
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: [[R-155]] · closes tech-debt #300 (was #291)
+SIGNAL: section 1 reads **one container volume of mix per tree — a 45 gallon tree takes 45 gallons**
+
+Same page, section 1.
+**PASS:** the mix rule states **one container volume per tree**, names the 45 gallon example, and
+the gallons figure reconciles: on Saturday 2026-08-29, **11 trees → 470 gallons → 2½ yards**, and
+`470 ÷ 201.974 = 2.33`, rounded UP to the next half yard.
+**PASS:** the sentence explains WHY it is a whole container rather than an allowance — *it settles
+on the drive and compacts when watered*. A number a person can question is a number they can trust.
+**🔴 FAIL if** the mix line is ~30% lower than the tree gallons on the day (e.g. 329 gallons against
+those same 11 trees). That is the 0.7 ratio returning, and on paper it reads perfectly.
+⚠️ **THIS CARD PROVES THE LOAD SHEET, NOT THE BOOKS.** `BOM_RULES` was already at 1.0 before the
+ruling, so **nothing a customer is charged moved.** The install cost model still holding 0.7 is
+**not in this repo** (tech-debt #299) and no card here can reach it.
 
 ---
 
 ## WHAT THIS BOARD DOES NOT COVER
 
-- **Deer fence quantities.** Nothing records them; the page says so (CARD 5). It cannot be tested
-  until something captures which stops need fence.
+- **Deer fence quantities — WHICH trees need fence.** Nothing records that; the page says so
+  (CARD 5). ✏️ **Narrowed 2026-09-14 ([[R-156]]): HOW MUCH fence a tree of a given size needs IS now
+  computed and printed** — the ring is a total function of container gallons, so a figure exists at
+  every size including ones LAWNS has never sold. What remains uncovered is the CAPTURE: nothing
+  says which stops need fence at all, so no card can exercise a real fenced stop.
 - **The 66–94 gallon band.** `tPostsFor` returns 4 there, which is an INFERENCE from David's two
   anchors (2 up to 65, 4 at 95 and above) and errs large on his own instruction. LAWNS sells no
   size in that band, so no card can exercise it on real data.
+- **Which √-fit David meant.** [[R-156]] gives two anchors and the word *through*, read as a curve
+  passing through BOTH (`d = a√g + b`). A single-parameter `d = k√g` cannot hit both and would
+  differ by up to ~6% away from the anchors. **Exact at 15 and 95 either way**, so no card on real
+  LAWNS sizes can tell the readings apart — it needs a sentence from David, not a test.
 - **Whether the computed bubbler count matches an invoice that bills bubblers.** The page prints
   both — the computed count in section 3, the billed `TB` line under *"Also on these orders"* — and
   deliberately does not reconcile them, because a word-matching rule is what R-144 forbids.

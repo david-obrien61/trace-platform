@@ -117,7 +117,7 @@ function ok(cond: boolean, msg: string): void {
     'D3: every number on the page comes from the pure model — the page computes no bill of materials of its own');
 
   // D4 (negative) — no arithmetic in the .tsx. A number computed in a render cannot be asserted.
-  ok(!/tPostsByGallons|mixRatioOfContainerVolume/.test(src),
+  ok(!/tPostsByGallons|mixContainerVolumesPerTree|ringByGallons/.test(src),
     '🔴 D4 (negative): the bill-of-materials rules are NEVER re-derived in the page');
 }
 
