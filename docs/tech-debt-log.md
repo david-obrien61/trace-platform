@@ -2267,6 +2267,18 @@ that makes a diff unreviewable** — which is the reason it was not taken, state
 
 🔴 **THIS ROW SAID ② WAS *"not checkable from the repo — nothing we own reads Vercel"*, AND THAT REMAINS TRUE.** Nothing we own reads Vercel *now either*. What changed is that **nothing has to**: Vercel sets those variables at BUILD time, so the answer is **baked into the artefact** and read off the screen — which is where David is standing when GATE 0 fires. **That is a different fix from the one this row imagined, and it is deliberately the weaker one:** a human at a screen can now SEE the target; **no cap ASSERTS it**, and the close-out gates still accept "pushed". ⚠️ **So the DEPLOYED bar is still not mechanically guarded. Do not read this as closed.**
 
+🔴 **① IS STILL OWED, STILL CHEAP, AND ON 2026-09-14 IT DREW BLOOD — MINE (David's instruction to record it here).**
+
+**The incident, in full, because it is the argument.** This session merged ledger **#320** into `main` and **reported it merged**. The merge commit `a0c957b` existed; `git merge` printed its diffstat; the working tree was correct. **`origin/main` was still at `ba7edcf`.** The merge had gone into **local** `main` and was never pushed — and the session then branched off local `main`, so the merge lived on **in that branch's ancestry**, where every subsequent command saw it and agreed it was there. **It was found ~40 minutes later, by running `merge-base --is-ancestor` by hand during a final check, and only because that check happened to be run.**
+
+🔴 **NOTE WHAT DID NOT CATCH IT.** Not `git status` (clean). Not the test suite (green). Not `npm run verify` (exit 0). Not `verify-handoff-retention`, **including the check built THIS SESSION to assert that every ledger row has a §3 entry** — the row and the entry were both present, both correct, and both unpushed. **Every gate we own passed on a merge that had not happened anywhere but this machine.** That is this row's sentence — *the close-out gates accept "pushed" as shipped* — with *"pushed"* itself turning out to be the optimistic reading.
+
+✏️ **AND IT IS THE THIRD TIME THIS FAMILY HAS BEEN RECORDED IN THIS REPO: #60** (a build that never deployed, live ~20h later as a side effect of an unrelated push), **#282** (a push that named the ref it meant and published a branch containing none of the work), and now a merge that named the branch it meant and published nothing. **Three different mechanisms, one shape: the command succeeded, said so, and the state did not change where it matters.**
+
+**The fix has not changed and is three lines.** At close-out, for the SHA the row claims: `git merge-base --is-ancestor <sha> origin/main` — **after** a `git fetch`, because the whole failure mode is a stale local view of `origin`. ⚠️ **It must read `origin/main`, never local `main`** — local `main` is exactly what was wrong here, and a check that consults it would have passed too. **It is free, it is mechanical, it needs no network beyond the fetch, and nothing about it was hard.** The only reason it does not exist is that nobody has written it.
+
+**② remains the genuinely hard half** and is unchanged: no cap can assert a production deployment without reading Vercel. ✅ **What ledger #321 did is make ② *observable* — see the PARTIAL note above — and it does not touch ①.**
+
 **① is satisfied for one row, not asserted either.** Ledger **#320** was merged to `main` 2026-09-14, so `git merge-base --is-ancestor` passes for it — **by someone running the command, not by a gate.** Asserting ① is cheap and is still owed; asserting ② needs something that reads Vercel, and that has not changed.
 
 **Why the weaker fix was taken anyway.** The incident in this row is *#303 recorded complete with only Preview deploys* — a preview and a production deploy of the SAME COMMIT were **indistinguishable in the app**. The SHA matched, GATE 0 passed, and the screen was not evidence. **That specific confusion is now impossible to have silently**, which is the part that was costing observations. ✏️ **The campaign-lifecycle board had already written the instruction by hand** — *"Confirm the SHA you are looking at is a PRODUCTION deploy of the code you mean, not a Preview of a branch"* — **with no way for anyone to carry it out.** That is [[R-26]]'s shape, and it is why the stamp was built rather than another note.
@@ -3308,3 +3320,49 @@ reports the same as one that passed*) · #186 (the runner that reported 72 of 74
 **The fix, when it is taken.** ① Escape the four stray pipes as `\|` (four one-character edits, and they are the half that actually loses content). ② Decide whether the 25 six-cell rows are normalised or the header is relaxed — **a decision, not a cleanup**, because merging Work item and Deliverable may be what those sessions meant. ③ **A cap is cheap and belongs with the id checks:** assert every close-out row's unescaped-pipe count against the header's, both directions. Without it this recurs the next time somebody writes a shell pipeline into a row.
 
 **Trigger.** The next session to touch a listed row, or the first time a reader asks why a ledger row's Blocker column is empty. Related: **#320** (which made the row load-bearing) · **#283**/**#284** (a true record that generates no obligation) · CLAUDE.md §6 r19.
+
+---
+
+### #294a — 🔴 A SHELL PIPE INSIDE INLINE CODE SPLITS A LEDGER ROW, AND GFM DISCARDS THE OVERFLOW SILENTLY (SEPARATED OUT 2026-09-14 on David's instruction, ledger #321)
+
+**Separated from #294 because it is not the same kind of item.** #294's first shape — 25 rows with six cells — is a **historical tidiness question**: it renders, it loses nothing, and normalising it is a decision about what those sessions meant. **This one is a live, recurring, silent data-loss defect**, and bundling the two would let the harmless half set the priority for the damaging half.
+
+**The mechanism, stated once and precisely.** A markdown table row is split on `|`. **Backticks do not protect a pipe** — GFM's table extension splits the row into cells *before* inline parsing runs, so `` `a | b` `` is two cells, not one code span. A row that ends up with **more cells than the header** has the excess **ignored** by the spec. So: you write a perfectly ordinary shell pipeline into a close-out row, the row silently gains a cell, and **the last cell — `Blocker` — stops being rendered.** No error, no warning, no visual tell. The content is in the file forever and on the screen never.
+
+**🔴 IT RECURS BY CONSTRUCTION, AND THAT IS THE WHOLE ARGUMENT.** Ledger **#320** made the close-out ledger row **the permanent home for every close-out's proof narrative**, moved out of CLAUDE.md §3 precisely *because the row is the copy nothing has to cut*. **Close-out narrative is exactly the prose that contains shell pipelines** — `find api -name '*.ts' | wc -l`, `git log --oneline | head`, `grep -c foo | wc -l`. **So #320 did not merely fail to fix this; #320 increased its rate.** The four live instances are `#279 · #299 · #311 · #317`, and #317's is `` `find api -name '*.ts' | wc -l` `` — a command this repo runs constantly, written into a row by a session doing everything right.
+
+**What it costs, measured.** The dropped cells are not filler. **#317** loses *"🔴 FIVE OPEN QUESTIONS ARE WRITTEN INTO THE DOC RATHER THAN ASKED"* · **#299** loses *"David: retire or wire `install_date` (waits on R-143) · zone shape (O2′ or O3) · infer `planting` on QuickBooks stops"* · **#279** loses *"Needs a live QuickBooks connection to demonstrate"* · **#311** loses a note that a sibling item was fixed in the same ledger. **Every one is a question or a blocker waiting on David** — the precise class `docs/open-questions.md` exists to surface, arriving at the register through a row that does not render it.
+
+**⚠️ It is invisible to every cap we own.** `verify-id-citations` parses a row's **id**, not its cells. Nothing reads the columns. The loss is to a human, on the rendered page, and a human reading a row with an empty Blocker column has no reason to suspect the file says otherwise.
+
+---
+
+#### 🔬 PROPOSED CHECK — NOT BUILT (David: *"PROPOSE a check that refuses a row whose cell count exceeds the header. Do not build it in this pass."*)
+
+**Name.** `verify-ledger-table-shape`, or a fifth clause on `verify-id-citations` — **it already parses this file**, so the second is cheaper and adds no new script to the verify chain (§6 r8: one operation, one place).
+
+**The assertion, in one sentence.** *In every markdown table in `docs/CLOSE-OUT-LEDGER.md`, no row may have MORE cells than its header row.*
+
+**How to count a cell — this is the part that must be right, and getting it wrong is how the first measurement of #294 reported 34 rows instead of 29.** Split on pipes **not preceded by a backslash**: `re.split(r'(?<!\\)\|', line)`. `\|` is the legitimate escape and rows **#304** and **#313** use it correctly — a naive `line.count('|')` condemns them and teaches the next reader that the cap cries wolf.
+
+**Direction — and it is ONE direction, deliberately.** **Refuse `cells > header`. Do NOT refuse `cells < header`.** A short row is padded by the spec and loses nothing; **25 rows are short today**, and failing on them would make the cap red on arrival, which is the state a cap does not survive (#73: a gap list that only grows stops being read). The short rows are #294's separate, human decision.
+
+**What it must print.** The row id, the count it found against the header's, **and the text of the cell that is being discarded** — because *"row #317 has 8 cells"* tells a reader nothing, while *"row #317 drops: 🔴 FIVE OPEN QUESTIONS…"* tells them exactly what the reader of that row is not seeing. **And it should name the likely culprit**: the first unescaped `|` that appears between backticks on the line.
+
+**Probes it needs, both directions (STD-022), the first being the real defect verbatim (STD-024):**
+- **P1** — 🔴 a row containing `` `find api -name '*.ts' | wc -l` `` → **REFUSES**, and names the dropped cell. *(#317, verbatim.)*
+- **P2** — the same row with the pipe escaped `` `find api -name '*.ts' \| wc -l` `` → **PASSES**. Without this, P1 could be a check that refuses every row.
+- **P3** — a row using `\|` legitimately in prose (#304/#313's shape) → **PASSES**. This is the one a naive implementation fails.
+- **P4** — a six-cell row → **PASSES**. Short is padded, and 25 exist.
+- **P5** — the header row itself → never evaluated against itself.
+- **P6** — a `⏳ RESERVED` row with a stray pipe → **REFUSES**. It is still a table row; reserving does not exempt the shape.
+- **P7** — 🔴 **NEGATIVE CONTROL that changes the POPULATION, not the subject** (#182's own unmet prescription): run it against a file with **no table at all** and against a table whose header is longer than every row — it must report **clean**, not silently pass because it found nothing to parse. *A check that cannot tell "no violations" from "I never looked" is the shape this repo keeps filing.*
+- **P8** — an unescaped pipe **outside** backticks (someone typed a real extra column) → **REFUSES**. The defect is the cell count, not the backticks; the backticks are only the commonest cause.
+
+**Scope, and a deliberate limit.** Assert **`CLOSE-OUT-LEDGER.md` only** to begin with. Every `.md` in the repo is the tempting scope and is how a cap arrives with a backlog nobody clears. ⚠️ **`docs/tech-debt-log.md` has tables too and this very entry contains pipes inside backticks** — if the scope widens, it must be widened *with* its own first run cleaned, not before.
+
+**Red-first, before it is trusted (§6 r19 · [[R-33]]).** Run it against `main` as it stands: it must **exit 1 and name exactly `#279 · #299 · #311 · #317`**. If it names more, the escape handling is wrong; if it names fewer, it is not reaching them. **Only then** escape the four pipes and watch it go green — and the four escapes are the repair, which #294 records as owed and which David has deliberately deferred.
+
+**Cost.** Roughly forty lines and one regex, inside a script that already reads the file. **The four repairs are four one-character edits.**
+
+**Trigger.** The next close-out that writes a shell pipeline into a ledger row — which, after #320, is the next close-out that shows its work.
