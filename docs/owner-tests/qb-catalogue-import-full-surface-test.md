@@ -1,10 +1,16 @@
 # OWNER TEST — THE QUICKBOOKS CATALOGUE IMPORT: THE ADAPTER, THE APPLIER, THE RUN ID AND THE UNDO
 
-> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a failed
 > or unmerged build looks *completely normal* — the app just serves the old bundle. Match it to
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 **Capability:** 2.3 / 5.1 (inventory) · **Ledger:** #277
 **SHA THIS BOARD WAS WRITTEN AGAINST:** `0c277f2`. **`84bd7d5` (ledger #278, the customer import) is

@@ -2261,6 +2261,17 @@ that makes a diff unreviewable** — which is the reason it was not taken, state
 
 ## #280 — 🔴 THE CLOSE-OUT GATES ACCEPT "PUSHED" AS SHIPPED: NEITHER ANCESTRY OF `origin/main` NOR A **PRODUCTION** DEPLOYMENT IS ASSERTED ANYWHERE (NEW 2026-09-12, ledger #303)
 
+✏️ **PARTIAL 2026-09-14 (ledger #321) — ② IS NOW OBSERVABLE. IT IS STILL NOT ASSERTED, AND THE DIFFERENCE IS THE WHOLE POINT OF THIS NOTE.**
+
+**What changed.** The deployed bundle now carries its **deployment target**, not only its SHA. `vite.config.ts` bakes `VERCEL_ENV` and `VERCEL_GIT_COMMIT_REF` into `__DEPLOY_ENV__` / `__DEPLOY_REF__`; `src/lib/deployStamp.ts` turns them into a label; `<VersionStamp>` renders it on every screen for every user. The stamp reads **`built <time> · <sha> · prod`** on production and shouts an amber **`PREVIEW <branch>`** otherwise. **GATE 0 on all 40 owner-test boards now says the last token must read `prod`.**
+
+🔴 **THIS ROW SAID ② WAS *"not checkable from the repo — nothing we own reads Vercel"*, AND THAT REMAINS TRUE.** Nothing we own reads Vercel *now either*. What changed is that **nothing has to**: Vercel sets those variables at BUILD time, so the answer is **baked into the artefact** and read off the screen — which is where David is standing when GATE 0 fires. **That is a different fix from the one this row imagined, and it is deliberately the weaker one:** a human at a screen can now SEE the target; **no cap ASSERTS it**, and the close-out gates still accept "pushed". ⚠️ **So the DEPLOYED bar is still not mechanically guarded. Do not read this as closed.**
+
+**① is satisfied for one row, not asserted either.** Ledger **#320** was merged to `main` 2026-09-14, so `git merge-base --is-ancestor` passes for it — **by someone running the command, not by a gate.** Asserting ① is cheap and is still owed; asserting ② needs something that reads Vercel, and that has not changed.
+
+**Why the weaker fix was taken anyway.** The incident in this row is *#303 recorded complete with only Preview deploys* — a preview and a production deploy of the SAME COMMIT were **indistinguishable in the app**. The SHA matched, GATE 0 passed, and the screen was not evidence. **That specific confusion is now impossible to have silently**, which is the part that was costing observations. ✏️ **The campaign-lifecycle board had already written the instruction by hand** — *"Confirm the SHA you are looking at is a PRODUCTION deploy of the code you mean, not a Preview of a branch"* — **with no way for anyone to carry it out.** That is [[R-26]]'s shape, and it is why the stamp was built rather than another note.
+
+
 **The instance, measured 2026-09-12.** `fc94309` (ledger **#303**, the ship-to address book) and
 `d48000c` (ledger **#261**) sit on `fix/pmi-suggest-auth`. `origin/main` is `ea9a047` and **has not
 moved since the branch diverged** — the merge-base IS `origin/main`, so a merge would be a pure

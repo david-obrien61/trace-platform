@@ -1,10 +1,16 @@
 # OWNER TEST — SERVICES: WHAT WE FOUND, WHAT WE REFUSED, AND THE $0 THAT MUST NEVER LAND
 
-> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a failed
 > or unmerged build looks *completely normal* — the app just serves the old bundle. Match it to
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 **Capability:** services / `service_offerings` · **Ledger:** #283 · #293
 **Board: 5 of 25 covered** (20 `owed`) — **CARDS 1, 12 and 15 proven live 2026-09-08 on Test Dave's; CARD 10 on LAWNS; CARD 3 FAILED and then PASSED the same day**, both runs recorded on the card. 🔁 **CARD 13 flipped to `owed` 2026-09-11 (#293)** — the write it proved changed. **CARDS 19–25 are new (#293 · R-120), every one runnable by David now — start with CARD 19.**

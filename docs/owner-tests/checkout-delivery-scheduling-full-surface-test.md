@@ -1,12 +1,18 @@
 # CHECKOUT → SCHEDULED DELIVERY — FULL-SURFACE OWNER TEST
 
-> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
 > failed or unmerged build looks *completely normal* — the app just serves the old bundle.
 > One glance. Match it to `git log --oneline origin/main -1` — **not to a SHA written in this
 > file**, because Vercel deploys the TREE and *any* push to `main`, docs included, moves the
 > stamp. *(GATE 0 · OP-15 · paid for twice on 2026-08-31: once hunting a defect in code that
 > was never deployed, once by a pinned SHA going stale on the very next commit.)*
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 > **Rendered board:** open `owner-tests.html` (a PURE renderer — it parses this file live and holds
 > no data of its own). Sibling of `stories.html` / `status.html`.

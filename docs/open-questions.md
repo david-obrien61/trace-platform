@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #320 — the #320 block added, and 🔴 **the register's own blind spot is named**: this file is fed by CLAUDE.md §3's *FLAGGED FOR DAVID*, and **fifteen close-out rows never wrote a §3 entry at all**, so whatever they flagged reached neither surface. #302 — the row that created this file — is one of the fifteen. Now asserted by `verify:handoff-retention` check 5; ledger #318 — the #318 block; #314 · #312 blocks; the counts below are still measured 2026-09-11 and say so) — created at David's request (ledger #302).
+**Last updated: 2026-09-14** (ledger #321 — the #321 block added; ledger #320 — the #320 block, and 🔴 **the register's own blind spot named**: it is fed by CLAUDE.md §3's *FLAGGED FOR DAVID*, and fifteen close-out rows never wrote a §3 entry at all, #302 — the row that created this file — among them. Now asserted by `verify-handoff-retention` check 5; the counts below are still measured 2026-09-11 and say so)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#321 — the production stamp**
+- 🔴 **OWNER-PROOF OWED, ONE GLANCE.** After `feat/production-stamp` merges and Vercel deploys `main`, open the app: the foot of the screen must read **`built <time> · <sha> · prod`**. **The stamp cannot prove itself** — the first production deploy carrying it IS the proof. A Preview of the branch is a free second proof (amber `PREVIEW feat/production-stamp`). Owner: `docs/CLOSE-OUT-LEDGER.md` → **#321**.
+- 🔴 **OPEN — PRODUCTION IS STAMPED POSITIVELY, AND THAT IS A DELIBERATE DEVIATION FROM THE INDUSTRY STANDARD (§6 r16).** The standard env badge shows **nothing** in production. I show `prod`, because a blank production is indistinguishable from a bundle built before the feature existed (A9 *absent is not empty*). **Cost: one more token on every screen, for every user, forever.** Owner: `src/lib/deployStamp.ts`.
+- 🔴 **OPEN — `prod⚠ <branch>` IS A JUDGEMENT MADE WITHOUT ASKING.** A production deploy built from a non-`main` branch shouts. Legal (someone promoted a branch), and I decided it is worth seeing. **Say so if you would rather it stayed quiet.** Owner: `src/lib/deployStamp.ts`.
+- 🟡 **OPEN — tech-debt #280 IS 🟡 PARTIAL, NOT RESOLVED.** ② is now **OBSERVABLE by a human**; **no cap asserts it** and the close-out gates still accept *"pushed"*. ① (`merge-base --is-ancestor`) is satisfied for #320 **by the merge, not by a gate** — **asserting it is cheap and still owed.** Owner: `docs/tech-debt-log.md` → **#280**.
 
 **#320 — the §3 entry gate, and the §3 entry trim**
 - 🔴 **OPEN — DECLARE OR BACKFILL? I DECLARED, AND THIS IS THE CALL TO OVERRULE.** Fifteen close-out rows have no §3 entry (**#253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317**). Backfilling means composing a handoff narrative for sessions nobody was in and dating it as though written then — **manufacturing a record rather than recovering one** ([[R-26]]). Every row is COMPLETE in the ledger, so nothing is lost by declaring. ⚠️ **What IS lost is those fifteen sessions' `FLAGGED FOR DAVID` items — and that loss already happened.** Owner: `handoff-entry-declarations.json`.
