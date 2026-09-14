@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-12** (ledger #314 — the #314 block added; ledger #312 — the #312 block added; the counts below are still measured 2026-09-11 and say so) — created at David's request (ledger #302).
+**Last updated: 2026-09-14** (ledger #320 — the #320 block added, and 🔴 **the register's own blind spot is named**: this file is fed by CLAUDE.md §3's *FLAGGED FOR DAVID*, and **fifteen close-out rows never wrote a §3 entry at all**, so whatever they flagged reached neither surface. #302 — the row that created this file — is one of the fifteen. Now asserted by `verify:handoff-retention` check 5; ledger #318 — the #318 block; #314 · #312 blocks; the counts below are still measured 2026-09-11 and say so) — created at David's request (ledger #302).
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -24,7 +24,7 @@
 | `docs/RULINGS.md` → **OWED** section (line 248+) | 🔴 **65** | Questions only David can answer. 90 rows total; **24 already answered and kept for the trail**, 2 header rows. |
 | `docs/RULINGS.md` → main table, `OPEN` state | 🟡 **35** | Rulings David has MADE that are **not yet built**. Not questions — work. |
 | `docs/RULINGS.md` → main table, `PARTIAL` | 🟡 **16** | Ruled and half-built. |
-| CLAUDE.md §3 — *FLAGGED FOR DAVID* | 🔴 **11** | The three newest sessions' questions (#299 · #300 · #301). Scrolls out at N=3 — **this is the only place they survive it.** |
+| CLAUDE.md §3 — *FLAGGED FOR DAVID* | 🔴 **11** | The three newest sessions' questions (#299 · #300 · #301). Scrolls out at N=3 — **this is the only place they survive it.** 🔴 **AND 2026-09-14 NAMES THE HOLE UNDER IT: an entry that is never WRITTEN never feeds this file either. Fifteen rows, #302 among them. Asserted now — `verify:handoff-retention` check 5, ledger #320.** |
 | CLAUDE.md — *Open Architecture Decisions* | 🟡 **4** | Rows 3, 5, 6, 9. Long-dormant. |
 | CLAUDE.md §4 — *PENDING DATA TASK* | 🔴 **2** | Work only David can do (LAWNS is read-only to Thunder). |
 | `docs/tech-debt-log.md` + CLAUDE.md tech-debt line | 🟡 **~36 mentions** | Items whose fix is explicitly *"David's call"*. |
@@ -77,6 +77,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#320 — the §3 entry gate, and the §3 entry trim**
+- 🔴 **OPEN — DECLARE OR BACKFILL? I DECLARED, AND THIS IS THE CALL TO OVERRULE.** Fifteen close-out rows have no §3 entry (**#253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317**). Backfilling means composing a handoff narrative for sessions nobody was in and dating it as though written then — **manufacturing a record rather than recovering one** ([[R-26]]). Every row is COMPLETE in the ledger, so nothing is lost by declaring. ⚠️ **What IS lost is those fifteen sessions' `FLAGGED FOR DAVID` items — and that loss already happened.** Owner: `handoff-entry-declarations.json`.
+- 🔴 **OPEN — ONE THING WAS KEPT IN §3 DELIBERATELY:** the trailing narrative sentence inside each `###` heading line. The heading is ONE authored paragraph (headline + punchline); splitting it means editing prose rather than moving whole units. **Cost, measured: 2,385 of the 8,755 chars §3 still holds.** Say the word and it moves to the ledger row too. Owner: CLAUDE.md §3 preamble.
+- 🔴 **OPEN AND UNCHANGED SINCE 2026-07-16 — OP-13's OWN PROPOSED AMENDMENT: the budget measures the WRONG QUANTITY.** This edit is its second piece of evidence: **−14KB against −27 lines.** CLAUDE.md is **651 lines**, still over its ~600 line budget, while the real saving was in bytes. **Switch the budget to `wc -c`?** Owner: CLAUDE.md §4 → *Docs — Doc Reorg*.
+- 🟡 **OPEN — `docs/CLOSE-OUT-LEDGER.md` row #318 is MALFORMED**: 6 columns where the header declares 7 (Work item and Deliverable merged). Renders fine, lies about nothing, read by nothing mechanical. Repairing another row's shape inside this pass was declined as drift. Owner: `docs/CLOSE-OUT-LEDGER.md`.
+- ✅ **ANSWERED BY INSTRUCTION — N=3 STAYS.** The register survives the rotation, so raising N buys nothing and costs the budget. Not changed.
 
 **#314 — the sweep's blind spot, closed; and a gap in clause (4)**
 - ✅ **ANSWERED BY BUILD — tech-debt #286 is RESOLVED.** Two populations: NEXT FREE from every ref, collisions by per-id inheritance at `merge-base(HEAD, ref)`. **Proven by making it fail from `main`** — old script exit 0, new exit 1, same tree, same id. 9/9 mutants.

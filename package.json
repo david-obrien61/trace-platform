@@ -34,7 +34,7 @@
     "verify:profile-boundary": "node scripts/verify-profile-writer-boundary.mjs",
     "field-lists:baseline": "node scripts/verify-field-lists.mjs --update",
     "verify:api-parses": "node scripts/verify-api-parses.mjs",
-    "verify:handoff-retention": "node scripts/verify-handoff-retention.mjs",
+    "verify:handoff-retention": "node scripts/verify-handoff-retention.mjs && node scripts/verify-handoff-retention.mjs --self-test",
     "verify:ui-divergence": "node scripts/verify-ui-standard-divergence.mjs",
     "verify:owner-boards": "node scripts/verify-owner-test-boards.mjs",
     "verify:pricing-writers": "node scripts/verify-pricing-config-writers.mjs && node scripts/verify-pricing-config-writers.mjs --self-test",
