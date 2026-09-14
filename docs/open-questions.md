@@ -78,6 +78,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#324 — the worktree rule (tech-debt #282 resolved)**
+- 🔴 **OPEN — PLACEMENT IS MINE AND THIS IS THE CALL TO OVERRULE.** The rule went to **CLAUDE.md §6 r20** (full text), with **R-154** as an index line and **§10 item 11** as a one-line pointer. §9 was rejected deliberately: it fires at CLOSE-OUT while #282 fires at the COMMIT INSTANT, and a worktree must exist before work starts. Owner: `CLAUDE.md` §6 r20.
+- 🟡 **OPEN — §10 ITEM 11 IS SCOPE YOU DID NOT ASK FOR.** A one-line pointer in the session-starter block, because §10 is what a session reads at the moment the rule binds. It changed *"confirm all ten"* → *"all eleven"*. **Strike it if you disagree.** Owner: `CLAUDE.md` §10.
+- 🔴 **OPEN — SHOULD THE RULE GET A CAP AT ALL?** It is unguarded by design and says so. A cap asserting the cause must know which checkout is the shared one — per-machine state (`.claude/` is gitignored for that reason). #282's `git branch --show-current` at the commit instant catches the SYMPTOM only. **Whether that is good enough is yours.** Owner: `docs/tech-debt-log.md` #282.
+- 🟡 **OPEN — #281 AND #280 ARE NOT CLOSED BY THIS.** The rule resolves the commit instant only; build start (#281) and close-out (#280) remain. Owner: `docs/tech-debt-log.md`.
+
 **#321 — the production stamp**
 - ✅ **ANSWERED BY A LIVE READ 2026-09-14 — `built Sep 14, 12:28p · 15fe4f2 · prod`, quiet, no amber chip, and `15fe4f2` IS `origin/main`.** Traced through the **shipped minified bundle**, not the source. ⚠️ **I did not render it in a browser — under OP-14 the card flip is yours.** Owner: `docs/CLOSE-OUT-LEDGER.md` → **#321**.
 - 🔴 **OPEN — PRODUCTION IS STAMPED POSITIVELY, AND THAT IS A DELIBERATE DEVIATION FROM THE INDUSTRY STANDARD (§6 r16).** The standard env badge shows **nothing** in production. I show `prod`, because a blank production is indistinguishable from a bundle built before the feature existed (A9 *absent is not empty*). **Cost: one more token on every screen, for every user, forever.** Owner: `src/lib/deployStamp.ts`.

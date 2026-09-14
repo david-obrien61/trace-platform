@@ -2432,7 +2432,47 @@ David's call, not this entry's.
 
 ---
 
-## #282 — 🔴 TWO SESSIONS, ONE WORKING TREE: THE BRANCH CAN CHANGE UNDER A SESSION BETWEEN THE COMMIT IT PLANNED AND THE COMMIT IT MAKES (NEW 2026-09-12, ledger #304)
+## #282 — ✅ **RESOLVED 2026-09-14 (ledger #324, [[R-154]], CLAUDE.md §6 r20) — DAVID ADOPTED THE RULE AND ANSWERED THE OBJECTION THAT HAD HELD IT A PROPOSAL.** WAS: 🔴 TWO SESSIONS, ONE WORKING TREE: THE BRANCH CAN CHANGE UNDER A SESSION BETWEEN THE COMMIT IT PLANNED AND THE COMMIT IT MAKES (NEW 2026-09-12, ledger #304)
+
+**THE RULE AS ADOPTED, verbatim:** *a session that will commit works in its own git worktree, never
+the shared checkout. The shared checkout is DAVID'S — his uncommitted work, kept on `main`, pulled
+after every merge. No session commits from it.*
+
+🔴 **THE OBJECTION THIS ENTRY RECORDED IS THE ONE THAT KEPT THE RULE A PROPOSAL, AND IT IS ANSWERED BY
+THE SECOND SENTENCE RATHER THAN WORKED AROUND.** Below, this entry asks what happens to David's own
+uncommitted edits in the shared tree. **The answer: they stay, and they are the only thing there.**
+One tree, one writer. The collision is **REMOVED, not relocated**, because the two populations are
+separated instead of interleaved — his uncommitted work in the shared checkout, every session's
+committed work in its own worktree.
+
+⚠️ **THE COST IS CARRIED IN THE RULE'S OWN TEXT, not left for the session that discovers it: a session
+CANNOT READ DAVID'S UNCOMMITTED WORK.** A worktree is a different directory and his in-flight edits are
+not reachable from it. **He commits them or he hands them over — there is no third option**, and a
+session that needs them ASKS rather than reaches. **The property that stops a session's commit landing
+in his tree is the same property that stops it reading his tree.** Paid deliberately.
+
+⚠️ **STILL UNGUARDED — this entry's *"nothing would enforce it"* is CORRECT and survives adoption.**
+No cap reads which directory a session is in; one asserting the cause would have to know which
+checkout is the shared one, and that is per-machine state (`.claude/` is gitignored for exactly that
+reason). The nearest mechanical check remains this entry's own — `git branch --show-current` at the
+commit instant — and it catches the SYMPTOM. **The rule says so out loud rather than implying a guard
+it does not have.**
+
+✅ **THE PRACTICE HAD ALREADY RUN AHEAD OF THE RULE, which is why adopting it costs nothing:**
+`git worktree list` on 2026-09-14 shows **17 worktrees**, nearly all in session scratchpads —
+including the two this entry names. **What was missing was the sentence, not the behaviour.** Ledger
+**#311** is the same lesson inverted: an accidental `git add -A` in a shared checkout three sessions
+were using staged a **27MB registered worktree**, caught before any push.
+
+⚠️ **THE FAMILY IS NOT CLOSED — this resolves the COMMIT INSTANT only.** **#281** (build start —
+*what is this branch for?*) and **#280** (close-out — *did it reach `main` and production?*) remain
+open. The rule helps both, since one worktree per branch makes *one ledger id per branch* the natural
+shape — **but neither is asserted by it, and neither should be marked resolved on its strength.**
+
+**The original entry is preserved below, unedited.**
+
+---
+
 
 **The occurrence, measured.** While ledger **#304** was being built, another session switched the
 shared checkout from `fix/stop-site-offer-unmount` to `feat/breakpoint-vocabulary`. The #304 commit
@@ -2481,7 +2521,7 @@ the mechanism above is real, and this is not its example. If a *different* run s
 numbers move, those numbers need re-measuring before they are cited, rather than inheriting this one's
 explanation ([[R-26]]).
 
-**THE PROPOSED RULE — RECORDED AS A PROPOSAL, DELIBERATELY NOT BUILT (David, 2026-09-12).**
+**THE PROPOSED RULE — RECORDED AS A PROPOSAL, DELIBERATELY NOT BUILT (David, 2026-09-12).** ✅ **ADOPTED 2026-09-14 — see the resolution above; it is now CLAUDE.md §6 r20 and [[R-154]].**
 > *A session that will commit works in its own worktree, not the shared checkout.*
 
 **Precedent, measured today rather than asserted:** `git worktree list` shows two worktrees created by
@@ -2495,7 +2535,7 @@ workflow constraint, not code, and **nothing would enforce it** — which is the
 *"Confirm branch (main or feature branch as appropriate)"*, a rule with no referent (#281). A worktree
 costs a full checkout (~1,200 files here). And 🔴 **the shared tree is also where DAVID works** — his
 own uncommitted edits were sitting in it during this incident — so *"own worktree"* has to say what
-happens to those, or it moves the collision rather than removing it.
+happens to those, or it moves the collision rather than removing it. ✅ **ANSWERED 2026-09-14: the shared tree is DAVID'S ALONE — his uncommitted work stays, nothing else lives there, so nothing collides. The cost (a session cannot read that work) is now stated in the rule itself.**
 
 **CLASS — THREE MOMENTS, ONE MISSING ASSERTION.** #281 is **build start** (*what is this branch
 for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
