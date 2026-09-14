@@ -482,7 +482,11 @@ export function Settings({
   const [newCategory, setNewCategory]     = useState('addon');
   const [newTiming, setNewTiming]         = useState('at_checkout');
   const [newPriceType, setNewPriceType]   = useState('per_unit');
-  const [newPriceUnit, setNewPriceUnit]   = useState('plant');   // DISTINCT from price_type — no longer derived
+  // ✏️ 'plant' → 'order' 2026-09-14 (ledger #328). THE COLUMN DEFAULT WAS NOT THE ONLY ONE:
+  // dropping `DEFAULT 'plant'` in the database leaves THIS, and this is the one an owner meets —
+  // a SHARED settings page pre-selecting "per plant" for every business in every vertical.
+  // 'order' is the generic choice: it is the one unit every business certainly has.
+  const [newPriceUnit, setNewPriceUnit]   = useState('order');  // DISTINCT from price_type — no longer derived
   const [newTransportMode, setNewTransportMode]       = useState('');      // only when category=transport — EMPTY until chosen (R-120: never a silent default)
   const [newRequiresAddress, setNewRequiresAddress]   = useState(false);   // only when category=transport
   const [newTriggerMode, setNewTriggerMode]           = useState('');      // '' = always show; only when category=addon
@@ -728,7 +732,7 @@ export function Settings({
     setOfferings(prev => [...prev, data as ServiceOffering]);
     setNewName(''); setNewDesc(''); setNewPrice('');
     setNewCategory('addon'); setNewTiming('at_checkout');
-    setNewPriceType('per_unit'); setNewPriceUnit('plant');
+    setNewPriceType('per_unit'); setNewPriceUnit('order');
     setNewTransportMode(''); setNewRequiresAddress(false); setNewTriggerMode('');
     setShowAddForm(false);
     setAddingOffering(false);

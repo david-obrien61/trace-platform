@@ -2,9 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BusinessDiscoveryProfile, SuggestedOffering } from './types';
 // R-120 — a transport service must say who transports; ONE rule, shared with every other writer.
 import { transportBindingError } from '../business-logic/serviceOfferingShape';
+// ONE price-unit rule, shared with the database constraint and the books review (§6 r8).
+import { normalisePriceUnit } from '../business-logic/serviceOfferingEnums';
 
 const VALID_CATEGORIES = new Set(['transport', 'addon', 'maintenance', 'inspection', 'subscription']);
-const VALID_PRICE_UNITS = new Set(['order', 'plant', 'vehicle', 'visit']);
 
 /**
  * classifyCategory — D-9 honesty (replaces the old silent unknown→'addon' coercion).
@@ -28,8 +29,30 @@ export function classifyCategory(raw: string | null | undefined): { category: st
   };
 }
 
-function toPriceUnit(raw: string): string {
-  return VALID_PRICE_UNITS.has(raw) ? raw : 'order';
+/**
+ * classifyPriceUnit — D-9 honesty, and the SECOND silent coercion removed from this file.
+ *
+ * 🔴 `classifyCategory` above was written to replace a silent unknown→'addon' mapping. The
+ * IDENTICAL defect sat four lines beneath it until 2026-09-14: `toPriceUnit` returned `'order'`
+ * for any unit it did not recognise, against a hardcoded set of four. So a vertical's own unit
+ * — 'household', 'bag' — was not rejected, it was **quietly rewritten to a different, plausible,
+ * wrong one**, and every screen downstream then showed a confident "once per order".
+ *
+ * ⚠️ AND THE SET IT CHECKED AGAINST WAS THE PROBLEM, NOT THE FALLBACK. The column itself now
+ * accepts any lowercase identifier (`20260914_price_unit_shape_not_enum.sql`), so the only
+ * question left is whether the value is SHAPED like a unit — which is what this asks.
+ *
+ * Unknown-but-well-shaped is now simply WRITTEN: that is a vertical supplying its own vocabulary,
+ * which is the entire point (AC-1). Only an unusable value is held back and reported.
+ */
+export function classifyPriceUnit(raw: string | null | undefined): { priceUnit: string | null; flagged: boolean; reason: string | null } {
+  const v = normalisePriceUnit(raw);
+  if (v) return { priceUnit: v, flagged: false, reason: null };
+  return {
+    priceUnit: null,
+    flagged: true,
+    reason: `price unit "${raw ?? '(none)'}" is not usable — it must be a short lowercase word such as order, visit or household`,
+  };
 }
 
 /** A suggested offering this seed would NOT write, and why. Reported, never dropped silently. */
@@ -85,13 +108,19 @@ export async function seedServiceOfferings(
     // A suggestion states no mode, so a transport suggestion cannot be written (R-120).
     const bind = transportBindingError(cat.category, null);
     if (bind) { held.push({ name: o.name, reason: bind }); continue; }
+    // Held back, never coerced — the column is NOT NULL and a guessed unit is a wrong one (D-9).
+    const unit = classifyPriceUnit(o.price_unit);
+    if (unit.flagged || !unit.priceUnit) {
+      held.push({ name: o.name, reason: unit.reason ?? 'price unit not usable' });
+      continue;
+    }
     rows.push({
       business_id: businessId,
       name:        o.name,
       description: o.description ?? null,
       category:    cat.category,
       price_type:  o.price_type ?? 'flat',
-      price_unit:  toPriceUnit(o.price_unit),
+      price_unit:  unit.priceUnit,
       price:       0,                         // NON-NULL placeholder only (column is NOT NULL); flagged unset below
       is_active:   false,
       sort_order:  rows.length,
