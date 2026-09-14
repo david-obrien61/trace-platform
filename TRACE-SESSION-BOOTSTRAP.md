@@ -103,10 +103,13 @@
     ~163 legacy TABLE rows its own clause B has counted since 2026-09-11. **Rows 107 → 270; the
     "unused ids" list 187 → 28.** The load-list branch's `#290`/`#291`/`#292` had collided with three
     different items on `main` — **#290→#299 · #291→#300 · #292→#301** under [[R-148]] clause (4).
-  - ⚠️ **BRANCHED OFF THE UNMERGED `feat/delivery-day-load-list` (David's hold), THEN REBASED ONTO
-    `main`.** `BOM_RULES` exists nowhere else. The rebase was deliberate: archiving §3 from a 2-day-old
-    base would have re-archived three entries `main` already held — **byte-identical duplicates,
-    auto-merged with no conflict**, which is the defect #325's hook exists to catch.
+  - ⚠️ **BRANCHED OFF THE UNMERGED `feat/delivery-day-load-list` (David's hold) — `BOM_RULES` exists
+    nowhere else — THEN `main` WAS MERGED IN.** Building on that 2-day-old base as-is would have
+    re-archived three §3 entries `main` already held: **byte-identical duplicates, auto-merged with
+    no conflict**, the defect #325's hook exists to catch. 🔴 **It was first done as a REBASE and
+    that had to be undone** — `verify-id-sweep` decides inheritance at `merge-base(HEAD, ref)`, and a
+    rebase destroys the ancestry marking ledger #315 as inherited, so the sweep reported a collision
+    against the branch this work is built on. **A merge keeps both parents.**
 
 ### 🟡 PUSHED, NOT MERGED — #322 (`fix/import-preview-field-checks`, 2026-09-14)
 
