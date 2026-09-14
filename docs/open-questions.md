@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #323 — **#280 ① and #294a are BUILT and asserted**; merged into `main` on top of #324 — the worktree rule, tech-debt #282 resolved — and #322 — the import preview's two field checks. All blocks are below, newest first.)
+**Last updated: 2026-09-14** (ledger #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#325 — the pre-commit hook (one check)**
+- 🔴 **NOT A QUESTION, A STANDING LIMIT YOU SHOULD KNOW: THE HOOK IS NOT ENFORCEMENT.** `git commit --no-verify` fires no hook at all and the broken state commits cleanly — **measured, not asserted**. No server-side check, no CI, no audit notices. A fresh clone that never runs `npm install` has no hook either. **It catches the accident; it stops nobody who means it.**
+- 🟡 **OPEN — SHOULD IT USE husky INSTEAD?** §6 r10 divergence, stated: husky is the industry standard and was not used, because it is a dependency plus a directory to do what one line of `core.hooksPath` does. **Your call; nothing breaks either way.**
+- 🟡 **OPEN — SHOULD ANYTHING ELSE EVER GO IN THIS HOOK?** My answer in the header is **no**: 0.21s is the design, and a hook that runs the whole gate is a hook people disable. **Recorded as a decision so the next session does not quietly add a second check.**
+- ✏️ **DISCLOSED, NOT A QUESTION:** worktrees share `.git/config`, so `core.hooksPath=.githooks` is **already set in `~/Desktop/trace-platform/.git/config`**. Harmless until this merges (no `.githooks/` on `main` → nothing fires), correct after. `npm run hooks:status` says which state you are in.
 
 **#324 — the worktree rule (tech-debt #282 resolved)**
 - 🔴 **OPEN — PLACEMENT IS MINE AND THIS IS THE CALL TO OVERRULE.** The rule went to **CLAUDE.md §6 r20** (full text), with **R-154** as an index line and **§10 item 11** as a one-line pointer. §9 was rejected deliberately: it fires at CLOSE-OUT while #282 fires at the COMMIT INSTANT, and a worktree must exist before work starts. Owner: `CLAUDE.md` §6 r20.
