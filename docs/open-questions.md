@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #321 — the production stamp **owner-proof READ LIVE**, `· prod` on `cultivar-os.app`; tech-debt **#294a** separated out with a **proposed check**; **#280 ①** sharpened after this session's own unpushed merge. Ledger #320 — the §3 entry gate, and 🔴 **the register's own blind spot named**: it is fed by §3's *FLAGGED FOR DAVID*, and fifteen close-out rows never wrote a §3 entry at all, #302 — the row that created this file — among them. The counts below are still measured 2026-09-11 and say so)
+**Last updated: 2026-09-14** (ledger #323 — **#280 ① and #294a are BUILT and asserted**; #280 stays 🟡 PARTIAL because ② is unchanged. Ledger #321 — the production stamp **OWNER-PROVEN**, and the `production-stamp` board created to receive the flip because it did not exist. The counts below are still measured 2026-09-11 and say so)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -83,6 +83,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — PRODUCTION IS STAMPED POSITIVELY, AND THAT IS A DELIBERATE DEVIATION FROM THE INDUSTRY STANDARD (§6 r16).** The standard env badge shows **nothing** in production. I show `prod`, because a blank production is indistinguishable from a bundle built before the feature existed (A9 *absent is not empty*). **Cost: one more token on every screen, for every user, forever.** Owner: `src/lib/deployStamp.ts`.
 - 🔴 **OPEN — `prod⚠ <branch>` IS A JUDGEMENT MADE WITHOUT ASKING.** A production deploy built from a non-`main` branch shouts. Legal (someone promoted a branch), and I decided it is worth seeing. **Say so if you would rather it stayed quiet.** Owner: `src/lib/deployStamp.ts`.
 - 🟡 **OPEN — tech-debt #280 IS 🟡 PARTIAL, NOT RESOLVED.** ② is now **OBSERVABLE by a human**; **no cap asserts it** and the close-out gates still accept *"pushed"*. ① (`merge-base --is-ancestor`) is satisfied for #320 **by the merge, not by a gate** — **asserting it is cheap and still owed.** Owner: `docs/tech-debt-log.md` → **#280**.
+
+**#323 — the two assertions, built**
+- ✅ **ANSWERED BY BUILD — #280 ① is asserted** (`verify-main-ancestry`, in `npm run verify`), **proven red with a real commit on local `main`**. ⚠️ **Clause A asserts `main` ONLY**, and **clause B is "at least one" not "all"** — measured: "all" reports 8 rebase artefacts, none a defect.
+- ✅ **ANSWERED BY BUILD — #294a is asserted** (`verify-id-citations` clause E), **red-first naming exactly the four predicted**, then repaired. **`#311` needed a judgement: which cell to merge** — I merged the renumber note into the SHA cell because it realigns every column. **Say so if you would rather it went elsewhere.**
+- 🔴 **STILL OPEN — #280 ② is unchanged and #280 stays 🟡 PARTIAL.** Nothing we own reads Vercel; ② is observable from the app (#321) and asserted by nothing. Owner: `docs/tech-debt-log.md` → **#280**.
+- 🔴 **LIVE `#323` COLLISION — another session (`docs/worktree-rule-and-282-close`, working tech-debt #282) claimed it 1m19s later.** R-148 clause (4): they renumber. **Not mine to move, and `npm run verify` is red until they do.**
 
 **#294a / #280 ① — the two the last pass left sharpened**
 - 🔬 **PROPOSED, NOT BUILT (your scope) — a check refusing a ledger row whose cell count EXCEEDS the header.** A shell pipe inside backticks splits a row and GFM discards the overflow silently; **#320 raised this defect's rate by making the row the home for close-out narrative.** Live: #279 · #299 · #311 · #317. Full proposal (counting rule, one-direction argument, 8 probes, red-first expectation, cost) in `docs/tech-debt-log.md` → **#294a**. **Your call whether it gets built.**
