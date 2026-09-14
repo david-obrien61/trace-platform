@@ -44,7 +44,7 @@ const SUITES  = [
 function suitesAreGreen() {
   for (const s of SUITES) {
     try {
-      execSync(`${ESB} ${s} --bundle --platform=node --format=cjs 2>/dev/null | node`,
+      execSync(`set -o pipefail; ${ESB} ${s} --bundle --platform=node --format=cjs 2>/dev/null | node`,
         { cwd: ROOT, stdio: 'pipe', shell: '/bin/bash' });
     } catch { return false; }
   }
