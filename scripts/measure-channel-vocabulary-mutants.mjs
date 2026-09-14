@@ -29,7 +29,7 @@ const ESB   = ROOT + 'node_modules/.bin/esbuild';
 
 function suiteIsGreen() {
   try {
-    execSync(`${ESB} ${SUITE} --bundle --platform=node --format=cjs 2>/dev/null | node`,
+    execSync(`set -o pipefail; ${ESB} ${SUITE} --bundle --platform=node --format=cjs 2>/dev/null | node`,
       { cwd: ROOT, stdio: 'pipe', shell: '/bin/bash' });
     return true;
   } catch { return false; }

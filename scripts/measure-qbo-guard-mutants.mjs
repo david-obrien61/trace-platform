@@ -32,7 +32,7 @@ const ESB = ROOT + 'node_modules/.bin/esbuild';
 function suitesGreen() {
   return SUITES.every(s => {
     try {
-      execSync(`${ESB} ${s} --bundle --platform=node --format=cjs 2>/dev/null | node`,
+      execSync(`set -o pipefail; ${ESB} ${s} --bundle --platform=node --format=cjs 2>/dev/null | node`,
         { cwd: ROOT, stdio: 'pipe', shell: '/bin/bash' });
       return true;
     } catch { return false; }

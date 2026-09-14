@@ -30,7 +30,7 @@ const ORIGINAL = { [MODULE]: readFileSync(MODULE, 'utf8'), [MIGRATION]: readFile
 /** Runs the suite. Returns true if GREEN (exit 0). Keys off the exit code, never on output text. */
 function suiteIsGreen() {
   try {
-    execSync(`node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs | node`, {
+    execSync(`set -o pipefail; node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs | node`, {
       stdio: 'pipe', shell: '/bin/bash',
     });
     return true;

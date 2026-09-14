@@ -53,7 +53,7 @@
 
 **DEPLOY / ENV**
 - Deploy = **merge to `main` → Vercel auto-deploys from main**. No per-branch previews — to test a branch, merge it first. Merge-to-main is **David's explicit go**, not automatic.
-- Vercel plan: **Hobby — 12 serverless-function ceiling, and this is a HARD LIMIT, not a discipline** (`api/` is AT the cap, 12/12; a 13th function silently fails the deploy and Vercel keeps serving the last-good bundle). **Upgrading to Pro is David's billing decision, never a builder's move mid-build — minting #13 is a STOP-and-surface event (§6 r11).** ⚠️ Confirmed 2026-08-30 after two working notes were found claiming or implying the ceiling had been lifted; both corrected — tech-debt #41. Supabase: **free tier**. Both → Pro at the first-paying-customer launch gate (PLATFORM_STATE ⛔).
+- Vercel plan: **Hobby — 12 serverless-function ceiling, and this is a HARD LIMIT, not a discipline** (`api/` is AT the cap, 12/12; a 13th function silently fails the deploy and Vercel keeps serving the last-good bundle). **Upgrading to Pro is David's billing decision, never a builder's move mid-build — minting #13 is a STOP-and-surface event (§6 r11).** ⚠️ Confirmed 2026-08-30 after two working notes were found claiming or implying the ceiling had been lifted; both corrected — tech-debt #41. Supabase: **free tier**. Both → Pro at the first-paying-customer launch gate (PLATFORM_STATE ⛔). ✅ **AND IT IS NOW A CHECK, NOT ONLY A RULE — 2026-09-14, ledger #318:** `verify-api-parses.mjs` counts the functions under `api/` **recursively** on every build (first script in `npm run verify`), prints `N of 12`, warns at zero headroom and **exits 1 at 13** — proven red on both a flat and a nested 13th file. **Ask the run, never a written number:** `PLATFORM_STATE.md` said `11 of 12 · 1 slot headroom` for 86 days and that count is now DELETED rather than corrected. ⚠️ It WARNS but does not BLOCK at 12, deliberately — **the last free slot is still spendable without a stop**, so §6 r11's STOP-and-surface at #13 remains a human rule.
 - Live prod env keys (cultivar `bgobkjcopcxusjsetfob`, names only — already set, don't re-suggest creating): `VITE_SUPABASE_URL`/`ANON_KEY`, `SUPABASE_URL`/`SERVICE_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `QBO_CLIENT_ID`/`SECRET`/`REDIRECT_URI`/`ENVIRONMENT`, `OCR_PRIMARY_MODEL`/`FALLBACK_MODEL`, `BLOTATO_API_KEY`, `VITE_DEMO_BUSINESS_ID`, `VITE_TAX_RATE`, `VITE_APP_URL`. Full list → `docs/inventory-env.md`.
 
 **DATA / RISK**
@@ -78,6 +78,29 @@
 ---
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
+
+### 🟡 PUSHED, NOT MERGED — #318 (`fix/pipefail-and-function-ceiling`, 2026-09-14)
+
+- 🔴 **`set -o pipefail` WAS MISSING FROM 19 EXEC'D PIPELINES, 18 OF THEM MUTATION HARNESSES** — BUILDER-COMPLETE,
+  `a4dd93c`. Without it bash returns only the LAST command's status, so **a module that will not compile is
+  indistinguishable from one whose suite passed**, and a mutation harness scores it **`SURVIVED`** when the suite
+  never ran. All 26 pipelines now carry it. **Nothing asserts that they keep doing so — tech-debt #292.**
+  - 🔴 **THE SCORES DID NOT MOVE, AND THAT IS THE FINDING.** 395 mutants, **byte-identical output** before and
+    after, every exit 0. **Measured with an esbuild shim: 483 builds across the 18, ZERO failed** — every current
+    mutant is a semantically-valid edit that compiles, so the bug was **LATENT**. The verdicts were correct **by
+    luck**; they are now correct **by construction**. ⚠️ **Do not quote a pre-fix score as evidence of anything.**
+  - ⚠️ **Residual — tech-debt #293:** a mutant that does not BUILD now scores `CAUGHT`, and 16 of 18 harnesses
+    discard esbuild's stderr with `2>/dev/null`, so the harness cannot say WHY. 0 of 483 today.
+- ✅ **THE 12-FUNCTION CEILING IS ASSERTED** — `verify-api-parses.mjs`, `297972b`. Recursive count, `N of 12`, a
+  zero-headroom warning, **exit 1 at 13**, 7 probes both directions, proven red on a flat AND a nested 13th file.
+  🔴 **Deliberately NOT `readdirSync('api').length <= 12`** — that returns **11** today and cannot fail: even
+  2026-06-20's own defect takes it 11 → 12 and passes.
+- ✅ **`PLATFORM_STATE.md`'s `11 of 12 · 1 slot headroom` IS DELETED, NOT CORRECTED** — `fa7260a`. It stood **86
+  days** in the doc §10 says to read first, while `docs/inventory-functions.md` had fixed the identical error
+  twelve days earlier. **A number hand-written in two places gets fixed in one.**
+- ⚠️ **PUSHED, NOT MERGED, per David.** Based on `recon/one-fact-many-homes` (`c141bab`) as a **real dependency**
+  — #317's ledger row lives only there and `verify-id-citations` needs it present — so
+  `merge-base --is-ancestor` FAILS by design (#280 ①). **The two merge together, or #317 merges first.**
 
 ### ✅ MERGED TO `main` 2026-09-12 — #304 · #305 · #307 · #309 (`d48dd84`)
 

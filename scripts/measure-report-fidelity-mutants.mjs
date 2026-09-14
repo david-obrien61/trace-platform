@@ -80,7 +80,7 @@ for (const [name, file, find, replace] of MUTANTS) {
     writeFileSync(file, original.replace(find, replace));
     let red = false;
     try {
-      execSync(`node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs | node`,
+      execSync(`set -o pipefail; node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs | node`,
         { stdio: 'pipe', shell: '/bin/bash' });
     } catch { red = true; }
     if (red) { caught++; rows.push(`✅ caught        ${name}`); }

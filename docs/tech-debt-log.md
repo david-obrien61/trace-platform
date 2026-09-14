@@ -3192,3 +3192,77 @@ was not in scope.**
 ✅ **The window closed as it opened: free.** Nothing consumes the export (**#266** — `business_inventory.zone`
 and the irrigation zone records both measured absent), so no stored row needed repairing and no read
 side had to learn to tolerate the space.
+
+---
+
+## #292 — 🟡 NOTHING ASSERTS THAT AN EXEC'D SHELL PIPELINE CARRIES `set -o pipefail`; NINETEEN WERE FIXED BY HAND AND THE TWENTIETH IS FREE TO REGRESS (NEW 2026-09-14, ledger #318)
+
+**Where.** All of `scripts/*.mjs` and the `scripts` block of `package.json`. As of ledger #318 every
+exec'd pipeline in the repo carries `set -o pipefail` — 26 places: the 7 that already had it,
+`run-tests.mjs`, and the 19 added today. **Nothing keeps it that way.**
+
+🔴 **THE DEFECT IS SILENT, AND IT MAKES A CHECK REPORT SUCCESS.** Without the option, bash returns
+only the LAST command's status. `esbuild` writes its diagnostics to stderr and nothing to stdout, so
+`node` reads an EMPTY program, exits 0, and the pipeline succeeds. **A file that will not compile is
+indistinguishable from one whose suite passed** — `run-tests.mjs:62` records the day that happened
+(2026-09-07: a test file printed ✅ with `(no summary line)` beside it). In a mutation harness the
+consequence is sharper: the harness scores the mutant **SURVIVED** — *the suite stayed green while
+the module was wrong* — when the suite never ran at all.
+
+**Why it is filed rather than fixed.** The mechanical fix is a cap that parses every `execSync` /
+`spawnSync` template and every `package.json` script, flags any containing an unquoted `|` without
+the option, and fails the build. It needs one thing this pass did not build: **a declaration file for
+the legitimate exceptions** — a single-command exec has no pipeline and must not be flagged, and a
+pipeline whose first stage genuinely may fail (a `grep` used as a filter) is a real case. Without
+that the cap is noise on its first run, and a noisy cap is one people learn to skip (#73's lesson).
+**Writing a new cap inside a nineteen-file mechanical fix is also the scope drift the gate exists to
+catch.**
+
+⚠️ **AND THE SHAPE IS ALREADY FAMILIAR: THIS IS A DECLARATION NOBODY RE-DERIVES.** #318 derived the
+population by hand (`grep -rln '| node'`, then per-file `pipefail` counts) and got 19. **That number
+is a measurement, not a guarantee** — it is #73's class and #185's class, one layer out into the
+tooling. The same grep is the cap; it is three lines plus the declaration.
+
+**Trigger.** The next session that adds an exec'd pipeline to `scripts/` or `package.json`, or any
+session with the appetite for a small cap. **Until then the invariant holds by nobody having broken
+it.**
+
+---
+
+## #293 — 🟡 WITH `pipefail` ON, A MUTANT THAT DOES NOT BUILD NOW SCORES `CAUGHT`, AND 16 OF 18 HARNESSES SWALLOW THE REASON WITH `2>/dev/null` (NEW 2026-09-14, ledger #318)
+
+**Where.** The 18 mutation harnesses fixed by ledger #318 — `scripts/measure-*.mjs` +
+`scripts/mutants-vendor-identity.mjs`. Sixteen of them run the pipeline as
+`${ESB} ${SUITE} … 2>/dev/null | node`.
+
+**What it is.** CA-1 was the right fix and this is its honest residual. `suiteIsGreen()` returns a
+BOOLEAN, so after the fix there are two distinct events collapsed into one verdict:
+
+| what happened | verdict | is that right? |
+|---|---|---|
+| the mutated module compiled and the suite went red | `CAUGHT` | yes — the suite noticed |
+| the mutated module DID NOT COMPILE, so nothing ran | `CAUGHT` | **defensible, but it is not the same claim** |
+
+Both are honestly "not survived" — a mutant the compiler rejects is a change the codebase refuses,
+and scoring it `SURVIVED` (the pre-fix behaviour) was flatly wrong. **But a harness that reports
+`CAUGHT` for a mutant no test ever executed is telling the reader something it did not measure**, and
+`2>/dev/null` means esbuild's message — the one sentence that would distinguish the two — is
+discarded before anyone could see it.
+
+🔴 **IT IS NOT REACHABLE TODAY, AND THAT IS PRECISELY WHY IT SHOULD BE WRITTEN DOWN NOW.** Measured
+in the #318 pass with an esbuild shim: **483 builds across the 18 harnesses, ZERO failed.** Every one
+of the 395 current mutants is a semantically-valid edit that compiles, so the branch is dead code.
+**The next mutant that touches a type, a signature or a brace makes it live**, and it will arrive as
+a satisfying green.
+
+**The fix.** Have the pipeline report its two stages separately — build to a temp file, check that
+exit, then run — and give the harness a third verdict (`NO-BUILD`, printed distinctly, counted
+separately, not folded into `caught`). Stop discarding esbuild's stderr on the failing path.
+Cheapest honest version: keep the boolean, but on a red result re-run the build alone and print
+`(did not build)` beside the mutant. **~15 lines in one shared helper — and the 18 harnesses should
+share that helper rather than each grow a copy, which is §6 r8 and is the larger reason to do it
+once.**
+
+**Trigger.** The first harness that reports a mutant it cannot explain, or the next session touching
+this family. Related: [[R-33]] · CLAUDE.md §6 r19 · #182 (*a harness that cannot reach its target
+reports the same as one that passed*) · #186 (the runner that reported 72 of 74 and said all pass).
