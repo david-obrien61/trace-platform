@@ -3563,7 +3563,7 @@ rename to `UNIT_SELF_SHARE` **and** record what the 0.6 was derived from, or tha
 
 ---
 
-## #297 — 🟡 GROWER UNITS ARE KEYS ON AN EXPORTED `shared` INTERFACE, AND THE FILE'S OWN AC-1 CLAIM IS 80% TRUE (NEW 2026-09-14, ledger #328, recon #327)
+## #297 — 🟡 GROWER UNITS ARE KEYS ON AN EXPORTED `shared` INTERFACE, THE FILE'S OWN AC-1 CLAIM IS 80% TRUE, AND ONE OF THE KEYS NOW HAS A SECOND HOME AT A DIFFERENT PRECISION (NEW 2026-09-14, ledger #328, recon #327)
 
 **Where.** `packages/shared/src/production/productionConfig.ts:56,58` (the interface) and `:112,113`
 (the defaults).
@@ -3598,10 +3598,38 @@ DATA, not schema.** So the storage is AC-1-clean and only the TypeScript narrows
 the whole `UppotPlan` surface read and write tables that do not exist. **There is no live row to
 migrate. Rename the keys before it is applied, or pay for it afterwards.**
 
+➕ **FOLDED IN 2026-09-14 (David's instruction) — `trueGallonsPerCubicYard` NOW HAS TWO HOMES AND
+TWO PRECISIONS. This is NOT a separate defect and must not be filed as one: it is a second copy of
+a key already queued for renaming here, and splitting them means two sessions touching one line.**
+
+| home | value | as written |
+|---|---|---|
+| `packages/shared/src/production/productionConfig.ts:126` | `201.974` | a rounded literal, 6 s.f. |
+| `packages/cultivar-os/src/lib/loadList.ts:42` | `201.97402597…` | `GALLONS_PER_CUBIC_YARD = 46656 / 231` — derived (231 in³/gal, 46,656 in³/yd³) |
+
+**One physical constant, two definitions** (§6 r8). ⚠️ **The arithmetic gap is negligible — ~1.3e-7
+relative, far below any material-ordering tolerance — so this is a DRIFT risk, not a wrong number
+today.** Recorded because the two are no longer the same expression: one is a literal somebody must
+remember to update, the other is derived and cannot go stale.
+
+🔴 **WHOEVER FIXES #297 MUST FOLD THIS, NOT LEAVE A SECOND COPY BEHIND.** Renaming the shared key
+while `loadList.ts` keeps its own derived constant would resolve the AC-1 half and **leave the
+duplication — which is the state that produced [[R-152]]'s three-month outage.** The derived form
+is the better one to keep.
+
+✅ **AND `loadList.ts` IS NOT AT FAULT — STATED SO NOBODY "FIXES" IT BY MOVING IT INTO `shared`.**
+Ledger #315's load list is AC-1-CORRECT: it touches nothing in `shared`, keeps its grower vocabulary
+in the vertical deliberately, and imports the generic operations rather than forking them. Its own
+header says so — *"this file lives in `cultivar-os`, NOT in `shared`, and deliberately … the two
+things that ARE general (reading a size out of a sentence, naming a unit) are imported FROM shared
+rather than re-implemented here (R-27)."* **The duplication is a consequence of the shared key being
+grower-named in the first place**, which is this entry.
+
 **Fix.** Move the grower keys into a nested `vertical: {}` sub-object, or rename to the platform
 concept (a unit-conversion factor and a bulk-material density). Correct `:43`'s claim either way.
+**And resolve the two homes above in the same pass** — one definition, derived, read by both.
 
-**Blast radius.** No live rows (the table does not exist). ~6 call sites in `productionMath.ts`.
+**Blast radius.** No live rows (the table does not exist). ~6 call sites in `productionMath.ts`, **plus the second home in `loadList.ts` that must be folded, not left standing.**
 
 **Trigger.** 🔴 **Before `20260905_production_planning.sql` is applied.**
 
