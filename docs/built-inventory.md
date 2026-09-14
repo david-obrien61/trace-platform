@@ -1,4 +1,5 @@
-# Last updated: 2026-09-14 (**#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
+# Last updated: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
+# (prior line, preserved: **#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
 # (prior line, preserved: **#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
 # (prior line, preserved: **#321 — THE PRODUCTION STAMP, MERGED AND READ LIVE.** `origin/main` = `15fe4f2`; `cultivar-os.app` renders **`built Sep 14, 12:28p · 15fe4f2 · prod`** — quiet, no amber chip — **traced through the shipped minified bundle** (`jJ("production","main")` → `{label:"prod", loud:false}`), not inferred from source. The bundle carries its **deployment target**, not only its SHA: `vite.config.ts` bakes `VERCEL_ENV`/`VERCEL_GIT_COMMIT_REF`, the pure `src/lib/deployStamp.ts` turns them into `{label, loud, reason}`, `<VersionStamp>` renders it on every screen. **GATE 0 on all 40 boards now requires the last token to read `prod`.** ⚠️ **Not rendered in a browser — under OP-14 the card flip is David's.** ⚠️ **tech-debt #280 → 🟡 PARTIAL: ② is OBSERVABLE, NO CAP ASSERTS IT; ① still owed and now carries this session's own unpushed-merge incident.** **#294a** separated out — a shell pipe inside inline code splits a ledger row and GFM discards the overflow silently, **a defect #320 made more likely** — with a **check PROPOSED, not built**.)
 # (prior line, preserved: **#320 — THE §3 ENTRY GATE, AND THE §3 ENTRY TRIM.** 🔴 **A close-out ledger row with NO CLAUDE.md §3 entry is now an INCOMPLETE CLOSE-OUT, asserted by `verify-handoff-retention` check 5** — every close-out row must be claimed by an entry's headline bold run (a `⏳ RESERVED` row owes none; `TECH-DEBT #NNN` is not a ledger claim; **a MENTION in another entry's body is not an entry**) or be declared in `handoff-entry-declarations.json`, **a list that prunes itself in both directions** (#73's lesson). **MEASURED: FIFTEEN rows had no entry — #253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317 — they never entered, they did not scroll out.** The prompt named four; the other eleven were derived. **#302 is the pointed one: the row that BUILT `open-questions.md`, to catch what §3 drops at N=3, is itself a row §3 never recorded.** **10 probes both directions + THREE red-first proofs against the real tree**, and the gate caught this very build before its entry was written. 🔴 **AND §3 ENTRIES ARE NOW TRIMMED TO headline + `Type:` + state + FLAGGED FOR DAVID** — the proof narrative moves to the CLOSE-OUT LEDGER ROW, which is permanent and which nothing has to cut. **Nothing deleted: 11 paragraphs (10.3KB) the rows did not carry were appended verbatim; 5 the rows already carried were dropped after a per-sentence check.** CLAUDE.md **678 → 651 lines, −14KB**. **N=3 unchanged.**)
@@ -2661,6 +2662,61 @@ mutant that puts `CustomerRef.name` back on the row.
 ⚠️ **AND THREE SOURCE PROBES WERE READING PROSE, INCLUDING ONE GREEN FOR WEEKS ON A GUARD WHOSE FAILURE IS UNRECOVERABLE** — `historyOrder.test.ts` §I would have **PASSED on a DELETED guard** so long as a comment still mentioned `findOrCreateQBCustomer`. Fixed and proven (mutants delete each guard's CODE and leave its COMMENT; both CAUGHT) → tech-debt **#146**, class not closed.
 
 ⚠️ **NOT BUILT, NAMED RATHER THAN IMPLIED:** the file harness ([[R-60]]) · retire-and-replace ([[R-58]]) · normalisation with consent and its two `audit_log` rows ([[R-59]]) · the printable artefact · a place to record an answer to the two findings that ask one (the panel says so on screen rather than offering a dead button). → owner-tests `docs/owner-tests/qb-test-mode-full-surface-test.md` (**14 cards, 0 covered**); story `user_stories.md` *"Lauren tries the whole thing on for a week…"*
+
+---
+
+### THE PRE-COMMIT HOOK — ONE CHECK (2026-09-14, ledger #325)
+
+**PURPOSE:** refuse a commit whose `CLAUDE.md` §3 / `docs/handoff-archive.md` state is broken,
+at the moment it breaks rather than on the next build.
+
+**WHY IT EXISTS.** 🔴 **Three archive duplicates in three merges — #322, #324, #323 — every one
+auto-merged with NO CONFLICT.** Two branches archive the same §3 entry at different offsets under
+different provenance comments; git's 3-way merge sees two independent hunks and takes both,
+producing a byte-identical duplicate. **A conflict stops a human; this does not.** Each was caught
+by someone reading the file before committing, which is not a control.
+
+🔴 **THE HOOK POINT IS THE FINDING.** Measured in a throwaway repo, git 2.37 — all four paths:
+
+| Path | Hook that fires |
+|---|---|
+| normal `git commit` | `pre-commit` |
+| **CLEAN auto-merge (no conflict)** | **`pre-merge-commit` only** |
+| conflicted merge → resolve → `git commit` | `pre-commit` |
+| `--no-verify` | **nothing** |
+
+**The duplicate arrives on a clean auto-merge.** All three real instances happened to conflict in
+OTHER files, so `git commit` was used — a `pre-commit`-only hook would have fired **by luck, not
+design**, and would have missed the very case it was built for.
+
+**WHAT SHIPPED.**
+- `.githooks/pre-commit` — runs **one** check: `node scripts/verify-handoff-retention.mjs`. The
+  real check only, **not** `npm run verify:handoff-retention` (which also runs `--self-test` and
+  shells through npm — both double the time to prove the CHECKER works, which is the verify
+  chain's job, not a commit's).
+- `.githooks/pre-merge-commit` — a **one-line `exec` pointer**, never a second copy (STD-011).
+- `package.json`: `prepare` (wires `core.hooksPath` on `npm install`, zero dependencies) ·
+  `hooks:install` · `hooks:status` (answers *is it on in THIS clone* in one line).
+
+**PROOF — four cases, each watched before being trusted (§6 r19).** ① staged duplicate → `git
+commit` **REFUSED**, exit 1, naming the entry · ② the real defect reproduced end-to-end, `git
+merge` **exit 0 with no CONFLICT line** → **REFUSED by `pre-merge-commit`** · ③ the same clean
+auto-merge without a duplicate → **ALLOWED**, exit 0 (negative control — not merely always-red) ·
+④ `--no-verify` → **the broken commit LANDED**, no hook output. **0.21–0.25s over three runs.**
+
+🔴 **IT IS NOT ENFORCEMENT AND THE HEADER SAYS SO IN ITS OWN WORDS.** `--no-verify` skips it and
+nothing anywhere catches that — no server-side check, no CI, no audit. `core.hooksPath` is
+per-clone, so a fresh clone that never runs `npm install` has no hook. **A seatbelt, not a lock.**
+
+⚠️ **IT CHECKS THE WORKING TREE, NOT THE INDEX.** Right for the merge case — during a merge the
+working tree IS the commit — a real limitation elsewhere, stated rather than papered over.
+
+⚠️ **DELIBERATE §6 r10 DIVERGENCE: husky is the industry standard and was NOT used** — a
+dependency plus a directory to do what one line of `core.hooksPath` does.
+
+🔴 **DO NOT ADD A SECOND CHECK.** 0.21s is the design. A hook that runs `npm run verify` is a hook
+people disable, and a disabled hook is worse than none because it still reads as protection.
+**Deliberately NOT in the verify chain:** the chain may be slow; a commit may not.
 
 ---
 

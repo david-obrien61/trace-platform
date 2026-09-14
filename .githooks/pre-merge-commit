@@ -1,0 +1,17 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# PURPOSE: the SAME one check as `pre-commit`, at the hook a CLEAN auto-merge
+#   actually fires. This file is a POINTER, never a second copy (STD-011) —
+#   two copies of one rule is one rule that drifts, and the copy is always the
+#   half that goes stale.
+#
+# 🔴 WHY THIS FILE HAS TO EXIST AT ALL. Measured in a throwaway repo, git 2.37:
+#      · normal `git commit`                      → pre-commit
+#      · CLEAN auto-merge (no conflict)           → THIS hook, and NOT pre-commit
+#      · conflicted merge → resolve → git commit  → pre-commit
+#   The archive duplicate arrives on a clean auto-merge. A pre-commit-only hook
+#   would have missed the exact case it was built for.
+#
+# ⚠️ `--no-verify` skips this too, and nothing catches that. See pre-commit.
+# ─────────────────────────────────────────────────────────────────────────────
+exec "$(dirname "$0")/pre-commit" "$@"

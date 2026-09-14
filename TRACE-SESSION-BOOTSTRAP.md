@@ -103,6 +103,29 @@
   - ✅ NO migration · NO schema · NO permission string · `api/` **12/12** untouched · `npm run verify`
     exit 0 ZERO NET-NEW · **108/108 files · 5,773 assertions** (+87).
 
+### 🟡 PUSHED, NOT MERGED — #325 (`fix/handoff-retention-precommit-hook`, 2026-09-14)
+
+- 🔴 **A PRE-COMMIT HOOK RUNNING ONE CHECK — `verify-handoff-retention`** — BUILDER-COMPLETE.
+  Refuses a commit whose §3 / handoff-archive state is broken, **at the moment it breaks** rather
+  than on the next build. **0.21s.** Install: `npm install` (or `npm run hooks:install`);
+  `npm run hooks:status` says whether it is on in this clone.
+  - 🔴 **WHY: three archive duplicates in three merges (#322, #324, #323), every one AUTO-MERGED
+    WITH NO CONFLICT.** Two branches archive the same §3 entry at different offsets under different
+    provenance comments; git takes both. **A conflict stops a human; this does not.**
+  - 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit`, NOT
+    `pre-commit`** (measured, git 2.37). A pre-commit-only hook would have missed the exact case it
+    was built for — all three real instances conflicted in OTHER files and routed through
+    `git commit` **by luck**. It is on both points, and it is still ONE check.
+  - ✅ **PROVEN FOUR WAYS:** staged duplicate → REFUSED · the defect reproduced end-to-end, merge
+    exit 0 with no CONFLICT line → REFUSED by `pre-merge-commit` · same merge without a duplicate →
+    **ALLOWED** (negative control) · `--no-verify` → **commit LANDED, nothing caught it.**
+  - 🔴 **IT IS NOT ENFORCEMENT AND THE HEADER SAYS SO.** `--no-verify` bypasses it; no CI, no
+    server-side check. **A seatbelt, not a lock.** Do NOT add a second check — scope is the feature.
+  - ⚠️ **`core.hooksPath` is ALREADY SET repo-wide** (worktrees share `.git/config`). Harmless until
+    this merges, correct after.
+  - ✅ NO app code · NO migration · NO schema · NO permission string · **NO new dependency** (not
+    husky — a stated §6 r10 divergence) · `api/` **12/12** · **NOT in `npm run verify`**.
+
 ### 🟡 PUSHED, NOT MERGED — #318 (`fix/pipefail-and-function-ceiling`, 2026-09-14)
 
 - 🔴 **`set -o pipefail` WAS MISSING FROM 19 EXEC'D PIPELINES, 18 OF THEM MUTATION HARNESSES** — BUILDER-COMPLETE,
