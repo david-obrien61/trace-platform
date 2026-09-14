@@ -50,6 +50,7 @@
 // ============================================================
 import { type BasisKind, type Estimate, fact, suggestion, guess, weakest } from './basis';
 import { type OperationsConfig, type ResolvedConfig, coverMonthsFor, OPERATIONS_BASIS } from './productionConfig';
+import { type Ladder, resolveRung } from '../inventory/containerLadder';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // GROUPING — the projection, never the string
@@ -84,7 +85,19 @@ export interface LotInput {
  * unit, or a RANGE. A null key is what makes the lot appear in the refused list instead of being
  * quietly bucketed under one end of its range.
  */
-export function rungKey(lot: LotInput): string | null {
+export function rungKey(lot: LotInput, ladder: Ladder | null = null): string | null {
+  // 🔴 WITH A LADDER, THE RUNG IS THE KEY — and that is the point of having one. "3/5 Gallon" and
+  // "#3" and "5 gal" are ONE bucket at LAWNS (R-71 ③: Terry's difference between #3 and #5 is only
+  // pot height), so they must group together or the split under-counts the rung three ways. The
+  // ladder resolves all three to one rung and the LABEL becomes the key.
+  // ⚠️ `ladder = null` is a MEANINGFUL value, not a forgotten argument: a tenant that has not set
+  // a ladder up falls through to the pre-ladder numeric behaviour, unchanged. It is spelled as a
+  // default rather than left optional-by-accident so a reader can see which case they are in.
+  if (ladder != null) {
+    const r = resolveRung(ladder, lot.size);
+    if (!r.ok) return null;
+    return `${lot.name.trim().toLowerCase()}|${r.rung.label}`;
+  }
   if (lot.unitKind !== 'container') return null;
   if (lot.unitValue == null || !Number.isFinite(lot.unitValue)) return null;
   if (lot.unitValueMax != null && lot.unitValueMax !== lot.unitValue) return null;
@@ -93,7 +106,7 @@ export function rungKey(lot: LotInput): string | null {
 
 export type LotRefusal =
   | { ok: true }
-  | { ok: false; reason: 'no_projection' | 'not_container' | 'range' | 'never_counted'; detail: string };
+  | { ok: false; reason: 'no_stock' | 'no_projection' | 'off_ladder' | 'not_container' | 'range' | 'never_counted'; detail: string };
 
 /**
  * Can this lot be planned, and if not, what does the person in front of it need to hear?
@@ -101,7 +114,39 @@ export type LotRefusal =
  * Order is the order of usefulness. A range is named before a missing count because the range is a
  * data-shape problem the owner can fix, while an uncounted lot is simply work not yet done.
  */
-export function classifyLot(lot: LotInput): LotRefusal {
+export function classifyLot(lot: LotInput, ladder: Ladder | null = null): LotRefusal {
+  // 🔴 NOTHING ON HAND OUTRANKS EVERY SIZE REASON, AND IT IS FIRST FOR THAT REASON. David,
+  // 2026-09-14: *"a row with zero on hand cannot be planned whatever its size."* The screen was
+  // reporting the WRONG REASON — 97 of Test Dave's 99 unplannable rows are catalogue rows carrying
+  // no size AND no stock, and every one of them was being told its size had not been read, which
+  // sends somebody to fix a size that would change nothing. Fixing the size of a row with zero on
+  // hand still leaves nothing to uppot.
+  // ⚠️ THIS FLIPS A WRITTEN ASSERTION (`productionPlan.test.ts` §D previously asserted that a lot
+  // counted AT zero is plannable). That test encoded an assumption David has now corrected; it is
+  // updated rather than deleted, and the old expectation is recorded there.
+  // ⚠️ It is NOT the same as never_counted, which stays where it deliberately sits at the bottom:
+  // zero is an ANSWER, null is an unanswered question, and A9 keeps them apart.
+  if (lot.qty === 0) {
+    return { ok: false, reason: 'no_stock', detail: 'Nothing on hand — there is nothing to uppot, whatever its size.' };
+  }
+
+  // 🔴 WITH A LADDER, THE LADDER IS THE AUTHORITY ON WHETHER A SIZE CAN BE PLANNED, and it sits
+  // above the kind and range checks because it legitimately overrules both:
+  //   · "3/5 Gallon" parses as a RANGE and would be refused — the ladder says it is ONE rung.
+  //   · "20 inch box" parsed as LENGTH until this build — a box is a container.
+  //   · "slip" is refused by the parser outright — the ladder matches it by label.
+  // A size that READS but names no rung is the 121-row population David named: a real answer that
+  // is simply not one of this nursery's sizes, and it gets its own reason rather than being
+  // mislabelled as unreadable.
+  if (ladder != null) {
+    const r = resolveRung(ladder, lot.size);
+    if (r.ok) return lot.qty == null
+      ? { ok: false, reason: 'never_counted', detail: 'Never counted — this is not a count of zero.' }
+      : { ok: true };
+    if (r.reason === 'off_ladder') return { ok: false, reason: 'off_ladder', detail: r.detail };
+    return { ok: false, reason: 'no_projection', detail: `"${lot.size ?? ''}" has not been read as a unit yet.` };
+  }
+
   if (lot.unitKind == null) {
     return { ok: false, reason: 'no_projection', detail: `"${lot.size ?? ''}" has not been read as a unit yet.` };
   }
@@ -420,6 +465,13 @@ export function planLots(
     batchSize: number;
     /** Set by the caller from the config window; batches are laid out from here in list order. */
     startDate: string | null;
+    /**
+     * This tenant's container ladder, or null when none is configured.
+     * 🔴 `null` IS A REAL STATE, NOT A MISSING ARGUMENT — a tenant that has not set a ladder up
+     * plans exactly as it did before this build. Spelled explicitly so the two cases are visible
+     * at the call site rather than differing by whether somebody remembered a field.
+     */
+    ladder?: Ladder | null;
   },
 ): { batches: PlannedBatch[]; refused: Array<{ lot: LotInput; refusal: LotRefusal }>; totals: PlanTotals } {
   const { ops, money } = cfg;
@@ -444,7 +496,7 @@ export function planLots(
 
   let cursor = opts.startDate;
   for (const lot of lots) {
-    const refusal = classifyLot(lot);
+    const refusal = classifyLot(lot, opts.ladder ?? null);
     if (!refusal.ok) { refused.push({ lot, refusal }); continue; }
     const target = opts.targets[lot.id];
     if (target == null || !Number.isFinite(target) || target <= (lot.unitValue ?? 0)) continue;

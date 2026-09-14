@@ -19,6 +19,12 @@ export {
   UNIT_COLUMNS, UNIT_KINDS,
 } from './unitOfMeasure';
 export type { UnitKind, UnitParse, UnitColumns, MultiUnitGroup, MultiUnitCandidate, UnitSummary, UnitSummaryRow } from './unitOfMeasure';
+
+// The container ladder — a container size is a rung, not a number (ledger #326).
+export {
+  foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
+} from './containerLadder';
+export type { Rung, Ladder, RungResolution, LadderConflict } from './containerLadder';
 export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retiredFilter';
 export type { LiveFilterable } from './retiredFilter';
 export { shapeCollisionKey, findShapeCollisions, collisionReason, moneyAtStake } from './shapeCollision';

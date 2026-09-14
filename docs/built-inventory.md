@@ -1,4 +1,5 @@
-# Last updated: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
+# Last updated: 2026-09-14 (**#326 — THE CONTAINER LADDER: A CONTAINER SIZE IS A RUNG, NOT A NUMBER. R-155.** Per-tenant `container_ladder`; **adding a rung is adding a ROW**, and the SIZE RESOLVER reads the same list the picker offers. 🔴 **The 7-gallon hypothetical had ALREADY HAPPENED — 21 live LAWNS rows, in none of the four hardcoded size lists** (two dead in `constants.ts`, a live HAND COPY in `api/orders/submit.ts:13`, one in prose). 🔴 **A rung's numeric keys are DERIVED, never declared:** `3/5 gal` claims BOTH 3 and 5 (R-71 ③), `95/100` claims both. 🔴 **Parser rung order changed — box above length — and the corpus was re-run: 565 rows unchanged, exactly 3 changed** (`20/24/36 inch box`), length → container; **their stored projection is now stale and owes a re-derive.** 🔴 **Nothing-on-hand is now the reason given**, above every size reason — 97 of Test Dave's 99 are catalogue rows with no size AND no stock; **this reversed a written assertion, recorded not deleted.** **60 assertions · 23/23 mutants caught, 0 survived**, the harness carrying a third **`NO-BUILD`** verdict (tech-debt #293's proposal). ⚠️ **Migration WRITTEN, NOT APPLIED. No screen edits the ladder yet.**)
+# (prior line, preserved: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.))
 # (prior line, preserved: **#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
 # (prior line, preserved: **#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
 # (prior line, preserved: **#321 — THE PRODUCTION STAMP, MERGED AND READ LIVE.** `origin/main` = `15fe4f2`; `cultivar-os.app` renders **`built Sep 14, 12:28p · 15fe4f2 · prod`** — quiet, no amber chip — **traced through the shipped minified bundle** (`jJ("production","main")` → `{label:"prod", loud:false}`), not inferred from source. The bundle carries its **deployment target**, not only its SHA: `vite.config.ts` bakes `VERCEL_ENV`/`VERCEL_GIT_COMMIT_REF`, the pure `src/lib/deployStamp.ts` turns them into `{label, loud, reason}`, `<VersionStamp>` renders it on every screen. **GATE 0 on all 40 boards now requires the last token to read `prod`.** ⚠️ **Not rendered in a browser — under OP-14 the card flip is David's.** ⚠️ **tech-debt #280 → 🟡 PARTIAL: ② is OBSERVABLE, NO CAP ASSERTS IT; ① still owed and now carries this session's own unpushed-merge incident.** **#294a** separated out — a shell pipe inside inline code splits a ledger row and GFM discards the overflow silently, **a defect #320 made more likely** — with a **check PROPOSED, not built**.)
@@ -3129,8 +3130,56 @@ crew-hours, the batch dates and whether the plan fits the window, **before** any
 seven-day flags (computed, tested, **rendered nowhere**) · the graduation ledger movement · the audit
 row · sales-a-month from history (stage ④) · a UI cancel for a committed plan.
 
-**PROOF:** `productionPlan.test.ts` 156 probes · `uppotPlanRead.test.ts` 28 probes ·
+**PROOF:** `productionPlan.test.ts` 169 probes · `uppotPlanRead.test.ts` 28 probes ·
 `scripts/measure-production-plan-mutants.mjs` **40 mutants, 40 caught, 0 survived**.
+
+### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-155)
+
+**Last updated:** 2026-09-14 · **Status:** BUILDER-COMPLETE · **migration WRITTEN, NOT APPLIED.**
+
+A grower's container sizes are a short, ordered, **per-tenant** list of real trade rungs — at LAWNS
+*slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200*. **Adding a rung is adding a ROW**, and the
+size resolver reads the same list the picker offers, so a new size is recognised everywhere at once.
+
+- `packages/shared/src/inventory/containerLadder.ts` — pure, zero-dep leaf. **The ladder is passed
+  IN as data**, because `parseUnitOfMeasure` is a zero-dep leaf that a client grid, a node backfill
+  and a verify cap all import, and none of them may drag a DB handle in.
+- `supabase/migrations/20260914_container_ladder.sql` — `public.container_ladder`, per-tenant.
+  SELECT is **membership** (not `settings:read` — `STAFF_DEFAULT_BUNDLE` holds no `settings:*`, so
+  gating the read would blind the picker for the people in the yard, tech-debt #188); write is
+  `settings:update`; **no DELETE policy at all** — retiring is an UPDATE (R-133 · ledger #303's shape).
+- `packages/cultivar-os/src/lib/containerLadderRead.ts` — one read. A **failed** read and an
+  **absent** ladder are different sentences and the screen says which.
+- `UppotPlan.tsx` — the target-size cell is now a **next-rung picker**; the unresolved list groups
+  off-ladder sizes **by size**, because the fix is one decision per size, not per lot.
+
+🔴 **THE NUMERIC KEYS OF A RUNG ARE DERIVED, NEVER DECLARED.** A rung claims every number the parser
+reads out of its own label and aliases, so the `3/5 gal` rung claims **both 3 and 5** (Terry: the
+difference is only pot height, R-71 ③) and `95/100` claims both. Nobody types out `15`/`#15`/`15G`.
+
+🔴 **THE PARSER RUNG ORDER CHANGED, AND THE CORPUS WAS RE-RUN AS ITS HEADER REQUIRES.** Box now sits
+ABOVE length: `24 box` read as a container while `20 inch box` read as a **length** — the same pot,
+one word apart, in two different unit kinds, and `rungKey` requires `container`. **Re-run across every
+live size at both tenants: 565 rows unchanged, exactly 3 changed** (`20/24/36 inch box`, Texas Mountain
+Laurel), length → container. ⚠️ **Those 3 rows' STORED projection is now stale and needs a re-derive**
+— the parser moved, not the size, so the DB trigger cannot have caught it.
+
+🔴 **NOTHING ON HAND IS NOW THE REASON GIVEN.** `classifyLot` checks stock FIRST: 97 of Test Dave's 99
+unplannable rows are catalogue rows with no size AND no stock, and every one was being told its *size*
+was unreadable. ⚠️ **This reversed a written assertion** (§D previously asserted a zero-count lot was
+plannable); the old expectation is recorded in the test rather than deleted.
+
+**NOT BUILT, AND SAID SO:** no screen EDITS the ladder yet (the table, the policies and the reader
+exist; adding a rung today is SQL) · per-rung `handling_minutes` is read and carried but **no rung
+sets one**, so every rung falls back to the global rate · the 121 off-ladder rows are LISTED, not
+resolved — that is David's decision per size · the three stale `inch box` projections are not re-derived.
+
+**PROOF:** `containerLadder.test.ts` **60 assertions** · `productionPlan.test.ts` §D2 ·
+`scripts/measure-container-ladder-mutants.mjs` **23 mutants, 23 caught, 0 survived, 0 no-build** —
+and the harness carries a **third `NO-BUILD` verdict** (tech-debt #293's proposal) so a mutant that
+cannot compile is an ERROR rather than a silent pass. ⚠️ **Four of §I's probes exist because four
+mutants SURVIVED the first run.**
+**BOARD:** `docs/owner-tests/uppot-planning-full-surface-test.md` CARDS 22–27, 0 covered.
 **DEMO NOTE:** cannot be shown on LAWNS — 447 lots, 2 counted, each holding one tree. Seed Test
 Dave's with `scripts/seed-uppot-harness.mjs`, which refuses to run against LAWNS.
 
