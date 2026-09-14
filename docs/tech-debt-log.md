@@ -2004,7 +2004,16 @@ decision — David's.
 
 ---
 
-## #253 — 🔴 SHIPPED CODE READS AND WRITES THREE TABLES THAT DO NOT EXIST, BECAUSE THEIR MIGRATION WAS NEVER APPLIED (NEW 2026-09-11)
+## #253 — ✅ RESOLVED-IN-FACT 2026-09-14 — THE MIGRATION WAS APPLIED AND THIS ENTRY WENT ON SAYING IT WAS NOT (was: 🔴 SHIPPED CODE READS AND WRITES THREE TABLES THAT DO NOT EXIST, NEW 2026-09-11)
+
+🔴 **CORRECTED 2026-09-14 (ledger #326, the container-ladder recon). ALL THREE TABLES EXIST LIVE.** Measured against the catalog while establishing where a rung table would sit:
+`to_regclass` returns non-null for **`business_operations_config`**, **`production_plans`** and **`production_plan_lines`**, and `production_plan_lines` carries its full 19-column shape (`from_unit_value` / `to_unit_value` / `qty_planned` / `qty_completed` / `sales_per_month` / `cover_months` / `cushion_pct` / `grow_months` / `scheduled_date` / `completed_date` / `backdate_reason` …). **All three are 0 rows** — applied, never written to.
+
+⚠️ **THE DEFECT THIS ENTRY DESCRIBED IS GONE; WHAT REPLACES IT IS SMALLER AND DIFFERENT: the tables are empty, not absent.** *"Settings → Operations cannot save and the Uppot plan page cannot commit, on every tenant"* **is no longer true** — there is a table to write to. Whether anything HAS written is a separate question and the answer today is no.
+
+🔴 **THE FINDING IS NOT THE STALE ROW, IT IS THAT A 🔴 ENTRY ASSERTING A LIVE PRODUCTION OUTAGE SAT UNCHALLENGED FOR THREE DAYS — [[R-26]]'s shape inside our own debt log.** Nobody re-derived it; the recon only caught it because it needed the answer for a different reason. **No cap reads this file against the catalog**, and the apply-state script that could have is not run per-entry. ✏️ **The original text is preserved below verbatim** so the correction is legible rather than a silent overwrite.
+
+### ORIGINAL ENTRY, PRESERVED VERBATIM (2026-09-11 — every claim below about the tables NOT existing is now FALSE)
 
 `20260905_production_planning.sql` creates `business_operations_config`, `production_plans` and `production_plan_lines`. **It is not applied** (measured 2026-09-11, `verify-migration-apply-state.mjs --catalog`). The code that depends on it **is shipped**:
 - `packages/cultivar-os/src/components/settings/OperationsSettings.tsx` — rendered by the Settings page; reads and upserts `business_operations_config`. Its own trace logs *"operations settings write landed NOTHING"* and shows a notice.

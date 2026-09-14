@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
+**Last updated: 2026-09-14** (ledger #326 — the container ladder RECON, nothing built; sits on top of #325, #324 and #323. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,14 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#326 — the container ladder (RECON, nothing built)**
+- 🔴 **OPEN — THE PROMPT'S STATED ROOT CAUSE DOES NOT REACH ITS OWN HEADLINE SYMPTOM, AND THIS IS THE DECISION.** The uppot plan cannot plan 99 of 130 lots because **all 99 have `size IS NULL`** — MEASURED, `unit_parsed_from` NULL on every one, so the parser never ran. **No ladder, alias or resolver change touches them.** Across all three tenants **not one non-blank size refuses the parser today.** Does the 99-blank-size fix (an import that carries a size, or someone typing them) come BEFORE the ladder? ⚠️ **Ship the ladder expecting 31/130 → 130/130 and the number will not move.** Owner: `docs/recon/2026-09-14-container-ladder-recon.md` §0.
+- 🔴 **OPEN — 121 LIVE LAWNS ROWS SIT OFF THE STATED LADDER AND THIS DECIDES THE SEED.** MEASURED: 1 gal (24) · 2 gal (7) · 3 gal (53) · 5 gal (34) · 10 gal (2) · 300 gal (1). Are these **retired rungs** that still resolve for history (R-133's shape), or **rungs that belong on the ladder** because LAWNS genuinely runs them? **Unanswerable from the repo.** Owner: recon §4.
+- 🔴 **OPEN — PER-TENANT OR PLATFORM-WIDE? THE CITED PRECEDENT POINTS THE OTHER WAY.** The prompt says adding a rung must be a ROW, never a migration, and cites ledger #310 — but `20260912_channels_one_vocabulary.sql:152-165` gives `channels` **no `business_id` and NO INSERT/UPDATE/DELETE policy of any kind**: *"NOBODY may write it from a client — adding a channel is a migration."* **The one-list half transfers; the write path does not.** My read: **per-tenant rows gated on `settings:update`, seeded from a platform default** — because *"Terry starts running 7 gallon"* is a LAWNS fact, not a platform fact. **But that reverses the precedent the prompt cites, so it is yours.** Owner: recon §9 Q2.
+- 🟡 **OPEN — DOES PER-RUNG `minutes per pot` MOVE R-89?** R-89 is IMPLEMENTED and guarded by mutants P1–P3; `runMinutes` uses **one global** `handlingMinutesPerPot` (~60 setup + ~3/pot) for every rung. Per-rung minutes is an **extension of a ruled, guarded model**, not an implementation of it. Owner: `docs/RULINGS.md` R-89.
+- ✅ **NOT A QUESTION — Q2 (the package boundary) I ANSWERED AND DID NOT NEED YOU FOR: `packages/shared`.** The resolver (`shared/src/inventory/unitOfMeasure.ts`) and the planner (`shared/src/production/productionMath.ts`) that must read the ladder are **already there**, so a vertical home inverts the dependency into the edge tech-debt **#156** says nothing enforces. ⚠️ **But I would NOT build the generic weight/length "unit ladder" the prompt floats — R-99 settled those as different dimensions.**
+- ✏️ **TWO CITATIONS CORRECTED, NOT QUESTIONS:** tech-debt **#292** is the `set -o pipefail` item, **not** the load list — **there is no load-list item in the log and no load-list surface anywhere in the code**, though **the 9-tree count is exactly right** (named in recon §7). And tech-debt **#253** says `production_plans` / `production_plan_lines` / `business_operations_config` do not exist — **MEASURED, all three EXIST live, all three 0 rows.**
 
 **#325 — the pre-commit hook (one check)**
 - 🔴 **NOT A QUESTION, A STANDING LIMIT YOU SHOULD KNOW: THE HOOK IS NOT ENFORCEMENT.** `git commit --no-verify` fires no hook at all and the broken state commits cleanly — **measured, not asserted**. No server-side check, no CI, no audit notices. A fresh clone that never runs `npm install` has no hook either. **It catches the accident; it stops nobody who means it.**
