@@ -63,8 +63,34 @@ const LEDGER = 'docs/CLOSE-OUT-LEDGER.md';
 const SELF_TEST = process.argv.includes('--self-test');
 const NO_FETCH = process.argv.includes('--no-fetch');
 
-/** A row asserting it reached the trunk. Narrow on purpose: it must name `main`. */
-const MERGED_CLAIM = /MERGED TO `main`/i;
+/**
+ * A row ASSERTING it reached the trunk.
+ *
+ * 🔴 THE CLAIM MUST BE **BOLDED**, AND THIS CAP FOUND OUT WHY BY FIRING ON ITSELF.
+ * The first form was /MERGED TO `main`/i — and the very first row written after it
+ * shipped was #323's, which DESCRIBES the check: `a row claiming "MERGED TO \`main\`"
+ * must cite at least one commit`. The matcher could not tell a row MAKING the claim
+ * from a row EXPLAINING it, and reported a false violation against its own author.
+ *
+ * That is tech-debt #146's class verbatim — a probe matching its own file's PROSE —
+ * and it is the same family as the two other self-inflicted findings this week: the
+ * unescaped `|` written inside the sentence describing unescaped pipes (#294a), and
+ * this script's sibling self-test asserting an escaped pipe with an escape JS had
+ * already eaten. Three in one week: describing a defect is a reliable way to commit it.
+ *
+ * ⚠️ THE FIRST FIX WAS "REQUIRE THE CLAIM TO BE BOLD", AND MEASURING IT SHOWED IT WAS
+ * WORSE. It cleared the false positive and silently dropped TWO REAL CLAIMS — #312
+ * ("`ac6d0ce`, merged to `main`, 11:59 CDT") and #249 ("when `thunder/history-order-lines`
+ * merged to `main`") — both lowercase and unbolded. Trading a false POSITIVE for two
+ * false NEGATIVES is the wrong direction for a gate: a noisy cap gets argued with, a
+ * blind one gets believed.
+ *
+ * So the discriminator is the QUOTE, which is what actually distinguishes the two: a row
+ * MAKING the claim states it, a row EXPLAINING it quotes it. Measured on the corpus:
+ * 8 real claims matched, this file's own describing row excluded. Probes P12 (the false
+ * positive, kept forever) and P14 (an unbolded real claim) hold both ends.
+ */
+const MERGED_CLAIM = /(?<!["\u201c\u201d\u2018\u2019'])MERGED TO `main`/i;
 const ROW = /^\| \*\*#(\d+)\*\* \|/;
 /** Backticked 7–40 hex. Migration filenames (`20260831d`) match too — the commit
  *  probe filters them, which is why resolution is a separate step from matching. */
@@ -243,6 +269,25 @@ if (SELF_TEST) {
     { name: 'P10 negative control — an empty ledger examines 0 rows and says so',
       md: '', g: {}, expect: false, why: 'must PASS with rowsClaiming === 0, proving the count tracks the input',
       extra: r => r.rowsClaiming === 0 },
+
+    // ── P12 — 🔴 THE FALSE POSITIVE THIS CAP MADE AGAINST ITS OWN AUTHOR, kept as a probe.
+    //    A row DESCRIBING the claim is not a row MAKING it (#146's class).
+    { name: 'P12 a row that QUOTES the claim while describing it is not making it',
+      md: row(323, 'x *Clause B — a row claiming "MERGED TO `main`" must cite a commit* `ef1d4f3`'),
+      g: { commits: ['ef1d4f3'], ancestors: [] },
+      expect: false, why: 'must PASS — the first form fired on the very row that documented it' },
+
+    // ── P14 — 🔴 THE FALSE NEGATIVE THE FIRST FIX INTRODUCED. #312 and #249 write the
+    //    claim lowercase and unbolded; a bold-only matcher went blind to both.
+    { name: 'P14 an UNBOLDED, lowercase real claim is still a claim',
+      md: row(312, 'x `ac6d0ce`, merged to `main`, 11:59 CDT'),
+      g: { commits: ['ac6d0ce'], ancestors: [] },
+      expect: true, why: 'must REFUSE — requiring bold traded one false positive for two false negatives' },
+
+    { name: 'P13 …and the bolded form IS still a claim',
+      md: row(321, 'x ✅ **MERGED TO `main`** `15fe4f2`'),
+      g: { commits: ['15fe4f2'], ancestors: [] },
+      expect: true, why: 'must REFUSE — P12 must not have blinded the clause entirely' },
 
     { name: 'P11 and a ledger WITH rows reports a non-zero count',
       md: row(321, 'x ✅ **MERGED TO `main`** `15fe4f2`'),
