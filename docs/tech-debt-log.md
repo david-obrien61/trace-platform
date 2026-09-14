@@ -3333,6 +3333,12 @@ reports the same as one that passed*) · #186 (the runner that reported 72 of 74
 
 **What it costs, measured.** The dropped cells are not filler. **#317** loses *"🔴 FIVE OPEN QUESTIONS ARE WRITTEN INTO THE DOC RATHER THAN ASKED"* · **#299** loses *"David: retire or wire `install_date` (waits on R-143) · zone shape (O2′ or O3) · infer `planting` on QuickBooks stops"* · **#279** loses *"Needs a live QuickBooks connection to demonstrate"* · **#311** loses a note that a sibling item was fixed in the same ledger. **Every one is a question or a blocker waiting on David** — the precise class `docs/open-questions.md` exists to surface, arriving at the register through a row that does not render it.
 
+🔴 **AND IT RECURRED INSIDE THE SESSION THAT FILED IT — TWO HOURS LATER, IN THE ROW FOR #320 ITSELF. THIS IS THE STRONGEST EVIDENCE FOR THE PROPOSED CHECK AND IT IS NOT A HYPOTHETICAL.**
+
+Writing #320's `Blocker` cell, this session typed the sentence *"Cause: an unescaped `\|` inside inline code."* — **with the pipe unescaped.** The sentence explaining the defect **committed the defect**, split row **#320** into eight cells, and **discarded the cell containing its own conclusion** — *"Filed as tech-debt #294, deliberately NOT repaired"* and the note that it bears directly on that row. **It was pushed to `main` in that state**, and found only by measuring the table again afterwards. Now escaped; the row is back to seven cells and the sentence records what happened to it.
+
+✏️ **What this proves, precisely: knowing about the defect is not protection against it.** The author had filed the item, written the counting rule, and specified the check — **within the same hour** — and still produced the defect the first time the topic came up in prose. **That is the definition of a thing that needs a mechanism rather than care**, and it is the same argument OP-13, #73 and #289 each arrived at from their own direction. Fifth live instance: **#279 · #299 · #311 · #317 · #320 (repaired)**.
+
 **⚠️ It is invisible to every cap we own.** `verify-id-citations` parses a row's **id**, not its cells. Nothing reads the columns. The loss is to a human, on the rendered page, and a human reading a row with an empty Blocker column has no reason to suspect the file says otherwise.
 
 ---
