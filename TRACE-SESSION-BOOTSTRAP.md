@@ -79,6 +79,30 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #322 (`fix/import-preview-field-checks`, 2026-09-14)
+
+- 🔴 **THE IMPORT PREVIEW NOW RUNS TWO FIELD CHECKS BEFORE ANYTHING IS WRITTEN** — BUILDER-COMPLETE,
+  owner-proof **OWED** (`qb-catalogue-import` CARDS 35 · 36 · 37, board 7 of 38).
+  **① an unmapped source field that carries data** — *"`BillAddr.Line2` has N values and is mapped to
+  nothing"*. **② a type-shape mismatch per destination column** — *"N of 1,946 values going into
+  `address_line1` look like phone numbers, not street addresses."*
+  - 🔴 **THE DEFECT: 486 LAWNS customers carry a PHONE in `BillAddr.Line1`, which the importer writes
+    straight into `address_line1` — and every number on the preview screen was correct.** 458 more
+    carry the real street in `Line2`, which the importer does not read; 223 carry a routable
+    `ShipAddr` that is ignored entirely. *A stop addressed to a phone number cannot go on a truck.*
+  - 🔴 **NOTHING IS REPAIRED, DELIBERATELY.** `address_line1 = Line2` would give the **1,473 whose
+    Line1 is already a street** their suite number and the **28 with no Line2** a NULL. The build
+    COUNTS; the remap is David's ruling. **tech-debt #254 is SURFACED, still OPEN.**
+  - 🔴 **THE SHIP-TO HALF IS BLOCKED BY A STANDING DECISION** — `customer_addresses` is applied and
+    empty, `20260911b` §4 declares **NO BACKFILL**, and `customerAddresses.test.ts` §F fails the build
+    the day anything seeds it. **David reopens that or the 223 stay reported-not-imported.**
+  - 🔴 **NEITHER CHECK IS EVER SILENT** — a clean capture renders GREEN saying *"Both checks ran and
+    found nothing."* **CARD 36 is the card that proves it; a blank space is the FAIL.**
+  - ⚠️ **Built in its own worktree** — the primary checkout holds **#321 uncommitted** (52 files).
+    **#321 and #322 will conflict in `handoff-archive.md`** (both archive #314). Tech-debt #282.
+  - ✅ NO migration · NO schema · NO permission string · `api/` **12/12** untouched · `npm run verify`
+    exit 0 ZERO NET-NEW · **108/108 files · 5,773 assertions** (+87).
+
 ### 🟡 PUSHED, NOT MERGED — #318 (`fix/pipefail-and-function-ceiling`, 2026-09-14)
 
 - 🔴 **`set -o pipefail` WAS MISSING FROM 19 EXEC'D PIPELINES, 18 OF THEM MUTATION HARNESSES** — BUILDER-COMPLETE,

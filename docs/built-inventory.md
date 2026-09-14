@@ -1,4 +1,5 @@
-# Last updated: 2026-09-14 (**#320 — THE §3 ENTRY GATE, AND THE §3 ENTRY TRIM.** 🔴 **A close-out ledger row with NO CLAUDE.md §3 entry is now an INCOMPLETE CLOSE-OUT, asserted by `verify-handoff-retention` check 5** — every close-out row must be claimed by an entry's headline bold run (a `⏳ RESERVED` row owes none; `TECH-DEBT #NNN` is not a ledger claim; **a MENTION in another entry's body is not an entry**) or be declared in `handoff-entry-declarations.json`, **a list that prunes itself in both directions** (#73's lesson). **MEASURED: FIFTEEN rows had no entry — #253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317 — they never entered, they did not scroll out.** The prompt named four; the other eleven were derived. **#302 is the pointed one: the row that BUILT `open-questions.md`, to catch what §3 drops at N=3, is itself a row §3 never recorded.** **10 probes both directions + THREE red-first proofs against the real tree**, and the gate caught this very build before its entry was written. 🔴 **AND §3 ENTRIES ARE NOW TRIMMED TO headline + `Type:` + state + FLAGGED FOR DAVID** — the proof narrative moves to the CLOSE-OUT LEDGER ROW, which is permanent and which nothing has to cut. **Nothing deleted: 11 paragraphs (10.3KB) the rows did not carry were appended verbatim; 5 the rows already carried were dropped after a per-sentence check.** CLAUDE.md **678 → 651 lines, −14KB**. **N=3 unchanged.**)
+# Last updated: 2026-09-14 (**#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
+# (prior line, preserved: **#320 — THE §3 ENTRY GATE, AND THE §3 ENTRY TRIM.** 🔴 **A close-out ledger row with NO CLAUDE.md §3 entry is now an INCOMPLETE CLOSE-OUT, asserted by `verify-handoff-retention` check 5** — every close-out row must be claimed by an entry's headline bold run (a `⏳ RESERVED` row owes none; `TECH-DEBT #NNN` is not a ledger claim; **a MENTION in another entry's body is not an entry**) or be declared in `handoff-entry-declarations.json`, **a list that prunes itself in both directions** (#73's lesson). **MEASURED: FIFTEEN rows had no entry — #253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317 — they never entered, they did not scroll out.** The prompt named four; the other eleven were derived. **#302 is the pointed one: the row that BUILT `open-questions.md`, to catch what §3 drops at N=3, is itself a row §3 never recorded.** **10 probes both directions + THREE red-first proofs against the real tree**, and the gate caught this very build before its entry was written. 🔴 **AND §3 ENTRIES ARE NOW TRIMMED TO headline + `Type:` + state + FLAGGED FOR DAVID** — the proof narrative moves to the CLOSE-OUT LEDGER ROW, which is permanent and which nothing has to cut. **Nothing deleted: 11 paragraphs (10.3KB) the rows did not carry were appended verbatim; 5 the rows already carried were dropped after a per-sentence check.** CLAUDE.md **678 → 651 lines, −14KB**. **N=3 unchanged.**)
 (**#318 — THREE MECHANICAL FIXES, AND THE HEADLINE IS THE NUMBER THAT DID NOT MOVE.** `set -o pipefail` added to the **19** exec'd pipelines that lacked it (18 mutation harnesses + `package.json:15`) — without it a module that will not compile is indistinguishable from one whose suite passed, and a mutation harness scores it `SURVIVED`. **The scores did NOT move: 395 mutants, byte-identical output, and an esbuild shim measured 483 builds with ZERO failures — the bug was LATENT, so the verdicts were correct BY LUCK and are now correct BY CONSTRUCTION.** The **12-function ceiling is now asserted** in `verify-api-parses.mjs` (recursive count, warns at zero headroom, exit 1 at 13, 7 probes both directions, proven red) — **deliberately NOT `readdirSync('api').length`, which reads 11 and cannot fail.** And the stale **`11 of 12 · 1 slot headroom`** is **DELETED** from `PLATFORM_STATE.md` after 86 days. tech-debt **#292** · **#293**.)
 # (**#314 — THE SWEEP'S OWN BLIND SPOT IS CLOSED (tech-debt #286 RESOLVED).** Two populations, not one: NEXT FREE from every ref, collisions by per-id inheritance at `merge-base(HEAD, ref)`; `main` is a rival too. Proven by making it fail from `main` — old script exit 0, new exit 1, same tree. 9/9 mutants. See the *id-claim* entry.) See also:
 # (**#312 — SIX OWNER-TEST CARDS FLIPPED `covered` FROM DAVID'S LIVE RUNS** — campaign-lifecycle 1/2/4, ship-to 1/3 (`customer_addresses` now APPLIED + catalog-verified), breakpoint CARD 1 already flipped in #307; the ship-to CARD 3 leak clause SPLIT so it no longer forbids `deliveries.address_line2` (tech-debt #279); tech-debt **#286** filed — the id sweep reports a taken id as free when run from `main`.) See also:
@@ -2658,6 +2659,73 @@ mutant that puts `CustomerRef.name` back on the row.
 ⚠️ **AND THREE SOURCE PROBES WERE READING PROSE, INCLUDING ONE GREEN FOR WEEKS ON A GUARD WHOSE FAILURE IS UNRECOVERABLE** — `historyOrder.test.ts` §I would have **PASSED on a DELETED guard** so long as a comment still mentioned `findOrCreateQBCustomer`. Fixed and proven (mutants delete each guard's CODE and leave its COMMENT; both CAUGHT) → tech-debt **#146**, class not closed.
 
 ⚠️ **NOT BUILT, NAMED RATHER THAN IMPLIED:** the file harness ([[R-60]]) · retire-and-replace ([[R-58]]) · normalisation with consent and its two `audit_log` rows ([[R-59]]) · the printable artefact · a place to record an answer to the two findings that ask one (the panel says so on screen rather than offering a dead button). → owner-tests `docs/owner-tests/qb-test-mode-full-surface-test.md` (**14 cards, 0 covered**); story `user_stories.md` *"Lauren tries the whole thing on for a week…"*
+
+---
+
+### 4.1c · THE IMPORT PREVIEW'S TWO FIELD CHECKS (2026-09-14, ledger #322)
+
+**PURPOSE:** answer, on the preview screen and before anything is written, two questions the import
+could not previously be asked — *what is QuickBooks sending that we are not taking?* and *do the
+values we ARE taking look like the column they land in?*
+
+**WHY IT EXISTS.** 🔴 **486 LAWNS customers carry a PHONE NUMBER in `BillAddr.Line1`, and the
+importer writes `BillAddr.Line1` straight into `address_line1`.** Every number the preview showed
+was correct — `toCreate`, `toReconcile`, `existingCustomers` — and none of them could see it.
+**458 more carry the real street one line down in `Line2`, which the importer does not read**, and
+**223 carry a routable `ShipAddr` that is ignored entirely.** *A stop addressed to a phone number
+cannot go on a truck.*
+
+⚠️ **THE PHONE IS IN LINE1 ON PURPOSE AND IS NOT A MISTAKE TO CORRECT** — it prints on the invoice,
+and it is mechanical rather than accidental (477 of 481 carry the identical phone in BOTH address
+blocks; 469 match `PrimaryPhone`). The platform needs the STREET for routing **and** the PHONE for
+the invoice, from two different lines.
+
+**WHAT SHIPPED.**
+- `packages/shared/src/quickbooks/importFieldAudit.ts` — pure, no IO. `CUSTOMER_FIELD_MAP` (16
+  declared mappings) · `CUSTOMER_IGNORED_SOURCE_FIELDS` (~30, each with a reason) ·
+  `EXPECTED_COLUMN_SHAPE` (6 columns) · `classifyValueShape` · `maskExample` · `auditImportFields`.
+- Wired through `adaptCustomers` → `CustomerAdaptation.fieldAudit` → `CustomerPlanReport.fieldAudit`
+  → the panel. **`adaptCustomers` is the last layer that still holds the raw records**, which is why
+  the audit is computed there.
+- `QboCatalogueImport.tsx` renders it **directly under the buttons** — above the item summary, not
+  below it, because below as many as 22 collision rows is a go-live blocker scrolled past (R-150).
+
+**FOUR DESIGN CALLS WORTH KNOWING.**
+1. 🔴 **NOTHING IS REPAIRED, DELIBERATELY.** `address_line1 = Line2` would give the **1,473 whose
+   Line1 is already a street** their suite number and the **28 with no Line2 at all** a NULL — a
+   larger data-loss event than the defect. The build counts; the remap is a ruling.
+2. 🔴 **THE POPULATION IS DERIVED, ONLY THE MAPPING IS DECLARED.** Source fields are discovered by
+   walking the records, so a field nobody has heard of is reported the first time one carries it. A
+   hand-written list of "every QuickBooks field" would make an unknown field INVISIBLE rather than
+   flagged.
+3. 🔴 **THE MIRROR IS COUNTED ONCE (R-110).** D-41 writes `address_line1` AND `billing_line1` from
+   one source value; counting both reports 972 where there are 486. The finding NAMES the mirror
+   and never counts it.
+4. 🔴 **NEITHER CHECK IS EVER SILENT.** `ran` is a literal `true` on the type and a clean capture
+   renders GREEN saying *"Both checks ran and found nothing"*. **A blank panel is indistinguishable
+   from a check that did not run.**
+
+**PRIVACY.** Examples are masked — every letter becomes `x`, every digit past the third becomes `•`
+— so an area code survives and a street name does not. This screen's standing design is that ~1,900
+real people are never painted (R-23).
+
+**PROOF.** `importFieldAudit.test.ts` — **87 assertions**, red-first on both checks and on both
+declaration directions. §A asserts every declared mapping **against the adapter's real behaviour**
+rather than trusting the declaration (#185's shape); §H is a mutant that changes the **POPULATION**
+rather than the subject (#182's own unmet prescription).
+
+✅ **NO migration · NO schema change · NO permission string · `api/` 12/12 untouched.**
+
+⚠️ **WHAT THIS DOES NOT DO.** It does not import `BillAddr.Line2` (tech-debt **#254** — now
+SURFACED, still open) and it does not import `ShipAddr`. The ship-to destination is
+`customer_addresses`, which is applied and empty; `20260911b` §4 declares **NO BACKFILL** on
+purpose and `customerAddresses.test.ts` §F fails the build the day anything seeds it. **Importing
+the 223 ship-tos requires David to reopen that decision.**
+
+⚠️ **AND THIS IS THE FIRST BODY ENTRY ON THE CUSTOMER-IMPORT PATH AT ALL.** Ledger #278 (the import
+itself) and #277 (the catalogue import) have header lines and **no body entry** — pre-existing
+drift under §9's reconciliation gate, named here rather than backfilled, because writing an as-built
+for a build I was not in is the manufacture #320 refused.
 
 ---
 
