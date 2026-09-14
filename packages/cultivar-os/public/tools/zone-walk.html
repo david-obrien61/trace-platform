@@ -315,8 +315,16 @@ document.getElementById('export').onclick = ()=>{
       emitter_rate:r.rate||null, emitter_count:r.count||null,
       notes:r.notes||null,
       plants:(r.plants||[]).filter(x=>x.label).map(x=>{
-        const hit = PLANTS.find(pl=>pl.label===x.label);
-        return {label:x.label, qty_approx:x.qty||null,
+        // #291 — TRIM ON THE WAY OUT, never at capture. What the walker typed stays as typed in
+        // local state; only the value handed to a machine is normalised. A trailing space is
+        // invisible in the JSON, the spreadsheet, the console and on the tag, and every join this
+        // platform does on a label is EXACT — so it would not look wrong, it would simply fail to
+        // match, and read as "this plant isn't in the catalogue". It breaks the lookup on the NEXT
+        // LINE as well as the exported string, which is the worse half: item_id/sku come back null
+        // and matched:false. Free to fix only while nothing consumes the export (#266).
+        const label = x.label.trim();
+        const hit = PLANTS.find(pl=>pl.label===label);
+        return {label, qty_approx:x.qty||null,
                 item_id:hit?hit.id:null, sku:hit?hit.sku:null,
                 matched:!!hit};
       })});
@@ -325,7 +333,10 @@ document.getElementById('export').onclick = ()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`lawns-zone-walk-${new Date().toISOString().slice(0,10)}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();
+  // Revoking the blob URL in the same tick cancels the download on some Safari versions —
+  // the link is dead before Safari has read it. Hold it for 10s, then release. (Ledger #301.)
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
 document.getElementById('plantlist').innerHTML =

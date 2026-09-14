@@ -1115,6 +1115,38 @@ PIECES: ambient_signal, drill_in_modal, operational_reasons, margin_target_setti
 NEEDS: three open dependencies to flag (none block the floor case): (1) PER-UNIT OVERHEAD ALLOCATION — the [[D-14]] carve-out / [[D-16]] Model B (cost-to-serve ÷ N) / cost_objects model, still OPEN platform-wide; gates the FULL traffic-light (true green/yellow/red vs landed cost). Partial signal (margin-vs-unit_cost, pre-overhead) works without it. (2) MARGIN-TARGET SETTING — the owner sets a desired margin %; where the green/yellow threshold lives (likely rides business_pricing_config.config jsonb, no migration — David sets the surface + granularity). (3) CONFIRM Layer-3 data coverage — plant_events is per-cultivar_plants specimen, but the dominant anchor is now the stock-line business_inventory lot ([[D-34]]/[[D-36]]) which may have no specimen events, so "plants dying on this line" may be sparse; age (created_at/received_at) is solid.
 Point-of-entry pricing intelligence with graceful degradation — a 3-layer interaction tying pricing health to OPERATIONAL health, right where the owner types a `sell_price`. **The price field IS the dashboard**, advisory-only (never blocks the save — Surface Honesty + owner-authority). **Layer 1 — ambient signal:** the field's BACKGROUND COLOR is the traffic light — 🟢 above margin target / 🟡 below target (thin) / 🔴 below cost+overhead (losing money) / ⚪ neutral when there's no cost basis to judge. Glanceable, always on, no interaction. **Layer 2 — drill-in:** a clickable icon → a modal with the math, state-dependent — GREEN shows % margin + profit-per-item ("42% margin · $53 each"), YELLOW adds a suggested price to reach green ("18% — suggest $145"), RED shows negative margin + recovery price + the Layer-3 reasons. **Layer 3 — the operational WHY (the differentiator):** red/yellow isn't just margin math — it connects price to operational health, surfacing reasons from operational data: too long in stock (aging → carrying cost, from inventory created_at/received_at), plants dying/declining (reuse plant_events decline tracking), great losses/shrinkage on the line (plant_events 'lost'), extensible. "This plant is bad business + here's why," not just "you priced it wrong." **Graceful degradation (mirrors cost_confidence + fidelity tiers):** no cost+overhead → NEUTRAL, accept the owner's price on trust, form fully works; unit_cost known → partial signal (vs cost, pre-overhead); + overhead → full traffic-light; + operational data → Layer 3 reasons light up. Intelligence appears as data arrives, NEVER blocks the floor case. **Reuse:** the shared MarginEngine for margin/suggested-price math (NOT its slab model — cultivar stores an explicit sell_price, so extract the small margin helpers, don't force the whole engine); existing plant_events + inventory timestamps for Layer 3. Full design: `docs/concepts/margin-aware-pricing-intelligence.md`. _Grounded: business_inventory.unit_cost/sell_price/created_at ([[D-35]]); plant_events (packages/cultivar-os/src/types/plant.ts); MarginEngine.ts; cost_confidence seam; open overhead model [[D-14]]/[[D-16]]._
 
+### Social media — the job that simply does not get done
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 4.3
+PIECES: social_setup_wizard, social_channel_config, social_weekly_generator, social_draft_edit_copy
+NEEDS: —
+_Dictated by David; recovered from session history and filed 2026-09-12 (ledger #313). Prose is David's, unrewritten._ **This is the `IN CODE BUT NOT ON THE BOARD` case (§9 story-reconciliation gate): capability 4.3 has been live for months with no story.**
+
+Lauren has no time. Social media is a task that simply does not get
+done, because there is too much else on her plate. TRACE drafts the
+posts so they exist at all; she edits them to sound like her and
+posts them. That is the whole story, and it is the same shape as the
+mobile work — a job that cannot get done rather than a job done badly.
+
+Regina's distinction, 2026-08-23, is what separates this from
+campaigns: "Social media has a story. A campaign has a call to action
+inside the story."
+
+COMING: a weekly/monthly newsletter, modelled on Backbone Valley
+Nursery. Its own story when it arrives, not folded into this one.
+
+⚠️ The Social Media module — setup wizard, channel config, weekly post
+generator, social_drafts, /social/setup — is LIVE and ENABLED ON LAWNS
+with no story on the board. Five campaign stories were filed
+2026-08-23 under ledger #193 and the social surface got none of them.
+Record that as why this story is late.
+
+✏️ **TWO PREMISES OF THE FILING INSTRUCTION CORRECTED AT FILE TIME, AND THE SECOND STRENGTHENS THE POINT RATHER THAN WEAKENING IT.** **(1) THREE campaign stories were filed under ledger #193, not five** — *Arbor Day* (`needs-input`), *Generating "more posts for this campaign" creates a second campaign* (`needs-input`) and *Deleting a campaign — deliberately not built* (`scoped-out`). Two further siblings arrived the same day under **ledger #194** — *Which channel actually brought them* and *Give it to me in my language* — which is likely where five comes from; neither is a campaign story. **(2) 🔴 #193 DID NOT MERELY OMIT THE SOCIAL SURFACE — IT NAMED THIS EXACT GAP IN WRITING, ON THE DAY, AND DECLINED TO PAPER OVER IT.** Its own row: *"Tagging these `4.3` would have made 4.3 read as STORIED while its own surface still has no story — a false green on the board's one key link, so the id was not borrowed."* It set `MAPS-TO: —` on all three deliberately so the hole would stay visible. **The mechanism worked exactly as designed and the hole stayed open for twenty days anyway** — because a visible gap is not the same as an assigned one, and nothing converts `MAPS-TO: —` into a story anybody owes. That is the honest reason this story is late, and it is a better one than an oversight.
+
+✏️ **PROVENANCE ON "LIVE AND ENABLED ON LAWNS":** `[MEASURED]` for **live** — `tileRegistry.ts:174` carries `key:'social_media'`, `status:'live'`, `route:'/social/setup'`, `required_permission:'campaigns:read'`, and `router.tsx:170` mounts the route; `built-inventory.md` §*Social Media Module* describes the generator, the `social_drafts` lifecycle and the edit/copy widget as shipped. `[STATED]` for **enabled on LAWNS** — that is a `business_modules` row in the live database, which this filing did not read. Not promoted to `[MEASURED]`.
+
 ### Arbor Day — plan the season once, change it when Terry changes his mind
 STATUS: needs-input
 SCOPE: platform, vertical:cultivar, vertical:kinna
@@ -1155,6 +1187,37 @@ what she ran last year and what she didn't.
 A campaign never features stock that cannot leave. **Under production is not for sale** —
 a block potted up in August is six to eight months from being sellable, and promoting it
 sells a tree that can't go on a truck.
+
+### The ask is what the generator writes toward — campaign_call_to_action
+STATUS: written
+SCOPE: platform, vertical:cultivar, vertical:kinna
+BUILD: active
+MAPS-TO: —
+PIECES: campaign_call_to_action, campaign_ask_generator_input
+NEEDS: —
+_David's reason, recovered from session history and filed 2026-09-12 (ledger #313). Prose is David's, unrewritten._ **This records WHY, so the pass is not re-argued. It is not a build instruction and it does not widen the Arbor Day story's scope — `campaign_call_to_action` remains one of that story's `PIECES` and its `NEEDS` line still carries the ask as owed.**
+
+THE ASK — campaign_call_to_action
+
+The story at user_stories.md:1119 already carries the assertion: "A
+campaign is not a run of posts. It is an ASK, and the posts carry it…
+Without the ask it is decoration." It has no field.
+
+🔴 DAVID'S REASON, which the story does not state and which is the
+build argument: THE ASK IS WHAT THE GENERATOR WRITES TOWARD. Today
+generateCampaignPosts receives businessName, businessType,
+advertChannels, campaign{…} and toneSamples — no purpose. With the
+ask, every caption serves one. Without it the AI writes about trees;
+with it, it writes to sell 15% off hardwoods before 6 November.
+
+Regina's Arbor Day angle is that shape: shade trees cut cooling
+costs, the west wall cooking the house through a Texas afternoon,
+humour about the heat, paired with a percentage-off code.
+
+⚠️ Not a build instruction — the column and the box are a separate
+pass. This records WHY, so the pass is not re-argued.
+
+✏️ **THE LINE CITATION IS NOW STALE BY THIS FILING'S OWN HAND, AND IS LEFT IN THE PROSE RATHER THAN EDITED.** *"user_stories.md:1119"* pointed at the Arbor Day narrative when David wrote it; inserting the social-media story above it moved that line. **The prose is David's and is not rewritten to suit the file it lives in** — the assertion it quotes is in *Arbor Day — plan the season once, change it when Terry changes his mind*, immediately above this entry, and is quoted in full here so the citation does not need to resolve. ⚠️ A line number is a pointer that rots on the next insertion; this is [[R-26]]'s shape in miniature, caught in the act.
 
 ### Generating "more posts for this campaign" creates a second campaign, silently (FIXED 2026-09-12)
 STATUS: written
@@ -1214,13 +1277,44 @@ opinions about who her buyer is. With codes it is arithmetic.
 This is the first thing on the board that closes the loop **campaign → post → code → order**
 — the point where marketing effort becomes a number instead of a feeling.
 
+### Lauren does the job twice, every delivery day
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 3.5, 2.3, 2.1
+PIECES: mobile_zone_walk, mobile_delivery_schedule_review, crew_route_send, crew_load_sheet_print, mobile_orders
+NEEDS: —
+_Dictated by David 2026-09-11; recovered from session history and filed 2026-09-12 (ledger #313). Prose is David's, unrewritten._ **This is the story `user_stories.md`'s breakpoint entry (`## PLATFORM STANDARD CAPABILITIES` → *One device, four questions*) explicitly deferred: *"the BEHAVIOURAL mobile story is a different story and it is OWED TO DAVID, not written here … that narrative is David's to dictate; this line covers only the vocabulary built underneath it."* The vocabulary shipped (ledger #305); this is the behaviour it was built for.**
+
+LAUREN DOES THE JOB TWICE, EVERY DELIVERY DAY.
+① Reviews the schedule on desktop. ② Goes to her phone and runs the
+same process again. ③ Uses the send-to button to send coordinates to
+the install team's driver. ④ Hands paper copies so they have the
+inventory — printing off the orders with any instructions, so the
+team has both a route and the actual order.
+
+🔴 THE DUPLICATION IS CAUSED BY THE PHONE SCREEN BEING UNUSABLE FOR
+REVIEW. The send lives on the phone (native share/SMS), so the phone
+is REQUIRED for the send; the review happens on desktop because the
+phone calendar truncates Saturday mid-word. The mobile work is not
+polish — its cost is Lauren doing the job twice on the busiest day of
+her week.
+
+🔴 TWO CHANNELS FOR ONE JOB: the route goes digitally (phone → text →
+driver) and the load goes on paper (printed orders). Showing the load
+on /delivery-schedule helps LAUREN SEE IT, not the crew. The crew's
+copy is the deliverable and today that copy is paper.
+
+DAVID'S ORDER: the zone walk is the working example · delivery next ·
+then orders.
+
 ### Give it to me in my language — Spanish for the people doing the work
-STATUS: needs-input
+STATUS: written
 SCOPE: platform
 BUILD: active
 MAPS-TO: —
-PIECES: i18n_locale_switch, i18n_crew_surfaces
-NEEDS: David to rule scope — crew-facing surfaces only, or the whole app — and whether locale is a per-user setting or a per-device one. Someone to confirm which surfaces the LAWNS crew actually touches.
+PIECES: i18n_locale_switch, i18n_crew_surfaces, i18n_string_layer, i18n_invite_language_choice, i18n_profile_language_change, i18n_inline_string_cap
+NEEDS: — ✅ **FLIPPED `needs-input` → `written` BY DAVID, 2026-09-12 (ledger #313), AND HIS REASON IS THE PART WORTH KEEPING: *"The device question does not block the string layer — the mechanism is the work and it is ruled. Cuto having an account is a separate question."* Both questions this line used to pose were answered on 2026-08-31 and are now minted as **[[R-151]]**: **scope** — start at Cuto's screens, not everyone's; **per-user or per-device** — **per-PERSON, chosen by the person, on the invitation screen.** ⚠️ **`STILL OPEN: does Cuto have a device and an account?` remains in the prose below and is NOT retracted** — it is a real open question, ruled to be a SEPARATE one. It does not block the translation layer, and this story is no longer waiting on it.
 A man has worked at LAWNS for ten years and does not speak English at home. He is one of
 the people who would be walking the rows with a phone — counting a block, marking a
 rotation date, working a delivery route. Terry gives him instructions in person and it
@@ -1235,6 +1329,57 @@ surface after the fact, it is a rewrite.
 This is platform, not Cultivar. Every vertical has crew — the nursery has planters, the
 auto shop has technicians, the kitchen has staff. The owner reads English and the work does
 not care.
+
+---
+
+**🔴 DAVID'S RULING, 2026-08-31 — recovered from session history and filed 2026-09-12 (ledger #313). It answers both questions the `NEEDS` above had been asking since this story was written.** Filed verbatim; the prose is David's and is not rewritten.
+
+Cuto lives on site at LAWNS and does the maintenance. He does not
+speak English. The install crews' English is not reliable either.
+Everything built so far assumes a reader of English at a desk or in a
+truck — Lauren, Terry, Joel, Tyler. He is the first user who is
+neither, and his screens are the least built.
+
+🔴 RULED: THE PERSON CHOOSES THEIR OWN LANGUAGE, AND THEY CHOOSE IT ON
+THE INVITATION. Not the owner. Lauren knows what language Cuto SPEAKS;
+she does not know what he READS, and those are different. It is his
+answer and nobody else's. Changeable afterwards from his own profile,
+without asking anyone.
+
+🔴 RULED: the invitation screen shows "English | Español" as plain
+words, side by side, always both, always visible. Not a dropdown
+labelled in one language, not a flag, not a globe icon. Recognisable
+without reading anything else on the page. The invitation arrives
+BEFORE a language is chosen, so an English-only invite screen excludes
+the person it exists for at its first screen. The password fields and
+their labels follow the choice immediately.
+
+🔴 RULED: TRANSLATE THE INTERFACE, NEVER THE DATA. Buttons, labels,
+headings, errors, prompts are ours and are translated. "Eagleston
+Holly 30 gallon", "Brodie Juniper", Terry's variety names are the
+business's own vocabulary and are never translated — that is the name
+physically printed on the tag. Get it backwards in either direction
+and something breaks.
+⚠️ The same screen can carry both languages, split by who is reading
+it: on the review ask the crew reads Completado and Ahora no, the
+customer reads English. Two audiences, one device.
+
+THE MECHANISM LANDS FIRST: every user-facing string through a
+translation layer rather than written inline. Once that exists,
+adding a language is data; until it exists, every screen is a
+separate job. A half-translated screen is worse than an English one,
+because you cannot tell what you are missing.
+⚠️ A string written inline, bypassing the layer, is invisible until
+someone who does not read English hits it. That is a cap, not a code
+review.
+
+WHERE TO START: Cuto's screens, not everyone's — equipment and
+maintenance schedule, the day's tasks, the count screen. Roughly the
+production side, which is also the least built, so translation lands
+as those screens are made rather than retrofitted.
+
+STILL OPEN: does Cuto have a device and an account? He has neither
+today, and a translated screen he cannot reach is not a feature.
 
 ### Truth in advertising — suggest facts, never censor, keep the record
 STATUS: needs-input

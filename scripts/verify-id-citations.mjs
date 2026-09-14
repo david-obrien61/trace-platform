@@ -78,6 +78,81 @@ const citedIds = (src) => {
 // neither. Counting either as a filing would make a correctly-reserved id look like a duplicate of
 // itself, which would teach sessions to stop reserving — the exact behaviour R-149 exists to produce.
 const ledgerRowIds = (src) => [...src.matchAll(/^\| \*\*#(\d+)\*\*/gm)].map(m => +m[1]);
+/* ──────────────────────────────────────────────────────────────────────────────
+   CLAUSE E — A LEDGER ROW WHOSE CELL COUNT EXCEEDS THE HEADER (tech-debt #294a).
+
+   🔴 BACKTICKS DO NOT PROTECT A PIPE. GFM's table extension splits a row into
+   cells BEFORE inline parsing runs, so `a | b` is TWO cells, not one code span.
+   A row with MORE cells than the header has the excess **ignored by the spec** —
+   no error, no warning, no visual tell. The content is in the file forever and
+   on the screen never, and what goes missing is the LAST cell: `Blocker`.
+
+   🔴 IT RECURS BY CONSTRUCTION, WHICH IS THE ARGUMENT FOR A CAP RATHER THAN CARE.
+   Ledger #320 made the close-out row the permanent home for every close-out's
+   proof narrative — moved there precisely because the row is the copy nothing
+   has to cut. Close-out narrative is exactly the prose that contains shell
+   pipelines. #317's live instance is `find api -name '*.ts' | wc -l`, a command
+   this repo runs constantly, written into a row by a session doing everything
+   right.
+
+   🔴 AND IT RECURRED INSIDE THE SESSION THAT FILED IT. Writing #320's Blocker
+   cell, that session typed "Cause: an unescaped `|` inside inline code" WITH THE
+   PIPE UNESCAPED — the sentence describing the defect committed it, split row
+   #320, and discarded the cell holding its own conclusion. It was pushed to
+   `main` in that state. The author had filed the item and specified this very
+   check within the same hour. Knowing about it is not protection against it.
+
+   ⚠️ ONE DIRECTION ONLY, DELIBERATELY. `cells > header` REFUSES; `cells < header`
+   does not. A short row is padded by the spec and loses nothing, and 25 rows are
+   short today — failing on those would make this cap RED ON ARRIVAL, which is the
+   state a cap does not survive (tech-debt #73: a gap list that only grows stops
+   being read). Normalising the short rows is #294's separate, human decision.
+
+   ⚠️ COUNT ON UNESCAPED PIPES. `\|` is the legitimate escape and rows #304 and
+   #313 use it correctly in prose. The first measurement of #294 counted raw `|`,
+   reported 34 rows instead of 29, and condemned those two — a cap that cries wolf
+   teaches people to ignore it.
+   ────────────────────────────────────────────────────────────────────────────── */
+const UNESCAPED_PIPE = /(?<!\\)\|/;
+const cellCount = (line) => line.split(UNESCAPED_PIPE).length - 2;
+/** The close-out table's header, so the width is DERIVED and never a written 7. */
+const ledgerHeaderWidth = (src) => {
+  const h = src.split('\n').find(l => /^\| # \| Work item \|/.test(l));
+  return h ? cellCount(h) : null;
+};
+/** The first unescaped `|` sitting inside a single-backtick span — the usual culprit. */
+const pipeInCode = (line) => {
+  let inCode = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '`') inCode = !inCode;
+    else if (c === '|' && inCode && line[i - 1] !== '\\') return line.slice(Math.max(0, i - 40), i + 40);
+  }
+  return null;
+};
+/** Rows the close-out table owns: a filed row, or an open reservation. Both are table rows. */
+const LEDGER_ANY_ROW = /^\| (?:\*\*#(\d+)\*\*|⏳ \*\*#(\d+))/u;
+const rowShapeViolations = (src) => {
+  const width = ledgerHeaderWidth(src);
+  if (width === null) return { width: null, violations: [] };
+  const violations = [];
+  for (const line of src.split('\n')) {
+    const m = LEDGER_ANY_ROW.exec(line);
+    if (!m) continue;
+    const n = cellCount(line);
+    if (n <= width) continue;
+    const cells = line.split(UNESCAPED_PIPE);
+    violations.push({
+      id: m[1] ?? m[2],
+      cells: n,
+      // What GFM throws away: everything past the header's width.
+      discarded: cells.slice(width + 1, -1).join(' | ').trim(),
+      culprit: pipeInCode(line),
+    });
+  }
+  return { width, violations };
+};
+
 const ledgerReservedIds = (src) => [...src.matchAll(/^\| ⏳ \*\*#(\d+) — RESERVED/gmu)].map(m => +m[1]);
 
 // ── D's matcher — an id claimed in a COMMIT SUBJECT. `feat(#305): …` / `docs(tech-debt #280): …` ──
@@ -141,6 +216,31 @@ const note = [];
   if (rowIds('**#211 is #280\'s "a declarative comment" **, filed hours earlier').length !== 0) { console.error('CAP PROBE FAILED: bolded prose at line start read as a row — the false-positive this cap already made once'); process.exit(2); }
   if (rowIds('see ## #7 mid-sentence').length !== 0) { console.error('CAP PROBE FAILED: an id not at line start counted as a row'); process.exit(2); }
   if (rowIds('## #7 no dash here').length !== 0) { console.error('CAP PROBE FAILED: the em-dash discriminator is not being applied'); process.exit(2); }
+  // ── CLAUSE E's probes (tech-debt #294a). P1 is the real defect verbatim (STD-024). ──
+  {
+    const HDR = '| # | Work item | Deliverable (one line) | Commit / SHA | Bar | Owner-proof owed (exact live test) | Blocker |\n';
+    const shape = (row) => rowShapeViolations(HDR + row + '\n').violations;
+    // P1 🔴 THE REAL DEFECT — #317's row, verbatim in shape: a shell pipe in inline code.
+    const p1 = shape('| **#317** | a | b | c | d | run `find api -name \'*.ts\' | wc -l` here | FIVE OPEN QUESTIONS |');
+    if (p1.length !== 1) { console.error('CAP PROBE FAILED (E/P1): a shell pipe inside inline code did not split the row — the real defect is invisible'); process.exit(2); }
+    if (!p1[0].discarded.includes('FIVE OPEN QUESTIONS')) { console.error('CAP PROBE FAILED (E/P1): the DISCARDED cell is not reported — "row has 8 cells" tells a reader nothing'); process.exit(2); }
+    if (!p1[0].culprit || !p1[0].culprit.includes('wc -l')) { console.error('CAP PROBE FAILED (E/P1): the culprit pipe inside backticks is not named'); process.exit(2); }
+    // P2 — the SAME row with the pipe escaped must PASS. Without this, P1 could be a check that refuses everything.
+    if (shape('| **#317** | a | b | c | d | run `find api -name \'*.ts\' \\| wc -l` here | FIVE OPEN QUESTIONS |').length !== 0) { console.error('CAP PROBE FAILED (E/P2): an ESCAPED pipe still counted — the fix would not clear the cap'); process.exit(2); }
+    // P3 — 🔴 the false positive that disables caps: `\|` used legitimately in prose (#304/#313).
+    if (shape('| **#304** | a | grep for `recipient\\|segment\\|mailing` | c | d | e | f |').length !== 0) { console.error('CAP PROBE FAILED (E/P3): a legitimately escaped pipe was condemned — this is the 34-vs-29 miscount that cries wolf'); process.exit(2); }
+    // P4 — a SHORT row passes. 25 exist today; failing them makes the cap red on arrival (#73).
+    if (shape('| **#318** | merged work and deliverable | c | d | e | f |').length !== 0) { console.error('CAP PROBE FAILED (E/P4): a six-cell row was refused — one direction only, or the cap arrives red'); process.exit(2); }
+    // P5 — the header is never evaluated against itself.
+    if (rowShapeViolations(HDR).violations.length !== 0) { console.error('CAP PROBE FAILED (E/P5): the header row was evaluated as a row'); process.exit(2); }
+    // P6 — a ⏳ RESERVED row is still a table row; reserving does not exempt the shape.
+    if (shape('| ⏳ **#323 — RESERVED** | a | b | c | d | run `a | b` | e |').length !== 1) { console.error('CAP PROBE FAILED (E/P6): a RESERVED row with a stray pipe was not checked'); process.exit(2); }
+    // P7 🔴 NEGATIVE CONTROL — changes the POPULATION, not the subject (#182's own unmet prescription).
+    //    No header at all must report width:null and examine nothing, NOT pass as though it had looked.
+    if (rowShapeViolations('| **#1** | a | b | c | d | e | f | g | h |\n').width !== null) { console.error('CAP PROBE FAILED (E/P7): a file with no header was given a width — "I never looked" must not render as "clean"'); process.exit(2); }
+    // P8 — an unescaped pipe OUTSIDE backticks is the same defect; backticks are only the commonest cause.
+    if (shape('| **#9** | a | b | c | d | a bare | pipe | e |').length !== 1) { console.error('CAP PROBE FAILED (E/P8): an extra cell from a bare pipe was missed'); process.exit(2); }
+  }
 }
 
 if (SELF_TEST) {
@@ -165,6 +265,13 @@ if (SELF_TEST) {
   const d1 = subjectIds(['feat(#9002): x']).ledger.has(9002);
   console.log(`  C duplicate ledger   — violation: ${c1 ? '✅ caught' : '🔴 MISSED'} · clean: ${ledgerRowIds('| ⏳ **#7 — RESERVED 2026-09-12** |').length === 0 ? '✅ accepted (a reservation is not a duplicate)' : '🔴 false positive'}`);
   console.log(`  D subject claim      — violation: ${d1 ? '✅ caught' : '🔴 MISSED'} · clean: ${subjectIds(['fix: touch the #9002 path']).ledger.size === 0 ? '✅ accepted (bare id ignored)' : '🔴 false positive'}`);
+  const HDR_E = '| # | Work item | Deliverable (one line) | Commit / SHA | Bar | Owner-proof owed (exact live test) | Blocker |\n';
+  const e1 = rowShapeViolations(HDR_E + '| **#317** | a | b | c | d | `x | y` | DROPPED |\n').violations.length === 1;
+  // 🔴 THE BACKSLASH MUST SURVIVE INTO THE STRING. Written as '\|' in JS source the
+  // escape is dropped by the language and the checker sees a bare pipe — which is
+  // exactly what this line did on its first run, and the probe caught it.
+  const e2 = rowShapeViolations(HDR_E + '| **#317** | a | b | c | d | `x \\| y` | KEPT |\n').violations.length === 0;
+  console.log(`  E ledger row shape   — violation: ${e1 ? '✅ caught' : '🔴 MISSED'} · clean: ${e2 ? '✅ accepted (an escaped pipe is legitimate)' : '🔴 false positive'}`);
   process.exit(0);
 }
 
@@ -216,11 +323,13 @@ for (const doc of WATCHED) {
 // shape that actually bites (two claims in two trees) — that is the all-branches sweep's job, and
 // the two are deliberately complementary: the sweep PREVENTS, this one NETS.
 let ledgerIds = [], ledgerReserved = [];
+let shapeResult = null;   // clause E (#294a) — null means NOT CHECKED, never 'clean'
 if (!existsSync(LEDGER)) { note.push(`ledger absent, clause C SKIPPED: ${LEDGER}`); }
 else {
   const ledgerSrc = readFileSync(LEDGER, 'utf8');
   ledgerIds = ledgerRowIds(ledgerSrc);
   ledgerReserved = ledgerReservedIds(ledgerSrc);
+  shapeResult = rowShapeViolations(ledgerSrc);
   const lseen = new Set(), ldup = new Set();
   for (const id of ledgerIds) (lseen.has(id) ? ldup : lseen).add(id);
   for (const id of [...ldup].sort((a, b) => a - b)) {
@@ -280,6 +389,27 @@ if (UPDATE) {
   process.exit(0);
 }
 
+// ── E — no CLOSE-OUT LEDGER row may have MORE cells than the header (tech-debt #294a) ──
+if (shapeResult === null) {
+  // The ledger is absent; clause C already noted the SKIP. Say so for E too rather
+  // than letting an unreached check read as a clean one (#182).
+  note.push('ledger absent, clause E (row shape) SKIPPED — not passed, SKIPPED');
+} else if (shapeResult.width === null) {
+  // 🔴 REFUSE, don't pass: without the header there is no width to compare against,
+  // and "I could not look" must never render as "nothing wrong" (#182).
+  fail.push(`LEDGER HEADER NOT FOUND in ${LEDGER} — clause E could not establish the table's width, so row shape was NOT checked.`);
+} else {
+  for (const v of shapeResult.violations) {
+    fail.push(
+      `LEDGER ROW SHAPE — close-out row #${v.id} has ${v.cells} cells against a ${shapeResult.width}-column header, ` +
+      `so GFM DISCARDS the overflow and this text is in the file but NOT on the screen:\n` +
+      `        "${v.discarded.slice(0, 220)}${v.discarded.length > 220 ? '…' : ''}"\n` +
+      (v.culprit ? `     Likely culprit — an unescaped \`|\` inside inline code: …${v.culprit}…\n` : '') +
+      `     Fix: write it \`\\|\`. Backticks do NOT protect a pipe in a table (tech-debt #294a).`,
+    );
+  }
+}
+
 // ── REPORTED, never asserted: the next free id, so nobody has to do arithmetic ──
 const max = ids.length ? Math.max(...ids) : 0;
 const gaps = [];
@@ -304,4 +434,5 @@ else {
 }
 
 if (fail.length) { console.error('\n🔴 ' + fail.join('\n🔴 ')); process.exit(1); }
-console.log(`\n✅ no duplicate rows (tech-debt AND ledger) · ${netNew + subjectNetNew} net-new dangling claims · ${backlog + subjectBacklog} baselined (visible, not forgotten).`);
+if (shapeResult?.width) console.log(`  LEDGER ROW SHAPE: all ${ledgerIds.length + ledgerReserved.length} row(s) fit the ${shapeResult.width}-column header — no cell is being silently discarded (#294a).`);
+console.log(`\n✅ no duplicate rows (tech-debt AND ledger) · ${netNew + subjectNetNew} net-new dangling claims · ${backlog + subjectBacklog} baselined (visible, not forgotten) · ledger row shape clean.`);

@@ -74,6 +74,7 @@ import { pushPermitted } from '../business-logic/testMode';
 import {
   CUSTOMER_IMPORT_SOURCE, type AdaptedCustomer, type CustomerAdaptation, type DuplicateFlag,
 } from './qboCustomerAdapter';
+import type { ImportFieldAudit } from './importFieldAudit';
 
 /** The narrow slice of a supabase client this file uses. Passed in, never constructed. */
 export interface DbLike {
@@ -100,6 +101,12 @@ export interface CustomerPlanReport {
   duplicateRecordCount: number;
   /** The tenant's customer count BEFORE anything is written. */
   existingCustomers: number;
+  /**
+   * 🔴 THE TWO FIELD CHECKS. PRESENT ON EVERY PLAN, INCLUDING A CLEAN ONE — that is the whole
+   * clause. `ran` is a literal `true`, so a panel can tell "checked and found nothing" from
+   * "never ran", and a blank warnings area can never mean both.
+   */
+  fieldAudit: ImportFieldAudit;
   /** Stated, never assumed: a preview writes nothing. */
   wrote: false;
   headline: string | null;
@@ -279,6 +286,7 @@ export async function previewCustomerImport(
     organizationCount: adaptation.organizationCount,
     duplicates: adaptation.duplicates,
     duplicateRecordCount: adaptation.duplicateRecordCount,
+    fieldAudit: adaptation.fieldAudit,
     existingCustomers,
     wrote: false,
     headline: adaptation.customers.length === 0

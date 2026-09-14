@@ -1,10 +1,16 @@
 # OWNER TEST — THE QUICKBOOKS CATALOGUE IMPORT: THE ADAPTER, THE APPLIER, THE RUN ID AND THE UNDO
 
-> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a failed
 > or unmerged build looks *completely normal* — the app just serves the old bundle. Match it to
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 **Capability:** 2.3 / 5.1 (inventory) · **Ledger:** #277
 **SHA THIS BOARD WAS WRITTEN AGAINST:** `0c277f2`. **`84bd7d5` (ledger #278, the customer import) is
@@ -31,7 +37,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 7 of 35 covered** (25 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
+**Board: 7 of 38 covered** (28 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
 ⚠️ **THE TOTAL WAS WRONG IN THIS HEADER AND IN THE SESSION REPORTS — corrected 2026-09-09.** It has been stated as **24**, as **34**, and the file holds **35**: CARD 14 was split into 14a/14b and the header was never re-added up. The counted figure is now derived on every `npm run verify` by `verify:owner-boards`, which prints a board whose header disagrees with its own cards. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
@@ -1216,3 +1222,67 @@ anything rendered above it shrinks the box instead of displacing it. The old fix
 ⚠️ **CHECK THE OTHER GRIDS TOO** — assets and customers use the same engine and inherit this. A
 quick look at each is worth more than trusting that one change was uniform.
 **FAIL:** the scrollbar is below the fold in any of the four states.
+
+
+---
+
+## CARD 35 — 🔴 THE TWO FIELD CHECKS, ON LAWNS'S REAL BOOKS
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Settings → Accounting → **Preview your books**, as the LAWNS owner. Read the box that appears
+**directly under the buttons**, above the item summary.
+
+1. It is **amber**, and the first line reads something like
+   *"Checked 1,946 records across 28 fields. N things to look at before you import."*
+2. A bullet says **`N of 1,946 values going into address_line1 look like phone numbers, not street
+   addresses`**, and it names `BillAddr.Line1` and says *"also written to billing_line1, counted
+   once"*.
+3. A bullet says **`BillAddr.Line2 has N values and is mapped to nothing`**, and says *"Mostly
+   street addresses."*
+4. Bullets for **`ShipAddr.Line1` / `.City` / `.PostalCode`** — each *"mapped to nothing"*.
+5. Every example is **masked**: letters show as `x`, digits past the third as `•`. **No customer's
+   street name and no complete phone number appears anywhere in the box.**
+
+**PASS:** all five. 🔴 **AND WRITE THE THREE NUMBERS DOWN** — the phone-in-street count, the Line2
+count and the ShipAddr count. They are the first live measurement of the go-live blocker, and the
+2026-09-11 figures (486 · 458 · 223) were taken by hand from a capture rather than by this check.
+**FAIL:** the box is missing, or it is green while any of those fields carry data, or an unmasked
+street or full phone number appears.
+
+⚠️ **NOTHING HERE WRITES ANYTHING.** The preview is read-only and this box is computed from the
+records in memory. **Do not press Import to run this card.**
+
+---
+
+## CARD 36 — 🔴 THE CHECK THAT FINDS NOTHING STILL SAYS SO
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+Same screen, on **Test Dave's** (`f7ec5d67-…`) — a company whose QuickBooks book is small and clean.
+
+1. Press **Preview your books**.
+2. The box is **green**, not absent, and reads
+   *"Checked N records across M fields. Both checks ran and found nothing."*
+
+**PASS:** a green box with a sentence in it.
+🔴 **FAIL: A BLANK SPACE WHERE THE BOX SHOULD BE — and this is the card, not CARD 35.** David's
+clause: *"a preview that shows no warnings must say it ran and found none — a blank panel is
+indistinguishable from a check that did not run."* CARD 35 proves the checks can find something;
+**only this card proves that finding nothing is a REPORTED result rather than a silent one.**
+⚠️ If Test Dave's book turns out to be dirty too, the box will be amber — that is not a fail, it is
+the wrong tenant for this card. Say so and leave it `owed`.
+
+---
+
+## CARD 37 — the checks do not block the import
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+On **Test Dave's**, with findings showing (or CARD 35's LAWNS preview still on screen).
+
+1. The **Import** button is still enabled and still reads
+   *"Import N customers and M products"*.
+2. The box's closing line says *"Nothing here stops the import — these are things to decide before
+   you rely on the result."*
+
+**PASS:** both. The checks INFORM; they do not gate.
+**FAIL:** the Import button is disabled, or the box claims the import is blocked.
+🔴 **THIS IS A DELIBERATE DESIGN CALL AND IT IS DAVID'S TO OVERRULE.** A phone number in a street
+column is a go-live blocker for the *delivery* capability, not a reason to refuse a customer list
+that is 75% correct. If you would rather the import refused while `address_line1` holds phone
+numbers, say so — it is a one-line change to `canImport` and a different ruling.

@@ -2020,6 +2020,25 @@ decision — David's.
 
 ## #254 — 🟡 THE QUICKBOOKS IMPORTER DOES NOT READ `BillAddr.Line2` (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
 
+> ✏️ **UPDATED 2026-09-14 (ledger #322) — SURFACED, NOT FIXED, AND THE SCOPE GREW BY MEASURING IT.**
+> The import preview now **counts and names this defect on screen** before anything is written:
+> check ① reports *"`BillAddr.Line2` has N values and is mapped to nothing — mostly street
+> addresses"*, and check ② reports *"N of 1,946 values going into `address_line1` look like phone
+> numbers, not street addresses."* **The importer still does not read `Line2`. This row stays OPEN.**
+>
+> 🔴 **AND THE FIX IS NOT "READ LINE2" — THAT IS THE PART THIS ROW DID NOT SAY.** `address_line1 =
+> Line2` would give the **1,473 whose Line1 is already a real street** their suite number, and the
+> **28 who have a phone in Line1 and no Line2 at all** a NULL. **486 broken addresses would become
+> 1,473.** The repair has to be **per-record and shape-driven**, and that is a ruling David has not
+> made — filed in `docs/open-questions.md` under #322.
+>
+> ⚠️ **THE 28 ARE THE ones NO REMAP CAN REACH** — asserted at `importFieldAudit.test.ts` §D8, which
+> states what neither check says alone: 486 broken street columns minus 458 streets recoverable
+> from Line2 leaves 28 records with no street anywhere in the capture.
+>
+> ⚠️ **THIS ROW'S OWN FIGURE WAS `456 values`.** The live number is whatever the check now reports;
+> `qb-catalogue-import-full-surface-test.md` CARD 35 asks David to write it down.
+
 `qboCustomerAdapter.ts` `billingOf()` returns `address_line1`, `city`, `state`, `zip` — **no second line**, deliberately: *"Line2 is deliberately NOT folded into line1 — `customers` has `billing_line2` and the party editor owns it; concatenating here would make this writer disagree with that one."* The reason is sound; the consequence is not handled. The handoff reports **451 routable addresses landing as phone numbers** because LAWNS staff put the real address on the second line — **that count is the handoff's, not re-measured here.**
 
 **Fix the reader before any address cleanup** (handoff §6): write `Line2` to `billing_line2` rather than dropping it. Otherwise a clean-up of the address lines is undone by the next import.
@@ -2264,6 +2283,31 @@ that makes a diff unreviewable** — which is the reason it was not taken, state
 
 ## #280 — 🔴 THE CLOSE-OUT GATES ACCEPT "PUSHED" AS SHIPPED: NEITHER ANCESTRY OF `origin/main` NOR A **PRODUCTION** DEPLOYMENT IS ASSERTED ANYWHERE (NEW 2026-09-12, ledger #303)
 
+✏️ **PARTIAL 2026-09-14 (ledger #321) — ② IS NOW OBSERVABLE. IT IS STILL NOT ASSERTED, AND THE DIFFERENCE IS THE WHOLE POINT OF THIS NOTE.**
+
+**What changed.** The deployed bundle now carries its **deployment target**, not only its SHA. `vite.config.ts` bakes `VERCEL_ENV` and `VERCEL_GIT_COMMIT_REF` into `__DEPLOY_ENV__` / `__DEPLOY_REF__`; `src/lib/deployStamp.ts` turns them into a label; `<VersionStamp>` renders it on every screen for every user. The stamp reads **`built <time> · <sha> · prod`** on production and shouts an amber **`PREVIEW <branch>`** otherwise. **GATE 0 on all 40 owner-test boards now says the last token must read `prod`.**
+
+🔴 **THIS ROW SAID ② WAS *"not checkable from the repo — nothing we own reads Vercel"*, AND THAT REMAINS TRUE.** Nothing we own reads Vercel *now either*. What changed is that **nothing has to**: Vercel sets those variables at BUILD time, so the answer is **baked into the artefact** and read off the screen — which is where David is standing when GATE 0 fires. **That is a different fix from the one this row imagined, and it is deliberately the weaker one:** a human at a screen can now SEE the target; **no cap ASSERTS it**, and the close-out gates still accept "pushed". ⚠️ **So the DEPLOYED bar is still not mechanically guarded. Do not read this as closed.**
+
+✅ **① RESOLVED 2026-09-14 (ledger #323) — `scripts/verify-main-ancestry.mjs`, IN `npm run verify`.** **Clause A: local `main` must not be ahead of `origin/main`** — every commit on local main must be an ancestor of it. That is the incident below, and it is the mechanical form of **CORE MANDATE rule 9** (*commit → push are ONE action*) for the shared trunk. **Clause B: a close-out row claiming "MERGED TO `main`" must cite at least ONE commit that IS an ancestor of `origin/main`** — #303's shape. 🔴 **PROVEN RED AGAINST A REAL COMMIT, NOT A FAKE** (David's instruction): an empty commit was made on local `main`, the check refused by name — *"local `main` is AHEAD of `origin/main` by 1 commit(s) — they exist only on this machine"*, exit 1 — and `main` was then restored. **11 probes both directions**, P1 the real defect verbatim, P9 *cannot-look ≠ nothing-wrong*, P10/P11 a population negative control. ⚠️ **CLAUSE B IS "AT LEAST ONE", NOT "ALL", AND THAT WAS MEASURED BEFORE IT SHIPPED:** requiring every cited SHA to be an ancestor reports **8 failures across 27 SHAs** on today's corpus and **none is a defect** — `13d64aa` is a pre-rebase SHA the breakpoint board keeps DELIBERATELY (*"a proof records what was RUN"*), and rows cite base commits legitimately. **A cap arriving red with 8 rebase artefacts is a cap people switch off** (#73). Measured at "at least one": **0 failures**. ⚠️ **SCOPE, STATED: clause A asserts `main` ONLY.** An unpushed feature branch is often correct mid-build (R-149 pushes reservations early); an unpushed `main` is invisible to everyone else. 🔴 **AND CLAUSE B FIRED ON ITS OWN AUTHOR WITHIN THE HOUR — #146's CLASS, AND THE FIX WAS MEASURED TWICE.** The first matcher was `/MERGED TO \`main\`/i`, and the very next row written — **#323's, which DESCRIBES the clause** (*a row claiming "MERGED TO `main`" must cite…*) — was reported as a false violation. **A checker matching prose that EXPLAINS the thing rather than IS it.** ⚠️ **The obvious fix, "require the claim to be BOLD", was measured and was WORSE: it cleared the false positive and silently dropped TWO REAL CLAIMS** — #312 (*"`ac6d0ce`, merged to `main`, 11:59 CDT"*) and #249 — both lowercase and unbolded. **Trading one false POSITIVE for two false NEGATIVES is the wrong direction for a gate: a noisy cap gets argued with, a blind one gets believed.** ✅ **The discriminator is the QUOTE** — a row MAKING the claim states it, a row EXPLAINING it quotes it. Measured: **8 real claims matched, the describing row excluded.** **P12** (the false positive) and **P14** (an unbolded real claim) hold both ends, permanently. ✏️ **Third self-inflicted finding this week, and the pattern is worth naming: describing a defect is a reliable way to commit it** — the unescaped `\|` written inside the sentence about unescaped pipes (#294a), the self-test asserting an escape JS had already eaten, and this. 🔴 **② IS UNCHANGED AND THIS ROW STAYS 🟡 PARTIAL — nothing here reads Vercel.**
+
+🔴 **① IS STILL OWED, STILL CHEAP, AND ON 2026-09-14 IT DREW BLOOD — MINE (David's instruction to record it here).**
+
+**The incident, in full, because it is the argument.** This session merged ledger **#320** into `main` and **reported it merged**. The merge commit `a0c957b` existed; `git merge` printed its diffstat; the working tree was correct. **`origin/main` was still at `ba7edcf`.** The merge had gone into **local** `main` and was never pushed — and the session then branched off local `main`, so the merge lived on **in that branch's ancestry**, where every subsequent command saw it and agreed it was there. **It was found ~40 minutes later, by running `merge-base --is-ancestor` by hand during a final check, and only because that check happened to be run.**
+
+🔴 **NOTE WHAT DID NOT CATCH IT.** Not `git status` (clean). Not the test suite (green). Not `npm run verify` (exit 0). Not `verify-handoff-retention`, **including the check built THIS SESSION to assert that every ledger row has a §3 entry** — the row and the entry were both present, both correct, and both unpushed. **Every gate we own passed on a merge that had not happened anywhere but this machine.** That is this row's sentence — *the close-out gates accept "pushed" as shipped* — with *"pushed"* itself turning out to be the optimistic reading.
+
+✏️ **AND IT IS THE THIRD TIME THIS FAMILY HAS BEEN RECORDED IN THIS REPO: #60** (a build that never deployed, live ~20h later as a side effect of an unrelated push), **#282** (a push that named the ref it meant and published a branch containing none of the work), and now a merge that named the branch it meant and published nothing. **Three different mechanisms, one shape: the command succeeded, said so, and the state did not change where it matters.**
+
+**The fix has not changed and is three lines.** At close-out, for the SHA the row claims: `git merge-base --is-ancestor <sha> origin/main` — **after** a `git fetch`, because the whole failure mode is a stale local view of `origin`. ⚠️ **It must read `origin/main`, never local `main`** — local `main` is exactly what was wrong here, and a check that consults it would have passed too. **It is free, it is mechanical, it needs no network beyond the fetch, and nothing about it was hard.** The only reason it does not exist is that nobody has written it.
+
+**② remains the genuinely hard half** and is unchanged: no cap can assert a production deployment without reading Vercel. ✅ **What ledger #321 did is make ② *observable* — see the PARTIAL note above — and it does not touch ①.**
+
+**① is satisfied for one row, not asserted either.** Ledger **#320** was merged to `main` 2026-09-14, so `git merge-base --is-ancestor` passes for it — **by someone running the command, not by a gate.** Asserting ① is cheap and is still owed; asserting ② needs something that reads Vercel, and that has not changed.
+
+**Why the weaker fix was taken anyway.** The incident in this row is *#303 recorded complete with only Preview deploys* — a preview and a production deploy of the SAME COMMIT were **indistinguishable in the app**. The SHA matched, GATE 0 passed, and the screen was not evidence. **That specific confusion is now impossible to have silently**, which is the part that was costing observations. ✏️ **The campaign-lifecycle board had already written the instruction by hand** — *"Confirm the SHA you are looking at is a PRODUCTION deploy of the code you mean, not a Preview of a branch"* — **with no way for anyone to carry it out.** That is [[R-26]]'s shape, and it is why the stamp was built rather than another note.
+
+
 **The instance, measured 2026-09-12.** `fc94309` (ledger **#303**, the ship-to address book) and
 `d48000c` (ledger **#261**) sit on `fix/pmi-suggest-auth`. `origin/main` is `ea9a047` and **has not
 moved since the branch diverged** — the merge-base IS `origin/main`, so a merge would be a pure
@@ -2412,7 +2456,47 @@ David's call, not this entry's.
 
 ---
 
-## #282 — 🔴 TWO SESSIONS, ONE WORKING TREE: THE BRANCH CAN CHANGE UNDER A SESSION BETWEEN THE COMMIT IT PLANNED AND THE COMMIT IT MAKES (NEW 2026-09-12, ledger #304)
+## #282 — ✅ **RESOLVED 2026-09-14 (ledger #324, [[R-154]], CLAUDE.md §6 r20) — DAVID ADOPTED THE RULE AND ANSWERED THE OBJECTION THAT HAD HELD IT A PROPOSAL.** WAS: 🔴 TWO SESSIONS, ONE WORKING TREE: THE BRANCH CAN CHANGE UNDER A SESSION BETWEEN THE COMMIT IT PLANNED AND THE COMMIT IT MAKES (NEW 2026-09-12, ledger #304)
+
+**THE RULE AS ADOPTED, verbatim:** *a session that will commit works in its own git worktree, never
+the shared checkout. The shared checkout is DAVID'S — his uncommitted work, kept on `main`, pulled
+after every merge. No session commits from it.*
+
+🔴 **THE OBJECTION THIS ENTRY RECORDED IS THE ONE THAT KEPT THE RULE A PROPOSAL, AND IT IS ANSWERED BY
+THE SECOND SENTENCE RATHER THAN WORKED AROUND.** Below, this entry asks what happens to David's own
+uncommitted edits in the shared tree. **The answer: they stay, and they are the only thing there.**
+One tree, one writer. The collision is **REMOVED, not relocated**, because the two populations are
+separated instead of interleaved — his uncommitted work in the shared checkout, every session's
+committed work in its own worktree.
+
+⚠️ **THE COST IS CARRIED IN THE RULE'S OWN TEXT, not left for the session that discovers it: a session
+CANNOT READ DAVID'S UNCOMMITTED WORK.** A worktree is a different directory and his in-flight edits are
+not reachable from it. **He commits them or he hands them over — there is no third option**, and a
+session that needs them ASKS rather than reaches. **The property that stops a session's commit landing
+in his tree is the same property that stops it reading his tree.** Paid deliberately.
+
+⚠️ **STILL UNGUARDED — this entry's *"nothing would enforce it"* is CORRECT and survives adoption.**
+No cap reads which directory a session is in; one asserting the cause would have to know which
+checkout is the shared one, and that is per-machine state (`.claude/` is gitignored for exactly that
+reason). The nearest mechanical check remains this entry's own — `git branch --show-current` at the
+commit instant — and it catches the SYMPTOM. **The rule says so out loud rather than implying a guard
+it does not have.**
+
+✅ **THE PRACTICE HAD ALREADY RUN AHEAD OF THE RULE, which is why adopting it costs nothing:**
+`git worktree list` on 2026-09-14 shows **17 worktrees**, nearly all in session scratchpads —
+including the two this entry names. **What was missing was the sentence, not the behaviour.** Ledger
+**#311** is the same lesson inverted: an accidental `git add -A` in a shared checkout three sessions
+were using staged a **27MB registered worktree**, caught before any push.
+
+⚠️ **THE FAMILY IS NOT CLOSED — this resolves the COMMIT INSTANT only.** **#281** (build start —
+*what is this branch for?*) and **#280** (close-out — *did it reach `main` and production?*) remain
+open. The rule helps both, since one worktree per branch makes *one ledger id per branch* the natural
+shape — **but neither is asserted by it, and neither should be marked resolved on its strength.**
+
+**The original entry is preserved below, unedited.**
+
+---
+
 
 **The occurrence, measured.** While ledger **#304** was being built, another session switched the
 shared checkout from `fix/stop-site-offer-unmount` to `feat/breakpoint-vocabulary`. The #304 commit
@@ -2461,7 +2545,7 @@ the mechanism above is real, and this is not its example. If a *different* run s
 numbers move, those numbers need re-measuring before they are cited, rather than inheriting this one's
 explanation ([[R-26]]).
 
-**THE PROPOSED RULE — RECORDED AS A PROPOSAL, DELIBERATELY NOT BUILT (David, 2026-09-12).**
+**THE PROPOSED RULE — RECORDED AS A PROPOSAL, DELIBERATELY NOT BUILT (David, 2026-09-12).** ✅ **ADOPTED 2026-09-14 — see the resolution above; it is now CLAUDE.md §6 r20 and [[R-154]].**
 > *A session that will commit works in its own worktree, not the shared checkout.*
 
 **Precedent, measured today rather than asserted:** `git worktree list` shows two worktrees created by
@@ -2475,7 +2559,7 @@ workflow constraint, not code, and **nothing would enforce it** — which is the
 *"Confirm branch (main or feature branch as appropriate)"*, a rule with no referent (#281). A worktree
 costs a full checkout (~1,200 files here). And 🔴 **the shared tree is also where DAVID works** — his
 own uncommitted edits were sitting in it during this incident — so *"own worktree"* has to say what
-happens to those, or it moves the collision rather than removing it.
+happens to those, or it moves the collision rather than removing it. ✅ **ANSWERED 2026-09-14: the shared tree is DAVID'S ALONE — his uncommitted work stays, nothing else lives there, so nothing collides. The cost (a session cannot read that work) is now stated in the rule itself.**
 
 **CLASS — THREE MOMENTS, ONE MISSING ASSERTION.** #281 is **build start** (*what is this branch
 for?*). This is the **commit instant** (*which branch am I on right now?*). #280 is **close-out**
@@ -2559,6 +2643,63 @@ than decides, so the 4/6/8 ladder cannot be mistaken for a ruling that the deskt
 ---
 
 ---
+
+---
+
+## #287 — 🔴 NOTHING ASSERTS THAT A BUILD'S RUNNABLE ARTIFACTS ARE IN THE TREE THE PERSON RUNNING THEM LOOKS AT (NEW 2026-09-12, ledger #310)
+
+**David's words, and they are the general rule rather than a complaint about one file:** *"the rule is
+not 'put migrations in the folder' — it is that anything I am expected to RUN lives at a path I can
+find without being told."*
+
+**The occurrence, measured.** `20260912_channels_one_vocabulary.sql` was written to
+`supabase/migrations/` — **the correct path** — inside a scratchpad worktree, and committed to an
+unmerged branch. David's checkout is detached at a commit that predates the branch, so in **his** tree
+the file did not exist. The close-out said *"Migration in supabase/migrations as a file"* and was
+**true of a tree he was not in.** 🔴 **THE PATH WAS RIGHT AND THE TREE WAS WRONG, and every report
+said the path.**
+
+🔴 **THIRD INSTANCE OF ONE SHAPE IN ONE AFTERNOON, WHICH IS WHY IT IS A CLASS AND NOT A SLIP:**
+
+| | What was asserted | Where it was true | Where David was |
+|---|---|---|---|
+| the owner-test board | *"12 cards, rendered by `owner-tests.html`"* | `origin/main` | a checkout 7 commits behind — the page was blank |
+| `verify-owner-test-boards` | **`✅ every board on disk is reachable`** · 37/37 | his stale tree, internally consistent | the same tree — the cap **cannot see** staleness, so it went green while the page was blank |
+| this migration | *"in `supabase/migrations` as a file"* | a scratchpad worktree + an unmerged branch | his tree, where the folder had no such file |
+
+**The common form: a claim about a PATH, made without asserting the TREE.** All three reported success,
+because each was measured where the work was rather than where the person is.
+
+**WHAT THE EXISTING CAPS DO AND DO NOT DO.** #309's `verify-id-sweep` and the board cap's new
+`[branch @ sha]` stamp fixed the *reporting* half — output now says which tree it describes.
+**Neither asserts that a runnable artifact has REACHED the reader's tree**, and nothing can from inside
+a worktree: the builder's tree is the only one it can see.
+
+**THE SHAPE OF A FIX, NOT A FIX (filed, not built).** Three candidates, none costed:
+  **(a)** a close-out gate listing every runnable artifact a build produced (migration, rollback,
+      script) and asserting each is an **ancestor of `origin/main`** rather than merely committed
+      somewhere — **#280's clause ① applied to files instead of to the build**;
+  **(b)** the inverse, and cheaper: a build that produces a runnable artifact **states the ref** the
+      reader must be on, so *"it is in `supabase/migrations`"* is never said without *"on `<ref>`"*;
+  **(c)** hand the artifact over by CONTENT rather than by path — a close-out that pastes the SQL
+      cannot be wrong about where the file is.
+✅ **THE BOUNDARY IS RULED — [[R-153]], 2026-09-12, and it closes the half this entry called owed.**
+*If David runs it, it is a file at a path in HIS tree and the handover names the ref. If Thunder runs it,
+or it is a few lines pasted into the SQL editor, it comes inline.* In his words: *"A migration is a file
+I apply as a file. A three-line discovery SELECT is text I paste. The rollback is a file I would run
+under pressure — so it is a file."* CARD 5 and CARD 6 pointed at *"the verification queries at the foot
+of the migration file"* and are fixed to paste; CARD 4 legitimately points at a file and now names the
+ref.
+
+🔴 **WHAT REMAINS OPEN IS THE MECHANICAL HALF, AND IT IS R-153's SECOND CLAUSE: *never state a path
+without the ref.*** *"'It is in supabase/migrations' is not a location. Every report that misled me
+today had a true path and a missing ref."* **Nothing asserts that.** A close-out can still name a path
+with no ref and every cap will pass — which is exactly how all three of today's instances reported
+success. That is this entry's remaining scope.
+
+**Blast radius: every build that has ever handed over a file to run.** Not measured. The three
+instances above are one afternoon's worth, and **all three were found by David, not by anything we
+own.**
 
 ## #284 — ✅ **RESOLVED 2026-09-12 (ledger #309) — MINTED AS R-148 + R-149, AND BOTH PROPOSALS BUILT.** THE ID-CLAIM RULE EXISTED, WAS UNNUMBERED, DISQUALIFIED ITSELF IN ITS OWN TEXT, AND LIVED IN THE ONE FILE THAT IS NO LONGER READ IN FULL (was NEW 2026-09-12, ledger #307)
 
@@ -2758,7 +2899,223 @@ proven by `stopOfferMount.test.ts` A6/A7.
 
 ---
 
-## #289 — 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+---
+
+## #286 — ✅ **RESOLVED 2026-09-12 (ledger #314) — TWO POPULATIONS, AND INHERITANCE MOVED FROM THE BRANCH TO THE ID.** THE ALL-BRANCHES SWEEP EXCLUDED EVERY BRANCH CUT FROM `main`, SO RUN FROM `main` IT REPORTED A TAKEN ID AS FREE (was NEW 2026-09-12, ledger #312)
+
+**The instance, measured today.** `node scripts/verify-id-sweep.mjs` run from `main` printed:
+
+```
+verify-id-sweep — 38 remote branches, 6 rivals (same-lineage and main excluded) swept from main
+  close-out highest anywhere: #309  →  NEXT FREE: #310   (this tree claims none beyond main)
+✅ verify-id-sweep — no id claimed by this branch is claimed anywhere else.
+```
+
+🔴 **`#310` AND `#311` ARE BOTH ALREADY CLAIMED ON `origin`.** `2584197 reserve(#310)` on
+`origin/feat/channel-vocabulary`, and `b8e5bbd reserve(#311)` + `cb60f62 fix(#311)` + `c6898df docs(#311)`
+on `origin/fix/zone-walk-safari-blob-revoke` — the last of which carries a **filed `#311` ledger row**,
+not merely a subject. The true highest, derived by hand over `git log --all` subjects ∪ every remote
+branch's `CLOSE-OUT-LEDGER.md` rows, is **#311**. The sweep was two ids behind and said so in green.
+
+**THE MECHANISM, AND IT IS FOUR LINES.** `scripts/verify-id-sweep.mjs:139-141`:
+
+```js
+const sameLineage = (ref) => {
+  const anc = (a, b) => { try { git('merge-base', '--is-ancestor', a, b); return true; } catch { return false; } };
+  return anc(ref, 'HEAD') || anc('HEAD', ref);
+};
+```
+
+The second disjunct — `anc('HEAD', ref)`, *"HEAD is an ancestor of it"* — excludes every branch
+**downstream** of HEAD. **Run from `main`, that is every branch cut from current `main`**, which is
+where every fresh reservation lives: **38 remote branches collapsed to 6 rivals.** Confirmed directly:
+`git merge-base --is-ancestor origin/main origin/fix/zone-walk-safari-blob-revoke` and the same for
+`origin/feat/channel-vocabulary` both return true.
+
+⚠️ **THE EXCLUSION IS NOT THE BUG, AND DELETING IT WOULD BREAK THE CAP.** Its comment is right, and
+it was written against a real first-run failure: *"The first run flagged four 'collisions' against
+`feat/tile-grid-r7-describe` and `feat/breakpoint-vocabulary` — which this branch is BUILT ON. Those
+ids are the same claim, INHERITED … A cap that fires every time you branch off your own work is a cap
+people turn off."* **That reasoning holds for the COLLISION half and fails for the NEXT-FREE half**,
+because the two halves need opposite populations:
+
+| Half | Question it answers | Population it needs |
+|---|---|---|
+| **COLLISION** | *is an id I claim also claimed by a session competing with me?* | rivals only — lineage correctly excluded |
+| **NEXT FREE** | *what is the highest id claimed ANYWHERE?* | **every ref, lineage included** |
+
+`max` is computed over `local ∪ localRes ∪ onMain ∪ elsewhere(RIVALS)` (`:174`), so a downstream
+branch's claim can never enter it. **From `main`, NEXT FREE is therefore always `main`'s max + 1 — a
+number computed without consulting a single unmerged branch.**
+
+🔴 **AND THIS IS THE EXACT CLASS THE SWEEP WAS BUILT TO CLOSE, ARRIVING IN THE SWEEP.** Ledger #309
+built it after *"six collisions in 24 hours, every one by a session doing the right thing"*, and the
+defect it was built for is **a claim that is invisible to the session reading the file**. A session that
+does the newly-correct thing — run the gate, reserve, push — is handed `#310` and collides with a
+reservation that has been on `origin` for hours. **The honest form of the finding: the gate turns a
+careful session into a colliding one.** §6 r19 / [[R-33]] — *a check that cannot disagree is not a
+check* — in its #182 variant: **the scanner reports a count and never states an expectation for it**,
+and *"✅ no id claimed by this branch is claimed anywhere else"* is TRUE as written. It answers the
+collision question correctly and the one the reader is actually asking incorrectly, in the same breath.
+
+**THE FIX IS SMALL AND IT IS NOT TAKEN HERE, BY THE SAME REASONING THE SWEEP'S OWN AUTHOR USED:**
+split the populations — keep `RIVALS` for COLLISION, add an unfiltered `ALL_REFS` for the NEXT-FREE
+max, and have the sweep **name the ref holding the highest id** rather than only the number (`#311 —
+origin/fix/zone-walk-safari-blob-revoke`), so a wrong answer is visible rather than merely wrong.
+⚠️ **Rewriting a checker inside a card-flip pass is the drift the gate exists to catch**, so it is
+SURFACED, not repaired. **What this pass did instead, and what it proves:** derived the true highest by
+hand, took **#312**, and recorded the derivation in the reservation commit — i.e. the workaround is a
+human doing the sweep's job, which is where this platform was before #309.
+
+⚠️ **SCOPE — WHAT IS AND IS NOT AFFECTED.** Run from a **feature branch** whose HEAD is not an ancestor
+of the other live branches, the exclusion drops far fewer refs and the NEXT-FREE figure is much closer
+to true — which is why #309's own run was clean and why this went unnoticed for a day. 🔴 **The worst
+case is `main`, which is where a session that has just merged, or one starting fresh, is standing** —
+the single most likely place for the gate to be run, and the only place where it degrades to
+`main`'s-max + 1. **Clauses C and D (`verify-id-citations.mjs`) are unaffected**: they read `HEAD ∪ origin/main`
+by design and make no free-id claim.
+
+---
+
+### ✅ HOW IT WAS FIXED (2026-09-12, ledger #314) — and the fix is NOT "delete the filter"
+
+🔴 **THE PROPOSED FIX IN THIS ROW WAS INCOMPLETE, AND SAYING SO IS THE POINT OF RE-READING IT.** It
+said *"keep `RIVALS` for COLLISION, add an unfiltered `ALL_REFS` for the NEXT-FREE max."* That repairs
+the maximum and **leaves the collision half blind from `main`** — which is where David's instruction
+pointed: *"run it from main against a known-taken id and watch it refuse."* A sweep that prints the
+right NEXT FREE and still passes a taken claim is the same false green, one layer over.
+
+**THE REAL DISCRIMINATOR: INHERITANCE IS A PROPERTY OF AN ID, NOT OF A BRANCH.** An id I claim is the
+SAME claim as another ref's **iff it was already claimed in our shared history — at
+`merge-base(HEAD, ref)`.** Exact in all four directions, and the fourth is the one that was missed:
+
+| Relationship | merge-base | Verdict |
+|---|---|---|
+| ref is an ANCESTOR of HEAD | = ref | every id it claims is inherited ✓ |
+| ref is DOWNSTREAM of HEAD | = HEAD | ids I claim are inherited — **no false positive, which is what the old filter was protecting** ✓ |
+| a SIBLING cut from `main` | = main | main does not claim my id → **COLLISION** ✓ |
+| **I am on `main`, ref downstream** | = main | a claim in my TREE is not at main → **COLLISION** — *the case that was missed* ✓ |
+
+So **the lineage filter is GONE, not loosened**, and every ref is swept for both questions.
+`selectPopulations()` takes **no lineage predicate at all** — the absence IS the fix, and probe **P1**
+fails the build if one reappears.
+
+**PROVEN BY MAKING IT FAIL, not by reasoning (§6 r19 · [[R-33]]).** One tree standing on `main`, one
+injected claim of **`#310`** — an id held by `origin/feat/channel-vocabulary` — and the two scripts run
+against it back to back, same tree, same id:
+
+```
+OLD (origin/main)  41 remote branches, 5 rivals …   NEXT FREE: #311
+                   ✅ no id claimed by this branch is claimed anywhere else.            exit 0
+NEW                41 refs for NEXT FREE, 40 for collisions …  NEXT FREE: #315
+                   held by: origin/fix/id-sweep-next-free-population (reserved)
+                   🔴 COLLISION — close-out #310 is claimed by THIS branch (HEAD)
+                      and by origin/feat/channel-vocabulary                             exit 1
+```
+
+⚠️ **THE OLD RUN WAS WRONG IN FOUR PLACES AT ONCE, NOT ONE.** It missed the collision, and it reported
+`#311`, tech-debt `#285` and `R-150` as free when the true answers were **#315**, **#290** and
+**R-154**. **A green line and four wrong numbers** — `origin/feat/channel-vocabulary`,
+`origin/docs/four-recovered-stories` and `origin/feat/action-feedback-visibility` are the three refs it
+could not see.
+
+🔴 **AND THE NEGATIVE CONTROL CAUGHT A REAL BUG IN THE FIX, WHICH IS EXACTLY WHY IT EXISTS.** Run from
+`8a76dde` — a commit that RESERVES `#312` — against `origin/docs/card-flips-and-leak-clause-split`,
+which is downstream of it and also claims `#312`, the first draft reported a **false COLLISION**: the
+merge-base read used the FILED-ROW matcher alone, so an inherited **RESERVATION** was invisible while
+the rival side counted it. **An asymmetry between two reads of one question** — and it reintroduced
+precisely the false positive the deleted filter existed to prevent. Both sides now go through **one**
+`fileClaims()`, so the asymmetry cannot be re-created by editing one of them; probe **P5** is that line.
+The control now reports *"1 overlapping claim(s) INHERITED at the merge-base, not collisions"*, exit 0.
+**It was found by running the probe, not by thinking about it.**
+
+**ALSO SHIPPED:** the highest id now **NAMES ITS HOLDER** (`held by: origin/feat/action-feedback-visibility`)
+— *a number with no holder gives a reader nothing to disagree with*, which is half of why this survived
+a day — and each ref's commit subjects are read **once** rather than twice per space (the old loop
+called `subjectsOf` for ledger and again for tech-debt).
+
+**PROBES: P1–P5, five of them POPULATION probes — #182's own prescription** (*"the mechanical fix is a
+mutant that changes the POPULATION, not the subject — none of our 13 do"*). **7/7 deliberate mutants
+caught:** a reintroduced lineage filter · a dropped `main` · an over-filtered rival set · `fileClaims`
+losing reservations · `collisionsOf` ignoring inheritance · `highestClaim` dropping the holder ·
+`highestClaim` returning the first instead of the max.
+
+⚠️ **WHAT IS STILL TRUE AND IS NOT A DEFECT:** the cap compares CLAIMS, never commit TIMES. R-148
+clause (4) needs a human to read two timestamps and decide; the cap **names the other holder so that
+comparison is possible, and deliberately does not perform it. Nothing in it moves an id.**
+
+---
+
+## #288 — 🟡 A RULING REACHED THE FILE AS A **FORECAST** AND NEVER REACHED THE STORY IT FORECAST, SO THE BOARD REPORTED A DECIDED QUESTION AS OWED FROM INSIDE THE FILE THAT HELD THE DECISION (NEW 2026-09-12, ledger #313 · minted as [[R-151]])
+
+**THE INSTANCE, MEASURED.** On **2026-08-31** David ruled the Spanish-language interface. The ruling
+reached `user_stories.md` **that day** — but as a **FORECAST**, at `:730`, inside a *different* story
+(*the on-site maintenance position*):
+
+> 🔴 **DO NOT ASSUME ONE LANGUAGE PER TENANT, and Cuto is the counter-example INSIDE one business.**
+> Two stories are being filed against this by David — **a Spanish-language interface where the choice
+> is made BY THE PERSON, on the invitation screen** — and the on-site maintenance position itself.
+
+**The story it forecast already existed**, 470 lines below at `:1199` (*Give it to me in my language*,
+filed 2026-08-23, ledger #194). Its `NEEDS` line read:
+
+> David to rule scope — crew-facing surfaces only, or the whole app — and whether locale is a
+> **per-user setting or a per-device one**.
+
+🔴 **THE FORECAST ANSWERS THAT QUESTION IN ITS OWN SENTENCE — *"the choice is made BY THE PERSON"* —
+AND THE TWO LINES SAT IN ONE FILE, UNCONNECTED, FOR TWELVE DAYS.** Anyone opening the board was told
+a question was owed to David by a file that, 470 lines earlier, recorded him answering it. **Nobody
+was wrong at any point**: the forecast was accurate, the story was honest about what it lacked, and
+neither knew about the other.
+
+**THE MECHANISM: NOTHING LINKS A FORECAST TO THE THING FORECAST.** A sentence that says *"a story is
+being filed"* creates no obligation, names no owner, carries no id, and is not swept by anything. It
+reads as a record of a decision **because it is one** — which is exactly why it does not read as an
+outstanding task. The `NEEDS` field is the board's only owed-marker, and a forecast written anywhere
+but in that field is invisible to it.
+
+🔴 **FOURTH SHAPE TODAY, AND THE FAMILY IS THE POINT — DAVID'S FRAMING.** Same family as **ledger
+#193's `MAPS-TO: —`**, which was set *deliberately* so the social gap would **stay visible**, and
+stayed visible for **twenty days** without ever being assigned. Both are **a true statement, correctly
+recorded, in a place that generates no obligation.** The other two of the four:
+
+| | The record | Why nothing acted on it |
+|---|---|---|
+| **#284** ([[R-148]]/[[R-149]]) | The id-claim rule, complete and correct since 2026-09-02 | It **disqualified itself in its own text** (*"deliberately NOT written into the table above as a ruling in his voice"*), and lived in a file now grepped rather than read |
+| **#283** (§6 r7) | *"Tile grid: desktop/tablet only (768px+)"* | **True when written**, invalidated by a change that never came back to it — a rule that was once true reads exactly like a rule that is true |
+| **#193** (`MAPS-TO: —`) | The social surface has no story | Set deliberately to keep the hole **visible**. Twenty days. **A visible gap is not an assigned one** |
+| **#288** (this) | *"two stories are being filed against this by David"* | A **forecast** — accurate, dated, in the right file, attached to nothing. Twelve days |
+
+**⚠️ WHAT THIS IS NOT.** It is not a call to stop writing forecasts — the `:730` line is genuinely
+useful and it is the reason the ruling survived at all. It is not [[R-26]] either: R-26 is *a written
+declaration nobody checked against reality*, and every one of these declarations was **true**. **The
+defect is that being true and being acted upon are unrelated properties of a written line**, and only
+one of them has a mechanism.
+
+🔴 **NOT FIXED, AND THE FIX IS NOT OBVIOUS — WHICH IS WHY THIS IS FILED RATHER THAN BUILT.** The cheap
+mechanical form is a cap that greps for forecast phrasing (*"is being filed"*, *"a story will be
+written"*, *"David will rule"*) and fails when it cannot find a matching owed-marker — but that is
+**matching on spelling**, which is tech-debt **#189**'s named weakness, and it would not have caught
+`:730`'s wording. The durable form is that **a forecast carries the id of the thing it forecasts**,
+which makes it sweepable — but nothing today gives an unwritten story an id, and R-148 clause (6)
+says an unminted thing **carries no id at all**. **That tension is real and is David's to resolve, not
+Thunder's to pick a default for.**
+
+**BLAST RADIUS: NOT MEASURED.** This entry documents **one** instance found while filing four stories.
+Whether other forecasts sit unconnected in `user_stories.md`, `RULINGS.md`'s OWED queue, or §3 prose
+that has since rotated out at N=3 **has not been swept** — and §3's N=3 rotation is precisely where a
+forecast would go to die unnoticed.
+---
+
+## #289 — ✅ **RESOLVED 2026-09-12 BY DELETION (ledger #316, David's ruling — option (a)).** WAS: 🔴 A "NEXT FREE ID" DECLARATION CACHED IN A FILE GOES STALE THE MOMENT A BRANCH CONSUMES THE ID, AND NOTHING CAN SEE IT (NEW 2026-09-12, ledger #308)
+
+✅ **THE RESOLUTION, IN DAVID'S WORDS:** ***"A number that is usually right is worse than no number, because it gets trusted."*** The cached next-free numbers are **GONE** from `TRACE-SESSION-BOOTSTRAP.md`. What replaces them is the instruction that was always beside them: **run `npm run verify:id-sweep`, FROM A BRANCH not from `main`, then reserve and push.** 🔴 **Option (a) of the three this entry named — chosen over (b) derive-at-read-time and (c) teach-the-sweep-to-assert-the-line, because the sweep ALREADY derives the answer at read time and the line was a second representation of it (STD-011). The convenient copy is the one that drifts, and it is the one that gets read.**
+
+✅ **AND TWO CAVEATS WENT IN WITH THE INSTRUCTION, BECAUSE AN INSTRUCTION WITH A SILENT FAILURE MODE IS THE NEXT VERSION OF THIS ENTRY:** ① **run it FROM A BRANCH** — from `main` the sweep excludes every branch cut from current `main` (`sameLineage()`; ⚠️ its own tech-debt row sits on an unmerged branch, so it is described not cited), which is exactly where a session that has just merged stands; ② **it cannot see an id claimed in an uncommitted working file, and that is the FLOOR, not a bug** — it reads refs, and reserve-and-push is what lifts a claim over that floor.
+
+⚠️ **WHAT THIS DOES NOT CLOSE, SAID PLAINLY:** the RACE is untouched — between the sweep and the push another session can still take the id ([[R-149]] says so and the sweep prints it). This entry was never about the race; it was about a cached ANSWER being trusted over a live one. **That is closed. The race is R-149's.**
+
+**THE EVIDENCE THAT DECIDED IT — three mechanisms in one day, every correction wrong within the hour:**
 
 **The line, on `main`, in the file every session opens first:**
 
@@ -2823,4 +3180,272 @@ only honest forms are DERIVE THEM AT READ TIME or DO NOT CACHE THEM AT ALL.** Th
 correct as of this commit and carries the same defect it describes; it was left as numbers rather
 than deleted because removing them is David's call, not a builder's.
 
+✏️ **THIRD CORRECTION THE SAME DAY, AND NOBODY DID ANYTHING WRONG THIS TIME.** Between the second
+correction and the merge of ledger #310 — about an hour — other sessions took more ids, and the sweep
+moved from `#314 / #288 / R-153` to `#315 / #291 / R-153`. The line was rewritten to `#316` / `#292` /
+`R-154`. **No merge falsified it and no survey was too shallow: it simply aged.** That is the third
+distinct mechanism in one day — stale by merge, stale by a survey that could not see far enough, and
+now stale by the passage of time on a busy tree — and it is the clearest argument yet that the
+quantity is not cacheable at all. 🔴 **Each correction has itself been wrong within the hour.**
+
 **TRIGGER:** the next branch that consumes an id and merges — i.e. immediately, and repeatedly.
+
+---
+
+## #290 — 🟡 THE ZONE WALK'S PLANT PICKER IS A `<datalist>`, AND iOS SAFARI IS THE ONE PLATFORM IT IS USED ON (NEW 2026-09-12, ledger #311)
+
+**Where.** `packages/cultivar-os/public/tools/zone-walk.html` — the plant field is an `<input list=…>`
+backed by `<datalist id="plantlist">`, populated from `PLANTS` at load:
+
+```js
+document.getElementById('plantlist').innerHTML =
+  PLANTS.map(p=>`<option value="${p.label.replace(/"/g,'&quot;')}">${p.sku}</option>`).join('');
+```
+
+🔴 **THE PLATFORM MISMATCH IS THE WHOLE ENTRY.** `<datalist>` is the weakest-supported form control
+in Safari: iOS renders it as a thin suggestion strip above the keyboard rather than a picker, it does
+not filter the way it does on desktop Chrome, and the `<option>`'s **label/value split is not
+honoured** — the SKU that is meant to show as the description is not reliably shown at all. **This
+tool is used standing in a lot, on a phone, by someone reading a plant tag** — the picker IS the
+interface, and desktop is the platform it will never be used on.
+
+**Named by David 2026-09-12 and deliberately NOT fixed in `#311`**, which committed the Safari
+blob-revoke fix only. ⚠️ **Not measured on a device by Thunder** — this entry records the defect as
+REPORTED, with the mechanism explained; the live behaviour on David's iPhone is the proof and it has
+not been taken. **Filed as a register row rather than left in a ledger row, because ledger rows
+scroll and this is the register** (David's instruction, same session).
+
+---
+
+---
+
+## #291 — ✅ **RESOLVED 2026-09-12 (ledger #311) — ONE TRIM, ON THE WAY OUT, WHILE IT WAS STILL FREE.** EXPORTED LABELS CARRIED A TRAILING SPACE, AND AN EXACT JOIN IS WHAT WILL READ THEM (was NEW 2026-09-12)
+
+**Where.** `packages/cultivar-os/public/tools/zone-walk.html` — the label written into the export
+retains a trailing space, so a row exports as `"Live Oak 30gal "` rather than `"Live Oak 30gal"`.
+
+🔴 **WHY A SINGLE SPACE IS A DATA DEFECT AND NOT A COSMETIC ONE.** Whatever eventually imports this
+file has to JOIN each exported label back to a stored one, and **every join this platform performs on
+a text label is an EXACT comparison** — `canonicalName` and `normalizeSize` exist precisely because
+inexact spellings had already cost us real rows (#55, #56, ledger #135). A trailing space is
+invisible in every surface a human would check it in: the JSON viewer, the spreadsheet, the console,
+the tag itself. **It will not look wrong; it will simply fail to match**, and the failure mode is a
+silent no-match that reads as *"this plant isn't in the catalogue"* rather than as a formatting bug.
+
+⚠️ **THE FIX IS A `.trim()` ON THE WAY OUT, NOT ON THE WAY IN.** Trimming at capture would edit what
+the walker typed; trimming at export normalises only the value being handed to a machine. Which side
+it lands on is a small decision, and it is not taken here.
+
+🔴 **AND THE REASON THIS IS 🟡 RATHER THAN 🔴: NOTHING CONSUMES THE EXPORT YET.** The tool exports for
+`business_inventory.zone` and *"the irrigation zone records"*, and **both were measured ABSENT**
+(tech-debt **#266**). So there is no importer to mis-join today — which makes this the cheapest
+possible moment to fix it, and **the last moment at which fixing it is free**: once a file with
+trailing spaces has been imported once, the same space has to be tolerated forever on the read side
+or the stored rows need repairing. **The window is open because the importer does not exist.**
+
+**Named by David 2026-09-12; not fixed in `#311`, which committed the Safari blob-revoke fix only.**
+
+
+---
+
+✅ **RESOLVED 2026-09-12 (ledger #311). David: *"Fix #291 now — `.trim()` on the way out. Nothing
+consumes the export yet, so this is the last moment it is free. One line."***
+
+**The fix, in `zone-walk.html`'s export map:** `const label = x.label.trim();` — and the two
+references below it now read `label` rather than `x.label`. Three functional lines; the rest of the
+diff is the reason, written where the next person will meet it.
+
+🔴 **AND IT WAS BREAKING MORE THAN THE EXPORTED STRING — FOUND BY READING THE EXPORT PATH BEFORE
+EDITING IT, NOT BY THE ORIGINAL REPORT.** The label is also the join key **inside the file**:
+
+```js
+const hit = PLANTS.find(pl => pl.label === x.label);   // ← ran on the UNTRIMMED value
+```
+
+So a plant typed with a trailing space exported as **`matched:false` with null `item_id` and null
+`sku`** — the in-file catalogue match silently failed, and the row carried *"we don't know what this
+is"* into a file that was otherwise correct. **One trim at the read point fixes the lookup and the
+exported string together.** Verified: `'Live Oak 30gal '` now resolves to `matched:true` with a real
+`item_id`, where before it returned nulls.
+
+⚠️ **TRIMMED ON THE WAY OUT, NOT AT CAPTURE, AND THAT WAS THE DECISION IN THE ORIGINAL ROW.** What the
+walker typed stays as typed in local state; only the value handed to a machine is normalised.
+
+⚠️ **NOT WIDENED, AND SAID RATHER THAN LEFT QUIET:** the `filter(x=>x.label)` above it is unchanged, so
+a whitespace-only entry still passes the filter and now exports as `label:""` instead of `label:"   "`.
+Both are junk; neither is a join hazard. **Changing the filter is a behaviour change to capture and
+was not in scope.**
+
+✅ **The window closed as it opened: free.** Nothing consumes the export (**#266** — `business_inventory.zone`
+and the irrigation zone records both measured absent), so no stored row needed repairing and no read
+side had to learn to tolerate the space.
+
+---
+
+## #292 — 🟡 NOTHING ASSERTS THAT AN EXEC'D SHELL PIPELINE CARRIES `set -o pipefail`; NINETEEN WERE FIXED BY HAND AND THE TWENTIETH IS FREE TO REGRESS (NEW 2026-09-14, ledger #318)
+
+**Where.** All of `scripts/*.mjs` and the `scripts` block of `package.json`. As of ledger #318 every
+exec'd pipeline in the repo carries `set -o pipefail` — 26 places: the 7 that already had it,
+`run-tests.mjs`, and the 19 added today. **Nothing keeps it that way.**
+
+🔴 **THE DEFECT IS SILENT, AND IT MAKES A CHECK REPORT SUCCESS.** Without the option, bash returns
+only the LAST command's status. `esbuild` writes its diagnostics to stderr and nothing to stdout, so
+`node` reads an EMPTY program, exits 0, and the pipeline succeeds. **A file that will not compile is
+indistinguishable from one whose suite passed** — `run-tests.mjs:62` records the day that happened
+(2026-09-07: a test file printed ✅ with `(no summary line)` beside it). In a mutation harness the
+consequence is sharper: the harness scores the mutant **SURVIVED** — *the suite stayed green while
+the module was wrong* — when the suite never ran at all.
+
+**Why it is filed rather than fixed.** The mechanical fix is a cap that parses every `execSync` /
+`spawnSync` template and every `package.json` script, flags any containing an unquoted `|` without
+the option, and fails the build. It needs one thing this pass did not build: **a declaration file for
+the legitimate exceptions** — a single-command exec has no pipeline and must not be flagged, and a
+pipeline whose first stage genuinely may fail (a `grep` used as a filter) is a real case. Without
+that the cap is noise on its first run, and a noisy cap is one people learn to skip (#73's lesson).
+**Writing a new cap inside a nineteen-file mechanical fix is also the scope drift the gate exists to
+catch.**
+
+⚠️ **AND THE SHAPE IS ALREADY FAMILIAR: THIS IS A DECLARATION NOBODY RE-DERIVES.** #318 derived the
+population by hand (`grep -rln '| node'`, then per-file `pipefail` counts) and got 19. **That number
+is a measurement, not a guarantee** — it is #73's class and #185's class, one layer out into the
+tooling. The same grep is the cap; it is three lines plus the declaration.
+
+**Trigger.** The next session that adds an exec'd pipeline to `scripts/` or `package.json`, or any
+session with the appetite for a small cap. **Until then the invariant holds by nobody having broken
+it.**
+
+---
+
+## #293 — 🟡 WITH `pipefail` ON, A MUTANT THAT DOES NOT BUILD NOW SCORES `CAUGHT`, AND 16 OF 18 HARNESSES SWALLOW THE REASON WITH `2>/dev/null` (NEW 2026-09-14, ledger #318)
+
+**Where.** The 18 mutation harnesses fixed by ledger #318 — `scripts/measure-*.mjs` +
+`scripts/mutants-vendor-identity.mjs`. Sixteen of them run the pipeline as
+`${ESB} ${SUITE} … 2>/dev/null | node`.
+
+**What it is.** CA-1 was the right fix and this is its honest residual. `suiteIsGreen()` returns a
+BOOLEAN, so after the fix there are two distinct events collapsed into one verdict:
+
+| what happened | verdict | is that right? |
+|---|---|---|
+| the mutated module compiled and the suite went red | `CAUGHT` | yes — the suite noticed |
+| the mutated module DID NOT COMPILE, so nothing ran | `CAUGHT` | **defensible, but it is not the same claim** |
+
+Both are honestly "not survived" — a mutant the compiler rejects is a change the codebase refuses,
+and scoring it `SURVIVED` (the pre-fix behaviour) was flatly wrong. **But a harness that reports
+`CAUGHT` for a mutant no test ever executed is telling the reader something it did not measure**, and
+`2>/dev/null` means esbuild's message — the one sentence that would distinguish the two — is
+discarded before anyone could see it.
+
+🔴 **IT IS NOT REACHABLE TODAY, AND THAT IS PRECISELY WHY IT SHOULD BE WRITTEN DOWN NOW.** Measured
+in the #318 pass with an esbuild shim: **483 builds across the 18 harnesses, ZERO failed.** Every one
+of the 395 current mutants is a semantically-valid edit that compiles, so the branch is dead code.
+**The next mutant that touches a type, a signature or a brace makes it live**, and it will arrive as
+a satisfying green.
+
+**The fix.** Have the pipeline report its two stages separately — build to a temp file, check that
+exit, then run — and give the harness a third verdict (`NO-BUILD`, printed distinctly, counted
+separately, not folded into `caught`). Stop discarding esbuild's stderr on the failing path.
+Cheapest honest version: keep the boolean, but on a red result re-run the build alone and print
+`(did not build)` beside the mutant. **~15 lines in one shared helper — and the 18 harnesses should
+share that helper rather than each grow a copy, which is §6 r8 and is the larger reason to do it
+once.**
+
+**Trigger.** The first harness that reports a mutant it cannot explain, or the next session touching
+this family. Related: [[R-33]] · CLAUDE.md §6 r19 · #182 (*a harness that cannot reach its target
+reports the same as one that passed*) · #186 (the runner that reported 72 of 74 and said all pass).
+
+---
+
+## #294 — 🟡 THE CLOSE-OUT LEDGER'S TABLE ROWS DO NOT MATCH ITS OWN HEADER — 29 OF 70, AND FOUR OF THEM LOSE CONTENT ON RENDER (NEW 2026-09-14, ledger #320)
+
+**Where.** `docs/CLOSE-OUT-LEDGER.md` — the close-out table. Header: `| # | Work item | Deliverable (one line) | Commit / SHA | Bar | Owner-proof owed (exact live test) | Blocker |` — **seven columns.**
+
+**What it is. Two distinct shapes, and only the first is harmless.**
+
+**① 25 of 70 close-out rows carry SIX cells** — `Work item` and `Deliverable` merged into one. `#318` is the instance David named; it is one of twenty-five: **#246 · #248 · #252 · #253 · #270 · #272 · #273 · #274 · #275 · #276 · #277 · #278 · #280 · #281 · #282 · #290 · #291 · #292 · #294 · #295 · #296 · #297 · #298 · #300 · #318.** GFM pads a short row with empty cells, so these **render, and lose nothing.** Cosmetic.
+
+**② 🔴 4 of 70 carry EIGHT, AND GFM SILENTLY DISCARDS THE EXCESS — `#279 · #299 · #311 · #317`.** The GFM spec is explicit: a row with *more* cells than the header has the excess **ignored**. So content that is in the file is **not on the screen**, and what is being dropped is the **Blocker** column — the most consequential cell in the row:
+
+- **`#317`** drops *"🔴 **FIVE OPEN QUESTIONS ARE WRITTEN INTO THE DOC RATHER THAN ASKED** (unattended run): ① is #253 closed…"*
+- **`#299`** drops *"David: retire or wire `install_date` (waits on R-143) · zone shape (O2′ or O3, by the walk data) · infer `planting` on QuickBooks stops (#268)"*
+- **`#279`** drops *"⚠️ **Needs a live QuickBooks connection to demonstrate — the review cannot replay a saved capture** (tech-debt #209). ⚠️ **Story gate OPEN**…"*
+- **`#311`** drops *"✅ **#291 IS NOW FIXED IN THIS SAME LEDGER — David, same session…"*
+
+**Cause, identified.** An **unescaped `|` inside inline code**. Markdown does *not* protect pipes inside backticks in a table — they must be written `\|`. The three isolated instances are all ordinary prose: `` `find api -name '*.ts' | wc -l` `` (#317), `` `| 108 |` `` quoting a table row (#299), and `` `|amount| ÷ base` `` as absolute-value notation (#279). ✏️ **Two rows carry BOTH shapes at once** — six columns *and* stray pipes — which is why #299's two stray pipes land it at eight rather than nine.
+
+**Why it matters, and why it is this ledger specifically.** #320 has just made the ledger row the **permanent home for every close-out's proof narrative**, moved out of CLAUDE.md §3 precisely because the row is the copy nothing has to cut. **A row that silently drops its last cell is a poor home for that**, and the four affected rows are dropping exactly the class of content §3b's register exists to surface: **open questions waiting on David.** This is the repo's own recurring shape — *a true record, correctly written, in a place that does not surface it* — the same family as ledger #193's `MAPS-TO: —` and tech-debt **#283**/**#284**.
+
+⚠️ **NOT A SILENT FALSE GREEN IN A CAP** — nothing mechanical reads these columns today; `verify-id-citations` parses the row's **id**, not its cells. The loss is to a **human reader**, on the rendered page.
+
+**Correction recorded.** The #320 close-out reported *"row #318 is malformed — 6 columns where the header declares 7"* and implied it was **the** instance. It is **one of 25**, and it is **the harmless shape**. The damaging shape — four rows dropping a cell — was found only when the whole table was measured on **unescaped** pipes; a first pass that counted raw `|` reported 34 rows and was wrong, because `\|` is legitimately escaped in `#304` and `#313`.
+
+**Not repaired in this pass, on David's instruction** — *"file it, do not repair it."* Repairing means editing 29 historical rows, which is exactly the diff-unreviewable drift the pre-flight gate exists to catch.
+
+**The fix, when it is taken.** ① Escape the four stray pipes as `\|` (four one-character edits, and they are the half that actually loses content). ② Decide whether the 25 six-cell rows are normalised or the header is relaxed — **a decision, not a cleanup**, because merging Work item and Deliverable may be what those sessions meant. ③ **A cap is cheap and belongs with the id checks:** assert every close-out row's unescaped-pipe count against the header's, both directions. Without it this recurs the next time somebody writes a shell pipeline into a row.
+
+**Trigger.** The next session to touch a listed row, or the first time a reader asks why a ledger row's Blocker column is empty. Related: **#320** (which made the row load-bearing) · **#283**/**#284** (a true record that generates no obligation) · CLAUDE.md §6 r19.
+
+---
+
+### #294a — 🔴 A SHELL PIPE INSIDE INLINE CODE SPLITS A LEDGER ROW, AND GFM DISCARDS THE OVERFLOW SILENTLY (SEPARATED OUT 2026-09-14 on David's instruction, ledger #321)
+
+**Separated from #294 because it is not the same kind of item.** #294's first shape — 25 rows with six cells — is a **historical tidiness question**: it renders, it loses nothing, and normalising it is a decision about what those sessions meant. **This one is a live, recurring, silent data-loss defect**, and bundling the two would let the harmless half set the priority for the damaging half.
+
+**The mechanism, stated once and precisely.** A markdown table row is split on `|`. **Backticks do not protect a pipe** — GFM's table extension splits the row into cells *before* inline parsing runs, so `` `a | b` `` is two cells, not one code span. A row that ends up with **more cells than the header** has the excess **ignored** by the spec. So: you write a perfectly ordinary shell pipeline into a close-out row, the row silently gains a cell, and **the last cell — `Blocker` — stops being rendered.** No error, no warning, no visual tell. The content is in the file forever and on the screen never.
+
+**🔴 IT RECURS BY CONSTRUCTION, AND THAT IS THE WHOLE ARGUMENT.** Ledger **#320** made the close-out ledger row **the permanent home for every close-out's proof narrative**, moved out of CLAUDE.md §3 precisely *because the row is the copy nothing has to cut*. **Close-out narrative is exactly the prose that contains shell pipelines** — `find api -name '*.ts' | wc -l`, `git log --oneline | head`, `grep -c foo | wc -l`. **So #320 did not merely fail to fix this; #320 increased its rate.** The four live instances are `#279 · #299 · #311 · #317`, and #317's is `` `find api -name '*.ts' | wc -l` `` — a command this repo runs constantly, written into a row by a session doing everything right.
+
+**What it costs, measured.** The dropped cells are not filler. **#317** loses *"🔴 FIVE OPEN QUESTIONS ARE WRITTEN INTO THE DOC RATHER THAN ASKED"* · **#299** loses *"David: retire or wire `install_date` (waits on R-143) · zone shape (O2′ or O3) · infer `planting` on QuickBooks stops"* · **#279** loses *"Needs a live QuickBooks connection to demonstrate"* · **#311** loses a note that a sibling item was fixed in the same ledger. **Every one is a question or a blocker waiting on David** — the precise class `docs/open-questions.md` exists to surface, arriving at the register through a row that does not render it.
+
+🔴 **AND IT RECURRED INSIDE THE SESSION THAT FILED IT — TWO HOURS LATER, IN THE ROW FOR #320 ITSELF. THIS IS THE STRONGEST EVIDENCE FOR THE PROPOSED CHECK AND IT IS NOT A HYPOTHETICAL.**
+
+Writing #320's `Blocker` cell, this session typed the sentence *"Cause: an unescaped `\|` inside inline code."* — **with the pipe unescaped.** The sentence explaining the defect **committed the defect**, split row **#320** into eight cells, and **discarded the cell containing its own conclusion** — *"Filed as tech-debt #294, deliberately NOT repaired"* and the note that it bears directly on that row. **It was pushed to `main` in that state**, and found only by measuring the table again afterwards. Now escaped; the row is back to seven cells and the sentence records what happened to it.
+
+✏️ **What this proves, precisely: knowing about the defect is not protection against it.** The author had filed the item, written the counting rule, and specified the check — **within the same hour** — and still produced the defect the first time the topic came up in prose. **That is the definition of a thing that needs a mechanism rather than care**, and it is the same argument OP-13, #73 and #289 each arrived at from their own direction. Fifth live instance: **#279 · #299 · #311 · #317 · #320 (repaired)**.
+
+**⚠️ It is invisible to every cap we own.** `verify-id-citations` parses a row's **id**, not its cells. Nothing reads the columns. The loss is to a human, on the rendered page, and a human reading a row with an empty Blocker column has no reason to suspect the file says otherwise.
+
+---
+
+#### ✅ BUILT 2026-09-14 (ledger #323) — `verify-id-citations` CLAUSE E, exactly as proposed below.
+
+**Shipped as the fifth clause**, not a new script: it already parses this file. Counts on **unescaped** pipes (`(?<!\\)\|`), derives the width from the header rather than writing `7`, refuses **`cells > header` only**, and prints **the text GFM is discarding** plus the likely culprit pipe. **8 probes, both directions**, P1 the real defect verbatim and P7 a population negative control.
+
+🔴 **RED-FIRST ON THE REAL CORPUS, AND IT NAMED EXACTLY THE FOUR THE PROPOSAL PREDICTED** — `#279 · #299 · #311 · #317`, exit 1. **The prediction and the result matching is the evidence the check reaches its target** (#182: a harness that cannot reach its target reports the same as one that passed).
+
+✅ **THEN REPAIRED, and the sequence was the proposal's own.** Three (`#279 · #299 · #317`) were stray pipes inside inline code and were escaped mechanically. 🔴 **`#311` WAS NOT — and it is the case probe P8 exists for: a genuine EXTRA COLUMN, no stray pipe at all.** Its cells were therefore also **MISALIGNED**: the renumber note sat in the `Bar` column, everything shifted right, and the `Blocker` fell off the end. Repaired by merging the renumber note back into the SHA cell, which restored **both** the discarded text and the column alignment. **All 77 rows now fit.**
+
+✏️ **THE SELF-TEST CAUGHT A BUG IN ITS OWN CLEAN CASE ON FIRST RUN:** the probe asserting an *escaped* pipe is accepted was written `'\|'` in JS source, where the language drops the backslash — so the checker saw a bare pipe and the probe reported a false positive. **The both-directions requirement is what surfaced it**; a violation-only probe would have passed.
+
+<details><summary>The original proposal, kept verbatim — what was specified against what was built</summary>
+
+
+**Name.** `verify-ledger-table-shape`, or a fifth clause on `verify-id-citations` — **it already parses this file**, so the second is cheaper and adds no new script to the verify chain (§6 r8: one operation, one place).
+
+**The assertion, in one sentence.** *In every markdown table in `docs/CLOSE-OUT-LEDGER.md`, no row may have MORE cells than its header row.*
+
+**How to count a cell — this is the part that must be right, and getting it wrong is how the first measurement of #294 reported 34 rows instead of 29.** Split on pipes **not preceded by a backslash**: `re.split(r'(?<!\\)\|', line)`. `\|` is the legitimate escape and rows **#304** and **#313** use it correctly — a naive `line.count('|')` condemns them and teaches the next reader that the cap cries wolf.
+
+**Direction — and it is ONE direction, deliberately.** **Refuse `cells > header`. Do NOT refuse `cells < header`.** A short row is padded by the spec and loses nothing; **25 rows are short today**, and failing on them would make the cap red on arrival, which is the state a cap does not survive (#73: a gap list that only grows stops being read). The short rows are #294's separate, human decision.
+
+**What it must print.** The row id, the count it found against the header's, **and the text of the cell that is being discarded** — because *"row #317 has 8 cells"* tells a reader nothing, while *"row #317 drops: 🔴 FIVE OPEN QUESTIONS…"* tells them exactly what the reader of that row is not seeing. **And it should name the likely culprit**: the first unescaped `|` that appears between backticks on the line.
+
+**Probes it needs, both directions (STD-022), the first being the real defect verbatim (STD-024):**
+- **P1** — 🔴 a row containing `` `find api -name '*.ts' | wc -l` `` → **REFUSES**, and names the dropped cell. *(#317, verbatim.)*
+- **P2** — the same row with the pipe escaped `` `find api -name '*.ts' \| wc -l` `` → **PASSES**. Without this, P1 could be a check that refuses every row.
+- **P3** — a row using `\|` legitimately in prose (#304/#313's shape) → **PASSES**. This is the one a naive implementation fails.
+- **P4** — a six-cell row → **PASSES**. Short is padded, and 25 exist.
+- **P5** — the header row itself → never evaluated against itself.
+- **P6** — a `⏳ RESERVED` row with a stray pipe → **REFUSES**. It is still a table row; reserving does not exempt the shape.
+- **P7** — 🔴 **NEGATIVE CONTROL that changes the POPULATION, not the subject** (#182's own unmet prescription): run it against a file with **no table at all** and against a table whose header is longer than every row — it must report **clean**, not silently pass because it found nothing to parse. *A check that cannot tell "no violations" from "I never looked" is the shape this repo keeps filing.*
+- **P8** — an unescaped pipe **outside** backticks (someone typed a real extra column) → **REFUSES**. The defect is the cell count, not the backticks; the backticks are only the commonest cause.
+
+**Scope, and a deliberate limit.** Assert **`CLOSE-OUT-LEDGER.md` only** to begin with. Every `.md` in the repo is the tempting scope and is how a cap arrives with a backlog nobody clears. ⚠️ **`docs/tech-debt-log.md` has tables too and this very entry contains pipes inside backticks** — if the scope widens, it must be widened *with* its own first run cleaned, not before.
+
+**Red-first, before it is trusted (§6 r19 · [[R-33]]).** Run it against `main` as it stands: it must **exit 1 and name exactly `#279 · #299 · #311 · #317`**. If it names more, the escape handling is wrong; if it names fewer, it is not reaching them. **Only then** escape the four pipes and watch it go green — and the four escapes are the repair, which #294 records as owed and which David has deliberately deferred.
+
+**Cost.** Roughly forty lines and one regex, inside a script that already reads the file. **The four repairs are four one-character edits.**
+
+**Trigger.** ~~The next close-out that writes a shell pipeline into a ledger row~~ — **now asserted on every build.**
+
+</details>

@@ -1,10 +1,16 @@
 # OWNER TEST — THE SHIP-TO ADDRESS BOOK (`customer_addresses`)
 
-> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
 > failed or unmerged build looks *completely normal* — the app just serves the old bundle.
 > Match it to `git log --oneline origin/main -1` — **not to a SHA written in this file**, because
 > Vercel deploys the TREE and *any* push to `main`, docs included, moves the stamp.
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 > *(GATE 0 · OP-15.)*
 
 **Capability:** 3.7 (customers) · 2.1 (checkout) · 3.5 (delivery)
@@ -33,27 +39,36 @@
 > the review ask. **Nothing on this board was `covered`, so no proof was lost** — which is why the
 > change was made before you ran it rather than after.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 12 covered** (10 `owed` · 2 `needs-test`).
+**Board: 2 of 12 covered** (2 `covered` · 8 `owed` · 2 `needs-test`) — measured on
+`docs/card-flips-and-leak-clause-split` @ `8a76dde`. ✅ **CARDS 1 and 3 — David, 2026-09-12.**
 
-> 🔴 **NOTHING ON THIS BOARD EXCEPT CARD 2 CAN RUN UNTIL THE MIGRATION IS APPLIED.**
-> `customer_addresses` does not exist yet. Until it does the picker renders nothing and the save
-> offer never appears — which is the correct degraded state, not a bug, and CARD 2 is how you
-> confirm it.
+> ✅ **THE MIGRATION IS APPLIED — DAVID, 2026-09-12 (CARD 1). THE BLOCK THAT USED TO STAND HERE IS
+> SPENT.** It read *"NOTHING ON THIS BOARD EXCEPT CARD 2 CAN RUN UNTIL THE MIGRATION IS APPLIED —
+> `customer_addresses` does not exist yet."* **It does now**, proven by CARD 3 against the catalog:
+> RLS on, 14 columns, exactly three policies naming `customers:*` and none naming `owner_id`, two
+> UNIQUE partial indexes, zero rows. **Every remaining card is unblocked at the database.**
+> 🔴 **What is NOT unblocked is the CODE PATH: CARDS 4–9 still need the build in front of you**, and
+> the fix CARD 4 failed on lives on `fix/stop-site-offer-unmount`. An applied table is not a deploy
+> (#280), and the stamp at the foot of the screen is still the only thing that settles which code you
+> are looking at.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
-> **David can run these now, Supabase SQL editor, no phone:** CARD 1 (applies) · CARDS 3, 10, 11.
+> **David can run these now, Supabase SQL editor, no phone:** ~~CARD 1 (applies)~~ ✅ · ~~CARD 3~~ ✅ · CARDS 10, 11.
 > **David's own login, Test Dave's — these WRITE:** CARDS 2, 4, 5, 6, 7, 8.
 > 🔴 **Never on LAWNS**: a checkout there pushes a real invoice, and a ship-to edit there moves a real customer's truck.
 > **David's own login, LAWNS, LOOKING ONLY:** CARD 9.
 > **Needs a login David does not hold:** CARD 8b (a STAFF member) — `needs-test`, with its reason.
 >
-> **🔴 ORDER: CARD 1 → CARD 3 → the screens.** (CARD 2 is `needs-test` — its window cannot open on a single database.)
+> **🔴 ORDER: ~~CARD 1~~ ✅ → ~~CARD 3~~ ✅ → the screens. NEXT: CARD 4, on the SCHEDULE** — it is the
+> one card on this board that has been run and **FAILED**, and the screen it passed on (`/orders/:id`)
+> is the screen that was never broken. (CARD 2 is `needs-test` — its window cannot open on a single
+> database, and after CARD 1 it cannot be re-entered at all.)
 
 ---
 
 ### CARD 1 — apply the migration, in the SQL editor
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David)
 DEVICE: desktop
 COVERS: ledger #303
 
@@ -66,6 +81,12 @@ Open `supabase/migrations/20260911b_customer_addresses.sql`, paste everything fr
 **PASS:** it completes with no error. It is idempotent; a second run is a no-op, not an error.
 **FAIL:** any error. It is one transaction, so nothing was written — report the message and stop.
 
+✅ **COVERED 2026-09-12 — DAVID APPLIED IT.** His words: *"Migration applied clean."* 🔴 **`customer_addresses`
+IS NOW A LIVE TABLE, WHICH CHANGES WHAT THE REST OF THIS BOARD MEANS** — the gate block at the top of
+the file no longer holds anything back, and **CARD 2's window is now closed forever**, not merely
+unobservable. It was already `needs-test` for that reason (one database, no unmigrated tenant); it is
+now `needs-test` about a state that cannot be re-entered without dropping the table.
+
 ---
 
 ### CARD 2 — 🔴 BEFORE APPLYING: nothing is broken and nothing is promised
@@ -73,6 +94,10 @@ STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: phone
 COVERS: ledger #303
+
+⚠️ **AND AS OF 2026-09-12 THE WINDOW IS NOT MERELY UNOBSERVABLE, IT IS GONE** — CARD 1 was applied, so
+re-entering the pre-apply state would now mean DROPPING a live table. The card stays `needs-test` for
+the same reason it always did; what changed is that nobody can ever argue it back.
 
 🔴 **CLOSED BY DAVID, 2026-09-11 — THE WINDOW THIS CARD TESTS CAN NEVER OPEN.** His words: *"single
 database, no unmigrated tenant exists, so the pre-apply window can never open."* There is ONE
@@ -96,8 +121,8 @@ was — **no saved-sites block, no error, and no empty "Saved delivery sites" he
 ---
 
 ### CARD 3 — the shape, the policies and the indexes are what was written
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David — all six clauses)
 DEVICE: desktop
 COVERS: ledger #303
 
@@ -127,10 +152,12 @@ WITH rls AS (
   SELECT 4, '', 'ROWS    ' || count(*)::text || '   (must be 0 — nothing backfills this book)'
     FROM public.customer_addresses
 ), leak AS (
+  -- D-41's redline, and ONLY that. See the SPLIT note under the PASS list: the
+  -- `deliveries.address_line2` half was removed on 2026-09-12 (tech-debt #279).
   SELECT 5, column_name, 'LEAK    ' || table_name || '.' || column_name || '   🔴 THIS MUST NOT EXIST'
     FROM information_schema.columns
    WHERE table_schema = 'public'
-     AND (column_name LIKE 'shipping%' OR (table_name = 'deliveries' AND column_name = 'address_line2'))
+     AND column_name LIKE 'shipping%'
 )
 SELECT line FROM (
   SELECT * FROM rls UNION ALL SELECT * FROM cols UNION ALL SELECT * FROM pol
@@ -148,10 +175,45 @@ SELECT line FROM (
 4. **Three INDEX rows beyond the primary key, and TWO of them say `UNIQUE`** —
    `customer_addresses_one_default` and `customer_addresses_one_label`.
 5. `ROWS 0`.
-6. 🔴 **NO `LEAK` row at all.** One would mean a `shipping_*` column exists somewhere — D-41's
-   redline — or that `deliveries` grew an `address_line2` this build deliberately did not add.
+6. 🔴 **NO `LEAK` row at all.** One would mean a **`shipping_*` column exists somewhere**, which is
+   D-41's redline: *"ADDRESS = L1"* — the order snapshots the address onto the delivery row, so a
+   parallel `shipping_*` family on any table is a second place an address can live, and a second
+   place is where drift starts. **This clause is permanent and it is not conditional on anything.**
 
 **FAIL:** any of the six. A fourth policy, a missing `UNIQUE`, a non-zero row count, or any LEAK row.
+
+---
+
+> ✏️ **SPLIT 2026-09-12, ON DAVID'S INSTRUCTION — THIS CLAUSE USED TO FORBID TWO UNRELATED THINGS AND
+> ONE OF THEM IS A COLUMN WE MAY DELIBERATELY ADD.** Until today clause 6 also failed on
+> `deliveries.address_line2`:
+>
+> ```sql
+> AND (column_name LIKE 'shipping%' OR (table_name = 'deliveries' AND column_name = 'address_line2'))
+> ```
+>
+> 🔴 **THAT HALF WOULD HAVE TURNED A CORRECT MIGRATION INTO A BOARD FAILURE.** `deliveries.address_line2`
+> is the column the **`BillAddr.Line2` fix needs** — tech-debt **#254**, where *"456 values sit and 453
+> are real streets"* — and **tech-debt #279** records that whether `deliveries` gains it is an OPEN
+> decision David has not made: *"① does `deliveries` gain an `address_line2`? … ② or does the importer
+> fold Line2 into Line1 on the way in?"* If ① is chosen, the next person runs this card, sees a red
+> `LEAK` row naming the column they just correctly added, and is told by a standing board that their
+> own build is a leak.
+>
+> ⚠️ **AND THE TWO HALVES WERE NEVER THE SAME CLAIM.** `shipping_*` is a **redline** — a shape that
+> must never exist, ruled under D-41. `deliveries.address_line2` was an **absence-of-the-day** — true
+> when written, by a decision that is explicitly still open. **Bundling a ruling with a pending
+> decision behind one `OR` makes the ruling expire when the decision lands**, and that is §6 r7's exact
+> shape (ledger #307): a statement that was true when written, left standing until it read as
+> authoritative. It cost nothing here only because David split it before ① was taken.
+>
+> **WHERE THE DROPPED HALF NOW LIVES:** nowhere as a gate, deliberately — it is a note, and tech-debt
+> **#279** is its owner. When ① or ② is decided, #279 is the row that closes; **no card needs to
+> change**, which is the point of moving it out of one.
+>
+> 🔴 **WHAT THIS BOARD NO LONGER ASSERTS, SAID PLAINLY:** nothing here now notices if `deliveries`
+> grows a fifth address part. That is not an oversight — it is a decision whose owner is #279, not
+> this card. **This board's scope is `customer_addresses`.**
 
 ---
 

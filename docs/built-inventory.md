@@ -1,4 +1,13 @@
-# Last updated: 2026-09-12 (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
+# Last updated: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
+# (prior line, preserved: **#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
+# (prior line, preserved: **#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
+# (prior line, preserved: **#321 — THE PRODUCTION STAMP, MERGED AND READ LIVE.** `origin/main` = `15fe4f2`; `cultivar-os.app` renders **`built Sep 14, 12:28p · 15fe4f2 · prod`** — quiet, no amber chip — **traced through the shipped minified bundle** (`jJ("production","main")` → `{label:"prod", loud:false}`), not inferred from source. The bundle carries its **deployment target**, not only its SHA: `vite.config.ts` bakes `VERCEL_ENV`/`VERCEL_GIT_COMMIT_REF`, the pure `src/lib/deployStamp.ts` turns them into `{label, loud, reason}`, `<VersionStamp>` renders it on every screen. **GATE 0 on all 40 boards now requires the last token to read `prod`.** ⚠️ **Not rendered in a browser — under OP-14 the card flip is David's.** ⚠️ **tech-debt #280 → 🟡 PARTIAL: ② is OBSERVABLE, NO CAP ASSERTS IT; ① still owed and now carries this session's own unpushed-merge incident.** **#294a** separated out — a shell pipe inside inline code splits a ledger row and GFM discards the overflow silently, **a defect #320 made more likely** — with a **check PROPOSED, not built**.)
+# (prior line, preserved: **#320 — THE §3 ENTRY GATE, AND THE §3 ENTRY TRIM.** 🔴 **A close-out ledger row with NO CLAUDE.md §3 entry is now an INCOMPLETE CLOSE-OUT, asserted by `verify-handoff-retention` check 5** — every close-out row must be claimed by an entry's headline bold run (a `⏳ RESERVED` row owes none; `TECH-DEBT #NNN` is not a ledger claim; **a MENTION in another entry's body is not an entry**) or be declared in `handoff-entry-declarations.json`, **a list that prunes itself in both directions** (#73's lesson). **MEASURED: FIFTEEN rows had no entry — #253 · #255 · #256 · #264 · #270 · #271 · #291 · #302 · #304 · #308 · #310 · #311 · #313 · #316 · #317 — they never entered, they did not scroll out.** The prompt named four; the other eleven were derived. **#302 is the pointed one: the row that BUILT `open-questions.md`, to catch what §3 drops at N=3, is itself a row §3 never recorded.** **10 probes both directions + THREE red-first proofs against the real tree**, and the gate caught this very build before its entry was written. 🔴 **AND §3 ENTRIES ARE NOW TRIMMED TO headline + `Type:` + state + FLAGGED FOR DAVID** — the proof narrative moves to the CLOSE-OUT LEDGER ROW, which is permanent and which nothing has to cut. **Nothing deleted: 11 paragraphs (10.3KB) the rows did not carry were appended verbatim; 5 the rows already carried were dropped after a per-sentence check.** CLAUDE.md **678 → 651 lines, −14KB**. **N=3 unchanged.**)
+(**#318 — THREE MECHANICAL FIXES, AND THE HEADLINE IS THE NUMBER THAT DID NOT MOVE.** `set -o pipefail` added to the **19** exec'd pipelines that lacked it (18 mutation harnesses + `package.json:15`) — without it a module that will not compile is indistinguishable from one whose suite passed, and a mutation harness scores it `SURVIVED`. **The scores did NOT move: 395 mutants, byte-identical output, and an esbuild shim measured 483 builds with ZERO failures — the bug was LATENT, so the verdicts were correct BY LUCK and are now correct BY CONSTRUCTION.** The **12-function ceiling is now asserted** in `verify-api-parses.mjs` (recursive count, warns at zero headroom, exit 1 at 13, 7 probes both directions, proven red) — **deliberately NOT `readdirSync('api').length`, which reads 11 and cannot fail.** And the stale **`11 of 12 · 1 slot headroom`** is **DELETED** from `PLATFORM_STATE.md` after 86 days. tech-debt **#292** · **#293**.)
+# (**#314 — THE SWEEP'S OWN BLIND SPOT IS CLOSED (tech-debt #286 RESOLVED).** Two populations, not one: NEXT FREE from every ref, collisions by per-id inheritance at `merge-base(HEAD, ref)`; `main` is a rival too. Proven by making it fail from `main` — old script exit 0, new exit 1, same tree. 9/9 mutants. See the *id-claim* entry.) See also:
+# (**#312 — SIX OWNER-TEST CARDS FLIPPED `covered` FROM DAVID'S LIVE RUNS** — campaign-lifecycle 1/2/4, ship-to 1/3 (`customer_addresses` now APPLIED + catalog-verified), breakpoint CARD 1 already flipped in #307; the ship-to CARD 3 leak clause SPLIT so it no longer forbids `deliveries.address_line2` (tech-debt #279); tech-debt **#286** filed — the id sweep reports a taken id as free when run from `main`.) See also:
+# (**#310 — ONE SHARED CHANNEL VOCABULARY:** the `channels` lookup table, FKs replacing both platform CHECKs, a write-time trigger for the jsonb `advert_channels`, and EMAIL becomes a real channel with a `subject` column. **MIGRATION WRITTEN, NOT APPLIED.** See the *Campaign Scheduler* entry.) See also:
+# (**#306 — THE CAMPAIGN LIFECYCLE: R-145 edit scope · R-146 cancel · R-147 generate-more appends, plus the zero-post claim that hid the duplicate.** No migration, no permission string, api/ 12/12. See the *Campaign Scheduler* entry.) See also:
 # (**#315 — THE DELIVERY DAY LOAD LIST (`/load-list?date=`):** the yard person's printable copy of the day — consolidated bill of materials first, per-stop breakdown underneath, special mix as line 1 because it loads first. Print view over existing data: NO table, NO migration, NO api function. The T-post rule is a COMPUTED threshold, not a five-row table — the defect it replaced dropped a 200 gallon tree off the end. Nothing it cannot compute is omitted; tech-debt **#290**/**#291** filed against the install cost model, **#292** against the size resolver. **NOT MERGED.**) See also:
 # (**#309 — THE ID-CLAIM RULE IS MINTED AND GUARDED:** `R-148` + `R-149` in the ruling table, prose unrewritten; `verify-id-sweep` sweeps every remote branch before a claim; `verify-id-citations` gains ledger-duplicate and commit-subject clauses; the board TOTAL carries its tree)
 # (**#307 — §6 r7 NOW DESCRIBES THE TILE GRID:** 4/6/8 at every width, the phone-first origin recorded, *describes-not-decides* stated; **no pixel moved**; CARD 1 owner-proven; tech-debt #283 closed, **#284** filed — the id-claim rule exists, unnumbered since 2026-09-02)
@@ -975,6 +984,33 @@ marketplace page."
 
 ---
 
+## API Parse Cap + the Vercel 12-Function Ceiling (`verify-api-parses`)
+
+**What:** Two assertions on the DEPLOYED backend, in the script that runs FIRST in `npm run verify`. **(1) PARSE** — every file under repo-root `api/` and `packages/*/api/**` parses (`ignition-os` excluded, frozen donor). That surface is in NO tsconfig, so it had neither a type check nor a parse check until 2026-07-29; on 2026-07-27 a `SyntaxError` reached production and three QBO routes 500'd behind a green `npm run verify`. **(2) THE FUNCTION CEILING (NEW 2026-09-14, ledger #318)** — Vercel Hobby caps a deployment at **12 serverless functions**, and a 13th does not error: **the whole deploy fails SILENTLY and Vercel keeps serving the last-good bundle**, so production looks healthy while serving stale code. That cost a day on 2026-06-20 when `api/deliveries/create.ts` was function #13.
+**Status:** ✅ Parse cap built 2026-07-29. ✅ **Ceiling assertion added 2026-09-14 (ledger #318, `297972b`)** — prints `N of 12`, warns at **zero headroom**, **exits 1 at 13**. Live reading today: **12 of 12, ZERO headroom.**
+**Vertical:** shared (root tooling) | **Type:** infrastructure
+**Files:** `scripts/verify-api-parses.mjs` · `scripts/fixtures/parse-fail-await-in-non-async.ts.txt` · wired as `npm run verify:api-parses` and first in the `verify` chain.
+🔴 **IT COUNTS RECURSIVELY, AND THE OBVIOUS FORM IS A CAP THAT CANNOT FAIL.** `readdirSync('api').length <= 12` returns **11** today — four files plus seven directories, top level only — so it reads GREEN at 12 of 12; **2026-06-20's own defect takes it 11 → 12 and still passes**; and a 13th nested in an existing directory never moves it (confirmed live: 13 real functions on disk, shallow count still 11). One function per code file **at any depth** is how Vercel builds the directory. Non-code files are excluded — `api/qbo/.DS_Store` is live in the repo and must not consume a slot.
+**PROBES:** 13 total, both directions (STD-022), the first the real defect (STD-024). Parse: P1/P1b (the `router.ts` pre-`a13d354` shape, and the message names the cause) · P2–P6. Ceiling: **P7** the 2026-06-20 defect verbatim → OVER · **P8** the 12 we ship → AT, not over · **P9** a 13th nested in an existing dir → OVER (the shallow form reports 11 here) · **P10** `.DS_Store` is not a function · **P11** a directory is not a function · **P12** eleven files → UNDER (negative control) · **P13** every counted extension is one Vercel builds. Probe failure exits **2** — the cap refuses to report a scan from a checker that does not work.
+**PROVEN RED** in a scratch worktree on both shapes of a 13th file, then restored to exit 0 (§6 r19 / [[R-33]]).
+**OUTPUTS:** exit 0 = parses AND ceiling holds · 1 = a parse failure or 13+ functions (every counted file named) · 2 = the cap's own probes failed.
+⚠️ **It WARNS but does not BLOCK at zero headroom, deliberately** — blocking at 12 would fail every build today. **So the last free slot is still spendable without a stop**, and §6 r11's STOP-and-surface at #13 remains a human rule. Doctrine: CLAUDE.md §6 r11 · tech-debt #41 · #60 · #77 (type-checking `api/` is a separate, unbuilt item).
+
+---
+
+## Shell-Pipeline Exit-Code Integrity (`set -o pipefail`, 26 places)
+
+**What:** Every exec'd shell pipeline in the repo's tooling sets `set -o pipefail`. **Without it bash returns only the LAST command's status:** `esbuild` writes its diagnostics to stderr and nothing to stdout, so `node` reads an **EMPTY program**, exits 0, and the pipeline succeeds — **a module that will not compile is indistinguishable from one whose suite passed.** `run-tests.mjs:62` records the day that happened (2026-09-07: a test file printed ✅ with `(no summary line)` beside it).
+**Status:** ✅ **Completed 2026-09-14 (ledger #318, `a4dd93c`)** — the 19 remaining places fixed: **18 mutation harnesses** (`scripts/measure-*.mjs` + `scripts/mutants-vendor-identity.mjs`) and **`package.json:15` `verify:write-wall`**. 7 harnesses and `run-tests.mjs` already had it; the correct string and its reason were copied from `run-tests.mjs:62`, not rewritten. **26 places total.**
+**Vertical:** shared (root tooling) | **Type:** infrastructure
+🔴 **WHY IT IS WORSE IN A MUTATION HARNESS THAN IN A TEST RUNNER:** the harness scores the mutant **`SURVIVED`** — *the suite stayed green while the module was wrong* — when the suite never ran at all. A false SURVIVED is a standing accusation against a test suite that is in fact fine, and it is the one verdict a reader acts on.
+🔴 **THE SCORES DID NOT MOVE, AND THAT IS THE FINDING.** All 18 harnesses report **byte-identical** output before and after: **395 mutants, 395 caught, every exit 0.** ✅ **MEASURED, not assumed — an esbuild shim (itself first proven able to record a failure) tallied 483 builds across the 18 and ZERO FAILED.** Every current mutant is a semantically-valid edit that compiles, so the trigger condition never occurs: **the bug was LATENT.** The verdicts were correct **by luck**; they are now correct **by construction**. ⚠️ **No pre-fix score should be quoted as evidence of anything** — it came from a harness that could not tell *"did not build"* from a verdict.
+**PROVEN RED** (§6 r19): a 13th mutant injected into `measure-order-kind` whose replacement does not compile — **PRE-FIX `P0 SURVIVED 🔴` 9/10, exit 1 → POST-FIX `P0 CAUGHT ✓` 10/10, exit 0**, one tree, one probe, same mutant. The `package.json` shape in `/bin/sh` against a non-compiling input: **without → exit 0, with → exit 1.**
+⚠️ **NOTHING ASSERTS THE INVARIANT — tech-debt #292.** 19 were added by hand in one pass; the 20th pipeline regresses silently. The cap is three lines of grep plus a declaration for the legitimate exceptions. ⚠️ **AND THE RESIDUAL — tech-debt #293:** with `pipefail` on, a non-compiling mutant now scores `CAUGHT`, and 16 of 18 harnesses discard esbuild's stderr with `2>/dev/null`, so the harness cannot say WHY. 0 of 483 today; live the moment a mutant touches a type.
+⚠️ **PORTABILITY, recorded not guarded:** all 18 harnesses pass `shell:'/bin/bash'`; npm's `/bin/sh` on this machine is bash 3.2 and supports the option. **Under `dash` the `package.json` half would break.**
+
+---
+
 ## Quality Gate — ESLint + knip (baseline-and-ratchet)
 
 **What:** Two standing build gates mapped to bug CLASSES the platform has actually hit (dead code, unused vars, swallowed async errors, stale-closure deps) — NOT a style linter. Baseline-and-ratchet: records current debt and fails the build on NET-NEW only.
@@ -1847,7 +1883,7 @@ rows), #252 (`price_type`/`price_unit`).
 
 **Party record — standard entity-completeness (2026-07-13, D-41 proposed · ledger #118 · migration `20260713_customers_party_record.sql` APPLIED + catalog-verified A-F by David 2026-07-13, UI owner-proof owed):** `customers` brought to the complete standard party record in ONE additive migration (15 cols): identity `organization_name`/`display_name`; **billing** `billing_line1/line2/city/state/zip` (**L1 — billing on the customer; shipping is order-time, snapshotted on the `deliveries` row; `customer_addresses` saved ship-to book = deferred L2**); tax `tax_id`/`tax_exempt_expires`/`tax_exempt_cert_doc_url` (STD-010 ingest SLOT); terms `payment_terms`/`credit_limit`; lifecycle `status` (soft-deactivate) / `updated_at` (+ canonical `set_updated_at_generic()` trigger, STD-011) / `notes`. Existing unprefixed `address_*` LEFT UNTOUCHED. AC-1 (payment_terms/status string values, NO CHECK); RLS inherits (AC-3, no new policy); BENCH-C — `tax_id`/`credit_limit` VALUE-MASKED in `[TRACE:customers]`. **UI shift:** the ~18-field set moved OFF the inline grid into a NEW grouped `CustomerPartyEditor` modal (`components/customers/CustomerPartyEditor.tsx` — Identity · Contact · Billing · Tax · Commercial terms · Status; auto-save via the shared coerce/persist helpers; the tax section reveals reason/cert/expiry and cannot save exempt without a reason — mirrors D-40's server refusal, and this is what made the exemption UI-editable, closing the D-40 owner-prove blocker). The **roster is now LEAN** — name (opens editor) · type · tier · tax-exempt badge · status (inline) · Added · Edit. Deploy-window-safe load (FULL→CORE fallback on 42703/PGRST204). Home: `docs/decisions/2026-07-13-customer-party-record.md`. Follow-ups flagged: (a) org-name backfill out of first_name; (b) unprefixed address_* → billing cleanup; (c) cert-doc ingest via STD-010; (d) ✅ **L2 `customer_addresses` ship-to book — TAKEN UP 2026-09-11, ledger #303** (migration WRITTEN, NOT APPLIED). 🔴 **L1 IS UNCHANGED BY IT AND THAT IS THE POINT:** still no `shipping_*` on `customers`, and the order still SNAPSHOTS onto the `deliveries` row — the book is a SOURCE for the order-time picker, never a foreign key a stop resolves at read time. See the *Ship-to address book* entry.
 
-**Ship-to address book — `customer_addresses` (2026-09-11, D-41's L2 hook · ledger #303 · migration `20260911b_customer_addresses.sql` **WRITTEN, NOT APPLIED** · BUILDER-COMPLETE, owner-proof owed):** a customer may hold several LABELLED delivery sites, offered first at order time so a repeat ship-to is CHOSEN rather than re-typed. **WHY it is data quality and not convenience:** AGAVE LD LLC carries four spellings of one yard across 18 invoices, two of them a phone number in Line1; a typed-per-order address drifts and a picked one cannot.
+**Ship-to address book — `customer_addresses` (2026-09-11, D-41's L2 hook · ledger #303 · migration `20260911b_customer_addresses.sql` ✅ **APPLIED 2026-09-12 by David and CATALOG-VERIFIED** — board CARDS 1 and 3 `covered`, ledger #312: RLS on · 14 columns · exactly three policies naming `customers:*` and **none naming `owner_id`** · two UNIQUE partial indexes · 0 rows · no `shipping_*` leak. ⚠️ **The TABLE is proven; the CODE PATH is not** — CARDS 4–9 are still `owed` and CARD 4 has FAILED once, so the book is live and unexercised · 2 of 12 cards covered):** a customer may hold several LABELLED delivery sites, offered first at order time so a repeat ship-to is CHOSEN rather than re-typed. **WHY it is data quality and not convenience:** AGAVE LD LLC carries four spellings of one yard across 18 invoices, two of them a phone number in Line1; a typed-per-order address drifts and a picked one cannot.
 🔴 **THE INVARIANT, AND IT IS THE WHOLE DESIGN: the order still SNAPSHOTS the chosen address onto the delivery row.** What travels to the server is TEXT (`ShipToInput`), never a `customer_addresses.id`, so editing a saved site tomorrow cannot move a past load. `customerAddresses.test.ts` §E drives every write the module offers against a recording client and asserts the tables touched are exactly one; board CARD 11 proves the same thing in live SQL.
 **TABLE** (14 cols): `business_id`/`customer_id` (FK `ON DELETE RESTRICT`, matching R-104) · `label` NOT NULL · `line1/line2/city/state/zip` · `notes` · `is_default` · `active` · timestamps + the canonical `set_updated_at_generic()` (STD-011). **RLS**: three policies reusing **`customers:read` / `:create` / `:update`** — 🔴 **no string minted** (a saved site is a field of the customer relationship, not a capability — the 2026-07-31 ruling, tech-debt #84; and under R-22 a new string ships a table nobody can write on day one), **no raw `owner_id` policy** (`20260910b` took 49→12), **no DELETE policy** (retiring is an UPDATE of `active` — R-133, so soft-delete is structural). **Three partial indexes, two UNIQUE** — one default per customer, one label per customer — which land cleanly only because the table is EMPTY BY CONSTRUCTION (the circumstance tech-debt #54/#58/#143/#183 never get).
 **CODE:** `business-logic/customerAddresses.ts` (the ONE write path — `planSaveSite` · `readCustomerAddresses` · `saveCustomerAddress` · `retireCustomerAddress`; refusals are VALUES, writes prove themselves by the COUNT) · `customerAddressFields.ts` (the column list, IMPORTED not restated — A4; `verify-field-lists` went red on the first draft and was right) · shared `<ShipToPicker>` (reads, never writes; renders NOTHING when the book is empty; a refused read is an EMPTY BOOK, not a broken screen) · `scheduleCheckoutDelivery` now takes `shipTo` and PREFERS it, customer fallback billing-first UNCHANGED · `useStopActions.saveSite` + the StopCard offer, gated `customers:create` and reachable ONLY from a ship-to save that landed (population is a by-product, never a chore).
@@ -1882,7 +1918,7 @@ rows), #252 (`price_type`/`price_unit`).
 - `packages/cultivar-os/api/campaigns.ts` — combined action handler (action: 'generate' | 'copy-post'). **generate:** reads `business_modules.config.advert_channels`, generates ONLY for enabled channels, derives post count from campaign duration. No hardcoded channel names. **copy-post (handoff model):** copies text, marks status='published' (= owner reviewed, NOT auto-posted), saves edited pairs for tone learning.
 - `packages/shared/src/campaigns/generate.ts` — `generateCampaignPosts({ advertChannels, ... })`. `CHANNEL_GUIDANCE` map keyed by channel name. `postsPerChannel()` derives count from campaign days. `ADVERT_DEBUG` gated. **🔴 ANTI-FABRICATION (2026-08-23, ledger #197 — SHIPPED, owner-proof owed):** `SYSTEM_PROMPT` (`:19`) now ends *"Specific means grounded in the facts you were given, never invented: no statistic, percentage, dollar figure, date, award, certification or comparative claim unless it appears in the supplied data. If a number would strengthen a post and you do not have one, write the sentence without it — a fabricated figure publishes under the name of the business, and the owner carries the liability."* **Written to RECONCILE the word *"specific"* in the preceding sentence, which was the invitation** — the user prompt (`:106`) repeats *"warm, local, specific"*, and the system prompt governs both because `executeCapability` sends them in one call. Story: *Truth in advertising — suggest facts, never censor, keep the record*. ⚠️ **NO TEST PROVES THIS AND NONE WAS WRITTEN** — a probe asserting the string exists would assert a CONFIGURATION and call it covered (STD-025); the reasoning is recorded in a comment above the constant. **The only control is `docs/owner-tests/social-campaign-full-surface-test.md` CARD 1.**
 
-✅ **THE LIFECYCLE SHIPPED 2026-09-12 (ledger #306 — R-145 · R-146 · R-147). BUILDER-COMPLETE; owner-proof owed, 0 of 12 on `docs/owner-tests/campaign-lifecycle-full-surface-test.md`.** The 2026-08-23 scoping had measured that edit and cancel were blocked by **nothing** — the RLS policy existed, `campaigns:update` existed and was `enforced`, and `'cancelled'` was already in the CHECK and already rendered red. **There was no UI. That was the whole gap.** All three rulings landed with **NO migration, NO new permission string, and api/ still 12/12** (append rides the existing `action: 'generate'` branch with a `campaignId` parameter — §6 r11 reuse-before-mint).
+✅ **THE LIFECYCLE SHIPPED 2026-09-12 (ledger #306 — R-145 · R-146 · R-147). BUILDER-COMPLETE; ✅ **3 of 12 COVERED — David, 2026-09-12, build `efc02f8`, ledger #312**: CARD 1 (the stop-gate — `'cancelled'` IS in the live CHECK, so R-146 does not become a migration), CARD 2 (both member policies live in the catalog, #241's class clean), CARD 4 (**both** zero-post `arbor day` rows read *"No posts yet"* — the original lie measured dead, and two rows are what make it a proof of DISCRIMINATION rather than of a string). ⚠️ **CARD 3 is the remaining `pre-merge` card and its SQL needs no repair** — both defects recorded on it were fixed in `efc02f8` itself. **Owner-proof still owed on the remaining NINE** (8 `owed` · 1 `needs-test` — CARD 12 needs Lauren's login) → `docs/owner-tests/campaign-lifecycle-full-surface-test.md`.** The 2026-08-23 scoping had measured that edit and cancel were blocked by **nothing** — the RLS policy existed, `campaigns:update` existed and was `enforced`, and `'cancelled'` was already in the CHECK and already rendered red. **There was no UI. That was the whole gap.** All three rulings landed with **NO migration, NO new permission string, and api/ still 12/12** (append rides the existing `action: 'generate'` branch with a `campaignId` parameter — §6 r11 reuse-before-mint).
 
 - **`packages/shared/src/business-logic/campaignLifecycle.ts`** — the ONE place the lifecycle rules live, as pure total functions returning decisions as VALUES: `campaignEditLock` · `campaignEditPlan` · `campaignCancelPlan` · `campaignAppendPlan` · `campaignPostClaim` · `CAMPAIGN_EDITABLE_FIELDS` (`start_date`, `end_date`, `target_category` — **three, and `name`/`description` deliberately absent**) · `CAMPAIGN_CANCELLED`.
 - **`packages/shared/src/business-logic/campaignFields.ts`** — `CAMPAIGN_TERMS_COLUMNS` + `CAMPAIGN_EDIT_ECHO_COLUMNS`, in their own module because `verify-field-lists` counts a column string declared beside its reader as hand-written and an imported one as derived (#179's lesson, the same shape `customerAddressFields.ts` records).
@@ -1893,6 +1929,18 @@ rows), #252 (`price_type`/`price_unit`).
 - **Writes:** both campaign UPDATEs are issued **client-side under the caller's own RLS** and declared in `verify-write-paths`' `ALLOWED_DIVERGENCE` with their reason — the existing endpoint path is the SERVICE KEY with `businessId` off the request body, so adding a second service-key surface to save a call RLS already secures would be a net loss in authority. Both use the **exact-count** proof (`rows?.length !== 1`), not `maybeSingle`: a PostgREST update matching zero rows returns success with no error (R-12).
 - **Proof:** `campaignLifecycle.test.ts` — **86 assertions, six sections, both directions** · **25/25 mutants caught, 0 survived, 0 never applied**, including **four POPULATION mutants** (tech-debt #182's named gap) · `npm run verify` exit 0, **102/102 files, 5,522 assertions**, zero net-new.
 - ⚠️ **STILL NOT BUILT, and named so the gap is not mistaken for a pass:** the ASK (`campaign_call_to_action`) — **David scoped it to a separate pass** — the sales grounding, the sellability guard, and channel codes. The word **"published"** on the done claim and the per-post chip still means **copied**; renaming it is a vocabulary change across the detail page and was not one of the three rulings.
+
+✅ **ONE CHANNEL VOCABULARY — 2026-09-12 (ledger #310 · R-152). MIGRATION WRITTEN AND NOT APPLIED; owner-proof owed, 0 of 11 on `docs/owner-tests/channel-vocabulary-full-surface-test.md`.**
+
+🔴 **THE DEFECT IT CLOSES, because it explains three months of silence.** A channel name lived in **FOUR** places. On 8 June 2026 (`35913b2`) tiktok and twitter joined the channel router and **two of the four were updated**: `social_drafts_platform_check` and `SOCIAL_CHANNELS` in the config UI. **Not updated:** `campaign_posts_platform_check` (inline at `20260529_campaigns.sql:27`, so auto-named and never typed) and the `CampaignPost.platform` TS union. So the only UI that can enable a channel offered tiktok and twitter, `campaign_posts` forbade them, and `api/campaigns.ts:167` inserts **all posts in ONE atomic statement** — one tiktok row rejected the whole batch. The campaign row is inserted first and separately and commits. **Result: `campaign_posts` EMPTY on every tenant, behind three committed zero-post campaigns that each looked fine.** ✏️ The asymmetry is the mechanism: the *findable* constraint got updated and the *invisible* one did not.
+
+- **`supabase/migrations/20260912_channels_one_vocabulary.sql`** — `channels` (name PK · kind · label · guidance · active · sort_order), seeded **six** rows; both platform CHECKs **replaced by FOREIGN KEYS** to `channels(name)` with **`ON UPDATE CASCADE ON DELETE RESTRICT`** (a referenced channel can never be deleted, so history keeps the name it published under); **`campaign_posts.subject`** added nullable; a **trigger** on `business_modules` validating `config->'advert_channels'` names. **PRE-FLIGHT 0** refuses before creating anything if any live value is outside the seed, and **7 verification queries** sit at the foot — two of them (⑥/⑦) prove the trigger both refuses and accepts, inside `BEGIN … ROLLBACK`.
+- 🔴 **THE JSONB BOUNDARY IS A RECORDED LIMIT, NOT AN OVERSIGHT.** `advert_channels` is a jsonb array; **Postgres cannot FK into a jsonb value and a CHECK cannot hold a subquery**, so a trigger is the enforcement. Stated in the migration header at David's instruction — *"someone will read that in six months and assume it was an oversight."* Moving `advert_channels` into its own table would permit a real FK and is **deliberately a different migration** (four readers, live config on two tenants).
+- **`channelVocabulary.ts`** — the ONE TS home. `CHANNEL_NAMES`, the **derived** `ChannelName` union, `isChannelName` for values arriving from outside TS, and `CHANNEL_COLUMNS`. ⚠️ **Called what it is: a GUARDED COPY, not a derived type.** TypeScript cannot read a database at compile time, so the names are written twice — and `channelVocabulary.test.ts` §A parses the migration's seed and fails in **both** directions. *The defect was never "written twice"; it was "written four times and nothing noticed when they disagreed."*
+- **The other three copies are gone.** `types.ts` uses the derived union (**copy 4**, which rejected tiktok at COMPILE time). `SocialSetup.tsx` **reads `channels`** and holds no list (**copy 3**) — and `reconcile()` handles both directions: a channel the table gained is offered OFF, one it lost is dropped rather than rendered as a checkbox the trigger would reject. `CHANNEL_GUIDANCE` in `generate.ts` is **deleted** — guidance now rides on the channel from the table, because storing it in the table *and* in code would have replaced one drift with another.
+- **EMAIL IS A REAL CHANNEL (R-152 ①).** Seed row, SocialSetup option, guidance line, `subject` through the generator's prompt/type/mapper (empty string → NULL, so an absent subject never lands as a present-but-blank one), and `ONE_PER_CAMPAIGN_KINDS = ['sms','email']` so it gets **one** message rather than a feed cadence. 🔴 **No surface implies direct send is coming** — board CARD 8 fails on wording alone, and a probe asserts the forbidden phrasings are absent from the file.
+- **PROOF:** **57 assertions** · **25/25 mutants caught, 0 survived, 0 never applied** — incl. **D1–D4** re-creating the drift in both directions on both sides. ✏️ **Six probes were hardened rather than six mutants softened**, and one mutant was rewritten because it *overstated what it did*: M10 claimed to remove the pre-flight and only renamed a comment, manufacturing a false SURVIVED. **P1 caught that the seed parser matched `public.channels_renamed` as a prefix** — tech-debt #182's shape, in a regex.
+- ⚠️ **NOT in this pass, named so the gaps are not read as passes:** the `platform` **column** is not renamed (the table is `channels`; the split is flagged in the migration header) · `api/social/generate-posts.ts` still names channels in its prompt prose (soft) · `api/social/enable.ts` validates nothing beyond "non-empty array" — the trigger is the guard · display maps (icon/colour/open-URL) are keyed by name with fallbacks, so a new channel renders without an icon.
 
 **Handoff controls (CampaignDetail.tsx):**
 - [Edit] → inline textarea → save draft edits locally.
@@ -2618,6 +2666,128 @@ mutant that puts `CustomerRef.name` back on the row.
 
 ---
 
+### THE PRE-COMMIT HOOK — ONE CHECK (2026-09-14, ledger #325)
+
+**PURPOSE:** refuse a commit whose `CLAUDE.md` §3 / `docs/handoff-archive.md` state is broken,
+at the moment it breaks rather than on the next build.
+
+**WHY IT EXISTS.** 🔴 **Three archive duplicates in three merges — #322, #324, #323 — every one
+auto-merged with NO CONFLICT.** Two branches archive the same §3 entry at different offsets under
+different provenance comments; git's 3-way merge sees two independent hunks and takes both,
+producing a byte-identical duplicate. **A conflict stops a human; this does not.** Each was caught
+by someone reading the file before committing, which is not a control.
+
+🔴 **THE HOOK POINT IS THE FINDING.** Measured in a throwaway repo, git 2.37 — all four paths:
+
+| Path | Hook that fires |
+|---|---|
+| normal `git commit` | `pre-commit` |
+| **CLEAN auto-merge (no conflict)** | **`pre-merge-commit` only** |
+| conflicted merge → resolve → `git commit` | `pre-commit` |
+| `--no-verify` | **nothing** |
+
+**The duplicate arrives on a clean auto-merge.** All three real instances happened to conflict in
+OTHER files, so `git commit` was used — a `pre-commit`-only hook would have fired **by luck, not
+design**, and would have missed the very case it was built for.
+
+**WHAT SHIPPED.**
+- `.githooks/pre-commit` — runs **one** check: `node scripts/verify-handoff-retention.mjs`. The
+  real check only, **not** `npm run verify:handoff-retention` (which also runs `--self-test` and
+  shells through npm — both double the time to prove the CHECKER works, which is the verify
+  chain's job, not a commit's).
+- `.githooks/pre-merge-commit` — a **one-line `exec` pointer**, never a second copy (STD-011).
+- `package.json`: `prepare` (wires `core.hooksPath` on `npm install`, zero dependencies) ·
+  `hooks:install` · `hooks:status` (answers *is it on in THIS clone* in one line).
+
+**PROOF — four cases, each watched before being trusted (§6 r19).** ① staged duplicate → `git
+commit` **REFUSED**, exit 1, naming the entry · ② the real defect reproduced end-to-end, `git
+merge` **exit 0 with no CONFLICT line** → **REFUSED by `pre-merge-commit`** · ③ the same clean
+auto-merge without a duplicate → **ALLOWED**, exit 0 (negative control — not merely always-red) ·
+④ `--no-verify` → **the broken commit LANDED**, no hook output. **0.21–0.25s over three runs.**
+
+🔴 **IT IS NOT ENFORCEMENT AND THE HEADER SAYS SO IN ITS OWN WORDS.** `--no-verify` skips it and
+nothing anywhere catches that — no server-side check, no CI, no audit. `core.hooksPath` is
+per-clone, so a fresh clone that never runs `npm install` has no hook. **A seatbelt, not a lock.**
+
+⚠️ **IT CHECKS THE WORKING TREE, NOT THE INDEX.** Right for the merge case — during a merge the
+working tree IS the commit — a real limitation elsewhere, stated rather than papered over.
+
+⚠️ **DELIBERATE §6 r10 DIVERGENCE: husky is the industry standard and was NOT used** — a
+dependency plus a directory to do what one line of `core.hooksPath` does.
+
+🔴 **DO NOT ADD A SECOND CHECK.** 0.21s is the design. A hook that runs `npm run verify` is a hook
+people disable, and a disabled hook is worse than none because it still reads as protection.
+**Deliberately NOT in the verify chain:** the chain may be slow; a commit may not.
+
+---
+
+### 4.1c · THE IMPORT PREVIEW'S TWO FIELD CHECKS (2026-09-14, ledger #322)
+
+**PURPOSE:** answer, on the preview screen and before anything is written, two questions the import
+could not previously be asked — *what is QuickBooks sending that we are not taking?* and *do the
+values we ARE taking look like the column they land in?*
+
+**WHY IT EXISTS.** 🔴 **486 LAWNS customers carry a PHONE NUMBER in `BillAddr.Line1`, and the
+importer writes `BillAddr.Line1` straight into `address_line1`.** Every number the preview showed
+was correct — `toCreate`, `toReconcile`, `existingCustomers` — and none of them could see it.
+**458 more carry the real street one line down in `Line2`, which the importer does not read**, and
+**223 carry a routable `ShipAddr` that is ignored entirely.** *A stop addressed to a phone number
+cannot go on a truck.*
+
+⚠️ **THE PHONE IS IN LINE1 ON PURPOSE AND IS NOT A MISTAKE TO CORRECT** — it prints on the invoice,
+and it is mechanical rather than accidental (477 of 481 carry the identical phone in BOTH address
+blocks; 469 match `PrimaryPhone`). The platform needs the STREET for routing **and** the PHONE for
+the invoice, from two different lines.
+
+**WHAT SHIPPED.**
+- `packages/shared/src/quickbooks/importFieldAudit.ts` — pure, no IO. `CUSTOMER_FIELD_MAP` (16
+  declared mappings) · `CUSTOMER_IGNORED_SOURCE_FIELDS` (~30, each with a reason) ·
+  `EXPECTED_COLUMN_SHAPE` (6 columns) · `classifyValueShape` · `maskExample` · `auditImportFields`.
+- Wired through `adaptCustomers` → `CustomerAdaptation.fieldAudit` → `CustomerPlanReport.fieldAudit`
+  → the panel. **`adaptCustomers` is the last layer that still holds the raw records**, which is why
+  the audit is computed there.
+- `QboCatalogueImport.tsx` renders it **directly under the buttons** — above the item summary, not
+  below it, because below as many as 22 collision rows is a go-live blocker scrolled past (R-150).
+
+**FOUR DESIGN CALLS WORTH KNOWING.**
+1. 🔴 **NOTHING IS REPAIRED, DELIBERATELY.** `address_line1 = Line2` would give the **1,473 whose
+   Line1 is already a street** their suite number and the **28 with no Line2 at all** a NULL — a
+   larger data-loss event than the defect. The build counts; the remap is a ruling.
+2. 🔴 **THE POPULATION IS DERIVED, ONLY THE MAPPING IS DECLARED.** Source fields are discovered by
+   walking the records, so a field nobody has heard of is reported the first time one carries it. A
+   hand-written list of "every QuickBooks field" would make an unknown field INVISIBLE rather than
+   flagged.
+3. 🔴 **THE MIRROR IS COUNTED ONCE (R-110).** D-41 writes `address_line1` AND `billing_line1` from
+   one source value; counting both reports 972 where there are 486. The finding NAMES the mirror
+   and never counts it.
+4. 🔴 **NEITHER CHECK IS EVER SILENT.** `ran` is a literal `true` on the type and a clean capture
+   renders GREEN saying *"Both checks ran and found nothing"*. **A blank panel is indistinguishable
+   from a check that did not run.**
+
+**PRIVACY.** Examples are masked — every letter becomes `x`, every digit past the third becomes `•`
+— so an area code survives and a street name does not. This screen's standing design is that ~1,900
+real people are never painted (R-23).
+
+**PROOF.** `importFieldAudit.test.ts` — **87 assertions**, red-first on both checks and on both
+declaration directions. §A asserts every declared mapping **against the adapter's real behaviour**
+rather than trusting the declaration (#185's shape); §H is a mutant that changes the **POPULATION**
+rather than the subject (#182's own unmet prescription).
+
+✅ **NO migration · NO schema change · NO permission string · `api/` 12/12 untouched.**
+
+⚠️ **WHAT THIS DOES NOT DO.** It does not import `BillAddr.Line2` (tech-debt **#254** — now
+SURFACED, still open) and it does not import `ShipAddr`. The ship-to destination is
+`customer_addresses`, which is applied and empty; `20260911b` §4 declares **NO BACKFILL** on
+purpose and `customerAddresses.test.ts` §F fails the build the day anything seeds it. **Importing
+the 223 ship-tos requires David to reopen that decision.**
+
+⚠️ **AND THIS IS THE FIRST BODY ENTRY ON THE CUSTOMER-IMPORT PATH AT ALL.** Ledger #278 (the import
+itself) and #277 (the catalogue import) have header lines and **no body entry** — pre-existing
+drift under §9's reconciliation gate, named here rather than backfilled, because writing an as-built
+for a build I was not in is the manufacture #320 refused.
+
+---
+
 ### 4.1 · QUICKBOOKS READS — COMPLETE, PAGINATED, AND TWO ENTITIES (2026-08-29, ledger #230, R-24)
 
 **WHAT SHIPPED.** `GET /api/qbo/items` and **NEW `GET /api/qbo/customers`** — both read-only against
@@ -2981,7 +3151,7 @@ Dave's with `scripts/seed-uppot-harness.mjs`, which refuses to run against LAWNS
 
 ---
 
-### PLATFORM UI · DEVICE VOCABULARY — ONE DETECTOR, FOUR AXES (2026-09-12, ledger #305) — **BUILDER-COMPLETE · 0 of 7 owner-test cards**
+### PLATFORM UI · DEVICE VOCABULARY — ONE DETECTOR, FOUR AXES (2026-09-12, ledger #305) — **BUILDER-COMPLETE · ✅ 1 of 7 owner-test cards** (CARD 1 — David, 2026-09-12, build `13d64aa`, flipped in ledger #307; **NEXT: CARD 2**, the one deliberate behaviour change)
 
 **What it is.** The single place the platform asks anything about the device it is rendering on:
 `packages/shared/src/hooks/useDevice.ts`. Pass ① of the mobile build — the vocabulary the delivery
@@ -3040,10 +3210,23 @@ been complete since 2026-09-02.
 2. Write a `⏳ **#N — RESERVED …**` row naming your branch, commit it **alone**, and **push it**.
 3. *Then* build. A claim nobody can see is not a claim.
 
-**`scripts/verify-id-sweep.mjs`** (in `npm run verify`) — sweeps every rival branch's ledger rows,
-tech-debt rows, ruling ids **and commit subjects**; fails naming the id and the branch. **Same-lineage
-excluded** (an inherited claim is not a competing one). **Staleness measured and reported**; `--strict`
-fails on stale refs. It states in its own output that it **does not close the race**.
+**`scripts/verify-id-sweep.mjs`** (in `npm run verify`) — sweeps every branch's ledger rows, tech-debt
+rows, ruling ids **and commit subjects**; fails naming the id and **every** ref that holds it, flagging
+when one of them is `origin/main`. **Staleness measured and reported**; `--strict` fails on stale refs.
+It states in its own output that it **does not close the race**, and that it **never moves an id**.
+✏️ **CORRECTED 2026-09-12 (ledger #314, tech-debt #286). THIS ENTRY SAID *"Same-lineage excluded (an
+inherited claim is not a competing one)"* AND THAT WAS THE DEFECT, NOT THE DESIGN.** The exclusion was
+per-BRANCH, so **run from `main` it excluded every branch cut from `main`** — 38 refs down to 6 — and
+the cap printed `NEXT FREE: #310` in green while `origin` held `reserve(#310)`, `reserve(#311)` and a
+filed `#311` row. **The gate built to prevent collisions caused one.** 🔴 **The fix is not "stop
+excluding inherited claims" — it is that INHERITANCE IS A PROPERTY OF AN ID, NOT OF A BRANCH**: every
+ref is now swept for both questions, and an overlapping claim is inherited only if it was already
+claimed at **`merge-base(HEAD, ref)`**. `selectPopulations()` takes **no lineage predicate at all** and
+probe **P1** fails the build if one reappears. **Proven by making it fail** — one tree on `main`, one
+injected claim of a held id, old script exit 0 / new script exit 1 — and the **negative control caught a
+real bug in the fix** (the merge-base read counted filed rows but not RESERVATIONS, reintroducing the
+false positive the old filter existed to prevent; both sides now call one `fileClaims`). **9/9 mutants
+caught, 5 of them POPULATION mutants** (#182's prescription).
 
 **`scripts/verify-id-citations.mjs`** — four clauses now: **A** duplicate tech-debt rows · **B**
 dangling tech-debt citations (ratchet) · **C** duplicate `| **#N**` ledger rows, where **a RESERVED

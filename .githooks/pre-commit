@@ -1,0 +1,81 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# PURPOSE: refuse a commit whose CLAUDE.md §3 / handoff-archive state is broken.
+#   ONE check — `scripts/verify-handoff-retention.mjs`. Nothing else. Ever.
+# DEPENDENCIES: node, and that one script. No npm install, no dependency, no husky.
+# OUTPUTS: exit 0 (commit proceeds) or exit 1 with the checker's own message.
+#
+# ═════════════════════════════════════════════════════════════════════════════
+# 🔴 THIS IS NOT ENFORCEMENT. `git commit --no-verify` SKIPS IT ENTIRELY, AND
+#    NOTHING ANYWHERE CATCHES THAT.
+# ═════════════════════════════════════════════════════════════════════════════
+# Measured, not assumed (2026-09-14): with this hook installed, `git commit -m x
+# --no-verify` fires NO hook at all and the commit lands. There is no server-side
+# check, no CI, and no audit that notices. `core.hooksPath` is also per-clone
+# config — a fresh clone that never runs `npm install` has no hook either.
+#
+# So this is a SEATBELT, not a lock. It exists to catch the accident, and the
+# accident is specific and has happened three times:
+#
+#   THE DEFECT. Two sessions branch from the same CLAUDE.md §3 and each archives
+#   the same entry. Git AUTO-MERGES the two insertions with NO CONFLICT — they
+#   land at different offsets under different provenance comments — and produces
+#   a BYTE-IDENTICAL DUPLICATE. Three merges (#322, #324, #323), three duplicates,
+#   no conflict any time. A conflict stops a human; this does not, and it breaks
+#   the archive's `entries-in == entries-out` arithmetic with nothing on screen.
+#
+# ⚠️ WHY IT IS ALSO AT `pre-merge-commit`, AND WHY A pre-commit-ONLY HOOK WOULD
+#    HAVE MISSED THE VERY CASE IT IS FOR. Measured in a throwaway repo, git 2.37:
+#      · normal `git commit`                      → pre-commit
+#      · CLEAN auto-merge (no conflict)           → pre-merge-commit ONLY
+#      · conflicted merge → resolve → git commit  → pre-commit
+#    The duplicate arrives on a CLEAN auto-merge. All three real instances also
+#    conflicted in OTHER files, so `git commit` was used and pre-commit would have
+#    fired — by luck, not design. `.githooks/pre-merge-commit` is this same file.
+#
+# ⚠️ IT CHECKS THE WORKING TREE, NOT THE INDEX. The checker reads files from disk,
+#    so a partially-staged commit is validated against what is on disk rather than
+#    against what is being committed. For the case this exists for that is exactly
+#    right — during a merge the working tree IS the commit — but it is a real
+#    limitation and it is stated rather than papered over.
+#
+# 🔴 SCOPE IS THE FEATURE. One check, ~0.2s. A hook that runs `npm run verify`
+#    is a hook people disable, and a disabled hook is worse than none because it
+#    reads as protection. Do NOT add a second check here. If something else needs
+#    guarding, it belongs in `npm run verify`, which is allowed to be slow.
+# ─────────────────────────────────────────────────────────────────────────────
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+CHECK="$ROOT/scripts/verify-handoff-retention.mjs"
+
+# A checkout without the script (an old commit, a partial clone) must not block a
+# commit — the hook has nothing to say there, and a hook that fails for an
+# unrelated reason is the fastest route to --no-verify becoming a habit.
+[ -f "$CHECK" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+# 🔴 THE REAL CHECK ONLY — NOT `npm run verify:handoff-retention`, which also runs
+# `--self-test` and shells through npm. Both double the time for no benefit here:
+# the self-test proves the CHECKER works, which is `npm run verify`'s job, not a
+# commit's.
+if node "$CHECK"; then
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+
+  ─────────────────────────────────────────────────────────────────────────
+  COMMIT REFUSED — CLAUDE.md §3 / handoff-archive state is broken.
+
+  If you are finishing a MERGE, this is almost certainly the duplicate:
+  both branches archived the same §3 entry and git auto-merged them with
+  no conflict. Open docs/handoff-archive.md, keep ONE copy, and record
+  both moves in a single provenance comment.
+
+  This hook is a seatbelt, not a lock: `git commit --no-verify` skips it
+  and nothing catches that. If you bypass it, say so in the commit body.
+  ─────────────────────────────────────────────────────────────────────────
+
+MSG
+exit 1

@@ -3,6 +3,7 @@ import { callerCan } from '../../shared/src/auth/callerPermission';
 import { generateCampaignPosts, type AdvertChannel } from '../../shared/src/campaigns/generate';
 import { campaignAppendPlan } from '../../shared/src/business-logic/campaignLifecycle';
 import { CAMPAIGN_TERMS_COLUMNS } from '../../shared/src/business-logic/campaignFields';
+import { CHANNEL_COLUMNS, isChannelName } from '../../shared/src/business-logic/channelVocabulary';
 
 const ADVERT_DEBUG = false;
 
@@ -100,9 +101,44 @@ export default async function handler(req: any, res: any) {
         .eq('module_key', 'social_media')
         .maybeSingle();
 
-      const advertChannels: AdvertChannel[] = Array.isArray(mod?.config?.advert_channels)
+      // 🔴 ONE VOCABULARY (ledger #310, R-152). The tenant's config says WHICH channels are on; the
+      // `channels` table says what a channel IS and how to write for it. Guidance is joined on here
+      // rather than held in a map in `generate.ts` — that map is deleted, because storing guidance in
+      // the table and also in code would replace one drift with another.
+      const { data: catalog } = await db
+        .from('channels')
+        .select(CHANNEL_COLUMNS)
+        .eq('active', true);
+
+      const guidanceByName = new Map<string, string | null>(
+        (catalog ?? []).map((c: any) => [c.name as string, (c.guidance ?? null) as string | null]),
+      );
+      const kindByName = new Map<string, string>(
+        (catalog ?? []).map((c: any) => [c.name as string, String(c.kind)]),
+      );
+
+      const configured: AdvertChannel[] = Array.isArray(mod?.config?.advert_channels)
         ? mod!.config.advert_channels
         : [{ type: 'social', name: 'instagram', enabled: true }]; // safe default: instagram only
+
+      // A configured name that is not in the vocabulary is DROPPED and SAID, not passed through to
+      // fail the insert. The trigger makes this unreachable through the app, but a row written before
+      // the migration (or by hand) would otherwise kill the whole atomic batch — which is exactly the
+      // failure this build exists to end.
+      const unknown = configured.filter(c => !isChannelName(c.name)).map(c => c.name);
+      if (unknown.length > 0) {
+        console.log('[TRACE:CAMPAIGN] dropping unknown channel(s) from config', { businessId, unknown });
+      }
+
+      const advertChannels: AdvertChannel[] = configured
+        .filter(c => isChannelName(c.name))
+        .map(c => ({
+          ...c,
+          // `kind` from the table wins over the config's stale `type`: the config was seeded in June
+          // with type 'social'|'sms' and knows nothing about email.
+          type:     kindByName.get(c.name) ?? c.type,
+          guidance: guidanceByName.get(c.name) ?? null,
+        }));
 
       if (ADVERT_DEBUG) console.log('[TRACE:advert] campaigns generate — channels:', advertChannels.filter(c => c.enabled).map(c => c.name));
 
@@ -113,7 +149,7 @@ export default async function handler(req: any, res: any) {
         .order('created_at', { ascending: false })
         .limit(5);
 
-      const posts = await generateCampaignPosts({
+      const { posts, refusals } = await generateCampaignPosts({
         businessName:   biz.name,
         businessType:   biz.business_type,
         advertChannels,
@@ -157,8 +193,9 @@ export default async function handler(req: any, res: any) {
       const postRows = posts.map(p => ({
         campaign_id:    targetId,
         business_id:    businessId,
-        platform:       p.channel,          // advert_channels name → campaign_posts.platform
+        platform:       p.channel,          // a channels.name → campaign_posts.platform (FK since #310)
         scheduled_date: p.scheduled_date,
+        subject:        p.subject,          // email only; NULL for a caption (A9)
         copy_text:      p.copy_text,
         image_prompt:   p.image_prompt,
         status:         'draft',
@@ -169,9 +206,20 @@ export default async function handler(req: any, res: any) {
 
       // STD-003 — ON by default, not behind ADVERT_DEBUG. The mode is the thing a reader of this
       // trail needs: an append that silently created would be invisible without it.
-      console.log('[TRACE:CAMPAIGN] generate', { mode: plan.mode, campaignId: targetId, postCount: posts.length });
+      console.log('[TRACE:CAMPAIGN] generate', { mode: plan.mode, campaignId: targetId, postCount: posts.length,
+        refusedChannels: refusals.map(r => r.value) });
 
-      return res.json({ campaignId: targetId, postCount: posts.length, mode: plan.mode });
+      // 🔴 A REFUSED ROW IS REPORTED, NOT SWALLOWED. The model named a channel nobody offered, so
+      // that post does not exist — and the caller is told how many and which values came back, because
+      // "you asked for 6 posts and got 4" with no reason is the shape that hid this defect for three
+      // months. `refusedChannels` is absent on a clean run rather than an empty array, so a reader
+      // never has to decide whether `[]` means none or means nobody looked.
+      return res.json({
+        campaignId: targetId, postCount: posts.length, mode: plan.mode,
+        ...(refusals.length > 0
+          ? { refusedChannels: refusals.map(r => r.value), offeredChannels: refusals[0].offered }
+          : {}),
+      });
     } catch (err: any) {
       console.error('[campaigns/generate]', err.message);
       return res.status(500).json({ error: err.message });

@@ -69,6 +69,22 @@ interface CountedRow { id: string; name: string; size: string | null; qty: numbe
  * types makes the compiler the check, which is the only fix that does not rely on me being careful.
  */
 import type { CustomerPlanReport, CustomerRunReport, CustomerUndoReport } from '../quickbooks/customerImportWriter';
+import type { ValueShape } from '../quickbooks/importFieldAudit';
+
+/**
+ * A shape, in the words Lauren would use. The type name is for us; "phone numbers" is for her.
+ * 🔴 `other` NEVER REACHES HERE — `auditImportFields` refuses to report an unclassifiable value as
+ * a finding — but the map is TOTAL rather than partial, because a `Record<ValueShape,…>` the
+ * compiler checks is how a seventh shape becomes a build error instead of `undefined` on screen.
+ */
+const SHAPE_WORDS: Record<ValueShape, string> = {
+  phone:    'phone numbers',
+  email:    'email addresses',
+  postcode: 'postcodes',
+  street:   'street addresses',
+  wordlike: 'plain words',
+  other:    'something we could not classify',
+};
 
 /** What the ITEMS half reports — this build's own shapes, kept local because they already are. */
 interface ItemPlan {
@@ -276,6 +292,96 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
       {plan && !plan.ok && plan.error && (
         <p style={{ marginTop: '.75rem', color: RED, fontSize: '.85rem' }}>⚠️ {plan.error}</p>
       )}
+      {/* ── THE TWO FIELD CHECKS ─────────────────────────────────────────────
+          🔴 PLACED HERE, IMMEDIATELY UNDER THE BUTTON, AND THAT IS R-150 RATHER THAN taste:
+          *"feedback that follows an action must be visible without scrolling from where the
+          action was taken."* Below the item summary it would sit under as many as 22 collision
+          rows — a go-live blocker scrolled past.
+
+          🔴 AND IT IS A SIBLING OF THE ITEM SUMMARY, NOT NESTED IN IT. That block is gated on
+          `counts`, which is the ITEMS half; nesting would make a customer-field warning vanish
+          whenever the product read came back empty — a check that disappears exactly when
+          something else went wrong.
+
+          🔴 THERE IS NO SILENT BRANCH. `fieldAudit.ran` is a literal `true`, so this renders on
+          every plan and says which of the two it is. A blank area cannot mean "nothing found"
+          and "never ran" at the same time. */}
+      {plan?.customers?.fieldAudit && !run && (() => {
+        const a = plan.customers!.fieldAudit;
+        const findings = a.unmappedWithData.length + a.columnShapeFindings.length + a.declarationFindings.length;
+        return (
+          <div style={{ marginTop: '.9rem', padding: '.75rem', borderRadius: 6,
+                        background: findings ? '#fffbeb' : '#f0fdf4',
+                        border: `1px solid ${findings ? AMBER : GREEN}` }}>
+            <strong style={{ color: findings ? AMBER : GREEN, fontSize: '.85rem' }}>
+              {findings ? '⚠️ ' : '✓ '}{a.headline}
+            </strong>
+
+            {/* ── CHECK ② first: a column holding the wrong kind of thing. It is ahead of
+                check ① because a value in the WRONG column is already being imported, while an
+                unmapped field is merely being lost — and only the first can put a phone number
+                on a delivery run. */}
+            {a.columnShapeFindings.length > 0 && (
+              <ul style={{ margin: '.5rem 0 0', paddingLeft: '1.1rem', color: DARK, fontSize: '.82rem', lineHeight: 1.55 }}>
+                {a.columnShapeFindings.map(f => (
+                  <li key={`${f.column}-${f.detected}`} style={{ marginBottom: '.3rem' }}>
+                    <strong style={{ color: RED }}>{f.count.toLocaleString('en-US')}</strong> of the{' '}
+                    {f.ofValues.toLocaleString('en-US')} values going into <strong>{f.column}</strong>{' '}
+                    look like <strong>{SHAPE_WORDS[f.detected]}</strong>, not {SHAPE_WORDS[f.expected]}.{' '}
+                    <span style={{ color: GRAY }}>
+                      From <code>{f.fromPath}</code>
+                      {f.mirrors.length > 0 && <> (also written to {f.mirrors.join(', ')}, counted once)</>}
+                      {f.examples.length > 0 && <> · e.g. {f.examples.join(', ')}</>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* ── CHECK ①: a source field that carries data and is mapped to nothing. */}
+            {a.unmappedWithData.length > 0 && (
+              <>
+                <p style={{ margin: '.6rem 0 .2rem', color: DARK, fontSize: '.82rem' }}>
+                  <strong>{a.unmappedWithData.length}</strong> field{a.unmappedWithData.length === 1 ? '' : 's'}{' '}
+                  in QuickBooks {a.unmappedWithData.length === 1 ? 'carries' : 'carry'} information that is not being brought across:
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '1.1rem', color: DARK, fontSize: '.82rem', lineHeight: 1.55 }}>
+                  {a.unmappedWithData.map(u => (
+                    <li key={u.path} style={{ marginBottom: '.25rem' }}>
+                      <code>{u.path}</code> has <strong>{u.withData.toLocaleString('en-US')}</strong> value
+                      {u.withData === 1 ? '' : 's'} and is mapped to nothing.{' '}
+                      <span style={{ color: GRAY }}>
+                        {u.looksLike && <>Mostly {SHAPE_WORDS[u.looksLike]}. </>}
+                        {u.examples.length > 0 && <>e.g. {u.examples.join(', ')}</>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* ── THE DECLARATIONS DISAGREEING WITH THEMSELVES OR WITH THE DATA. Rare, and loud
+                when it happens: a column we believe we fill that nothing fills is how an upstream
+                rename looks from in here. */}
+            {a.declarationFindings.length > 0 && (
+              <ul style={{ margin: '.5rem 0 0', paddingLeft: '1.1rem', color: RED, fontSize: '.82rem', lineHeight: 1.55 }}>
+                {a.declarationFindings.map(d => (
+                  <li key={`${d.kind}-${d.path}`}><code>{d.path}</code> — {d.detail}</li>
+                ))}
+              </ul>
+            )}
+
+            {findings > 0 && (
+              <p style={{ margin: '.55rem 0 0', color: GRAY, fontSize: '.8rem', lineHeight: 1.5 }}>
+                Nothing here stops the import — these are things to decide before you rely on the
+                result. Examples are masked: letters show as <code>x</code> and digits past the third
+                as <code>•</code>.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {plan?.ok && counts && !run && (
         <div style={{ marginTop: '.9rem' }}>
           <p style={{ margin: '0 0 .6rem', color: DARK, fontSize: '.85rem', lineHeight: 1.6 }}>

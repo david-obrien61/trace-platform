@@ -1,6 +1,6 @@
 # CAMPAIGN LIFECYCLE — FULL-SURFACE OWNER TEST
 
-> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
 > failed or unmerged build looks *completely normal* — the app just serves the old bundle.
 > One glance. Match it to `git log --oneline origin/main -1` — **not to a SHA written in this
@@ -11,6 +11,12 @@
 > merged.** Tech-debt **#280** is exactly this trap — the close-out gates accept "pushed" as
 > "shipped" and name neither a branch nor an environment. **Confirm the SHA you are looking at is a
 > PRODUCTION deploy of the code you mean**, not a Preview of a branch, before CARDS 4–12.
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 > **Rendered board:** open `owner-tests.html` (a PURE renderer — it parses this file live and holds
 > no data of its own). Sibling of `stories.html` / `status.html`.
@@ -66,6 +72,13 @@ your customers have seen something, it is wrong even if everything else passes.*
 
 **PASS = every card in scope is `covered` with today's date.** Thunder never sets `covered` (OP-14).
 
+**Board: 3 of 12 covered** (3 `covered` · 8 `owed` · 1 `needs-test`) — measured on
+`docs/card-flips-and-leak-clause-split` @ `8a76dde`. ✅ **CARDS 1, 2 and 4 — David, 2026-09-12, build
+`efc02f8`.** ⚠️ **The stamp is here because a count is a claim about a TREE** (ledger #309): on
+2026-09-11 one board was reported as 35, 36 and 37 cards by three sessions reading three checkouts,
+and none of them was wrong. 🔴 **CARD 3 is the remaining `pre-merge` card and it is runnable now** —
+see the dated note on it.
+
 ### 🔴 `RUNS:` — WHEN A CARD CAN BE RUN, AND WHY THIS TAG EXISTS
 
 | Tag | Means |
@@ -94,8 +107,8 @@ These three are SQL you paste into the Supabase SQL editor. They write nothing. 
 stop-gate: if it fails, R-146 becomes a migration and the cancel half of this build must not ship.**
 
 ### CARD 1 — the live CHECK constraint actually permits `'cancelled'`
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David, build `efc02f8`)
 DEVICE: desktop
 COVERS: R-146 · ledger #306 · the stop-gate
 RUNS: pre-merge — reads `pg_constraint` only. 🔴 **THIS IS THE STOP-GATE AND IT NEEDED NOTHING BUILT** — it could have run before the merge it gates, and did not.
@@ -121,17 +134,20 @@ CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'c
 
 **`'cancelled'` IS in the live constraint. R-146 does NOT become a migration** — repo and database
 agree on this table, so #91's class is checked and clean here.
-⚠️ **`STATUS` stays `owed` and Thunder is not flipping it.** OP-14 is absolute — *Thunder may never
-mark a card `covered`* — and the builder does not grade its own homework even on a read-only query.
-**David flips this one, with a date.**
+✅ **COVERED 2026-09-12 — DAVID RAN IT, build `efc02f8`.** His words: *"`'cancelled'` is in the live
+CHECK."* 🔴 **THE STOP-GATE IS CLOSED BY THE PERSON IT GATES, WHICH IS THE WHOLE POINT.** Thunder had
+executed the same query hours earlier and got the same answer, and **that was not enough** — OP-14 is
+absolute (*Thunder may never mark a card `covered`*) and the builder does not grade its own homework
+even on a read-only query. ⚠️ **The earlier run is kept above, not replaced**: it is the record of why
+the build proceeded, and David's is the record of why the card is closed. Two different claims.
 
 **PASS:** a row whose `definition` contains **`'cancelled'`**.
 🔴 **FAIL → STOP AND TELL THUNDER.** R-146 then needs a migration and that is a different
 conversation. Do not run CARD 8.
 
 ### CARD 2 — the three member policies are LIVE, and they name `campaigns:update`
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David, build `efc02f8`)
 DEVICE: desktop
 COVERS: R-145 · R-146 · R-147 · ledger #306
 RUNS: pre-merge — reads `pg_policies` only. The policies predate this build by weeks.
@@ -155,7 +171,12 @@ and `campaign_posts_member_insert` (INSERT, WITH CHECK), plus `campaigns_member_
 `campaign_posts_member_select` (SELECT) and `campaign_posts_member_update` (UPDATE). The `*_owner`
 `FOR ALL` policies still stand on both tables — which is exactly how DELETE stays owner-only-at-the-
 database under R2, with no product control for it. **#241's class clean: these are catalog rows, not
-corpus greps.** ⚠️ `STATUS` stays `owed` — David flips it.
+corpus greps.**
+
+✅ **COVERED 2026-09-12 — DAVID RAN IT, build `efc02f8`.** His words: *"Both member policies live."*
+⚠️ **What this card proves and what it does not:** the two policies EXIST in the catalog, which is
+#241's class clean. It is **not** a proof that Lauren can write through them — that is CARD 12, which
+needs a login David does not hold and is still `needs-test`.
 
 **PASS:** `campaigns_member_update` (UPDATE) and `campaign_posts_member_insert` (INSERT) both present.
 ⚠️ If either is missing, Lauren's edit/cancel/append will fail under her own session even though the
@@ -192,6 +213,15 @@ SELECT c.id, c.name, b.name AS tenant, c.status, c.created_at,
 SELECT count(*) AS campaigns_total FROM campaigns;
 ```
 
+> ✅ **AND THE SQL IN THE BLOCK ABOVE IS ALREADY THE CORRECTED ONE — CHECKED 2026-09-12, NOT ASSUMED.**
+> Both defects named in this note were fixed in **`efc02f8`**, the same build CARDS 1, 2 and 4 were
+> proven on: the block carries **no `GROUP BY` at all** (so 42803 cannot fire) and it **selects `c.id`
+> first** (so two byte-identical rows can never collapse into one). `main`'s copy of this file is
+> byte-identical to `efc02f8`'s — verified with `git diff efc02f8 HEAD --`. 🔴 **IF YOU WERE HANDED A
+> QUERY WITH `GROUP BY 1,2,3,4,5` IN IT, IT DID NOT COME FROM THIS FILE** — it is the pre-`efc02f8`
+> draft quoted in the paragraph above as the defect, and the only copy of it left in the corpus is that
+> quotation. **Run the block above. Nothing needs fixing first.**
+
 **PASS (MEASURED 2026-09-12):** **TWO rows**, both `arbor day`, both Test Dave's Tree Nest, both
 `active`, both **0 posts**, created **2026-08-22 19:25:16+00** and **2026-08-22 22:25:37+00** —
 **three hours and ten minutes apart**, exactly as `user_stories.md:1150` described. `count(*)` = 2.
@@ -204,8 +234,8 @@ SELECT count(*) AS campaigns_total FROM campaigns;
 ## AFTER THE BUILD IS DEPLOYED — David, **Test Dave's tenant** unless a card says otherwise
 
 ### CARD 4 — a campaign with no posts SAYS it has no posts
-STATUS: owed
-LAST-PROVEN: never
+STATUS: covered
+LAST-PROVEN: 2026-09-12 (David, build `efc02f8`)
 DEVICE: either
 COVERS: the claim that hid R-147 · `user_stories.md:1151-1152` · §6 r18
 RUNS: post-deploy — needs the fixed list page in front of you.
@@ -214,6 +244,13 @@ STEPS: open `/campaigns` on Test Dave's. There are **TWO** `arbor day` rows (0 p
 🔴 **FAIL:** it reads anything containing the word *published*. That is the original lie.
 ⚠️ **Look, do not click through and generate** — CARD 3's row is the evidence and David is still
 deciding what happens to it.
+
+✅ **COVERED 2026-09-12 — DAVID RAN IT, build `efc02f8`.** His words: *"Both arbor day rows read "No
+posts yet", neither said published."* 🔴 **THAT IS THE ORIGINAL LIE MEASURED DEAD ON BOTH ROWS, AND
+THE COUNT IS THE HALF THAT MATTERS.** The defect was never that one row read wrong — it was that a
+zero-post campaign and a finished campaign were **indistinguishable**, so the duplicate hid behind a
+green claim for three hours. Two rows both reading *"No posts yet"* is what makes them countable; one
+row would have proven the string and not the discrimination.
 
 ### CARD 5 — 🟢 THE NEGATIVE CONTROL: a genuinely finished campaign still says so
 STATUS: owed

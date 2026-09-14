@@ -89,7 +89,7 @@ const MUTANTS = [
 
 function runSuite() {
   try {
-    execSync(`node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs --log-level=error | node`,
+    execSync(`set -o pipefail; node_modules/.bin/esbuild ${SUITE} --bundle --platform=node --format=cjs --log-level=error | node`,
       { stdio: 'pipe', shell: '/bin/bash' });
     return true;   // green
   } catch { return false; }  // red

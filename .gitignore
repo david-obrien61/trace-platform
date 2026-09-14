@@ -17,8 +17,15 @@ venv/
 .env.vercel.*
 # Scratch / throwaway work — never commit
 scratch/
-# Local Claude Code permission prefs — stays on David's machine, never commit
-.claude/settings.json
+# Claude Code's local working directory — stays on David's machine, never commit.
+# WIDENED 2026-09-12 (ledger #311) from `.claude/settings.json` to the whole directory. The
+# narrow form ignored ONE file, so `.claude/` still showed as untracked on every status — and it
+# now holds `settings.local.json` and, more seriously, REGISTERED GIT WORKTREES
+# (`.claude/worktrees/<name>`) carrying other sessions' uncommitted work. An accidental
+# `git add -A` staged the whole 27MB tree in a shared checkout three sessions were using (caught
+# before any push). Committed as a gitlink, that worktree would be orphaned for everyone who
+# clones. All of it is per-machine state, none of it is project source.
+.claude/
 # Personal-financial / personal-sensitive decisions — never commit (family reads the repo)
 decisions/PERSONAL-FINANCIAL.local.md
 
@@ -36,3 +43,16 @@ docs/cost-to-produce/.scratch/
 # nurseries (some are prospects). Desktop-only, NEVER versioned. The recon .md
 # notes in this dir ARE tracked (institutional memory about TRACE's own system).
 data/grower-scan/*.csv
+
+# Pre-migration database snapshots — NEVER versioned (David's instruction, 2026-09-12).
+# `docs/snapshots/pre-*.sql` is a LOGICAL capture taken before a migration is applied, and it
+# contains LIVE ROWS: `business_modules` config for every tenant (LAWNS and Test Dave's), plus
+# `social_drafts`, `campaigns` and `campaign_posts` contents. Real customer configuration does not
+# belong in a git history that outlives the migration it was taken for.
+#
+# ⚠️ THE ROLLBACK AND THE README ARE CAUGHT BY THIS TOO, AND THAT IS ACCEPTED, NOT OVERLOOKED.
+# A narrower `pre-*.sql` rule would version the rollback script — which is pure DDL and safe — but
+# it sits beside a file that must never be committed, and a rule that versions one file in a
+# secrets-bearing directory is a rule somebody will widen by accident. The whole directory is
+# excluded; the rollback's content is reproduced in the close-out ledger row where it is needed.
+docs/snapshots/
