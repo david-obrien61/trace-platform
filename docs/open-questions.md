@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #322 — the import preview's two field checks, merged into `main` alongside ledger #321 — the production stamp, **owner-proof READ LIVE**. Both blocks are below; #321's answers stand.)
+**Last updated: 2026-09-14** (ledger #324 — the worktree rule, tech-debt #282 resolved; merged into `main` on top of #322 and #321. All three blocks are below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#324 — the worktree rule (tech-debt #282 resolved)**
+- 🔴 **OPEN — PLACEMENT IS MINE AND THIS IS THE CALL TO OVERRULE.** The rule went to **CLAUDE.md §6 r20** (full text), with **R-154** as an index line and **§10 item 11** as a one-line pointer. §9 was rejected deliberately: it fires at CLOSE-OUT while #282 fires at the COMMIT INSTANT, and a worktree must exist before work starts. Owner: `CLAUDE.md` §6 r20.
+- ✅ **ANSWERED BY INSTRUCTION 2026-09-14 — KEEP IT.** David, merging this branch: *"Keep §10 item 11."* The one-line worktree pointer in the SESSION STARTER **stays**, and `Do not start until you confirm all eleven` with it. ✏️ **The flag was right to raise it** — item 11 was scope the prompt did not ask for, and a rule filed only in §6 is a rule the session-open checklist never surfaces (the OP-15 / row-19B lesson: a rule filed where the actor is not standing is a note, and notes do not act).
+- 🔴 **OPEN — SHOULD THE RULE GET A CAP AT ALL?** It is unguarded by design and says so. A cap asserting the cause must know which checkout is the shared one — per-machine state (`.claude/` is gitignored for that reason). #282's `git branch --show-current` at the commit instant catches the SYMPTOM only. **Whether that is good enough is yours.** Owner: `docs/tech-debt-log.md` #282.
+- 🟡 **OPEN — #281 AND #280 ARE NOT CLOSED BY THIS.** The rule resolves the commit instant only; build start (#281) and close-out (#280) remain. Owner: `docs/tech-debt-log.md`.
 
 **#322 — the import preview's two field checks**
 - 🔴 **OPEN AND IT IS THE GO-LIVE BLOCKER'S NEXT STEP — MAY THE IMPORT SEED `customer_addresses` FROM `ShipAddr`?** 223 LAWNS customers carry a routable ship-to that has never come across. The destination EXISTS and is empty. **`20260911b` §4 declares NO BACKFILL deliberately** — AGAVE LD LLC's four spellings of one yard would become four curated sites and the drift would be permanent — and **`customerAddresses.test.ts` §F fails the build the day anything seeds that table.** So this is not a coding gap, it is your ruling. The check REPORTS them and imports nothing. **OWNER: `supabase/migrations/20260911b_customer_addresses.sql` §4.**
