@@ -60,6 +60,7 @@
 // in `tax_exempt_cert_ref`.
 // ─────────────────────────────────────────────────────────────────────────────
 import { normEmail, normPhone } from './customerList';
+import { auditImportFields, type ImportFieldAudit } from './importFieldAudit';
 
 /** Written to `customers.source` on every row this import creates. */
 export const CUSTOMER_IMPORT_SOURCE = 'quickbooks-customers';
@@ -112,6 +113,16 @@ export interface CustomerAdaptation {
   duplicates: DuplicateFlag[];
   /** Distinct records touched by ANY duplicate flag — the union across both keys, not a sum. */
   duplicateRecordCount: number;
+  /**
+   * 🔴 THE TWO FIELD CHECKS, OVER THE RAW RECORDS — a source field carrying data that lands
+   * nowhere, and a destination column holding values of the wrong shape. Computed HERE because
+   * this is the last place that still holds the raw records; every layer above it has only the
+   * adapted rows, and the whole point is what QuickBooks SENT rather than what we kept.
+   *
+   * ⚠️ It carries counts and MASKED examples only, so it is safe to put on a wire and on a screen
+   * beside ~1,900 real people (`maskExample` — every letter `x`, every digit past the third `•`).
+   */
+  fieldAudit: ImportFieldAudit;
 }
 
 function str(v: unknown): string | null {
@@ -314,11 +325,17 @@ export function flagDuplicates(customers: AdaptedCustomer[]): DuplicateFlag[] {
 export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
   const customers: AdaptedCustomer[] = [];
   const seen = new Set<string>();
+  // 🔴 THE RAW RECORDS ARE KEPT FOR THE FIELD AUDIT, AND THE POPULATION IS EVERY RECORD THE PAGE
+  // YIELDED — including ones `adaptCustomer` then REFUSES. A field check asks what QuickBooks
+  // sent; filtering it down to what we could use would hide a field from the check precisely
+  // when the record carrying it was the one we could not read.
+  const rawRecords: Record<string, unknown>[] = [];
   let unparseable = 0, noId = 0, dupId = 0;
   for (const body of rawBodies) {
     const page = parseCustomerRecords(body);
     if (!page.ok) { unparseable++; continue; }
     for (const raw of page.rows) {
+      rawRecords.push(raw);
       const adapted = adaptCustomer(raw);
       if (!adapted) { noId++; continue; }
       if (seen.has(adapted.qb_customer_id)) { dupId++; continue; }
@@ -347,5 +364,6 @@ export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
     // 104 people — the sets overlap and the honest number is 72. Reporting the sum would overstate
     // the review Lauren is being asked to do by nearly half.
     duplicateRecordCount: touched.size,
+    fieldAudit: auditImportFields({ records: rawRecords }),
   };
 }

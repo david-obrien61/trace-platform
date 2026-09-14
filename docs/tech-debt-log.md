@@ -2017,6 +2017,25 @@ decision — David's.
 
 ## #254 — 🟡 THE QUICKBOOKS IMPORTER DOES NOT READ `BillAddr.Line2` (NEW 2026-09-11, transcribed from the 2026-09-10 handoff)
 
+> ✏️ **UPDATED 2026-09-14 (ledger #322) — SURFACED, NOT FIXED, AND THE SCOPE GREW BY MEASURING IT.**
+> The import preview now **counts and names this defect on screen** before anything is written:
+> check ① reports *"`BillAddr.Line2` has N values and is mapped to nothing — mostly street
+> addresses"*, and check ② reports *"N of 1,946 values going into `address_line1` look like phone
+> numbers, not street addresses."* **The importer still does not read `Line2`. This row stays OPEN.**
+>
+> 🔴 **AND THE FIX IS NOT "READ LINE2" — THAT IS THE PART THIS ROW DID NOT SAY.** `address_line1 =
+> Line2` would give the **1,473 whose Line1 is already a real street** their suite number, and the
+> **28 who have a phone in Line1 and no Line2 at all** a NULL. **486 broken addresses would become
+> 1,473.** The repair has to be **per-record and shape-driven**, and that is a ruling David has not
+> made — filed in `docs/open-questions.md` under #322.
+>
+> ⚠️ **THE 28 ARE THE ones NO REMAP CAN REACH** — asserted at `importFieldAudit.test.ts` §D8, which
+> states what neither check says alone: 486 broken street columns minus 458 streets recoverable
+> from Line2 leaves 28 records with no street anywhere in the capture.
+>
+> ⚠️ **THIS ROW'S OWN FIGURE WAS `456 values`.** The live number is whatever the check now reports;
+> `qb-catalogue-import-full-surface-test.md` CARD 35 asks David to write it down.
+
 `qboCustomerAdapter.ts` `billingOf()` returns `address_line1`, `city`, `state`, `zip` — **no second line**, deliberately: *"Line2 is deliberately NOT folded into line1 — `customers` has `billing_line2` and the party editor owns it; concatenating here would make this writer disagree with that one."* The reason is sound; the consequence is not handled. The handoff reports **451 routable addresses landing as phone numbers** because LAWNS staff put the real address on the second line — **that count is the handoff's, not re-measured here.**
 
 **Fix the reader before any address cleanup** (handoff §6): write `Line2` to `billing_line2` rather than dropping it. Otherwise a clean-up of the address lines is undone by the next import.
