@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #324 — the worktree rule, tech-debt #282 resolved; merged into `main` on top of #322 and #321. All three blocks are below, newest first.)
+**Last updated: 2026-09-14** (ledger #323 — **#280 ① and #294a are BUILT and asserted**; merged into `main` on top of #324 — the worktree rule, tech-debt #282 resolved — and #322 — the import preview's two field checks. All blocks are below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -93,10 +93,16 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - ✏️ **RESOLVED BY THE MERGE, AND IT DID NOT HAPPEN THE WAY I PREDICTED — WORTH READING.** I flagged that #321 and #322 would **CONFLICT** in `handoff-archive.md` because both archived #314. **They did not conflict. Git AUTO-MERGED them** — the two insertions landed at different offsets under different provenance comments — and produced **TWO BYTE-IDENTICAL COPIES of #314**. 🔴 **The silent outcome is the worse one:** a conflict stops a human; a duplicate breaks the archive's `entries-in == entries-out` arithmetic with nothing on screen to say so. Deduped to one at merge time, with both moves recorded in a single provenance comment. ⚠️ **AND THE MERGE ITSELF ARCHIVED A THIRD ENTRY NEITHER SESSION COULD HAVE:** both branches left §3 holding three, keeping both new entries makes four, so **N=3 rotated #318 out at merge time**. Tech-debt **#282** — two sessions, one §3 window.
 
 **#321 — the production stamp**
-- ✅ **ANSWERED BY A LIVE READ 2026-09-14 — `built Sep 14, 12:28p · 15fe4f2 · prod`, quiet, no amber chip, and `15fe4f2` IS `origin/main`.** Traced through the **shipped minified bundle**, not the source. ⚠️ **I did not render it in a browser — under OP-14 the card flip is yours.** Owner: `docs/CLOSE-OUT-LEDGER.md` → **#321**.
+- 🟢 **OWNER-PROVEN 2026-09-14 — David's live run: *"the foot of the screen reads · prod"*.** `production-stamp` board CARD 1 `covered`, 1 of 5. 🔴 **The board had to be CREATED to receive the flip — an OP-14 gap in #321, which changed a surface on every screen and made no card for it.** ⚠️ **CARDS 2–4 still `owed`** (the preview chip, the promoted-branch chip, the broken-screen case). Owner: `docs/owner-tests/production-stamp-full-surface-test.md`.
 - 🔴 **OPEN — PRODUCTION IS STAMPED POSITIVELY, AND THAT IS A DELIBERATE DEVIATION FROM THE INDUSTRY STANDARD (§6 r16).** The standard env badge shows **nothing** in production. I show `prod`, because a blank production is indistinguishable from a bundle built before the feature existed (A9 *absent is not empty*). **Cost: one more token on every screen, for every user, forever.** Owner: `src/lib/deployStamp.ts`.
 - 🔴 **OPEN — `prod⚠ <branch>` IS A JUDGEMENT MADE WITHOUT ASKING.** A production deploy built from a non-`main` branch shouts. Legal (someone promoted a branch), and I decided it is worth seeing. **Say so if you would rather it stayed quiet.** Owner: `src/lib/deployStamp.ts`.
 - 🟡 **OPEN — tech-debt #280 IS 🟡 PARTIAL, NOT RESOLVED.** ② is now **OBSERVABLE by a human**; **no cap asserts it** and the close-out gates still accept *"pushed"*. ① (`merge-base --is-ancestor`) is satisfied for #320 **by the merge, not by a gate** — **asserting it is cheap and still owed.** Owner: `docs/tech-debt-log.md` → **#280**.
+
+**#323 — the two assertions, built**
+- ✅ **ANSWERED BY BUILD — #280 ① is asserted** (`verify-main-ancestry`, in `npm run verify`), **proven red with a real commit on local `main`**. ⚠️ **Clause A asserts `main` ONLY**, and **clause B is "at least one" not "all"** — measured: "all" reports 8 rebase artefacts, none a defect.
+- ✅ **ANSWERED BY BUILD — #294a is asserted** (`verify-id-citations` clause E), **red-first naming exactly the four predicted**, then repaired. **`#311` needed a judgement: which cell to merge** — I merged the renumber note into the SHA cell because it realigns every column. **Say so if you would rather it went elsewhere.**
+- 🔴 **STILL OPEN — #280 ② is unchanged and #280 stays 🟡 PARTIAL.** Nothing we own reads Vercel; ② is observable from the app (#321) and asserted by nothing. Owner: `docs/tech-debt-log.md` → **#280**.
+- 🔴 **LIVE `#323` COLLISION — another session (`docs/worktree-rule-and-282-close`, working tech-debt #282) claimed it 1m19s later.** R-148 clause (4): they renumber. **Not mine to move, and `npm run verify` is red until they do.**
 
 **#294a / #280 ① — the two the last pass left sharpened**
 - 🔬 **PROPOSED, NOT BUILT (your scope) — a check refusing a ledger row whose cell count EXCEEDS the header.** A shell pipe inside backticks splits a row and GFM discards the overflow silently; **#320 raised this defect's rate by making the row the home for close-out narrative.** Live: #279 · #299 · #311 · #317. Full proposal (counting rule, one-direction argument, 8 probes, red-first expectation, cost) in `docs/tech-debt-log.md` → **#294a**. **Your call whether it gets built.**

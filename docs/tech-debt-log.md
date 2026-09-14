@@ -2286,6 +2286,8 @@ that makes a diff unreviewable** — which is the reason it was not taken, state
 
 🔴 **THIS ROW SAID ② WAS *"not checkable from the repo — nothing we own reads Vercel"*, AND THAT REMAINS TRUE.** Nothing we own reads Vercel *now either*. What changed is that **nothing has to**: Vercel sets those variables at BUILD time, so the answer is **baked into the artefact** and read off the screen — which is where David is standing when GATE 0 fires. **That is a different fix from the one this row imagined, and it is deliberately the weaker one:** a human at a screen can now SEE the target; **no cap ASSERTS it**, and the close-out gates still accept "pushed". ⚠️ **So the DEPLOYED bar is still not mechanically guarded. Do not read this as closed.**
 
+✅ **① RESOLVED 2026-09-14 (ledger #323) — `scripts/verify-main-ancestry.mjs`, IN `npm run verify`.** **Clause A: local `main` must not be ahead of `origin/main`** — every commit on local main must be an ancestor of it. That is the incident below, and it is the mechanical form of **CORE MANDATE rule 9** (*commit → push are ONE action*) for the shared trunk. **Clause B: a close-out row claiming "MERGED TO `main`" must cite at least ONE commit that IS an ancestor of `origin/main`** — #303's shape. 🔴 **PROVEN RED AGAINST A REAL COMMIT, NOT A FAKE** (David's instruction): an empty commit was made on local `main`, the check refused by name — *"local `main` is AHEAD of `origin/main` by 1 commit(s) — they exist only on this machine"*, exit 1 — and `main` was then restored. **11 probes both directions**, P1 the real defect verbatim, P9 *cannot-look ≠ nothing-wrong*, P10/P11 a population negative control. ⚠️ **CLAUSE B IS "AT LEAST ONE", NOT "ALL", AND THAT WAS MEASURED BEFORE IT SHIPPED:** requiring every cited SHA to be an ancestor reports **8 failures across 27 SHAs** on today's corpus and **none is a defect** — `13d64aa` is a pre-rebase SHA the breakpoint board keeps DELIBERATELY (*"a proof records what was RUN"*), and rows cite base commits legitimately. **A cap arriving red with 8 rebase artefacts is a cap people switch off** (#73). Measured at "at least one": **0 failures**. ⚠️ **SCOPE, STATED: clause A asserts `main` ONLY.** An unpushed feature branch is often correct mid-build (R-149 pushes reservations early); an unpushed `main` is invisible to everyone else. 🔴 **AND CLAUSE B FIRED ON ITS OWN AUTHOR WITHIN THE HOUR — #146's CLASS, AND THE FIX WAS MEASURED TWICE.** The first matcher was `/MERGED TO \`main\`/i`, and the very next row written — **#323's, which DESCRIBES the clause** (*a row claiming "MERGED TO `main`" must cite…*) — was reported as a false violation. **A checker matching prose that EXPLAINS the thing rather than IS it.** ⚠️ **The obvious fix, "require the claim to be BOLD", was measured and was WORSE: it cleared the false positive and silently dropped TWO REAL CLAIMS** — #312 (*"`ac6d0ce`, merged to `main`, 11:59 CDT"*) and #249 — both lowercase and unbolded. **Trading one false POSITIVE for two false NEGATIVES is the wrong direction for a gate: a noisy cap gets argued with, a blind one gets believed.** ✅ **The discriminator is the QUOTE** — a row MAKING the claim states it, a row EXPLAINING it quotes it. Measured: **8 real claims matched, the describing row excluded.** **P12** (the false positive) and **P14** (an unbolded real claim) hold both ends, permanently. ✏️ **Third self-inflicted finding this week, and the pattern is worth naming: describing a defect is a reliable way to commit it** — the unescaped `\|` written inside the sentence about unescaped pipes (#294a), the self-test asserting an escape JS had already eaten, and this. 🔴 **② IS UNCHANGED AND THIS ROW STAYS 🟡 PARTIAL — nothing here reads Vercel.**
+
 🔴 **① IS STILL OWED, STILL CHEAP, AND ON 2026-09-14 IT DREW BLOOD — MINE (David's instruction to record it here).**
 
 **The incident, in full, because it is the argument.** This session merged ledger **#320** into `main` and **reported it merged**. The merge commit `a0c957b` existed; `git merge` printed its diffstat; the working tree was correct. **`origin/main` was still at `ba7edcf`.** The merge had gone into **local** `main` and was never pushed — and the session then branched off local `main`, so the merge lived on **in that branch's ancestry**, where every subsequent command saw it and agreed it was there. **It was found ~40 minutes later, by running `merge-base --is-ancestor` by hand during a final check, and only because that check happened to be run.**
@@ -3402,7 +3404,18 @@ Writing #320's `Blocker` cell, this session typed the sentence *"Cause: an unesc
 
 ---
 
-#### 🔬 PROPOSED CHECK — NOT BUILT (David: *"PROPOSE a check that refuses a row whose cell count exceeds the header. Do not build it in this pass."*)
+#### ✅ BUILT 2026-09-14 (ledger #323) — `verify-id-citations` CLAUSE E, exactly as proposed below.
+
+**Shipped as the fifth clause**, not a new script: it already parses this file. Counts on **unescaped** pipes (`(?<!\\)\|`), derives the width from the header rather than writing `7`, refuses **`cells > header` only**, and prints **the text GFM is discarding** plus the likely culprit pipe. **8 probes, both directions**, P1 the real defect verbatim and P7 a population negative control.
+
+🔴 **RED-FIRST ON THE REAL CORPUS, AND IT NAMED EXACTLY THE FOUR THE PROPOSAL PREDICTED** — `#279 · #299 · #311 · #317`, exit 1. **The prediction and the result matching is the evidence the check reaches its target** (#182: a harness that cannot reach its target reports the same as one that passed).
+
+✅ **THEN REPAIRED, and the sequence was the proposal's own.** Three (`#279 · #299 · #317`) were stray pipes inside inline code and were escaped mechanically. 🔴 **`#311` WAS NOT — and it is the case probe P8 exists for: a genuine EXTRA COLUMN, no stray pipe at all.** Its cells were therefore also **MISALIGNED**: the renumber note sat in the `Bar` column, everything shifted right, and the `Blocker` fell off the end. Repaired by merging the renumber note back into the SHA cell, which restored **both** the discarded text and the column alignment. **All 77 rows now fit.**
+
+✏️ **THE SELF-TEST CAUGHT A BUG IN ITS OWN CLEAN CASE ON FIRST RUN:** the probe asserting an *escaped* pipe is accepted was written `'\|'` in JS source, where the language drops the backslash — so the checker saw a bare pipe and the probe reported a false positive. **The both-directions requirement is what surfaced it**; a violation-only probe would have passed.
+
+<details><summary>The original proposal, kept verbatim — what was specified against what was built</summary>
+
 
 **Name.** `verify-ledger-table-shape`, or a fifth clause on `verify-id-citations` — **it already parses this file**, so the second is cheaper and adds no new script to the verify chain (§6 r8: one operation, one place).
 
@@ -3430,4 +3443,6 @@ Writing #320's `Blocker` cell, this session typed the sentence *"Cause: an unesc
 
 **Cost.** Roughly forty lines and one regex, inside a script that already reads the file. **The four repairs are four one-character edits.**
 
-**Trigger.** The next close-out that writes a shell pipeline into a ledger row — which, after #320, is the next close-out that shows its work.
+**Trigger.** ~~The next close-out that writes a shell pipeline into a ledger row~~ — **now asserted on every build.**
+
+</details>
