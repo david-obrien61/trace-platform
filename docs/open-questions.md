@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
+**Last updated: 2026-09-14** (ledger #327 — recon, what is in cultivar that belongs in shared, report only; sits on top of #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,15 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#327 — recon: what is in cultivar that belongs in shared (report only)**
+- 🔴 **OPEN — SHOULD THE SEVEN FINDINGS GET TECH-DEBT IDS?** I filed none, because the prompt said *report only*. ⚠️ **The cost is real: a finding that is not in the log is one nothing will resurface.** **Four are NOT previously filed** — `serviceReview.ts:156` `ACCOUNT_STOCK = /nursery\s+stock\|plant\s+sales/i`, `:407` `/^\d+ Gallon$/`, `:78` `UNIT_PLANT_SHARE`, and `productionConfig.ts:56,58`'s gallon keys. Owner: `docs/recon/2026-09-14-cultivar-to-shared-boundary.md`.
+- 🔴 **OPEN — WIDEN `service_offerings.price_unit`'s CHECK AND DROP `DEFAULT 'plant'`?** `CHECK (price_unit IN ('order','plant','vehicle','visit')) DEFAULT 'plant'` puts a grower's noun in a platform constraint, **and it is load-bearing in cart math** (`netting.ts:37`, `transport.ts:41,43`). 🔴 **The only finding in the report that gets more expensive with time, because it is schema with live rows.** ⚠️ Widening never rejects an existing row — **cheap today.** ⚠️ **The hard part is not the migration:** `netting.ts` must learn to multiply by *the line-item count* with `plant` as one label for it. Owner: same doc, Finding 1.
+- 🔴 **OPEN — PERSIST THE GEOCODER'S COORDINATES?** `DeliveryRoute.tsx:211` geocodes every stop; `:408/:417/:428` are its only DB calls and **all three are READS**. **Route geometry is discarded on every delivery day — the only finding with a running cost rather than refactor risk.** ⚠️ **Needs `customer_addresses`' schema read first; I did not query the live database.** Owner: same doc, Finding 4 §3.
+- 🟡 **OPEN — RENAME `production/`'s GALLON KEYS WHILE IT IS STILL FREE?** `tradeGallonFactor` / `trueGallonsPerCubicYard` are grower units on an **exported shared interface**. 🔴 **Free only because tech-debt #253 is still true — `20260905_production_planning` is NOT APPLIED, so there is no live row to migrate. That will change.** Owner: same doc, Finding 6.
+- 🟡 **OPEN — ANSWER GOOGLE-vs-SELF-HOSTED ROUTING BEFORE moving the delivery libs.** `routeHandoff.ts:73,88` builds Google Directions URLs; moving that page to `shared` makes the lock-in platform-wide. Owner: same doc, Finding 4 §4.
+- ✏️ **NOT A QUESTION — TWO CORRECTIONS THIS RECON OWES.** **tech-debt #16's *"MarginEngine orphaned"* is STALE** (real import, `CostToProduce.ts:41`, five consumers; ⚠️ its `plants.cost_price` half NOT verified). **`productionConfig.ts:43`'s own AC-1 claim is 80% true** — the `uppot` half holds, the gallon keys do not.
+- ⚠️ **NOT A QUESTION — A RECOMMENDATION AGAINST WORK.** Do **not** start a general move-surfaces-to-shared campaign. 32-of-33 tiles being `general` makes it look obvious; it touches ~7,700 LOC of working owner-proven surfaces and **the receipts move alone flips 12 proven owner-test cards to `owed`.** The correct trigger is a commissioned second vertical.
 
 **#325 — the pre-commit hook (one check)**
 - 🔴 **NOT A QUESTION, A STANDING LIMIT YOU SHOULD KNOW: THE HOOK IS NOT ENFORCEMENT.** `git commit --no-verify` fires no hook at all and the broken state commits cleanly — **measured, not asserted**. No server-side check, no CI, no audit notices. A fresh clone that never runs `npm install` has no hook either. **It catches the accident; it stops nobody who means it.**
