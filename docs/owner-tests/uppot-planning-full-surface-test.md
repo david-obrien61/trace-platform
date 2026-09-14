@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 21 covered** (19 `owed` · 2 `needs-test`).
+**Board: 0 of 27 covered** (25 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -29,9 +29,19 @@ desktop (capture=mobile / reconcile=desktop).
 
 ---
 
-> ⛔ **MIGRATION GATE — `supabase/migrations/20260905_production_planning.sql` IS NOT APPLIED.**
+> ✏️ **MIGRATION GATE — CORRECTED 2026-09-14 (ledger #326): `20260905_production_planning.sql` IS APPLIED.**
+> **MEASURED against the catalog**, not assumed: `to_regclass` returns non-null for all three of
+> `business_operations_config`, `production_plans` and `production_plan_lines`, and
+> `production_plan_lines` carries its full 19-column shape. **All three are 0 rows — applied, never
+> written to.** 🔴 **CARDS 8–17 ARE THEREFORE NO LONGER GATED**, and this block said they were for
+> three days. Tech-debt **#253** carried the same false claim and is corrected with it.
+> ⚠️ **What follows is the ORIGINAL gate text, preserved so the correction is legible.** Every claim
+> in it about the tables NOT existing is now false; the §6 r17 instruction about the SQL editor
+> stands and applies to the NEW ladder migration below.
+>
+> ⛔ ~~**MIGRATION GATE — `supabase/migrations/20260905_production_planning.sql` IS NOT APPLIED.**
 > **CARDS 8 THROUGH 17 CANNOT PASS WITHOUT IT.** It creates three tables:
-> `business_operations_config`, `production_plans`, `production_plan_lines`.
+> `business_operations_config`, `production_plans`, `production_plan_lines`.~~
 >
 > **Nothing breaks meanwhile, and the failure is honest rather than silent:** CARDS 1–7 (the
 > calculator, which writes nothing) pass without it, Settings → Operations shows its defaults and
@@ -458,3 +468,159 @@ Recording the hole rather than pretending the code path is proven.
 > **"whether up-potting is modelled as a transformation or as a movement out and in"** — which his
 > 2026-09-05 prompt answers (movement out and in). **What no story covers is the four-way split
 > itself** — must-keep, cushion, delta, uppot-now. That half is owed and is David's to dictate.
+
+---
+
+# THE CONTAINER LADDER — CARDS 22–27 (ledger #326, 2026-09-14)
+
+> ⛔ **MIGRATION GATE — `supabase/migrations/20260914_container_ladder.sql` IS NOT APPLIED.**
+> **CARDS 22–27 CANNOT PASS WITHOUT IT.** It creates `public.container_ladder` and seeds LAWNS's
+> nine rungs (slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200).
+>
+> Apply it **as `postgres`, in the SQL EDITOR — never the dashboard TABLE EDITOR** (§6 r17: the
+> table editor's `supabase_admin` default ACL grants TRUNCATE + REFERENCES to `anon`, and RLS
+> cannot filter TRUNCATE). **This migration CREATES A TABLE, so that rule is load-bearing here.**
+>
+> **Nothing breaks meanwhile and the failure is honest:** with no table the ladder read fails, the
+> screen says so in a red banner, and planning falls back to reading sizes as plain numbers —
+> exactly as it did before this build. **It does not silently pretend the nursery has no sizes.**
+>
+> Then run **V1–V5** at the foot of the migration file.
+
+## CARD 22 — the ladder is read, and the picker offers RUNGS instead of a spinner
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+📄 PRINT-PROVABLE
+
+1. Open the uppot plan screen at **LAWNS**.
+2. Find any row whose size is **15 gal** and look at the **target size** cell.
+
+**PASS:** it is a **dropdown**, and opening it offers **30 gal · 45 gal · 65 gal · 95/100 · 200 gal**
+— and nothing else.
+**FAIL:** it is still a number box with up/down arrows, or the list offers sizes at or below 15.
+
+🔴 **WHY THIS IS THE HEADLINE CARD.** The control was `<input type="number">` with no `min`, no
+`step` and no list. **Getting 15 → 30 was fifteen presses of a spinner, and nothing stopped a plan
+landing on 47** — a container nobody sells, which then costs mix, pots and hours against a pot that
+does not exist. **Try to type 47. You should not be able to.**
+
+---
+
+## CARD 23 — 🔴 "3/5 Gallon" IS ONE RUNG, AND TWO REAL LAWNS TREES DEPEND ON IT
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+📄 PRINT-PROVABLE
+
+1. Find **Cedar Elm** and **Native Pecan** — both carry size **`3/5 Gallon`**.
+
+**PASS:** both are in the **GRID**, plannable, showing a target-size dropdown.
+**FAIL:** either appears in the refused list saying its size *"names a range … it cannot be planned
+until somebody says which it is."*
+
+🔴 **WHY.** Before this build the parser read `3/5` as a RANGE 3→5 and refused it. Terry's position
+(R-71 ③) is that **the difference between #3 and #5 is only pot height — it is one bucket**, and the
+ladder now says so. These are the two rows David named: `Elm:CE5` and `Pecan:NP5`.
+
+---
+
+## CARD 24 — 🔴 A SIZE THAT READS BUT IS NOT YOURS GETS ITS OWN LIST
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+📄 PRINT-PROVABLE
+
+1. Scroll to **"lots cannot be planned"**.
+
+**PASS:** a panel reads **"N of those read fine — they are just not one of your container sizes"**,
+listing the sizes **grouped, with a count each** — expect **`3 gal` (53) · `5 gal` (34) · `1 gal` (24)
+· `7 gal` (21) · `2 gal` (7) · `10 gal` (2) · `300 gal` (1)** or similar.
+**FAIL:** these are mixed in with the unreadable-size refusals, or they say *"has not been read as a
+unit yet."*
+
+⚠️ **`3 gal` and `5 gal` MAY NOT APPEAR** — they fold onto the `3/5 gal` rung by derived key, which
+is correct. **If they are absent, that is a PASS, not a miss.**
+
+🔴 **WHY.** Measured 2026-09-14: **121 live LAWNS rows** carry a size that reads perfectly and is not
+one of the nine rungs. Telling their owner the size is *unreadable* sends them to the wrong fix.
+**Each entry is one decision — add the rung, or correct the rows — which is why it groups by SIZE
+and not by lot.**
+
+---
+
+## CARD 25 — 🔴 NOTHING ON HAND IS THE REASON GIVEN, NOT THE SIZE
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's · **ACTOR:** OWNER · **LAST-PROVEN:** —
+📄 PRINT-PROVABLE
+
+1. Open the plan screen at **Test Dave's Tree Nest**.
+2. Look at the refused list.
+
+**PASS:** the rows with nothing on hand say **"Nothing on hand — there is nothing to uppot, whatever
+its size."**
+**FAIL:** they say *"has not been read as a unit yet"* — the old, wrong reason.
+
+🔴 **WHY.** Measured 2026-09-14: **97 of Test Dave's 99 unplannable rows are catalogue rows carrying
+no size AND no stock.** David: *"a row with zero on hand cannot be planned whatever its size."*
+Telling somebody to fix a size on a row holding nothing sends them to work that changes nothing.
+⚠️ **A never-counted row must still say "Never counted — this is not a count of zero"** (CARD 3). If
+those two now read the same, that is a FAIL — zero is an answer, null is an unanswered question.
+
+---
+
+## CARD 26 — 🔴 A RETIRED RUNG STILL RESOLVES AND IS NEVER OFFERED
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+
+Run this in the SQL editor, then reload the screen:
+
+```sql
+-- retire the 65 gallon rung
+UPDATE public.container_ladder SET active = false
+ WHERE label = '65 gal'
+   AND business_id = (SELECT id FROM public.businesses WHERE name = 'LAWNS Tree Farm, LLC');
+```
+
+1. Open a **45 gal** row's target dropdown.
+
+**PASS:** it offers **95/100** and **200 gal** — **65 gal is GONE from the list.**
+**FAIL:** 65 gal is still offered.
+
+2. Now find a row whose size **is** `65 gal` (44 such rows are live).
+
+**PASS:** it is **still in the grid, still plannable** — it resolved to the retired rung.
+**FAIL:** it has moved into the refused list saying its size is not one of your container sizes.
+
+Then put it back:
+```sql
+UPDATE public.container_ladder SET active = true
+ WHERE label = '65 gal'
+   AND business_id = (SELECT id FROM public.businesses WHERE name = 'LAWNS Tree Farm, LLC');
+```
+
+🔴 **WHY BOTH HALVES.** R-133: retire never means delete. **Resolving and offering are different
+questions and only one of them filters** — if a retired rung stopped resolving, every past lot and
+past order pointing at it would become unreadable, which is deletion by another name.
+
+---
+
+## CARD 27 — a clashing ladder says so instead of picking one silently
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+
+```sql
+-- add a 5 gal rung beside the existing 3/5 gal one, which already claims 5
+INSERT INTO public.container_ladder (business_id, label, sort_order, volume_gallons)
+SELECT id, '5 gal', 35, 5 FROM public.businesses WHERE name = 'LAWNS Tree Farm, LLC';
+```
+
+1. Reload the plan screen.
+
+**PASS:** a red banner reads **"Two of your container sizes clash"** and names **`3/5 gal` and
+`5 gal` both claim the number 5**.
+**FAIL:** no banner, and lots of size `5 gal` quietly land on one of the two.
+
+Then remove it:
+```sql
+DELETE FROM public.container_ladder
+ WHERE label = '5 gal'
+   AND business_id = (SELECT id FROM public.businesses WHERE name = 'LAWNS Tree Farm, LLC');
+```
+⚠️ **That DELETE runs as `postgres` in the SQL editor. The app itself has NO delete policy at all** —
+retiring from a screen is an UPDATE, by design.
+
+🔴 **WHY.** Two rungs claiming one number makes which rung a lot lands on **an accident of row
+order** — the silent, order-dependent wrong answer the whole ladder exists to remove (R-96's shape:
+two things that collide both get flagged).

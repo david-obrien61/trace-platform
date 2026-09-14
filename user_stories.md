@@ -1430,7 +1430,8 @@ BUILD: active
 ARC: asset-inventory-pmi
 MAPS-TO: —
 PIECES: growth_ladder_config, rotation_date, under_production_state, uppot_schedule
-NEEDS: Joel to supply the numbers — the container sizes in order, which are never sold, and maturation plus hold per rung (per variety where he knows it). David to rule whether UNDER PRODUCTION is a new value in the lot-status vocabulary or a derived state, and whether up-potting is modelled as a transformation or as a movement out and in.
+NEEDS: ✅ **THE CONTAINER SIZES IN ORDER ARE SUPPLIED — by DAVID, not Joel, 2026-09-14 (R-155, ledger #326): slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200, and `growth_ladder_config` IS BUILT** as the per-tenant `container_ladder` table. **STILL OWED and this story stays `needs-input` for them:** maturation plus hold per rung (per variety where he knows it) · **which rungs are never sold** — the ladder has no such column, deliberately, because nobody has said which they are · David to rule whether UNDER PRODUCTION is a new value in the lot-status vocabulary or a derived state, and whether up-potting is a transformation or a movement out and in.
+⚠️ **AND ONE THE BUILD SURFACED RATHER THAN ANSWERED:** 121 live LAWNS rows carry a size that READS but is not one of the nine rungs (1 · 2 · 3 · 5 · 10 · 300 gal). They are LISTED on the plan screen as an unresolved population; whether each is a retired rung or a real one is per-size and is David's.
 Lauren corrected David on this, and the correction is the whole model. He had them
 repotting every six months. She said: *"I had that backwards. We don't repot them every six
 months. It takes six to eight months to grow into their pots, and then they can live in

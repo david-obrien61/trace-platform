@@ -25,6 +25,7 @@ import {
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck, addMonths, addWorkingDays,
   workingDaysBetween, ARITHMETIC_TOLERANCE, type LotInput,
 } from './productionMath';
+import { type Ladder, type Rung } from '../inventory/containerLadder';
 import { holdsStock, availableFrom3, availabilityLabel3, PLAN_STATUSES } from './productionHold';
 import { flagsFor, validateCompletion, FLAG_THRESHOLD_DAYS, POSSIBLE_CAUSES } from './productionFlags';
 
@@ -162,9 +163,70 @@ ok(!rr.ok && rr.detail.includes('10') && rr.detail.includes('15'), '🔴 §D …
 const nc = classifyLot(lot({ qty: null }));
 ok(!nc.ok && nc.reason === 'never_counted', '🔴 §D a never-counted lot is REFUSED, not planned as zero');
 ok(!nc.ok && nc.detail.includes('not a count of zero'), '🔴 §D …and it says so — 445 of LAWNS\'s 447 rows are this case');
-ok(classifyLot(lot({ qty: 0 })).ok, '§D a lot counted AT zero is a real answer and is planned');
+// 🔴 THIS ASSERTION WAS REVERSED ON 2026-09-14 (ledger #326), AND THE OLD ONE IS RECORDED RATHER
+// THAN DELETED. It previously read:
+//     ok(classifyLot(lot({ qty: 0 })).ok, '§D a lot counted AT zero is a real answer and is planned');
+// i.e. a lot with nothing on hand was PLANNABLE. David corrected the premise: *"a row with zero on
+// hand cannot be planned whatever its size."* The visible cost of the old behaviour was that 97 of
+// Test Dave's 99 unplannable rows — catalogue rows with no size AND no stock — were being told
+// their SIZE had not been read, which sends somebody to fix a size that would change nothing.
+// ⚠️ Zero is STILL a real answer and still distinct from never-counted; what changed is only that
+// it is not a PLANNABLE one. The pair below is what holds those two apart.
+const zero = classifyLot(lot({ qty: 0 }));
+ok(!zero.ok && zero.reason === 'no_stock', '🔴 §D a lot with NOTHING ON HAND is refused for that reason — not for its size');
+ok(!zero.ok && zero.detail.includes('whatever its size'), '🔴 §D …and says the size is not the problem, so nobody is sent to fix one');
+ok(zero.ok === false && nc.ok === false && zero.reason !== nc.reason,
+  '🔴 §D zero and never-counted are DIFFERENT refusals — "we counted and there are none" is not "nobody has looked" (A9)');
 ok(!classifyLot(lot({ unitKind: null })).ok, '§D an unparsed size is refused');
 ok(!classifyLot(lot({ unitKind: 'weight', size: '40 lb' })).ok, '§D a weight is not a container rung');
+
+// ════════════════════════════════════════════════════════════════════════════════
+// §D2 — THE LADDER OVERRULES THE NUMBER (ledger #326). These probes did not exist
+// until the mutation harness showed that classifyLot and rungKey had NO ladder
+// coverage at all — every ladder branch could have been deleted silently.
+// ════════════════════════════════════════════════════════════════════════════════
+const mkRung = (p: Partial<Rung> & { label: string; sortOrder: number }): Rung => ({
+  aliases: [], volumeGallons: null, handlingMinutes: null, handlingBecause: 'untimed', active: true, ...p,
+});
+const LADDER: Ladder = [
+  mkRung({ label: '3/5 gal', sortOrder: 30, aliases: ['#3/5'] }),
+  mkRung({ label: '15 gal',  sortOrder: 40 }),
+  mkRung({ label: '30 gal',  sortOrder: 50 }),
+];
+
+// 🔴 THE TWO LIVE LAWNS TREES. "3/5 Gallon" parses as a RANGE and is refused without a ladder;
+// with one it is a single rung, because Terry's #3 and #5 are the same bucket (R-71 ③).
+const threeFive = lot({ size: '3/5 Gallon', unitKind: 'container', unitValue: 3, unitValueMax: 5, qty: 40 });
+ok(!classifyLot(threeFive).ok, '§D2 without a ladder "3/5 Gallon" is refused as a range — the behaviour before this build');
+ok(classifyLot(threeFive, LADDER).ok, '🔴 §D2 WITH the ladder it is PLANNABLE — Cedar Elm and Native Pecan, two live LAWNS rows');
+
+// 🔴 THE 121-ROW POPULATION: a size that READS but is not one of this nursery's sizes.
+const seven = lot({ size: '7 gal', unitKind: 'container', unitValue: 7, qty: 21 });
+const sevenR = classifyLot(seven, LADDER);
+ok(!sevenR.ok && sevenR.reason === 'off_ladder',
+  '🔴 §D2 an off-ladder size gets its OWN reason — not "unreadable", which would send somebody to the wrong fix');
+ok(!sevenR.ok && /not one of this nursery/.test(sevenR.detail), '§D2 …and the sentence says what it actually is');
+ok(classifyLot(seven).ok, '§D2 …while WITHOUT a ladder the same row is plannable — proving the ladder is what refuses it');
+
+// 🔴 ZERO ON HAND STILL OUTRANKS THE LADDER — David: "whatever its size".
+const zeroOnLadder = lot({ size: '15 gal', unitKind: 'container', unitValue: 15, qty: 0 });
+ok(!classifyLot(zeroOnLadder, LADDER).ok && classifyLot(zeroOnLadder, LADDER).reason === 'no_stock',
+  '🔴 §D2 a row with nothing on hand is refused for STOCK even when its size is a perfect rung');
+
+// 🔴 NEVER-COUNTED SURVIVES THE LADDER BRANCH — the easy one to drop when adding an early return.
+const uncountedOnLadder = lot({ size: '15 gal', unitKind: 'container', unitValue: 15, qty: null });
+ok(!classifyLot(uncountedOnLadder, LADDER).ok && classifyLot(uncountedOnLadder, LADDER).reason === 'never_counted',
+  '🔴 §D2 a never-counted lot on a good rung is still refused as never-counted, not silently planned');
+
+// ── rungKey reads the ladder ─────────────────────────────────────────────────────────────────
+const three = lot({ name: 'Cedar Elm', size: '#3',    unitKind: 'container', unitValue: 3, qty: 5 });
+const five  = lot({ name: 'Cedar Elm', size: '5 gal', unitKind: 'container', unitValue: 5, qty: 5 });
+ok(rungKey(three) !== rungKey(five), '§D2 without a ladder "#3" and "5 gal" are TWO keys — the defect');
+ok(rungKey(three, LADDER) === rungKey(five, LADDER),
+  '🔴 §D2 WITH the ladder they are ONE key — Terry\'s single bucket, and the split stops under-counting the rung');
+ok(rungKey(three, LADDER) === 'cedar elm|3/5 gal', '§D2 …and the key is the RUNG LABEL, not a number');
+ok(rungKey(lot({ size: '7 gal', unitKind: 'container', unitValue: 7 }), LADDER) === null,
+  '🔴 §D2 an off-ladder size has NO rung key — it cannot be quietly bucketed anywhere');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // §E — THE POT CASCADE (R-87). The named witness: Lauren has run out of pots mid-uppotting.
