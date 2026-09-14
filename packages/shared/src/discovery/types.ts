@@ -7,7 +7,14 @@ export interface VerticalSchema {
     name: string;
     category: 'transport' | 'addon' | 'maintenance' | 'inspection' | 'subscription';
     price_type: 'flat' | 'per_unit';
-    price_unit: 'order' | 'plant' | 'vehicle' | 'visit';
+    /**
+     * ✏️ WIDENED to `string` 2026-09-14 (ledger #328). It was a closed union of the same four
+     * values as the old CHECK constraint — so a `verticals/foodbank.ts` writing
+     * `price_unit: 'household'` was a COMPILE ERROR, before it was ever a database one.
+     * Validated at the seam by `classifyPriceUnit` (./seed), never by this type.
+     * Consistent with `SuggestedOffering.price_unit` below, which was already `string`.
+     */
+    price_unit: string;
   }>;
 }
 

@@ -538,6 +538,44 @@ in shared `readFileSync` cultivar-os source as string assertions — `rosterAuth
 it must not be broken by a naive rule**: any check written here has to assert *import edges*, not
 *the string `cultivar-os`*, or it fails five legitimate probes on day one.
 
+➕ **MEASURED AGAIN 2026-09-14 (recon #327, filed here on David's instruction) — TWO THINGS, AND
+THE SECOND ONE CHANGES WHAT THE CAP MUST DO.**
+
+✅ **① THE RULE HAS NEVER BEEN BROKEN.** A fresh sweep in both directions found **ZERO runtime
+`shared → cultivar-os` imports** — checked for `@trace/cultivar-os`-style specifiers and for relative
+`../../cultivar` paths across all of `packages/shared/src`. Meanwhile `cultivar-os` imports from
+`shared` heavily (48× `context`, 32× `business-logic`, 19× `auth`, 11× `inventory`). **So the
+convention has held for eleven months, by habit alone** — which is the strongest argument that the
+cap is worth building cheaply, and that the risk it guards is not currently live.
+
+🔴 **② AND THE BOUNDARY IS ALREADY CROSSED A SECOND NON-IMPORT WAY — ONE THE PROPOSED CAP WOULD NOT
+SEE. TWO SHARED FILES CITE A VERTICAL FILE BY `file:line` AS AUTHORITY:**
+
+| citing file | lines | cites |
+|---|---|---|
+| `packages/shared/src/auth/permissionManifest.ts` | `:99` `:379` `:613` `:633` `:826` `:1019` | `tileRegistry.ts` — six times |
+| `packages/shared/src/positions/responsibilityCatalogue.ts` | `:17` | *"`tileRegistry.ts:17-27` **already ruled the pattern** for a platform-authored catalogue"* |
+
+**Seven citations, no import edge.** `packages/cultivar-os/src/registry/tileRegistry.ts` is the file
+that calls itself *"THE SINGLE TILE REGISTRY … one declared source for every tile/surface in
+**TRACE**"* and declares `TileVertical = 'general'|'cultivar'|'ignition'|'conduit'|'kinna'` — **a
+platform registry living inside a vertical**, which four platform verify scripts also hardcode the
+path to (`verify-universals.mjs:496`, `verify-tile-fields.mjs:39`, `verify-authority-checks.mjs:499`,
+`measure-registry-contradictions.mjs:56`).
+
+⚠️ **SO THE ENTRY'S OWN REPAIR PARAGRAPH IS NOW KNOWN TO BE INCOMPLETE, AND THAT IS WHY THIS WAS
+FILED RATHER THAN NOTED.** It says a check *"has to assert **import edges**, not the string
+`cultivar-os`"* — correct for the five test files, and **it would catch none of these seven.** Move
+or renumber `tileRegistry.ts` and all seven rot silently: a shared file reasoning about a vertical
+file that no longer says what it claims. **[[R-26]]'s shape inside our own permission model**, which
+is the one place a stale premise is least affordable.
+
+⚠️ **IT IS NOT A SECOND DEFECT TO FIX SEPARATELY** — the durable answer to both halves is the same:
+**`tileRegistry.ts` belongs in `shared`** (recon #327 Finding 2; the move is one `git mv`, ~10 import
+updates and four one-line path edits, and `npm run verify` goes red loudly if it is wrong). Filed
+here so that whoever builds the import-edge cap knows it does **not** close this entry on its own.
+🔴 **DO NOT mark #156 resolved on the strength of an import-edge cap alone.**
+
 **REPAIR (not chosen — the direction is one line, the scope is the question):** the narrow form is a
 cap asserting **zero ES import/export edges from `packages/shared/src` into any sibling package**,
 derived from the source rather than a hardcoded list, proven RED by planting one edge before it is
@@ -3455,3 +3493,155 @@ Writing #320's `Blocker` cell, this session typed the sentence *"Cause: an unesc
 **Trigger.** ~~The next close-out that writes a shell pipeline into a ledger row~~ — **now asserted on every build.**
 
 </details>
+
+## #295 — 🟡 A GROWER'S CHART-OF-ACCOUNTS NAMES DECIDE WHAT COUNTS AS A PRODUCT LINE, INSIDE `shared` (NEW 2026-09-14, ledger #328, recon #327)
+
+**Where.** `packages/shared/src/business-logic/serviceReview.ts:156`
+
+```ts
+const ACCOUNT_STOCK = /nursery\s+stock|plant\s+sales/i;
+```
+
+and its consumers at `:434` (`const LINE_IS_PLANT = ACCOUNT_STOCK;`) and `:469`.
+
+**What it is.** The books review decides whether an invoice line is a PRODUCT or a SERVICE by
+matching the QuickBooks **account name** against a regex naming two grower accounts. A business
+whose product account is called *"Merchandise"*, *"Food Distribution"* or *"Parts"* matches
+nothing, so **every one of its product lines is classified as something else** — silently, with no
+row reported as unclassifiable.
+
+🔴 **This is not a label, it is a CLASSIFIER, and it is in `shared`.** AC-1 says vertical identity
+is a value, never an identifier — here a vertical's own account names are compiled into platform
+logic. The name `LINE_IS_PLANT` is the tell: the platform concept is *"this line is stock we
+sell"*, and it has been given a grower's name because a grower is the only tenant so far.
+
+⚠️ **NOT a live defect today — and that is exactly why it is being filed rather than fixed.** LAWNS
+is the only tenant, LAWNS's accounts do match, so the classifier is right on every row it has ever
+seen. It fails the first time a non-grower runs the books review, and it fails **quietly**.
+
+**Fix.** The account-name → line-kind mapping is per-business configuration (or at minimum a
+per-vertical list beside `discovery/verticals/`), not a constant. ⚠️ **It needs a ruling first:**
+a business's chart of accounts is theirs, so *"which accounts are product?"* is a question only the
+owner can answer — which makes this an onboarding surface, not a code change.
+
+**Blast radius.** One tenant today. **Every non-grower tenant at the moment there is one.**
+
+**Trigger.** The second vertical, or any LAWNS account rename.
+
+---
+
+## #296 — 🟡 TWO GROWER MAGIC VALUES IN `shared`'S PRICING ANALYSIS: A `"N Gallon"` SIZE FORMAT AND A 0.6 PLANT-SHARE (NEW 2026-09-14, ledger #328, recon #327)
+
+**Where.** `packages/shared/src/business-logic/serviceReview.ts`
+
+| line | literal | what it assumes |
+|---|---|---|
+| `:407` | `if (!/^\d+(?:\.\d+)? Gallon$/.test(folded)) continue;` | a size is written *"30 Gallon"* — a container volume, with that exact spacing and capital G |
+| `:78` | `export const UNIT_PLANT_SHARE = 0.6;` | 60% is the share above which a line is "mostly the thing itself" rather than a service |
+
+**What it is.** Two separate assumptions, filed together because they are the same class in the same
+file: **a grower's units written as constants in a shared module.**
+
+🔴 **`:407` is stricter than it looks and it is a `continue`** — a row that does not match is
+skipped, not reported. So a business whose sizes read `"5 lb"`, `"case of 12"` or `"30 gal"`
+(**lowercase — a spelling LAWNS itself uses; `productionMath.ts`'s header records 46 distinct
+spellings of 13 sizes**) drops out of the ladder silently, and the analysis is computed over a
+subset nobody is told about. **#182's shape: a scan that states no expected population.**
+
+⚠️ **`UNIT_PLANT_SHARE = 0.6` is a different kind of problem — the NUMBER may well be universal
+and only the NAME is grower.** The threshold *"is this line mostly product or mostly service?"* is
+a real platform question. **Do not rename it and call it fixed**: whether 0.6 holds for a business
+with different margins is unmeasured, and nobody has asked.
+
+**Fix.** `:407` — reuse the existing shared `parseUnitOfMeasure` / `normalizeSize` rather than a
+bespoke regex (§6 r8; `unitOfMeasure.test.ts` already carries 166 assertions about this). `:78` —
+rename to `UNIT_SELF_SHARE` **and** record what the 0.6 was derived from, or that nobody knows.
+
+**Blast radius.** Silent under-counting for any tenant whose sizes are not `"<n> Gallon"`.
+
+**Trigger.** The second vertical, or any size-vocabulary work.
+
+---
+
+## #297 — 🟡 GROWER UNITS ARE KEYS ON AN EXPORTED `shared` INTERFACE, AND THE FILE'S OWN AC-1 CLAIM IS 80% TRUE (NEW 2026-09-14, ledger #328, recon #327)
+
+**Where.** `packages/shared/src/production/productionConfig.ts:56,58` (the interface) and `:112,113`
+(the defaults).
+
+```ts
+export interface OperationsConfig {
+  tradeGallonFactor: number;        // :56
+  trueGallonsPerCubicYard: number;  // :58
+```
+
+**What it is.** `OperationsConfig` is the shared production-planning config type. Two of its keys are
+**grower units**: a food bank's operations config has no gallon factor and no cubic yards.
+
+✏️ **AND IT CORRECTS THE FILE'S OWN CLAIM.** `productionConfig.ts:43` asserts:
+
+> *"AC-1: **generic throughout. No vertical noun in any key, type or identifier.** 'Uppot' is a
+> cultivar-vertical LABEL and appears only in the cultivar surface."*
+
+✅ **The `uppot` half is TRUE and was verified** — `uppotNow` is an internal field name only, the
+label lives in the cultivar surface, and the precedent it cites (`responsibilityCatalogue.ts`)
+holds. 🔴 **The "no vertical noun in any key" half is FALSE**, on the same page. **This is the
+fifth comment-contradicts-its-own-repo instance logged in a fortnight** (cf. #188, #61, #180, and
+`serviceOfferingEnums.ts`'s header, corrected in ledger #328) — **and it is the dangerous kind,
+because being 80% right is why nobody checked the other 20%.**
+
+✅ **THE TABLE UNDER IT IS CORRECT, AND THAT MATTERS MORE THAN THE TYPE.**
+`20260905_production_planning.sql:57-62` stores this as a `jsonb config` blob — **variation in
+DATA, not schema.** So the storage is AC-1-clean and only the TypeScript narrows it.
+
+🔴 **THE FIX IS FREE RIGHT NOW AND WILL NOT STAY FREE.** tech-debt **#253**: that migration is
+**NOT APPLIED** — all three tables are absent live — so `shared/src/production/` (1,731 LOC) and
+the whole `UppotPlan` surface read and write tables that do not exist. **There is no live row to
+migrate. Rename the keys before it is applied, or pay for it afterwards.**
+
+**Fix.** Move the grower keys into a nested `vertical: {}` sub-object, or rename to the platform
+concept (a unit-conversion factor and a bulk-material density). Correct `:43`'s claim either way.
+
+**Blast radius.** No live rows (the table does not exist). ~6 call sites in `productionMath.ts`.
+
+**Trigger.** 🔴 **Before `20260905_production_planning.sql` is applied.**
+
+---
+
+## #298 — 🟡 THE SHARED SERVICE PICKER STILL OFFERS "per plant" TO EVERY VERTICAL — THE REFUSAL IS FIXED, THE AFFORDANCE IS NOT (NEW 2026-09-14, ledger #328)
+
+**Where.** `packages/shared/src/business-logic/serviceOfferingEnums.ts` (`PRICE_UNIT_OPTIONS`) and
+`packages/shared/src/business-logic/serviceReview.ts:105` (`PRICE_UNITS`), rendered by
+`packages/shared/src/pages/Settings.tsx:1075` and
+`packages/shared/src/components/services/ServicesReview.tsx:569`.
+
+**What it is.** Ledger #328 removed every *refusal* of a non-grower price unit — the CHECK
+constraint, the seed's silent coercion, the books-review gate, two closed TypeScript unions and the
+AI prompt. **It did not change what the dropdown OFFERS.** A food bank owner opening Settings →
+Services still sees a `<select>` containing **"per plant"**, and does not see "per household",
+because the list is four hardcoded values in a shared module.
+
+⚠️ **SO THE COLUMN IS OPEN AND THE ONLY UI THAT WRITES TO IT IS NOT.** A vertical can supply its
+own unit through `discovery/verticals/` (which is what #328 unblocked, and it works), but an OWNER
+cannot type one. **That is a real remaining hole and it is filed rather than implied.**
+
+🔴 **DELIBERATELY OUT OF SCOPE FOR #328, ON DAVID'S INSTRUCTION** — *"NOT NOW: the surface move…
+the trigger is a commissioned vertical, not a tidy-up."* Changing a shared `<select>` into a
+per-vertical or free-text control is a UI decision with owner-test consequences, not a constraint fix.
+
+**Fix — and it needs a decision, not just code.** Three shapes, cheapest first:
+1. **Free text with the four as suggestions** (`<input list=…>`). Cheapest; loses the guarantee that
+   two businesses spell the same concept the same way.
+2. **Per-vertical option lists**, beside `discovery/verticals/`. Consistent with the seed pattern
+   #328 leaned on, and AC-1-correct.
+3. **The R-152 shape — a lookup table** both the constraint and the picker read. David ruled exactly
+   this for channel names: *"one list… Adding a channel becomes a row, and drift becomes
+   structurally impossible rather than a discipline."* Fullest, and the only one that also restores
+   a curation guarantee.
+
+⚠️ **`isUsablePriceUnit` already guards whatever the picker produces**, so none of the three can
+write a value the column rejects.
+
+**Blast radius.** Cosmetic for cultivar (its units ARE these). **Blocking for the first vertical
+whose owner needs to name their own unit.**
+
+**Trigger.** A commissioned second vertical.

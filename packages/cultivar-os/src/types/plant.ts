@@ -74,7 +74,14 @@ export interface ServiceOffering {
   category: 'transport' | 'addon' | 'maintenance' | 'inspection' | 'subscription';
   timing: 'at_checkout' | 'post_purchase' | 'recurring';
   price_type: 'flat' | 'per_unit';
-  price_unit: 'order' | 'plant' | 'vehicle' | 'visit';
+  /**
+   * ✏️ WIDENED to `string` 2026-09-14 (ledger #328). This described a value READ FROM THE
+   * DATABASE as a closed union of four, which stopped being true when
+   * `20260914_price_unit_shape_not_enum.sql` made the column a shape. A type that narrows a
+   * value it does not control is a claim the compiler will happily enforce and the row will
+   * happily break. Comparisons against `'plant'` (AddOns.tsx) are unaffected.
+   */
+  price_unit: string;
   price: number;
   transport_mode: 'self' | 'staff' | null;
   trigger_transport_mode: 'self' | 'staff' | null;

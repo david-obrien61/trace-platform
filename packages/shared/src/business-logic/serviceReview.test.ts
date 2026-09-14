@@ -270,8 +270,20 @@ function review(items: ServiceItemFact[], tallies: ServiceLineTally[], opts: {
   ok(!(SERVICE_CATEGORIES as readonly string[]).includes('uncategorized'),
     '…and the five are the five the migration declares, not a list typed twice');
 
-  const badUnit = buildServiceRows({ accepted: [{ ...good, priceUnit: 'tree' }], businessId: B, existing: [] });
-  ok(badUnit.ok === false, 'a price_unit outside the CHECK is refused before it reaches the database');
+  // ✏️ REWRITTEN 2026-09-14 (ledger #328). THIS ASSERTED `priceUnit: 'tree'` WAS REFUSED, and
+  // it was — by a membership test against a hardcoded four. `20260914_price_unit_shape_not_enum.sql`
+  // replaced that closed list with a SHAPE, so 'tree' is now correctly ACCEPTED: a vertical supplies
+  // its own unit as data (AC-1). The rule this assertion exists to prove is unchanged — *refuse here
+  // what Postgres refuses there* — so it now tests against the shape the column actually enforces.
+  const okUnit = buildServiceRows({ accepted: [{ ...good, priceUnit: 'tree' }], businessId: B, existing: [] });
+  ok(okUnit.ok === true,
+    "🔴 a well-shaped unit this codebase has never used IS ACCEPTED — 'tree' needs no migration (AC-1)");
+
+  for (const bad of ['per tree', 'Tree', '', '   ', '3trees']) {
+    const badUnit = buildServiceRows({ accepted: [{ ...good, priceUnit: bad }], businessId: B, existing: [] });
+    ok(badUnit.ok === false,
+      `a price_unit the column's shape constraint refuses is refused HERE first: ${JSON.stringify(bad)}`);
+  }
   ok(PRICE_UNITS.length === 4 && SERVICE_CATEGORIES.length === 5, 'the two vocabularies match the migration');
 
   ok(buildServiceRows({ accepted: [], businessId: B, existing: [] }).ok === false,
