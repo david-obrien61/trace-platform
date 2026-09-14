@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
+**Last updated: 2026-09-14** (ledger #328 — price_unit is a shape, not a closed list; migration WRITTEN not applied; sits on top of #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -77,6 +77,15 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#328 — `price_unit` is a shape, not a closed list (migration WRITTEN, not applied)**
+- 🔴 **BLOCKING — YOU APPLY THE MIGRATION AND §9's SCHEMA VERIFICATION GATE IS OWED UNTIL YOU DO.** `supabase/migrations/20260914_price_unit_shape_not_enum.sql`, in the **SQL editor, never the table editor** (§6 r17). Five verification queries sit at its foot; **paste ③ (every live value + counts) and ④ (`'household'` now inserts, wrapped in `BEGIN`/`ROLLBACK`) back** and the ledger row gets filled. ⚠️ **⑤ matters as much as ④** — four probes that must STILL FAIL, because a constraint that accepts everything is not a constraint. Owner: the migration file.
+- 🔴 **OPEN — I WENT BEYOND WHAT YOU APPROVED AND THIS IS THE CALL TO OVERRULE.** You approved the CHECK and the DEFAULT. **I also changed six code-side refusals**, because the migration alone does not deliver the reason you gave: `seed.ts` would still have silently rewritten `'household'` to `'order'`, and a `foodbank.ts` would have been a **compile error before it was ever a database one**. Each is small and listed in ledger #328; **any comes out on your word.** Owner: `docs/CLOSE-OUT-LEDGER.md` #328.
+- 🟡 **OPEN — DO YOU WANT [[R-152]]'s LOOKUP TABLE INSTEAD?** You ruled exactly this class for channel names: *"one list… Adding a channel becomes a row, and drift becomes structurally impossible rather than a discipline."* **I did not take it**, because R-152's driver was **drift between two constraints that disagreed** and `price_unit` has one constraint and no drift — so a lookup table buys **curation, not correctness**. It is tech-debt **#298**'s option 3. Owner: the migration header.
+- 🟡 **OPEN — THE PICKER STILL OFFERS “per plant” TO EVERY VERTICAL (tech-debt #298).** The refusal is gone; the affordance is not. A vertical can supply its own unit through `discovery/verticals/`, **but an owner cannot type one.** Out of scope on your *"not now"* — three fixes are costed in #298.
+- 🟡 **OPEN — DROP THE DEFAULT, OR REPOINT IT?** I dropped it outright: `price_unit` stays NOT NULL, so an omitted unit now **fails loudly** rather than silently becoming a grower's unit (D-9). **Measured first — nothing in the repo relies on the default.** One line if you would rather it degraded quietly. Owner: the migration §C.
+- 🔴 **NOT A QUESTION, A TIMER: tech-debt #297 IS FREE TO FIX ONLY WHILE `20260905_production_planning` STAYS UNAPPLIED (#253).** Grower units (`tradeGallonFactor`, `trueGallonsPerCubicYard`) are keys on an **exported shared interface**. No live row exists to migrate today. **That changes the moment you apply #253's migration.**
+- ⚠️ **NOT A QUESTION, A HEADS-UP: another session is building the BOM** (`origin/fix/bom-one-mix-ratio-and-ring-function`, which also claimed #328 71 seconds after this branch and renumbers under R-148 (4)). **Recon #327 Finding 6 §5 says a BOM should be born in `shared` with its `unit` NOT enumerating a vertical's vocabulary** — the defect #328 just fixed. Worth making sure they have read it.
 
 **#325 — the pre-commit hook (one check)**
 - 🔴 **NOT A QUESTION, A STANDING LIMIT YOU SHOULD KNOW: THE HOOK IS NOT ENFORCEMENT.** `git commit --no-verify` fires no hook at all and the broken state commits cleanly — **measured, not asserted**. No server-side check, no CI, no audit notices. A fresh clone that never runs `npm install` has no hook either. **It catches the accident; it stops nobody who means it.**
