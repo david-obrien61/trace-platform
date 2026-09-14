@@ -3266,3 +3266,34 @@ once.**
 **Trigger.** The first harness that reports a mutant it cannot explain, or the next session touching
 this family. Related: [[R-33]] · CLAUDE.md §6 r19 · #182 (*a harness that cannot reach its target
 reports the same as one that passed*) · #186 (the runner that reported 72 of 74 and said all pass).
+
+---
+
+## #294 — 🟡 THE CLOSE-OUT LEDGER'S TABLE ROWS DO NOT MATCH ITS OWN HEADER — 29 OF 70, AND FOUR OF THEM LOSE CONTENT ON RENDER (NEW 2026-09-14, ledger #320)
+
+**Where.** `docs/CLOSE-OUT-LEDGER.md` — the close-out table. Header: `| # | Work item | Deliverable (one line) | Commit / SHA | Bar | Owner-proof owed (exact live test) | Blocker |` — **seven columns.**
+
+**What it is. Two distinct shapes, and only the first is harmless.**
+
+**① 25 of 70 close-out rows carry SIX cells** — `Work item` and `Deliverable` merged into one. `#318` is the instance David named; it is one of twenty-five: **#246 · #248 · #252 · #253 · #270 · #272 · #273 · #274 · #275 · #276 · #277 · #278 · #280 · #281 · #282 · #290 · #291 · #292 · #294 · #295 · #296 · #297 · #298 · #300 · #318.** GFM pads a short row with empty cells, so these **render, and lose nothing.** Cosmetic.
+
+**② 🔴 4 of 70 carry EIGHT, AND GFM SILENTLY DISCARDS THE EXCESS — `#279 · #299 · #311 · #317`.** The GFM spec is explicit: a row with *more* cells than the header has the excess **ignored**. So content that is in the file is **not on the screen**, and what is being dropped is the **Blocker** column — the most consequential cell in the row:
+
+- **`#317`** drops *"🔴 **FIVE OPEN QUESTIONS ARE WRITTEN INTO THE DOC RATHER THAN ASKED** (unattended run): ① is #253 closed…"*
+- **`#299`** drops *"David: retire or wire `install_date` (waits on R-143) · zone shape (O2′ or O3, by the walk data) · infer `planting` on QuickBooks stops (#268)"*
+- **`#279`** drops *"⚠️ **Needs a live QuickBooks connection to demonstrate — the review cannot replay a saved capture** (tech-debt #209). ⚠️ **Story gate OPEN**…"*
+- **`#311`** drops *"✅ **#291 IS NOW FIXED IN THIS SAME LEDGER — David, same session…"*
+
+**Cause, identified.** An **unescaped `|` inside inline code**. Markdown does *not* protect pipes inside backticks in a table — they must be written `\|`. The three isolated instances are all ordinary prose: `` `find api -name '*.ts' | wc -l` `` (#317), `` `| 108 |` `` quoting a table row (#299), and `` `|amount| ÷ base` `` as absolute-value notation (#279). ✏️ **Two rows carry BOTH shapes at once** — six columns *and* stray pipes — which is why #299's two stray pipes land it at eight rather than nine.
+
+**Why it matters, and why it is this ledger specifically.** #320 has just made the ledger row the **permanent home for every close-out's proof narrative**, moved out of CLAUDE.md §3 precisely because the row is the copy nothing has to cut. **A row that silently drops its last cell is a poor home for that**, and the four affected rows are dropping exactly the class of content §3b's register exists to surface: **open questions waiting on David.** This is the repo's own recurring shape — *a true record, correctly written, in a place that does not surface it* — the same family as ledger #193's `MAPS-TO: —` and tech-debt **#283**/**#284**.
+
+⚠️ **NOT A SILENT FALSE GREEN IN A CAP** — nothing mechanical reads these columns today; `verify-id-citations` parses the row's **id**, not its cells. The loss is to a **human reader**, on the rendered page.
+
+**Correction recorded.** The #320 close-out reported *"row #318 is malformed — 6 columns where the header declares 7"* and implied it was **the** instance. It is **one of 25**, and it is **the harmless shape**. The damaging shape — four rows dropping a cell — was found only when the whole table was measured on **unescaped** pipes; a first pass that counted raw `|` reported 34 rows and was wrong, because `\|` is legitimately escaped in `#304` and `#313`.
+
+**Not repaired in this pass, on David's instruction** — *"file it, do not repair it."* Repairing means editing 29 historical rows, which is exactly the diff-unreviewable drift the pre-flight gate exists to catch.
+
+**The fix, when it is taken.** ① Escape the four stray pipes as `\|` (four one-character edits, and they are the half that actually loses content). ② Decide whether the 25 six-cell rows are normalised or the header is relaxed — **a decision, not a cleanup**, because merging Work item and Deliverable may be what those sessions meant. ③ **A cap is cheap and belongs with the id checks:** assert every close-out row's unescaped-pipe count against the header's, both directions. Without it this recurs the next time somebody writes a shell pipeline into a row.
+
+**Trigger.** The next session to touch a listed row, or the first time a reader asks why a ledger row's Blocker column is empty. Related: **#320** (which made the row load-bearing) · **#283**/**#284** (a true record that generates no obligation) · CLAUDE.md §6 r19.
