@@ -1,6 +1,6 @@
 # OWNER TEST — REPORT FIDELITY: FIVE SURFACES THAT ASSERTED WHAT THEY DID NOT MEASURE
 
-> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> 🔴 **GATE 0 · BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a failed
 > or unmerged build looks *completely normal* — the app just serves the old bundle. Match it to
 > `git log --oneline origin/main -1` — **not to a SHA written in this file**, because Vercel deploys
@@ -12,6 +12,12 @@
 > `git log --oneline origin/main -1`, NEVER to a SHA written here** — every push to `main`, docs
 > included, rebuilds the tree and moves the stamp, so a SHA typed into a file goes stale the next
 > time anyone commits.
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 **Capability:** checkout · customers roster · catalogue import · person-name display
 **Ledger:** #282 · **Rulings:** [[R-110]], [[R-111]]

@@ -1,12 +1,18 @@
 # ONE CHANNEL VOCABULARY — FULL-SURFACE OWNER TEST
 
-> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.** If it is
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha> · <where>`.** If it is
 > not the SHA you mean to test, **stop.** Match it to `git log --oneline origin/main -1`, never to a SHA
 > written in this file. *(GATE 0 · OP-15.)*
 >
 > ⚠️ **AND: THE MIGRATION IS NOT APPLIED.** Cards 1–3 run BEFORE it. Card 4 applies it. Everything
 > after card 4 requires it. Tech-debt **#280** — "pushed" is not "shipped" — so also confirm the SHA
 > you are looking at is a **production** deploy, not a branch preview.
+> 🔴 **AND THE LAST TOKEN MUST READ `prod`.** Anything else is **not production**, and the SHA being
+> right does not rescue it: an amber **`PREVIEW <branch>`** chip, an amber **`prod⚠ <branch>`**
+> (production, but built from a branch), **`env?`** (target unknown), or **`local`**. **A preview
+> serves the RIGHT CODE at the WRONG TARGET — the stamp's SHA matches and the screen is still not
+> evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
+> preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
 > **Rendered board:** `owner-tests.html` (a PURE renderer — parses this file live, holds no data).
 >

@@ -17,6 +17,18 @@ export default defineConfig({
     // the SHA answers "which code", this answers "from when". Together they are
     // the always-visible version stamp that GATE 0 reads.
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    // 🔴 THE PRODUCTION STAMP — GATE 0's second half, tech-debt #280 ②.
+    // The SHA answers "which code" and the timestamp "from when"; NEITHER answers
+    // "is this deployment's target PRODUCTION". #280 records ② as not checkable
+    // because "nothing we own reads Vercel" — but nothing has to: Vercel sets
+    // these at BUILD time, so the answer is baked into the bundle and read off
+    // the screen, which is where David is standing when GATE 0 fires.
+    // A Preview and a Production deploy of the SAME COMMIT were indistinguishable
+    // until this line; #303 was recorded complete on preview-only deploys.
+    // Absent off Vercel — deployStamp() resolves that against the SHA, and an
+    // unrecognised value is NEVER coerced to production.
+    __DEPLOY_ENV__: JSON.stringify(process.env.VERCEL_ENV || ''),
+    __DEPLOY_REF__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_REF || ''),
   },
   resolve: {
     alias: {
