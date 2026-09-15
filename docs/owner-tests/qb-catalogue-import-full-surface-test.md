@@ -37,7 +37,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 7 of 38 covered** (28 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
+**Board: 5 of 39 covered** (31 `owed` · 3 `needs-test`) — ✏️ **2026-09-15 (ledger #337): CARD 5 and CARD 10 flipped `covered` → `owed` (OP-14 cl.3 — the undo gained GATE 2), and CARD 12b added.** 🔴 **CARD 10 is not merely owed, it is no longer passable on LAWNS** — order `6a60a0ca` gave an imported lot ledger history, so the wipe is now correctly REFUSED there. WAS: **7 of 38 covered** (28 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
 ⚠️ **THE TOTAL WAS WRONG IN THIS HEADER AND IN THE SESSION REPORTS — corrected 2026-09-09.** It has been stated as **24**, as **34**, and the file holds **35**: CARD 14 was split into 14a/14b and the header was never re-added up. The counted figure is now derived on every `npm run verify` by `verify:owner-boards`, which prints a board whose header disagrees with its own cards. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
@@ -303,8 +303,17 @@ with a height remark and were refused outright when their size was plainly state
 ---
 
 ## CARD 5 — 🔴 PROVE THE UNDO ON TEST DAVE'S BEFORE LAWNS
-**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-07 (David, live, Test Dave's)
-> ✅ **COVERED — ALL EIGHT STEPS, run id `b020759d`.** Fingerprint identical before and after,
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — *(was `covered` 2026-09-07; flipped 2026-09-15)*
+
+> 🔴 **FLIPPED `covered` → `owed` ON 2026-09-15 (ledger #337) — OP-14 CLAUSE 3, AND IT COST A REAL
+> PROOF.** The undo gained **GATE 2**: it now reads whether any of the run's lots carry
+> `business_inventory_ledger` history **before it deletes anything**, and refuses the whole run if
+> any do. The 2026-09-07 run below is still true about the code it ran against; **it is not true
+> about the code that ships now**, and a green check on a moved surface asserts a proof nobody
+> performed. **Re-running it is cheap** — Test Dave's imported lots have no ledger history, so the
+> eight steps should behave exactly as before and the only new thing to look for is that they do.
+>
+> ✅ **THE ORIGINAL RUN, PRESERVED:** **ALL EIGHT STEPS, run id `b020759d`.** Fingerprint identical before and after,
 > zero residue. **The undo is proven**, which is what CARD 6 was waiting on.
 > ✏️ *It failed first on STEP 3 under run id `435f52b5` — `source` is not a column on
 > `business_inventory` — and **the guard held**: create-before-retire meant a stopped run rather
@@ -617,9 +626,26 @@ for you. **If you would rather see one, that is a decision — say which, and it
 ---
 
 ## CARD 10 — 🔴 THE WIPE. This is the promise, and it must be exact.
-**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-08 (David, live, LAWNS)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — *(was `covered` 2026-09-08; flipped 2026-09-15)*
 
-✅ **COVERED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** the wipe ran and **step 8 — the fingerprint — was the step that closed it.** Baseline re-verified at the close: **447 · 2 · 0 · `c3be3f88c52cf3a601d950408a1b1ec1`**, ledger **456**. The rows came back *unchanged*, not merely back — which counting alone cannot see. 
+> 🔴 **FLIPPED `covered` → `owed` ON 2026-09-15 (ledger #337) — AND THIS ONE IS NOT A RE-RUN. READ
+> IT BEFORE YOU TRY.** The undo gained **GATE 2** (stock history refuses the whole run), which is
+> reason enough under OP-14 clause 3. **But the sharper fact is about LAWNS, not about the code:**
+>
+> 🔴 **THIS CARD CAN NO LONGER PASS ON LAWNS, AND THAT IS THE GATE WORKING RATHER THAN A
+> REGRESSION.** Order **`6a60a0ca`** (2026-09-09, `order_kind = test`, $1,875) moved stock against
+> an imported lot. That lot now has a `business_inventory_ledger` row, the ledger is append-only,
+> and `ON DELETE SET NULL` is an UPDATE the trigger refuses — **so the lot is undeletable and the
+> wipe is refused.** Pressing Undo on LAWNS now returns **409** with a sentence naming the held
+> products. **Expect the refusal. It is CARD 12b, not this card.**
+>
+> ⚠️ **THE PROMISE THIS CARD IS NAMED FOR — *"import, look, wipe and reload as many times as it
+> takes"* — IS THEREFORE OVER ON LAWNS.** It ended the moment a real order touched an imported lot.
+> **That is a product decision, not a bug**, and it is tech-debt **#304** on
+> `origin/feat/opening-stock-seed` awaiting David's ruling among three options.
+> **This card is re-provable on a tenant whose imported lots have never been sold from.**
+>
+> ✅ **THE ORIGINAL RUN, PRESERVED — David, live, 2026-09-08, LAWNS (`ed2e5933`).** the wipe ran and **step 8 — the fingerprint — was the step that closed it.** Baseline re-verified at the close: **447 · 2 · 0 · `c3be3f88c52cf3a601d950408a1b1ec1`**, ledger **456**. The rows came back *unchanged*, not merely back — which counting alone cannot see. 
 
 ⚠️ **RECORDED LIMIT — THE UNDO WAS RUN FROM THE BROWSER CONSOLE, NOT FROM A BUTTON.** This card's steps are written as a console `fetch` and that is what was performed. **CARD 30 (the wipe *through the button*) and CARD 29 (the Undo surviving a refresh) are NOT proven by this run** and stay `owed`. A card that claims the surface is not satisfied by a card that exercised the endpoint.
 
@@ -709,6 +735,57 @@ their books rather than a second mechanism that could disagree with it.
 ⚠️ **PUT TEST MODE BACK ON AFTERWARDS** (`qbo_writes_enabled = false`) and confirm
 `/api/qbo/status` reports **`writes_permitted: false`** before doing anything else.
 **FAIL:** the undo proceeds. That is the one outcome that can destroy something real.
+
+---
+
+## CARD 12b — 🔴 STOCK HISTORY REFUSES THE WHOLE UNDO, AND NOTHING IS DELETED FIRST
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**COVERS:** ledger #337 · tech-debt **#304** · GATE 2
+
+> 🔴 **THE DEFECT THIS CARD GUARDS WAS LIVE ON LAWNS AND IT DID NOT NEED THE SEED.** One test
+> order — **`6a60a0ca`**, 2026-09-09 — against one imported lot was enough. Before GATE 2, pressing
+> Undo **deleted the customers this run created, then threw** on the inventory delete, because a lot
+> with ledger history is undeletable (`ON DELETE SET NULL` is an UPDATE; the ledger's append-only
+> trigger refuses it). **A half-wiped tenant, reported with `customersDeleted: 0`** — the catch
+> returns zeroed counts, so the error was honest and every number beside it was wrong.
+
+🔴 **RUN THIS ON LAWNS. It is the one tenant where the condition already exists, and it is
+READ-ONLY in effect — the whole point is that it refuses.** You do not need to set anything up.
+
+1. Open **Settings → Accounting → Import products & services**, get the run recovered (CARD 29), and
+   press **Undo this import**.
+2. **HTTP 409**, not 500 and not 200. `refused` is `true`.
+3. The panel shows **Undo is closed.** and a sentence that:
+   - leads with **how many** products have stock history — the **total**, not a sample;
+   - **names** some of them, and if it names five it says **"and N more"**;
+   - states **NOTHING WAS DELETED AND NOTHING WAS CHANGED**, and says so about the **customers**
+     too, not only the products;
+   - says the history is protected **by design**, not that something failed.
+4. 🔴 **THE STEP THAT MATTERS. In SQL, confirm nothing moved:**
+
+```sql
+-- both must be UNCHANGED from before you pressed it
+SELECT count(*) FILTER (WHERE import_run_id IS NOT NULL) AS inv_from_imports,
+       (SELECT count(*) FROM public.customers
+         WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id IS NOT NULL) AS cust_from_imports
+  FROM public.business_inventory
+ WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
+```
+
+**PASS:** 409, the sentence is specific and names the products, and **both counts are exactly what
+they were before you pressed the button.**
+🔴 **FAIL — AND THIS IS THE SERIOUS ONE: the customer count DROPPED.** That is the half-wipe, and it
+means GATE 2 did not run before the delete. Stop and surface it.
+**FAIL also:** a 500 · a generic "the undo failed" with no product names · a sentence that says the
+undo *partly* worked · any count that moved.
+
+**SIGNAL:** `[TRACE:QBITEMS] undo REFUSED — stock history { ledgerHeld: N, named: M, readFailed: false }`.
+**Secondary** — every check above is readable on the screen and in SQL without a console.
+
+⚠️ **THIS CARD CANNOT PROVE the "we could not check" branch.** If the pre-flight read itself fails,
+the undo also refuses and says so in different words (`ledgerHeld: -1`). Reproducing that means
+breaking a read on purpose; it is covered by probe **§K5** and is **recorded as not live-proven**
+rather than quietly assumed.
 
 ---
 

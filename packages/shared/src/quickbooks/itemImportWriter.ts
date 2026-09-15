@@ -41,6 +41,13 @@
 //   this paragraph — a comment claiming a boundary is a comment, and R-26 has instances of one
 //   being false the day it was written.
 //
+//   ✏️ **AND THE READ SIDE IS NOT THE SAME LIST, SO IT IS STATED SEPARATELY RATHER THAN LEFT TO BE
+//   INFERRED FROM A PARAGRAPH ABOUT WRITES.** Since 2026-09-15 the undo's GATE 2 READS
+//   `business_inventory_ledger` — through an `!inner` embed on `business_inventory`, so the table
+//   name appears in a select string rather than in a `from()`. **It still reads it.** The sentence
+//   above remains exactly true (nothing is WRITTEN there, and R-93's whole point survives), but a
+//   reader scanning for `business_inventory_ledger` would otherwise find only a denial.
+//
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 CREATE FIRST, RETIRE SECOND — AND THE RETIRE EXCLUDES THE RUN'S OWN ROWS.
 // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -213,6 +220,10 @@ export interface UndoReport {
    *  than inferred from "no error". Empty on a clean undo. */
   leftovers: string[];
   refused: boolean;
+  /** 🔴 HOW MANY OF THIS RUN'S ROWS NOW CARRY STOCK HISTORY — the pre-flight's answer, and the
+   *  reason a refusal is a refusal rather than a failure. `0` on every undo that proceeds.
+   *  `-1` means the pre-flight could not be READ, which also refuses: see `ledgerHeldRows`. */
+  ledgerHeld: number;
   error: string | null;
 }
 
@@ -320,6 +331,98 @@ async function undoIsOpen(
   }
   const writesEnabled = (data as { qbo_writes_enabled?: boolean }).qbo_writes_enabled ?? null;
   return { open: !pushPermitted({ writesEnabled, platformHeld }), writesEnabled, readFailed: false };
+}
+
+/** How many held lots the refusal NAMES. The rest are counted, never elided silently — the
+ *  sentence says "and N more" so the number on screen is always the whole number. */
+const LEDGER_NAMES_SHOWN = 5;
+
+/**
+ * 🔴 THE PRE-FLIGHT FOR THE UNDO: WHICH OF THIS RUN'S LOTS NOW HAVE STOCK HISTORY.
+ *
+ * `business_inventory_ledger.inventory_id` is declared `ON DELETE SET NULL`, and **SET NULL IS AN
+ * UPDATE**. `20260720_inventory_movement_ledger.sql` §2 installs
+ * `BEFORE UPDATE OR DELETE … FOR EACH ROW … RAISE EXCEPTION` **with no exemption**, and a
+ * referential cascade fires row triggers like any other write. So the FK clause is INERT and the
+ * migration's own header says so, having watched it fail live:
+ *
+ *   > *"DELETE on business_inventory → SET NULL here → REFUSED (observed live: "business_
+ *   > inventory_ledger is append-only: UPDATE is not permitted"). A lot with history is
+ *   > UNDELETABLE."*
+ *
+ * ⚠️ AND `itemImportWriter.ts` CARRIED THE OPPOSITE CLAIM IN A COMMENT FOR 48 DAYS — that all four
+ * FKs were `ON DELETE SET NULL` *"so those rows survive with a null anchor and nothing cascades."*
+ * True of three of the four, false of the fourth, and false in the file a builder reads before
+ * deciding the undo is safe. That comment is now gone and this function is what replaced it.
+ *
+ * 🔴 THE SHAPE IS `business_inventory` → `!inner` CHILD, NOT A CHUNKED `.in(...)` OF LOT IDS, AND
+ * THE REASON IS THE COUNT RATHER THAN THE SYNTAX. Filtering the LEDGER by an embedded parent
+ * returns one row per ledger ENTRY, so a count of it answers *how many movements* — a lot sold
+ * three times would be counted three times and the sentence would overstate the damage. Reading
+ * the PARENT with an inner child returns each lot **once**, so `count` is the number of LOTS, which
+ * is the number the refusal is about. It also needs no id list, so there is no URL-length ceiling
+ * and no chunk loop (`customerImportWriter.ts:390` pays that cost because it must read two
+ * unrelated tables by id; here one join answers it).
+ *
+ * 🔴 A FAILED READ RETURNS `-1` AND THE CALLER REFUSES ON IT. Deleting rows we could not check is
+ * the unrecoverable direction, and this mirrors `undoIsOpen`'s own "we could not check" branch
+ * exactly rather than inventing a second policy for the same situation.
+ */
+async function ledgerHeldRows(
+  db: DbLike, businessId: string, runId: string,
+): Promise<{ held: number; names: string[] }> {
+  // 🔴 RETIRED-FILTER-EXEMPT: THE EXEMPTION IS LOAD-BEARING, NOT A CONVENIENCE. This counts what
+  // the RUN MADE, not what a person can see. A row this run created and then RETIRED still has
+  // ledger history and is still undeletable — and the undo deletes by `import_run_id` without
+  // regard to `retired_at`, so a gate that looked only at live rows would wave through exactly the
+  // rows that are going to refuse. Adding `.is('retired_at', null)` would make this gate weaker
+  // than the statement it guards, which is the shape of a check that cannot disagree (§6 r19).
+  const { data, error, count } = await db.from('business_inventory')
+    .select('id, name, size, business_inventory_ledger!inner(id)', { count: 'exact' })
+    .eq('business_id', businessId)
+    .eq('import_run_id', runId)
+    .limit(LEDGER_NAMES_SHOWN);
+  if (error) {
+    console.log('[TRACE:QBITEMS] undo pre-flight — could not read stock history', {
+      businessId, runId, message: (error as { message?: string }).message,
+    });
+    return { held: -1, names: [] };
+  }
+  const rows = (data ?? []) as { id: string; name: string | null; size: string | null }[];
+  const names = rows.map(r => {
+    const n = (r.name ?? '').trim() || '(unnamed product)';
+    const sz = (r.size ?? '').trim();
+    return sz ? `${n} (${sz})` : n;
+  });
+  // 🔴 `count` IS THE AUTHORITY, NOT `rows.length`. The limit above is there to keep the NAMES
+  // short; taking the total from the page would report "5" for a seeded catalogue of 647 and the
+  // owner would act on a number an order of magnitude too small.
+  return { held: count ?? rows.length, names };
+}
+
+/** The sentence a refusal is made of. Separate from the query so a probe can read it without a
+ *  database, and so the wording is one string rather than three concatenations at the call site. */
+export function ledgerRefusalSentence(held: number, names: string[]): string {
+  if (held < 0) {
+    return 'We could not check whether any of this run\'s products have stock history, so the undo '
+      + 'refused rather than guessing. Nothing was deleted and nothing was changed. This is a failed '
+      + 'read, NOT a statement that something is wrong with your catalogue — try again, and if it '
+      + 'keeps happening say so.';
+  }
+  const shown = names.slice(0, LEDGER_NAMES_SHOWN);
+  const more = held - shown.length;
+  const list = shown.length === 0
+    ? ''
+    : ` — ${shown.join(', ')}${more > 0 ? `, and ${more} more` : ''}`;
+  return `${held} product${held === 1 ? '' : 's'} from this import ${held === 1 ? 'has' : 'have'} `
+    + `stock history${list}. A product that has been counted, sold or received cannot be removed: `
+    + 'the stock ledger is permanent by design, so the database refuses to unlink it. '
+    + '🔴 NOTHING WAS DELETED AND NOTHING WAS CHANGED — not the products, and not the customers '
+    + 'this run created. The whole undo stopped here, deliberately, because removing part of an '
+    + 'import is worse than removing none of it. '
+    + 'That history is the record of real movements, which is why it is protected rather than a '
+    + 'fault — but it does mean this import can no longer be wiped and reloaded. Clearing it is a '
+    + 'separate decision, and it needs the movements dealt with first.';
 }
 
 async function countReceipts(db: DbLike, businessId: string): Promise<number> {
@@ -461,7 +564,7 @@ export async function undoItemImport(
   const empty: UndoReport = {
     ok: false, runId, inventoryDeleted: 0, customersDeleted: 0, unretired: 0,
     receiptsBefore: 0, receiptsAfter: 0, deliveriesBefore: 0, deliveriesAfter: 0,
-    leftovers: [], refused: false, error: null,
+    leftovers: [], refused: false, ledgerHeld: 0, error: null,
   };
 
   const gate = await undoIsOpen(db, businessId, pushHoldRaw);
@@ -476,19 +579,52 @@ export async function undoItemImport(
       : 'QuickBooks writes are switched on for this business, so an imported product may already be on an invoice you have sent. Undo is closed. Nothing was changed.' };
   }
 
+  // ── GATE 2 — STOCK HISTORY. READ BEFORE ANY WRITE, AND REFUSE THE WHOLE RUN. ────────────────
+  // 🔴 THIS RUNS BEFORE THE CUSTOMER DELETE, AND THAT ORDERING IS THE ENTIRE FIX.
+  // The customer delete is issued FIRST below and is its own transaction; the inventory delete
+  // that follows is the one a lot with ledger history refuses. So before this gate existed the
+  // undo DELETED THE CUSTOMERS, THEN THREW — a half-wiped tenant, reported with
+  // `customersDeleted: 0` because the catch returns `{ ...empty }` and `empty` zeroes the counts
+  // that had already landed. The error was honest and the numbers beside it were not.
+  //
+  // ⚠️ AND IT IS ALL-OR-NOTHING, WHICH IS A DELIBERATE DIVERGENCE FROM ITS SIBLING (§6 r8/r10).
+  // `undoCustomerImport` does a PARTIAL undo — it removes what it can and names what it could not,
+  // and that is right there, because each customer is independent and a blocked one is a fact
+  // about that customer. Here the run is ONE thing: a catalogue with its customers. David's
+  // ruling: *"the undo checks for ledger history BEFORE deleting anything and refuses the whole
+  // thing with a sentence."* Removing part of an import is worse than removing none of it.
+  //
+  // 🔴 A REFUSAL ISSUES NO WRITES. §F already asserts that for GATE 1; §I asserts it for this one.
+  const ledger = await ledgerHeldRows(db, businessId, runId);
+  if (ledger.held !== 0) {
+    console.log('[TRACE:QBITEMS] undo REFUSED — stock history', {
+      businessId, runId, ledgerHeld: ledger.held, named: ledger.names.length,
+      readFailed: ledger.held < 0,
+    });
+    return { ...empty, refused: true, ledgerHeld: ledger.held,
+      error: ledgerRefusalSentence(ledger.held, ledger.names) };
+  }
+
   try {
     // Asserted BEFORE — see the header. These two tables carry no run id and cannot be reached by
     // any statement below; the counts prove it rather than the sentence claiming it.
     const receiptsBefore   = await countReceipts(db, businessId);
     const deliveriesBefore = await countDeliveries(db, businessId);
 
-    // FK ORDER. Every FK pointing at `business_inventory` in the migration corpus is
-    // `ON DELETE SET NULL` (cultivar_plants.inventory_id, order_items.business_inventory_id,
-    // inventory_counts.inventory_id, business_inventory_ledger.inventory_id) — so those rows
-    // survive with a null anchor and nothing cascades. The ONE exception is
-    // `20260905_production_planning.sql`'s `ON DELETE RESTRICT`, which is NOT APPLIED today; when
-    // it is, a plan line holding an imported lot will REFUSE the delete, and that refusal is the
-    // correct answer, surfaced rather than swallowed.
+    // ✏️ FK ORDER — AND THE PARAGRAPH THAT STOOD HERE FOR 48 DAYS WAS WRONG ABOUT THE ONE FK
+    // THAT MATTERS. It read: *"Every FK pointing at `business_inventory` … is `ON DELETE SET NULL`
+    // (cultivar_plants.inventory_id, order_items.business_inventory_id, inventory_counts.inventory_id,
+    // business_inventory_ledger.inventory_id) — so those rows survive with a null anchor and
+    // nothing cascades."* **True of the first three. False of the fourth**, and
+    // `20260720_inventory_movement_ledger.sql:136-151` had recorded the correction — with a live
+    // observation — before this was written. SET NULL is an UPDATE, and the ledger's append-only
+    // trigger refuses it. See `ledgerHeldRows`, which is GATE 2 above and exists because of this.
+    // 🔴 The three that ARE `SET NULL` still are, so those rows do survive with a null anchor.
+    // ⚠️ `20260905_production_planning.sql`'s `ON DELETE RESTRICT` is a separate refusal and is
+    // NOT caught by GATE 2 — a plan line holding an imported lot refuses at the DELETE, which is
+    // the correct answer surfaced rather than swallowed, but it lands in the catch below and so it
+    // lands AFTER the customer delete. The migration is applied as of 2026-09-15; that hole is
+    // named in the close-out rather than quietly widened into this gate.
     // Customers are deleted FIRST because a future customer import will hang orders off them; the
     // order is fixed now so it does not have to be discovered later.
     const cust = await db.from('customers').delete().eq('business_id', businessId).eq('import_run_id', runId).select('id');
@@ -553,6 +689,9 @@ export async function undoItemImport(
       ok: untouched && leftovers.length === 0,
       runId, inventoryDeleted, customersDeleted, unretired,
       receiptsBefore, receiptsAfter, deliveriesBefore, deliveriesAfter, refused: false,
+      // 🔴 ZERO, AND IT IS AN ASSERTION RATHER THAN A DEFAULT: reaching this line means GATE 2 read
+      // the ledger and found nothing holding this run. `0` here is a measurement.
+      ledgerHeld: 0,
       leftovers,
       // 🔴 BOTH FAILURES ARE NAMED, AND A CHANGED COUNT IS AN ERROR EVEN THOUGH NOTHING HERE COULD
       // HAVE CAUSED ONE. If the impossible happened, the owner is told, not reassured.

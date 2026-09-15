@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-14** (ledger #329 — two BOM rulings; the mix half of the install-cost pair is CLOSED and the mulch half is not, so the net effect has moved further from zero. Prior: #325 — the pre-commit hook, one check, on `pre-commit` AND `pre-merge-commit`; sits on top of #323, #324 and #322. All blocks below, newest first.)
+**Last updated: 2026-09-15** (ledger #337 — the catalogue-import undo now refuses BEFORE it deletes anything; the defect was live on LAWNS without the seed, and one test order against one imported lot did it. **Your ruling is owed on what the undo should MEAN** — three options, none taken.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,15 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#337 — the undo refuses before it deletes anything (GATE 2)**
+- 🔴 **OPEN — WHAT SHOULD THE CATALOGUE-IMPORT UNDO *MEAN* NOW? The build made the refusal honest and deliberately did not pick.** **(a)** the seed ends the rehearsal — no code, a sentence, and the panel already says it · **(b)** the undo TOMBSTONES instead of deleting (`soft_delete_inventory`, R-133's shape — changes the contract from *gone* to *retired* and re-points every fingerprint check) · **(c)** exempt the referential cascade from the append-only trigger — a MIGRATION, and it is **tech-debt #79's** question, which also blocks the OP-12 reference-environment teardown. → the `#304` row on `origin/feat/opening-stock-seed`
+- 🔴 **NOT A QUESTION, A FACT YOU NEED: *"import, look, wipe and reload as many times as it takes"* IS OVER ON LAWNS.** It ended when order `6a60a0ca` (2026-09-09) moved stock against an imported lot. Board **CARD 10** can no longer pass there — the wipe is correctly REFUSED — and it is re-provable only on a tenant whose imported lots have never been sold from.
+- 🟡 **OWED — RUN BOARD `CARD 12b` ON LAWNS.** Read-only in effect: the whole point is that it refuses. **The step that matters is the SQL re-count showing the CUSTOMER count did not move** — a dropped customer count is the half-wipe and means GATE 2 did not run.
+- 🟡 **OWED — `CARD 17` ON `owner-role-authority`: Lauren rings up an order on her own login.** Written 2026-09-15 and left `owed` **on your ruling**: order `6a60a0ca` proves access and server-side enforcement (`tax_exempt_by` = her uid), **not a screen.** Only your live run flips it.
+- ⚠️ **DISCLOSED — A SECOND REFUSAL GATE 2 DOES NOT CATCH:** `20260905_production_planning`'s `ON DELETE RESTRICT`. A plan line holding an imported lot refuses at the DELETE, which lands **after** the customer delete. That migration is applied. Widening the gate needs its own probe and its own card; not done.
+- ⚠️ **DISCLOSED — A DELIBERATE DIVERGENCE (§6 r10):** `undoCustomerImport` does a PARTIAL undo, this one is all-or-nothing. Say so if you would rather both were partial.
+- ⚠️ **DISCLOSED — tech-debt #293's `NO-BUILD` verdict is in ONE mutant harness, not the shared helper it asks for** (§6 r8, eighteen harnesses). Recorded, not presented as the fix.
 
 **#330 — the grow-ladder literature recon (research, report only)**
 - 🔴 **NOT A QUESTION, A CORRECTION YOU SHOULD CARRY: `ANSI Z60.1` IS SUPERSEDED.** The current standard is **`ANSI Z60.2-2025`**, approved 17 April 2025 — a **new base number**, not a new edition. Anything in the corpus citing "Z60.1" is citing a retired designation. Owner: `docs/research/2026-09-15-industry-grow-ladder-literature.md` §①.

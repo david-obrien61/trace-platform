@@ -18,7 +18,7 @@
 **Ledger:** #228 · **#274** (RESET INVITE — the expiry a screen never showed) · **Branch:** `main`
 **Last updated:** 2026-09-04
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 16 covered · owed 16 · needs-test 0.**
+**Board: 0 of 17 covered · owed 17 · needs-test 0.** ✏️ **CARD 17 added 2026-09-15 (ledger #337) — selling, on her own login. It is `owed` DESPITE a real order in the database, and the card says why: a row proves access and server enforcement, never a screen.**
 
 Ruling under test: **R-22** — *the OWNER role carries full authority; `owner_id` is the account holder of last resort.*
 Story: *Hand over the keys — the owner role outlives the person who opened the account.*
@@ -313,6 +313,63 @@ Sign in as the **MANAGER (`df7723be`)**, then as a **STAFF** member.
 2. Now open somebody who **has** joined (badged **Active**). **EXPECT:** the button is live and green.
 **FAIL LOOKS LIKE:** 🔴 **the button is pressable on the Invited person and prints "PIN revoked. Share this reset link:".** That was the behaviour until this build: it nulled a `pin_hash` that was already null and handed over a link to a sign-in form the person has no credentials for. Also a fail: the button greyed with **no explanation** — that is the mystery-lock §6 r13 forbids, and it is a different defect from the one being fixed.
 **THIS CARD CANNOT PROVE:** the **other** half of the `armPinReset` fix. A zero-row RLS refusal now throws instead of reporting success, but reproducing it needs an OWNER-role member who is not `businesses.owner_id` pressing Reset PIN on a joined member — **and at LAWNS that is Lauren, so it is reachable**: if she presses it and sees *"the PIN was not revoked — you may not have permission"* instead of a reset link, that is the fix working. **Recorded here rather than given its own card because it is a refusal path nobody has confirmed is still refused** — Stage 2 may already have widened it.
+
+
+---
+
+## SURFACE: selling — the till, on her own login
+
+### CARD 17 — 🔴 SHE CAN SELL. An OWNER-role member who is not the account holder rings up an order end to end.
+**STATUS:** owed · **LAST-PROVEN:** — · **DEVICE:** desktop or phone · **COVERS:** #228 · [[R-22]]
+**TENANT:** LAWNS `ed2e5933` · **ACTOR:** 🔴 **LAUREN, ON HER OWN LOGIN. Nobody else.**
+**MUST BE TRUE FIRST:** GATE 0.
+
+> 🔴 **WHY THIS CARD EXISTS, AND WHY IT IS `owed` RATHER THAN `covered` ON THE DAY IT WAS WRITTEN.**
+> **The evidence is real and it is on the record.** Order **`6a60a0ca-dedf-4c1d-a58c-804bf1e64c79`**
+> exists on LAWNS, dated **2026-09-09**: `status = fulfilled`, `order_kind = test`, **$1,875**,
+> self-transport, and **`tax_exempt_by = 790b31d2`** — **Lauren's uid**, a resale exemption *she*
+> applied. That row cannot have been written by an owner-only path. It is the strongest single
+> piece of evidence for **[[R-22]]** in the database: a member whose `user_id` is **not**
+> `businesses.owner_id` exercised `orders:create` **and** `tax_exempt:apply`, and the **SERVER**
+> recorded who did it.
+>
+> 🔴 **AND IT STILL DOES NOT FLIP THIS CARD, WHICH IS THE POINT OF WRITING IT DOWN.** A database row
+> proves **access** and **server-side enforcement**. It proves **nothing about a screen** — not that
+> the exemption control rendered, not what it said, not that the total re-computed in front of her,
+> not that the confirmation was honest. **Nobody watched it happen.** Marking this `covered` on a
+> row would assert a proof nobody performed, which is OP-14 clause 3 and the exact failure this
+> board exists to make visible. **David's live run flips it. Nothing else does.**
+>
+> ⚠️ **Until it is run, cite the ROW for the access claim and this CARD for the screen.** They are
+> different claims and only one of them has evidence.
+
+Sign in as **Lauren** — her own login, not the owner's — and ring up a complete order on LAWNS.
+
+1. **Checkout completes.** She reaches the confirmation without a refusal at any step.
+2. **The tax-exemption control is THERE and is not a 🔒 line.** She holds `tax_exempt:apply`, so she
+   gets the control itself, not the named refusal that `authority-model` CARD 10 asserts for
+   somebody without it. **This card is CARD 10's positive twin — the same screen, the other side.**
+3. She applies a **resale** exemption with its reason. **The tax line goes to zero and the total
+   re-computes on screen**, before she commits anything.
+4. The order saves, and the confirmation names **her** as the person who took it, not the owner.
+5. 🔴 **Afterwards, in SQL:** `SELECT tax_exempt_by, order_kind, status FROM orders WHERE id = '<the new order>';`
+   **`tax_exempt_by` is LAUREN'S uid** — `790b31d2-7b65-45ec-953f-79855453a73e` — not David's and
+   not NULL. **The server is what must record this; a client that merely displays her name proves
+   nothing.**
+
+**PASS:** she completes the sale on her own login and the server stamps her uid on the exemption.
+**FAIL:** any refusal at any step · the exemption control absent or rendered as 🔒 · the total not
+re-computing · `tax_exempt_by` NULL or carrying the account holder's uid.
+🔴 **AND A FAIL THAT WOULD LOOK LIKE A PASS: running this as DAVID.** He is `businesses.owner_id`;
+the owner path passes this card while proving nothing about the ruling. Same trap `qb-test-mode`
+CARD 4 names from the other direction.
+
+⚠️ **THIS CARD IS `order_kind = test` TERRITORY BY DEFAULT** — LAWNS runs with the writes switch
+off, so the order is born marked and nothing reaches QuickBooks. If the switch is ON when she runs
+it, **a real invoice goes to a real customer.** Check before, not after.
+
+**THIS CARD CANNOT PROVE:** anything about Stage 2. She still cannot assign a role — see the
+NOT-COVERED list below, which is unchanged by this.
 
 ---
 

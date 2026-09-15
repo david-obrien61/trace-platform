@@ -14,6 +14,7 @@
  * §F  🔴 the undo REFUSES while QuickBooks writes are on
  * §G  🔴 the undo un-retires by RUN ID, never by timestamp
  * §H  🔴 receipts and deliveries are asserted before AND after
+ * §K  🔴 THE UNDO REFUSES BEFORE DELETING ANYTHING when a lot has stock history (tech-debt #304)
  *
  * Run:
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/itemImportWriter.test.ts \
@@ -21,7 +22,7 @@
  */
 import {
   rowForItem, previewItemImport, commitItemImport, undoItemImport,
-  RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS,
+  RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS, ledgerRefusalSentence,
 } from './itemImportWriter';
 import { adaptQboItems } from './qboItemAdapter';
 import type { QboItemRow } from './itemList';
@@ -78,6 +79,13 @@ function recorder(opts: {
   writesEnabled?: boolean | undefined;
   /** Simulates the businesses read FAILING, so the "we could not check" refusal is reachable. */
   businessReadFails?: boolean;
+  /** 🔴 LEDGER ROWS, KEYED BY `inventory_id` — the append-only history that makes a lot
+   *  UNDELETABLE. Without this the double could not produce the one state GATE 2 exists to
+   *  detect, and every §I assertion would be decoration (§6 r19a / tech-debt #138). */
+  ledger?: { inventory_id: string }[];
+  /** Simulates the GATE 2 pre-flight read FAILING, so its "we could not check" refusal — the
+   *  `-1` branch — is reachable rather than merely written. */
+  ledgerReadFails?: boolean;
 } = {}) {
   const calls: { table: string; verb: string; filters: [string, string, any][]; payload?: any }[] = [];
   const inventory: any[] = (opts.inventory ?? []).map(r => ({ ...r }));
@@ -90,6 +98,7 @@ function recorder(opts: {
   const businesses: any[] = opts.businessReadFails ? [] : [{
     id: BIZ, qbo_writes_enabled: opts.writesEnabled === undefined ? false : opts.writesEnabled,
   }];
+  const ledger: any[] = (opts.ledger ?? []).map(r => ({ ...r }));
   const store = (t: string) => (t === 'customers' ? customers : t === 'businesses' ? businesses : inventory);
   const counts: Record<string, number> = { receipts: opts.receipts ?? 0, deliveries: opts.deliveries ?? 0 };
   const reads: Record<string, number> = { receipts: 0, deliveries: 0 };
@@ -99,15 +108,29 @@ function recorder(opts: {
     const rec = { table, verb, filters, payload };
     calls.push(rec);
     let headMode = false;
+    let innerLedger = false;
+    let exactCount = false;
+    let limitN: number | null = null;
     const b: any = {
-      select(_c?: string, o?: any) { if (o?.head) headMode = true; return b; },
+      select(c?: string, o?: any) {
+        if (o?.head) headMode = true;
+        if (o?.count === 'exact') exactCount = true;
+        // 🔴 THE `!inner` EMBED, MODELLED RATHER THAN IGNORED. `business_inventory` rows are
+        // filtered to those having at least one `business_inventory_ledger` child — an INNER
+        // join, so a lot with no history drops out. A double that silently ignored `!inner`
+        // would return every row and GATE 2 would refuse every undo, which is a failure the
+        // probes would catch; the dangerous direction is the opposite, and it is why `matches`
+        // below applies the join rather than the select string being merely recorded.
+        if (/business_inventory_ledger!inner/.test(String(c ?? ''))) innerLedger = true;
+        return b;
+      },
       eq(c: string, v: any)  { filters.push([c, 'eq', v]);  return b; },
       neq(c: string, v: any) { filters.push([c, 'neq', v]); return b; },
       is(c: string, v: any)  { filters.push([c, 'is', v]);  return b; },
       gt(c: string, v: any)  { filters.push([c, 'gt', v]);  return b; },
       or(s: string)          { filters.push(['__or', 'or', s]); return b; },
       order() { return b; },
-      limit() { return b; },
+      limit(n?: number) { if (typeof n === 'number') limitN = n; return b; },
       // 🔴 ADDED 2026-09-06 AND IT WENT RED FIRST. The gate now reads `businesses.qbo_writes_enabled`
       // via `.maybeSingle()`, which this double did not implement, so the whole suite THREW. That is
       // the double being NARROWER than the client — the harmless direction. The dangerous one is a
@@ -147,8 +170,24 @@ function recorder(opts: {
       }
       const rows_ = store(table);
       if (verb === 'select') {
-        const hits = rows_.filter(matches);
-        return headMode ? { data: null, error: null, count: hits.length } : { data: hits, error: null, count: hits.length };
+        let hits = rows_.filter(matches);
+        if (innerLedger) {
+          // The pre-flight's read. A failed read is its own branch because "we could not check"
+          // and "there is nothing to check" must not be the same answer (#182).
+          if (opts.ledgerReadFails) {
+            return { data: null, error: { message: 'simulated ledger read failure' }, count: null };
+          }
+          const withHistory = new Set(ledger.map(l => String(l.inventory_id)));
+          hits = hits.filter(r => withHistory.has(String(r.id)));
+        }
+        // 🔴 `count` IS THE FULL FILTERED SET AND `data` IS THE LIMITED PAGE — PostgREST's own
+        // behaviour, and modelling it is what makes the "names are a sample, count is the total"
+        // distinction reachable. A double that limited BOTH would let `rows.length` pass as the
+        // total and mutant L4 would survive.
+        const total = hits.length;
+        const page = limitN === null ? hits : hits.slice(0, limitN);
+        if (headMode) return { data: null, error: null, count: total };
+        return { data: page, error: null, count: exactCount ? total : page.length };
       }
       if (verb === 'insert') {
         const rows = Array.isArray(payload) ? payload : [payload];
@@ -186,7 +225,7 @@ function recorder(opts: {
       };
     },
   };
-  return { db, calls, inventory, customers, businesses };
+  return { db, calls, inventory, customers, businesses, ledger };
 }
 
 const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers every business.
@@ -716,6 +755,119 @@ async function sectionJ() {
   ok((rep.error ?? '').includes('refused'), '§J and calls it a refusal rather than an empty result');
 }
 
+
+// ── §K 🔴 STOCK HISTORY REFUSES THE WHOLE UNDO, BEFORE ANY WRITE (tech-debt #304) ────────────
+//
+// 🔴 THE DEFECT THIS SECTION EXISTS FOR IS NOT HYPOTHETICAL AND IT DID NOT NEED THE SEED.
+// `business_inventory_ledger.inventory_id` is `ON DELETE SET NULL`; SET NULL is an UPDATE; the
+// ledger's `BEFORE UPDATE OR DELETE` trigger refuses it with no exemption. So a lot with history
+// is UNDELETABLE — and before GATE 2 the undo deleted the CUSTOMERS first, then threw on the
+// inventory, leaving the tenant half-wiped and reporting `customersDeleted: 0` for rows that were
+// already gone.
+//
+// ⚠️ ONE TEST ORDER AGAINST ONE IMPORTED LOT WAS ENOUGH. The opening-stock seed would do it 647
+// times, but the seed is not what made this live.
+async function sectionK() {
+  const runRows = () => ([
+    { id: 'lot-1', business_id: BIZ, import_run_id: RUN, name: 'Natchez Crape Myrtle', size: '30 gallon', qty: 0, retired_at: null },
+    { id: 'lot-2', business_id: BIZ, import_run_id: RUN, name: 'Live Oak',             size: '15 gallon', qty: 0, retired_at: null },
+    { id: 'lot-3', business_id: BIZ, import_run_id: RUN, name: 'Cedar Elm',            size: null,        qty: 0, retired_at: null },
+  ]);
+
+  // ── K1 the clean case still proceeds — a gate that refuses everything proves nothing ──
+  {
+    const clean = recorder({ inventory: runRows(), customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }] });
+    const r = await undoItemImport(clean.db as any, BIZ, RUN, HELD);
+    ok(r.refused === false, '§K1 🔴 NO ledger rows → the undo PROCEEDS. The negative control: a gate that cannot pass is not a gate');
+    ok(r.ledgerHeld === 0, '§K1 and reports zero held');
+    ok(r.inventoryDeleted === 3 && r.customersDeleted === 1, '§K1 and it actually did the work');
+  }
+
+  // ── K2 one lot with history refuses the WHOLE run ──
+  {
+    const held = recorder({
+      inventory: runRows(),
+      customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }],
+      ledger: [{ inventory_id: 'lot-2' }],
+    });
+    const r = await undoItemImport(held.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true, '§K2 🔴 ONE lot with history REFUSES the run');
+    ok(r.ledgerHeld === 1, '§K2 and says how many — one');
+    ok((r.error ?? '').includes('Live Oak'), '§K2 🔴 and NAMES it, so the refusal is actionable rather than a category');
+
+    // 🔴 THE ASSERTION THAT IS THE WHOLE POINT OF THE BUILD.
+    ok(held.customers.length === 1,
+       '§K2 🔴 THE CUSTOMER IS STILL THERE. Before GATE 2 this row was deleted and the throw came after — a half-wiped tenant');
+    ok(held.inventory.length === 3, '§K2 🔴 and every product row is still there');
+    ok(held.calls.every(c => c.verb === 'select'),
+       '§K2 🔴 A REFUSED UNDO ISSUES ONLY READS — not one delete, not one update, on ANY table');
+    ok(r.inventoryDeleted === 0 && r.customersDeleted === 0 && r.unretired === 0,
+       '§K2 and every count it reports is zero, because zero is what happened');
+  }
+
+  // ── K3 the count is the TOTAL, the names are a sample ──
+  {
+    const many = Array.from({ length: 12 }, (_, i) => (
+      { id: `L${i}`, business_id: BIZ, import_run_id: RUN, name: `Tree ${i}`, size: '15 gallon', qty: 0, retired_at: null }));
+    const rec = recorder({ inventory: many, ledger: many.map(m => ({ inventory_id: m.id })) });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.ledgerHeld === 12,
+       `§K3 🔴 THE COUNT IS THE FULL SET (12), NOT THE PAGE — got ${r.ledgerHeld}. Reporting the page would understate a seeded catalogue by two orders of magnitude`);
+    ok((r.error ?? '').includes('and 7 more'), '§K3 and the sentence accounts for the ones it did not name');
+    ok((r.error ?? '').includes('12 products'), '§K3 and leads with the total');
+  }
+
+  // ── K4 a RETIRED row this run made still counts ──
+  {
+    const rec = recorder({
+      inventory: [{ id: 'lot-1', business_id: BIZ, import_run_id: RUN, name: 'Retired Oak', size: '15 gallon', qty: 0,
+                    retired_at: '2026-09-15T00:00:00Z', retired_reason: RETIRE_REASON }],
+      ledger: [{ inventory_id: 'lot-1' }],
+    });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.ledgerHeld === 1,
+       '§K4 🔴 A RETIRED ROW THIS RUN CREATED STILL BLOCKS — the undo deletes by run id regardless of retired_at, so a gate filtering to live rows would wave through the exact rows that refuse');
+  }
+
+  // ── K5 a failed pre-flight read REFUSES, and says it could not check ──
+  {
+    const rec = recorder({ inventory: runRows(), customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }], ledgerReadFails: true });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true, '§K5 🔴 a pre-flight we could not READ refuses — deleting rows we could not check is the unrecoverable direction');
+    ok(r.ledgerHeld === -1, '§K5 and -1 distinguishes "could not check" from "nothing to check"');
+    ok(/could not check/i.test(r.error ?? ''), '§K5 🔴 and the sentence says so rather than blaming the catalogue (#182: a failed read must not wear the face of a clean one)');
+    ok(rec.customers.length === 1 && rec.inventory.length === 3, '§K5 and nothing was touched');
+  }
+
+  // ── K6 the gate is SECOND, not first — writes-on still wins and says the other thing ──
+  {
+    const rec = recorder({ inventory: runRows(), ledger: [{ inventory_id: 'lot-1' }], writesEnabled: true });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, '');
+    ok(r.refused === true, '§K6 writes-on still refuses');
+    ok(/QuickBooks writes are switched on/.test(r.error ?? ''),
+       '§K6 🔴 …and with ITS OWN sentence, not the ledger one. Two refusals that say the same thing are one refusal wearing two names');
+  }
+
+  // ── K7 a run that made nothing is not "held" ──
+  {
+    const rec = recorder({ inventory: runRows(), ledger: [{ inventory_id: 'lot-1' }] });
+    const r = await undoItemImport(rec.db as any, BIZ, 'a-run-that-made-nothing', HELD);
+    ok(r.refused === false && r.ledgerHeld === 0,
+       '§K7 🔴 the gate is scoped to THIS RUN — another run\'s history does not refuse this undo');
+  }
+
+  // ── K8 the sentence, driven directly, both shapes ──
+  {
+    const one = ledgerRefusalSentence(1, ['Live Oak (15 gallon)']);
+    ok(one.includes('1 product from this import has'), '§K8 singular reads as English, not "1 products have"');
+    ok(!one.includes('and 0 more'), '§K8 and does not tack on an empty remainder');
+    const none = ledgerRefusalSentence(3, []);
+    ok(!none.includes(' — ,') && none.includes('3 products'), '§K8 a count with no names still reads');
+    ok(/NOTHING WAS DELETED AND NOTHING WAS CHANGED/.test(one),
+       '§K8 🔴 and the one fact the owner most needs is stated in the sentence, not implied by the absence of numbers');
+  }
+}
+
 // ── preview writes nothing ───────────────────────────────────────────────────
 async function sectionPreview() {
   const { db, calls } = recorder({ inventory: [
@@ -736,7 +888,7 @@ async function sectionPreview() {
 // Sequential, not Promise.all: each section builds its own recorder, and a shared failure order
 // is what makes a red run readable.
 (async () => {
-  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionPreview]) {
+  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionK, sectionPreview]) {
     await section();
   }
   console.log(`\nitemImportWriter — ${passed} passed, ${failed} failed`);
