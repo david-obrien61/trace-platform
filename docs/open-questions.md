@@ -52,6 +52,23 @@ end to end.** Unproven is not broken — and the difference is the whole point o
 🔴 **This was the #1 item on this list for four days and it was false**, gating tech-debt **#299**,
 which is now unblocked. → tech-debt **#253** ✅ RESOLVED
 
+**1b · THE `#332` RENUMBER — THIS BRANCH WAS THE EARLIER CLAIM AND MOVED ANYWAY.** `f83e044`
+reserved `#332` at **10:21:22**; `ecfb376` claimed it **11:10:33**, 49 minutes later, so by
+[[R-148]] clause (4) `feat/contact-record` keeps it. **But theirs merged first, and
+`verify-id-sweep` refuses to rule on that case — it says so in its own text.** Moved to `#335`
+deliberately and reversibly; **overrule it and the move undoes cleanly.** → CLAUDE.md §3 #335
+
+**1c · 🔴 `npm run verify` IS RED ON `origin/main` AND IT IS NOT THIS BRANCH'S.** `verify:id-citations`
+reports `#332` claimed in a commit subject with **no ledger row** — `ecfb376`'s close-out filed
+none. **Proven by running the cap in a throwaway worktree at clean `origin/main`.** Someone must
+file that row or declare it; a session cannot write another session's close-out. → ledger #335
+
+**1d · APPLY ORDER FOR THE CONTACT RECORD — `20260915` FIRST, THEN `20260915b`.** The second DROPS
+the columns the first's trigger REPLACES, so out of order leaves `customers` with no address at
+all in between. `20260915b` refuses rather than destroys (a pre-flight raise, no `CASCADE`); **run
+its V0 before applying.** Then re-run `scripts/snapshot-customers-columns.mjs`, which is currently
+**not a pure measurement and says so in its own `source` field.** → ledger #335
+
 **2 · WHO MAY SEE THE EQUIPMENT LIST WITHOUT SEEING WHAT IT COST?**
 *"Equipment lives in `cost_objects` (confidential, gated on `costs:read`); maintaining it is `pmi:*`.
 So someone who holds `pmi:*` and not `costs:read` gets a locked screen with nothing to maintain."*

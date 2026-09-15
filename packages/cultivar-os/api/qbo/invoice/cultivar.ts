@@ -111,16 +111,19 @@ function displayNameFor(customer: any): string {
 }
 
 /**
- * BillAddr from the D-41 billing_* fields, falling back to the legacy unprefixed address_*
- * (which the shared editor still mirrors — ledger #119). All-empty → OMIT the block entirely
- * rather than push a hollow address (D-9 omit-not-fake).
+ * BillAddr from the `billing_*` fields. All-empty → OMIT the block entirely rather than push a
+ * hollow address (D-9 omit-not-fake).
+ *
+ * ✏️ THE LEGACY FALLBACK IS GONE (ledger #335). This read `billing_* ?? address_* ?? null`
+ * because the shared editor mirrored one onto the other; the legacy four are dropped and
+ * `billing_*` is now the derived view of the address list, so there is one source.
  */
 function billAddrFrom(customer: any): Record<string, string> | undefined {
-  const line1 = customer.billing_line1 ?? customer.address_line1 ?? null;
+  const line1 = customer.billing_line1 ?? null;
   const line2 = customer.billing_line2 ?? null;
-  const city  = customer.billing_city  ?? customer.city  ?? null;
-  const state = customer.billing_state ?? customer.state ?? null;
-  const zip   = customer.billing_zip   ?? customer.zip   ?? null;
+  const city  = customer.billing_city  ?? null;
+  const state = customer.billing_state ?? null;
+  const zip   = customer.billing_zip   ?? null;
   if (!line1 && !city && !state && !zip) return undefined;
   const addr: Record<string, string> = {};
   if (line1) addr.Line1 = String(line1);

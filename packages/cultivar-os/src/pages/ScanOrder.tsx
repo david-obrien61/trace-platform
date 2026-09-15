@@ -87,9 +87,12 @@ function buildTierOptions(types: DiscountType[]): { value: string; label: string
 // only shows up beside its sibling: it resolved `address_line1` BILLING-FIRST (`r.billing_line1 ??
 // r.address_line1`) and city/state/zip LEGACY-ONLY. So a customer whose billing city differed from
 // their legacy city got a line-1 from one column set and a city from the other — one row, one
-// address, assembled under two rules, and disagreeing with `submit.ts:264-274`, which is
-// billing-first on all four when it writes the delivery stop. `customerOrderInput` applies the ONE
-// rule to all four, so the cart, the invoice and the truck now read the same address.
+// address, assembled under two rules, and disagreeing with `submit.ts`, which applied one rule to
+// all four when it wrote the delivery stop. `customerOrderInput` applies the ONE rule to all four,
+// so the cart, the invoice and the truck read the same address.
+// ✏️ THE TWO COLUMN SETS THIS DEFECT WAS ABOUT NO LONGER EXIST (ledger #335): the legacy four are
+// dropped and `billing_*` is the derived view of the address list. The defect is kept on record
+// because the SHAPE recurs — one value assembled under two rules — not because it is still live.
 // `CustomerInput.email` is required; CustomerCapture still requires a valid one before submit.
 function customerToInput(r: CustomerSearchHit): CustomerInput {
   return customerOrderInput(r) as CustomerInput;

@@ -132,8 +132,10 @@ function seedRepeatCustomer(over: Row = {}) {
     customers: [{
       id: 'cust-1', business_id: BIZ, person_id: 'p-1', customer_type: 'person',
       first_name: 'Diane', last_name: 'Foster', email: '', phone: PHONE,
-      address_line1: '904 Hialeah Circle', city: 'Georgetown', state: 'TX', zip: '78628',
-      billing_line1: null, billing_city: null, billing_state: null, billing_zip: null,
+      // ✏️ ONE COLUMN SET (ledger #335). This fixture used to carry BOTH: the legacy four holding
+      // '904 Hialeah Circle' and the canonical four NULL — which is what made A1e/A1f two facts.
+      // With one column the stored address is simply present, and rule (b) must not overwrite it.
+      billing_line1: '904 Hialeah Circle', billing_city: 'Georgetown', billing_state: 'TX', billing_zip: '78628',
       marketing_opt_in: null, source: 'ocr-invoice', ...over,
     }],
   };
@@ -149,15 +151,18 @@ async function main() {
     const db = fakeDb(seedRepeatCustomer());
     const r = await findOrCreateCustomer(db as any, BIZ, {
       first_name: 'Diane', last_name: 'Foster', email: 'diane@example.com', phone: PHONE,
-      address_line1: '100 Main St', city: 'Leander', state: 'TX', zip: '78641',
+      billing_line1: '100 Main St', billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641',
     }, 'qr-scan');
     ok(r.created === false, 'A1 the repeat customer MATCHED an existing row (no duplicate minted)');
     ok(db.rows.customers.length === 1, 'A1b exactly one customer row exists after the checkout');
     ok(cust(db).email === 'diane@example.com', `A1c THE ROW HOLDS THE TYPED EMAIL — read back: ${JSON.stringify(cust(db).email)}`);
     ok(cust(db).id === 'cust-1', 'A1d the email landed on the SAME row the order attached to');
     // The two facts that made this defect invisible: everything ELSE in the payload behaved.
-    ok(cust(db).billing_line1 === '100 Main St', 'A1e billing_line1 still fills from the same payload (the fill that DID work)');
-    ok(cust(db).address_line1 === '904 Hialeah Circle', 'A1f the OCR ship-to address is still NOT clobbered (rule (b) intact)');
+    // ✏️ ONE COLUMN SET (ledger #335). A1e and A1f used to assert the SAME fact about two columns —
+    // the canonical one filling and the legacy one not being clobbered. There is one column now,
+    // and rule (b) FILL-NEVER-CLOBBER is what decides it: the stored address wins.
+    ok(cust(db).billing_line1 === '904 Hialeah Circle',
+       'A1e 🔴 the stored address is NOT clobbered by the checkout payload — rule (b), intact');
   }
 
   // ── CASE 2 — AN EMAIL EDITED: THE OLD VALUE IS REPLACED ─────────────────────────────────────
@@ -181,7 +186,7 @@ async function main() {
     const db = fakeDb(seedRepeatCustomer({ email: 'keep@example.com' }));
     await findOrCreateCustomer(db as any, BIZ, {
       first_name: 'Diane', last_name: 'Foster', email: value, phone: PHONE,
-      city: 'Leander',
+      billing_city: 'Leander',
     }, 'qr-scan');
     ok(cust(db).email === 'keep@example.com',
       `A3 (${label}) a blank email LEAVES the stored value untouched — read back: ${JSON.stringify(cust(db).email)}`);
@@ -196,7 +201,7 @@ async function main() {
     let id = '';
     try {
       const r = await findOrCreateCustomer(db as any, BIZ, {
-        first_name: 'Diane', last_name: 'Foster', phone: PHONE, city: 'Leander',
+        first_name: 'Diane', last_name: 'Foster', phone: PHONE, billing_city: 'Leander',
       }, 'qr-scan');
       id = r.customerId;
     } catch (e) { threw = e instanceof Error ? e.message : String(e); }
@@ -213,12 +218,14 @@ async function main() {
     const db = fakeDb({ people: [], customers: [] });
     const r = await findOrCreateCustomer(db as any, BIZ, {
       first_name: 'Marcus', last_name: 'Webb', email: 'marcus@example.com', phone: '5125559999',
-      address_line1: '12 Oak', city: 'Leander', state: 'TX', zip: '78641',
+      billing_line1: '12 Oak', billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641',
     }, 'qr-scan');
     ok(r.created === true, 'B1 a genuinely new customer is INSERTED');
     ok(cust(db).email === 'marcus@example.com', `B1b the new row holds the email — read back: ${JSON.stringify(cust(db).email)}`);
-    ok(cust(db).billing_line1 === '12 Oak' && cust(db).address_line1 === '12 Oak',
-       'B1c canonical + mirror both written on insert (D-41, unchanged)');
+    // ✏️ B1c ASSERTED "canonical + mirror BOTH written on insert (D-41)". There is no mirror:
+    // the legacy four are dropped and `billing_*` is derived from the address list by a trigger.
+    ok(cust(db).billing_line1 === '12 Oak',
+       'B1c the canonical billing column is written on insert — and there is no second column to keep in step');
   }
   {
     // A new customer with NO email: the column is written explicitly, never a fabricated value.
@@ -236,7 +243,7 @@ async function main() {
     const db = fakeDb({
       people: [{ id: 'p-2', auth_user_id: null, email: 'ph@example.com', phone: null }],
       customers: [{ id: 'cust-2', business_id: BIZ, person_id: 'p-2', first_name: 'Ph', last_name: 'One',
-                    email: 'ph@example.com', phone: null, address_line1: null, city: null, state: null, zip: null }],
+                    email: 'ph@example.com', phone: null, billing_line1: null, city: null, state: null, zip: null }],
     });
     await findOrCreateCustomer(db as any, BIZ, {
       first_name: 'Ph', last_name: 'One', email: 'ph@example.com', phone: '5125557777',
@@ -253,7 +260,7 @@ async function main() {
       people: [{ id: 'p-1', auth_user_id: null, email: 'diane@example.com', phone: null }],
       customers: [{ id: 'cust-1', business_id: BIZ, person_id: 'p-1', customer_type: 'person',
                     first_name: 'Diane', last_name: 'Foster', email: 'old@example.com', phone: '5125551111',
-                    address_line1: '904 Hialeah Circle', city: 'Georgetown', state: 'TX', zip: '78628' }],
+                    billing_line1: '904 Hialeah Circle', billing_city: 'Georgetown', billing_state: 'TX', billing_zip: '78628' }],
     });
     await findOrCreateCustomer(db as any, BIZ, {
       first_name: 'Diane', last_name: 'Foster', email: 'diane@example.com', phone: '5125552222',
@@ -318,11 +325,11 @@ async function main() {
       people: [],
       customers: [{ id: 'cust-3', business_id: BIZ, customer_type: 'organization',
                     first_name: "Dave's Tree Svs", last_name: '', email: '', phone: null,
-                    address_line1: '77 County Road', city: 'Leander', state: 'TX', zip: '78641' }],
+                    billing_line1: '77 County Road', billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641' }],
     });
     await findOrCreateCustomer(db as any, BIZ, {
       first_name: "Dave's Tree Svs", customer_type: 'organization',
-      email: 'dave@treesvs.com', address_line1: '77 County Road',
+      email: 'dave@treesvs.com', billing_line1: '77 County Road',
     }, 'qr-scan');
     ok(db.rows.customers.length === 1, 'F1 the org matched on name+billing — no duplicate (dedup untouched)');
     ok(cust(db).email === 'dave@treesvs.com', `F1b the org row holds the typed email too — read back: ${JSON.stringify(cust(db).email)}`);

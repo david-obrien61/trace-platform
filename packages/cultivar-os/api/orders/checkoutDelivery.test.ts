@@ -80,9 +80,12 @@ const CUSTOMER_FULL = {
   address_line1: '400 Honeycomb Mesa', city: 'Leander', state: 'TX', zip: '78641',
 };
 /** A customer whose address exists ONLY in the legacy mirror (never backfilled). */
-const CUSTOMER_LEGACY_ONLY = {
-  billing_line1: null, billing_city: null, billing_state: null, billing_zip: null,
-  address_line1: '1100 Ranch Rd', city: 'Georgetown', state: 'TX', zip: '78626',
+// ✏️ WAS `CUSTOMER_LEGACY_ONLY` (ledger #335) — a customer whose address lived ONLY in the
+// unprefixed four while `billing_*` were null. That state cannot exist any more: the legacy four
+// are DROPPED from `customers`. The fixture keeps its ROLE — a customer whose record carries an
+// address, used to prove the stop falls back to it — under the columns that still exist.
+const CUSTOMER_WITH_BILLING = {
+  billing_line1: '1100 Ranch Rd', billing_city: 'Georgetown', billing_state: 'TX', billing_zip: '78626',
 };
 
 const BASE = {
@@ -198,10 +201,10 @@ async function main(): Promise<void> {
   // ══ G. THE ADDRESS — canonical first, legacy mirror as the fallback, absent stays NULL (D-41/A9) ══
   {
     const db = fakeDb();
-    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', customerRow: CUSTOMER_LEGACY_ONLY });
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', customerRow: CUSTOMER_WITH_BILLING });
     const r = db.rows.deliveries[0] ?? {};
     ok(r.address_line1 === '1100 Ranch Rd' && r.city === 'Georgetown' && r.zip === '78626',
-      'G1 a legacy-only address is still found (the billing_* backfill is not assumed)');
+      'G1 the customer\'s billing address is used when the order carries no ship-to of its own');
   }
   {
     const db = fakeDb();
@@ -215,11 +218,15 @@ async function main(): Promise<void> {
     const db = fakeDb();
     await scheduleCheckoutDelivery(db, {
       ...BASE, transportMethod: 'delivery',
-      customerRow: { billing_line1: '   ', address_line1: '9 Oak Ln', billing_city: '', city: 'Kyle' },
+      // ✏️ G4 ASSERTED A FALLBACK THAT NO LONGER EXISTS (ledger #335): *"a WHITESPACE-only
+      // canonical value does not shadow a real LEGACY one."* There is no legacy column to fall
+      // through to. A blank canonical value now means the customer HAS no address, and the stop
+      // must say so rather than borrow one — A9, absent is not empty.
+      customerRow: { billing_line1: '   ', billing_city: '' },
     });
     const r = db.rows.deliveries[0] ?? {};
-    ok(r.address_line1 === '9 Oak Ln' && r.city === 'Kyle',
-      'G4 a WHITESPACE-only canonical value does not shadow a real legacy one');
+    ok((r.address_line1 ?? null) === null && (r.city ?? null) === null,
+      'G4 🔴 a WHITESPACE-only billing value yields NO address on the stop — there is nothing to fall back to, and a blank is not an address');
   }
 
   // ══ H. THE UNDATED ORDER — a stop with no date is still a stop ═══════════════════════════════
@@ -324,7 +331,7 @@ async function main(): Promise<void> {
     // NEGATIVE CONTROL — the J-probes must be able to SEE the customer address win, or J1 proves
     // nothing (#182: a probe that cannot reach its subject reports the same as one that passed).
     const db = fakeDb();
-    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', customerRow: CUSTOMER_LEGACY_ONLY });
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery', customerRow: CUSTOMER_WITH_BILLING });
     ok(db.rows.deliveries[0]?.address_line1 === '1100 Ranch Rd',
       'J13 the probe CAN observe the customer-record path producing a different street');
   }

@@ -81,6 +81,18 @@ export function stripComments(src) {
 
 const lineOf = (src, idx) => src.slice(0, idx).split('\n').length;
 
+/** A block's OWN level: every nested `{ … }` removed, so a parent is not judged by its children. */
+export function stripNested(block) {
+  const inner = block.slice(1, -1);
+  let out = '', depth = 0;
+  for (const ch of inner) {
+    if (ch === '{') depth++;
+    else if (ch === '}') { if (depth > 0) depth--; continue; }
+    if (depth === 0) out += ch;
+  }
+  return out;
+}
+
 /** CLAUSE A — a select projection that names `customers` and one of the four. */
 export function clauseA(src) {
   const hits = [];
@@ -159,7 +171,20 @@ export function clauseC(src) {
         if (!blk) continue;
         const block = src.slice(blk[0], blk[1] + 1);
         if (block.length > 6000) continue;                       // a whole module body is not a shape
-        if (!CUSTOMER_ONLY.some(f => new RegExp(`\\b${f}\\b`).test(block))) continue;
+        // 🔴 NESTED BLOCKS ARE STRIPPED BEFORE JUDGING THE SHAPE, AND THIS IS THE SECOND PRECISION
+        // FIX THE REAL CORPUS FORCED. `stopRead.ts`'s `StopRow` is a DELIVERIES shape that NESTS a
+        // `customers: { … billing_line1 … }` join — so its own `address_line1` was read as a
+        // customer column because a field belonging to its CHILD made the parent look customer-
+        // shaped. A block is judged on what IT declares, not on what it contains.
+        const ownLevel = stripNested(block);
+        // 🔴 A BLOCK DECLARES A CUSTOMER SHAPE BY NAMING A CUSTOMER FIELD AS A KEY. READING one
+        // from somewhere else is CONSUMPTION, not declaration — the third precision fix the real
+        // corpus forced. `submit.ts` builds a `deliveries` row whose values come from
+        // `billTo.billing_line1`; counting that member read as a declaration made a delivery row
+        // customer-shaped, and every one of its four delivery columns a violation.
+        const declaresCustomer = CUSTOMER_ONLY.some(f =>
+          new RegExp(`(^|[,{\\s])${f}\\s*[?]?\\s*[:,}]`, 'm').test(ownLevel));
+        if (!declaresCustomer) continue;
         hits.push({ line: lineOf(src, m.index), clause: 'C', col: c, what: 'customer-shaped block' });
       }
     }
@@ -259,6 +284,28 @@ function runProbes() {
       const row = { business_id: b, qb_customer_id: q, address_line1: a };
       await db.from('customers').upsert(row);
     }`)]));
+  // 🔴 P20 — THE SECOND FALSE POSITIVE FOUND AGAINST THE REAL CORPUS (stopRead.ts).
+  // A DELIVERIES interface that NESTS a customer join must be judged on its own level.
+  check('P20 a delivery shape nesting a customers join is NOT flagged', 0,
+    n([f('a.ts', `export interface StopRow {
+      id: string; delivery_date: string | null; service_type: string | null;
+      address_line1: string | null; city: string | null; state: string | null; zip: string | null;
+      customers: { first_name: string; billing_line1: string | null; billing_city: string | null } | null;
+    }`)]));
+  check('P20b …but a CUSTOMER interface declaring them at its OWN level still IS flagged', 1,
+    n([f('a.ts', `export interface Row { qb_customer_id: string | null; address_line1: string | null; }`)]));
+  // 🔴 P21 — THE THIRD FALSE POSITIVE FOUND AGAINST THE REAL CORPUS (submit.ts).
+  // A DELIVERIES row whose values are READ from a resolved billing object must not be flagged:
+  // consuming a customer value is not declaring a customer shape.
+  check('P21 a delivery row reading billing_* values is NOT flagged', 0,
+    n([f('a.ts', `const q = "customers(first_name)";
+      const row = { business_id: b, customer_id: cid, delivery_date: d,
+                    address_line1: ship ? ship.address_line1 : billTo.billing_line1,
+                    city: ship ? ship.city : billTo.billing_city,
+                    state: ship ? ship.state : billTo.billing_state,
+                    zip: ship ? ship.zip : billTo.billing_zip };`)]));
+  check('P21b …but a block DECLARING billing_line1 as a key alongside a legacy one still IS', 1,
+    n([f('a.ts', `const row = { billing_line1: a, address_line1: b };`)]));
   check('P18 stripComments preserves the line count exactly',
     5, stripComments('/**\n * x\n */\nconst a=1;\nconst b=2;').split('\n').length);
 

@@ -79,6 +79,34 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #335 (`feat/contact-record`, 2026-09-15)
+
+- 🔴 **THE CONTACT RECORD — THE CUSTOMER REBUILT AS ONE IDENTITY WITH REPEATING TYPED PROPERTIES.**
+  BUILDER-COMPLETE, **NOTHING APPLIED, NOTHING OWNER-PROVEN** (`customer-contact-record`
+  **board 0 of 14**). **TWO migrations WRITTEN and NOT APPLIED · no permission string · api/ 12/12.**
+  Phones, emails and addresses become typed lists; `customers.phone`/`.email`/`.billing_*` become a
+  **DERIVED view of the primary**, maintained by a database trigger. **The legacy four
+  (`address_line1`/`city`/`state`/`zip`) are DROPPED.**
+  🔴 **THE CASE IS NOT VOLUME AND THE BUILD CORRECTED ITS OWN PREMISE** — measured on the complete
+  1,959-record capture: *"704 unmapped Mobile numbers"* is really **15** (651 are byte-equal to
+  `PrimaryPhone`); *"478 ShipAddr.Line2 streets"* is really **11** as a second address (725 of 736
+  are identical to the billing one); **ZERO records hold two email FIELDS.** **The case is that the
+  old shape FORCES A LOSS** — #331's `phone-would-be-lost` branch existed for 5 records where
+  recovering a street meant discarding a phone held nowhere else. Under a list, nothing is chosen.
+  🔴 **THE CAP IS THE REVIEWER: proven RED at 109 sites / 14 files, green after.** The compiler
+  catches **13 of ~140** — measured by deleting the fields and running tsc.
+  ✅ **Fixed a live defect the second copy was already costing:** `CartReview` read the legacy four
+  with no billing fallback, so a customer whose address was in `billing_*` showed **no address** on
+  the review screen while three other surfaces resolved it correctly.
+  - 🔴 **APPLY ORDER MATTERS — `20260915` FIRST, THEN `20260915b`.** The second drops the columns the
+    first's trigger replaces. `20260915b` **refuses rather than destroys** (pre-flight raise, no
+    `CASCADE`); **run its V0 before applying.** Then re-run `scripts/snapshot-customers-columns.mjs`.
+  - ⚠️ **`npm run verify` exits 1 on a clause that is NOT this branch's** — `#332` claimed in
+    `origin/main`'s commit subject with no ledger row (`ecfb376`). **Proven red on clean
+    `origin/main` in a throwaway worktree.** Every other check green.
+  - ⚠️ **`#332` → `#335` renumber is David's to overrule** — this branch held the EARLIER claim by
+    49 minutes, but theirs merged first and `verify-id-sweep` refuses to rule on that case.
+
 ### 🟡 PUSHED, NOT MERGED — #329 (`fix/bom-one-mix-ratio-and-ring-function`, 2026-09-14)
 
 - 🔴 **TWO BOM RULINGS APPLIED — [[R-155]] REMOVES A CONFIG KEY, [[R-156]] REPLACES A TABLE THAT WAS

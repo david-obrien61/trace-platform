@@ -62,10 +62,12 @@ export interface FieldMapEntry {
   /** The `customers` column it lands in — the CANONICAL one. */
   column: string;
   /**
-   * 🔴 THE MIRROR COLUMNS, DECLARED, AND THIS IS AN R-110 GUARD RATHER THAN BOOKKEEPING.
-   * D-41 writes `address_line1` AND `billing_line1` from ONE source value. Counting both would
-   * report **916** phone numbers where there are **458** — a surface asserting a number it did
-   * not get from the operation it describes. The finding names the mirrors; it never counts them.
+   * 🔴 THE MIRROR COLUMNS, DECLARED — an R-110 guard rather than bookkeeping: a source value
+   * written into TWO columns must be counted ONCE, or the surface asserts a number it did not get
+   * from the operation it describes (counting both reported 916 phone numbers where there were
+   * 458). ⚠️ **NO ENTRY USES THIS TODAY** (ledger #335): D-41's canonical+mirror pair was the only
+   * mirror in the corpus and it is gone. The mechanism is KEPT because the hazard is general and
+   * the guard is three lines; it is recorded as currently unused rather than left to look active.
    */
   mirrors?: string[];
 }
@@ -140,11 +142,14 @@ export const CUSTOMER_FIELD_MAP: FieldMapEntry[] = [
   { path: 'Taxable',                     column: 'tax_exempt' },
   { path: 'ResaleNum',                   column: 'tax_exempt_cert_ref' },
   { path: 'TaxExemptionReasonId',        column: 'tax_exempt_reason' },
-  // D-41's canonical + mirror. The mirror is NAMED and never counted twice — see FieldMapEntry.
-  { path: 'BillAddr.Line1',                    column: 'address_line1', mirrors: ['billing_line1'] },
-  { path: 'BillAddr.City',                     column: 'city',          mirrors: ['billing_city'] },
-  { path: 'BillAddr.CountrySubDivisionCode',   column: 'state',         mirrors: ['billing_state'] },
-  { path: 'BillAddr.PostalCode',               column: 'zip',           mirrors: ['billing_zip'] },
+  // ✏️ NO MIRROR ANY MORE (ledger #335). These four declared `column: 'address_line1'` with
+  // `mirrors: ['billing_line1']` because D-41 wrote ONE source value into TWO columns. The legacy
+  // four are dropped and `billing_*` is the derived view of the address list, so there is one
+  // destination per source and nothing that could be double-counted.
+  { path: 'BillAddr.Line1',                    column: 'billing_line1' },
+  { path: 'BillAddr.City',                     column: 'billing_city'  },
+  { path: 'BillAddr.CountrySubDivisionCode',   column: 'billing_state' },
+  { path: 'BillAddr.PostalCode',               column: 'billing_zip'   },
 ];
 
 /**
@@ -208,10 +213,10 @@ export const CUSTOMER_IGNORED_SOURCE_FIELDS: Record<string, string> = {
  * of what a check is for.
  */
 export const EXPECTED_COLUMN_SHAPE: Record<string, ValueShape> = {
-  address_line1: 'street',
-  city:          'wordlike',
-  state:         'wordlike',
-  zip:           'postcode',
+  billing_line1: 'street',
+  billing_city:  'wordlike',
+  billing_state: 'wordlike',
+  billing_zip:   'postcode',
   email:         'email',
   phone:         'phone',
 };

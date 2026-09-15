@@ -81,10 +81,12 @@ export interface AdaptedCustomer {
   organization_name: string | null;
   email: string | null;
   phone: string | null;
-  address_line1: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
+  // ✏️ RENAMED FROM `address_line1`/`city`/`state`/`zip` (ledger #335). Those four columns are
+  // DROPPED from `customers`; `billing_*` is the derived view of the address list.
+  billing_line1: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
   tax_exempt: boolean;
   /** Null when the customer is taxable — a reason on a taxable row would be a contradiction. */
   tax_exempt_reason: string | null;
@@ -214,14 +216,14 @@ export function exemptionOf(raw: Record<string, unknown>): Pick<AdaptedCustomer,
 /** BillAddr is the billing home; ShipAddr is a job site and is NOT a billing address. */
 function billingOf(raw: Record<string, unknown>) {
   const a = (raw.BillAddr ?? null) as Record<string, unknown> | null;
-  if (!a || typeof a !== 'object') return { address_line1: null, city: null, state: null, zip: null };
+  if (!a || typeof a !== 'object') return { billing_line1: null, billing_city: null, billing_state: null, billing_zip: null };
   // ⚠️ Line2 is deliberately NOT folded into line1 — `customers` has `billing_line2` and the
   // party editor owns it; concatenating here would make this writer disagree with that one.
   return {
-    address_line1: str(a.Line1),
-    city: str(a.City),
-    state: str(a.CountrySubDivisionCode),
-    zip: str(a.PostalCode),
+    billing_line1: str(a.Line1),
+    billing_city: str(a.City),
+    billing_state: str(a.CountrySubDivisionCode),
+    billing_zip: str(a.PostalCode),
   };
 }
 

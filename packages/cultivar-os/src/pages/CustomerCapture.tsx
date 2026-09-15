@@ -92,10 +92,10 @@ export function CustomerCapture() {
   const [lastName,  setLastName]  = useState(saved?.last_name ?? '');
   const [email,     setEmail]     = useState(saved?.email ?? '');
   const [phone,     setPhone]     = useState(saved?.phone ?? '');
-  const [address,   setAddress]   = useState(saved?.address_line1 ?? '');
-  const [city,      setCity]      = useState(saved?.city ?? '');
-  const [state,     setState]     = useState(saved?.state ?? 'TX');
-  const [zip,       setZip]       = useState(saved?.zip ?? '');
+  const [address,   setAddress]   = useState(saved?.billing_line1 ?? '');
+  const [city,      setCity]      = useState(saved?.billing_city ?? '');
+  const [state,     setState]     = useState(saved?.billing_state ?? 'TX');
+  const [zip,       setZip]       = useState(saved?.billing_zip ?? '');
   const [optIn,     setOptIn]     = useState(saved?.marketing_opt_in ?? true);
   const [delivDate, setDelivDate] = useState(savedDeliveryDate ?? '');
   const [touched,   setTouched]   = useState(false);
@@ -194,8 +194,11 @@ export function CustomerCapture() {
     console.log('[TRACE:customers] checkout selected existing', {
       id: h.id, tier: h.price_tier, exempt: !!h.tax_exempt,
       // Which of the address fields actually arrived — the one thing GATE 0 needs to read here.
-      addressFilled: { line1: !!f.address_line1, city: !!f.city, state: !!f.state, zip: !!f.zip },
-      addressSource: h.billing_line1 ? 'billing_*' : (h.address_line1 ? 'legacy' : '(none on file)'),
+      addressFilled: { billing_line1: !!f.billing_line1, billing_city: !!f.billing_city,
+                       billing_state: !!f.billing_state, billing_zip: !!f.billing_zip },
+      // ✏️ `addressSource` is gone (ledger #335): there is ONE column set now, so the question
+      // "which of the two did this come from" no longer has two answers to choose between.
+      addressOnFile: !!h.billing_line1,
       optIn: f.marketing_opt_in,
     });
     setFirstName(f.first_name);
@@ -205,16 +208,16 @@ export function CustomerCapture() {
     // 🔴 THE FOUR THAT WERE NEVER COPIED. Billing-first, the SAME rule `submit.ts:264-274` uses to
     // write the delivery row and `qbo/invoice/cultivar.ts:101-106` uses to push the invoice — so
     // what the cashier confirms on this screen is what the truck and the invoice get.
-    setAddress(f.address_line1);
-    setCity(f.city);
+    setAddress(f.billing_line1);
+    setCity(f.billing_city);
     // ⚠️ DELIBERATE: this sets the customer's OWN state, even when that is ''. The blank form
     // defaults to 'TX' for a NEW customer, which is a sensible guess about someone being typed in
     // from scratch; asserting 'TX' about a customer we have ON FILE with no state recorded is
     // inventing a fact about them (A9). B3's rule is literal — if it cannot be filled from the
     // selected customer, it renders empty. The 'TX' fallback at the PAYLOAD site (:232) is
     // untouched, so nothing downstream changed.
-    setState(f.state);
-    setZip(f.zip);
+    setState(f.billing_state);
+    setZip(f.billing_zip);
     // 🔴 CONSENT. Never `?? true` — see the registry note on `marketing_opt_in`. A customer who
     // opted out was silently re-opted-in by every selection, because this box was not in the copy.
     setOptIn(f.marketing_opt_in);
@@ -279,10 +282,10 @@ export function CustomerCapture() {
       last_name:       lastName.trim(),
       email:           emailLower,
       phone:           phone.trim() || undefined, // A9 — never silently discard what was typed
-      address_line1:   address.trim() || undefined,
-      city:            city.trim() || undefined,
-      state:           state.trim() || 'TX',
-      zip:             zip.trim() || undefined,
+      billing_line1:   address.trim() || undefined,
+      billing_city:    city.trim() || undefined,
+      billing_state:   state.trim() || 'TX',
+      billing_zip:     zip.trim() || undefined,
       marketing_opt_in: optIn,
       price_tier:      priceTier,
       tax_exempt:          taxExempt,

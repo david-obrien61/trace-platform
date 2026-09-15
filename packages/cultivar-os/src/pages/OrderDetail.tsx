@@ -71,7 +71,7 @@ interface OrderDetailRow {
   leakage_flag: boolean;
   notes: string | null;
   delivery_date?: string | null;
-  customers: { first_name: string; last_name: string; email: string; phone: string | null; address_line1: string | null; city: string | null; state: string | null; zip: string | null; billing_line1?: string | null; billing_city?: string | null; billing_state?: string | null; billing_zip?: string | null } | null;
+  customers: { first_name: string; last_name: string; email: string; phone: string | null; billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null } | null;
   order_items: DetailItem[];
   order_service_selections: DetailSelection[];
 }
@@ -90,7 +90,7 @@ const SELECT_COLS = `
   subtotal, tax_amount, total_amount, addons_amount,
   tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref,
   leakage_flag, notes,
-  customers ( first_name, last_name, email, phone, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip ),
+  customers ( first_name, last_name, email, phone, billing_line1, billing_city, billing_state, billing_zip ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
     is_manual_override, original_price, override_reason,
@@ -337,9 +337,10 @@ export function OrderDetail() {
           <>
             <p style={row}><b>{customerDisplayName(cust, '—')}</b></p>
             <p style={sub}>{cust.email}{cust.phone ? ` · ${cust.phone}` : ''}</p>
-            {(cust.billing_line1 ?? cust.address_line1 ?? cust.billing_city ?? cust.city) && (
-              <p style={sub}>{[cust.billing_line1 ?? cust.address_line1, cust.billing_city ?? cust.city,
-                                cust.billing_state ?? cust.state, cust.billing_zip ?? cust.zip].filter(Boolean).join(', ')}</p>
+            {/* ✏️ ONE COLUMN SET (ledger #335) — the `?? legacy` fallbacks went with the columns. */}
+            {(cust.billing_line1 ?? cust.billing_city) && (
+              <p style={sub}>{[cust.billing_line1, cust.billing_city,
+                                cust.billing_state, cust.billing_zip].filter(Boolean).join(', ')}</p>
             )}
           </>
         ) : <p style={sub}>Unknown customer</p>}

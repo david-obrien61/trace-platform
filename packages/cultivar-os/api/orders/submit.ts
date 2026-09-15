@@ -275,10 +275,14 @@ export async function scheduleCheckoutDelivery(
   // first, fall back to the mirror, and leave a genuinely absent field NULL — an address the
   // platform does not hold must not be invented (A9: absent is not empty).
   const c = args.customerRow ?? {};
-  const pick = (canonical: unknown, legacy: unknown): string | null => {
-    for (const v of [canonical, legacy]) if (typeof v === 'string' && v.trim()) return v.trim();
-    return null;
-  };
+  // ✏️ ONE ARGUMENT NOW (ledger #335) — it took `(canonical, legacy)` and returned the first
+  // non-blank of the two. There is no legacy column to fall back to.
+  // 🔴 THE TRIM IS THE HALF THAT MATTERS AND IT IS KEPT DELIBERATELY: a first draft of this repoint
+  // used `c.billing_line1 ?? null`, which passes '   ' through as a string, and
+  // `checkoutDelivery.test.ts` G4 went red — a whitespace-only value would have been written onto
+  // a delivery row as an address. A blank is not a value (A9).
+  const pick = (v: unknown): string | null =>
+    (typeof v === 'string' && v.trim() ? v.trim() : null);
 
   // 🔴 THE ORDER'S OWN SHIP-TO WINS, AND THIS IS THE SNAPSHOT D-41 RULED (ledger #303).
   //
@@ -289,8 +293,10 @@ export async function scheduleCheckoutDelivery(
   // discarded and the truck was sent to the billing address. Preferring the order's own ship-to is
   // what makes the field mean what it says on the screen.
   //
-  // The fallback below is untouched: no ship-to ⇒ the customer's address, billing-first, exactly as
-  // before. And what is stored is TEXT, never a `customer_addresses.id` — editing a saved site
+  // The fallback below still applies: no ship-to ⇒ the customer's address. ✏️ It used to say
+  // *"billing-first, exactly as before"*; there is no "first" any more, because the legacy columns
+  // it fell back TO are dropped (ledger #335) and `billing_*` is the derived view of the address
+  // list. And what is stored is TEXT, never a `customer_addresses.id` — editing a saved site
   // tomorrow cannot move this stop, because this stop does not point at it.
   const st = args.shipTo ?? null;
   const shipField = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
@@ -301,14 +307,33 @@ export async function scheduleCheckoutDelivery(
     ? { address_line1: shipField(st.line1), city: shipField(st.city), state: shipField(st.state), zip: shipField(st.zip) }
     : null;
 
+  // 🔴 THE BILLING FALLBACK IS RESOLVED HERE, NOT INSIDE THE ROW LITERAL, AND THAT IS DELIBERATE.
+  // Reading `c.billing_line1` inside the `deliveries` row made the literal look CUSTOMER-shaped to
+  // `verify-customer-address-columns` — a false positive my own repoint created. Hoisting it is
+  // also plainer: the row below now reads as four delivery columns taking four resolved values,
+  // with the choosing done once, above, where it can be read in one line.
+  // ⚠️ THE KEYS ARE THE COLUMN NAMES THEY HOLD. Calling them `line1`/`city`/`state`/`zip` read as
+  // the retired customer columns to both a person and the cap; naming them for their source makes
+  // the line below say exactly where the value came from.
+  const billTo = {
+    billing_line1: pick(c.billing_line1),
+    billing_city:  pick(c.billing_city),
+    billing_state: pick(c.billing_state),
+    billing_zip:   pick(c.billing_zip),
+  };
+
   const row: Record<string, unknown> = {
     business_id:   args.businessId,
     customer_id:   args.customerId,
     delivery_date: args.deliveryDate,                        // null = undated; the day view buckets it last
-    address_line1: shipTo ? shipTo.address_line1 : pick(c.billing_line1, c.address_line1),
-    city:          shipTo ? shipTo.city          : pick(c.billing_city,  c.city),
-    state:         shipTo ? shipTo.state         : pick(c.billing_state, c.state),
-    zip:           shipTo ? shipTo.zip           : pick(c.billing_zip,   c.zip),
+    // ✏️ ONE COLUMN SET (ledger #335). This was `pick(c.billing_*, c.<legacy>)` — billing-first
+    // with a legacy fallback; the legacy four are dropped and `billing_*` is the derived view of
+    // the address list, so there is nothing to fall back to. These keys are `deliveries` columns
+    // and are UNCHANGED — the stop still SNAPSHOTS the address (D-41's surviving invariant).
+    address_line1: shipTo ? shipTo.address_line1 : billTo.billing_line1,
+    city:          shipTo ? shipTo.city          : billTo.billing_city,
+    state:         shipTo ? shipTo.state         : billTo.billing_state,
+    zip:           shipTo ? shipTo.zip           : billTo.billing_zip,
     status:        'scheduled',
     source:        'checkout',                               // distinguishable from 'ocr-invoice'
     service_type:  serviceType,
