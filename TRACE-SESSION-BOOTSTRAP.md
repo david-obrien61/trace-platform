@@ -79,6 +79,43 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #329 (`fix/bom-one-mix-ratio-and-ring-function`, 2026-09-14)
+
+- 🔴 **TWO BOM RULINGS APPLIED — [[R-155]] REMOVES A CONFIG KEY, [[R-156]] REPLACES A TABLE THAT WAS
+  NEVER WRITTEN.** BUILDER-COMPLETE, owner-proof **OWED** (`load-list` **CARD 13 new · CARD 5
+  rewritten**, board 0 of 13). No migration, no schema, no permission string, api/ 12/12.
+  **① ONE MIX RATIO, AND IT IS 1.0** — one gallon of mix per gallon of container, *for loading AND
+  for costing*. The reasoning is physical, not a safety margin: *"it settles on the drive and
+  compacts."* **So the ruling REMOVES a key** — the `mixRatioCosting`/`mixRatioLoading` split is
+  dead (*"One key or none"*) — and `tradeGallonFactor = 0.7` stays untouched as a fact about the POT.
+  **② RING DIAMETER IS A TOTAL √ FUNCTION OF CONTAINER GALLONS**, through 15 gal → 5 ft and
+  95 gal → 12 ft. **The `tPostsFor` five-row-table defect, caught one quantity over before it was
+  written** — the 200 gallon Live Oak reads ~17.2 ft ring / ~55 ft fence where a lookup prints
+  nothing, and *"rope is a quantity so a missing one reads as zero."*
+  - 🔴 **#299 IS A BUILD, NOT A FIX — RE-SCOPED 2026-09-15 ON DAVID'S CORRECTION.** There is no
+    install cost model in this repo and there never was. The artefact is a **Python script David ran
+    in a chat on 2026-09-11** (output `install-cost-model.json`, never committed), and **its mulch
+    line, its RING FIVE-ROW LOOKUP and `MULCH_YD = BARK_YD ("TO CONFIRM")` are LIGHTNING'S, not
+    LAWNS'S** — the ring lookup independently being the exact shape [[R-156]] rules against.
+    **So: BUILD it here, reading `business_operations_config`, no mulch line, the ring as R-156's
+    total function**, and no number carried across without a `basis.ts` provenance mark.
+    ✏️ **The "pull opposite ways / net uncomputed" pairing with #300 is RETIRED: nothing a customer
+    is charged depends on a model that does not exist**, and #300 was a ratio settled by ruling.
+    🔴 **Hard-blocked on #253** — `20260905_production_planning` is unapplied, so
+    `business_operations_config` is absent on every tenant. **Apply-or-retire gates this.**
+  - 🔴 **A CAP WAS HANDING OUT TAKEN IDS, AND THAT IS WHY THIS BRANCH RENUMBERED THREE.**
+    `verify-id-citations` computed NEXT FREE over `## #N` headings only while the log also holds
+    ~163 legacy TABLE rows its own clause B has counted since 2026-09-11. **Rows 107 → 270; the
+    "unused ids" list 187 → 28.** The load-list branch's `#290`/`#291`/`#292` had collided with three
+    different items on `main` — **#290→#299 · #291→#300 · #292→#301** under [[R-148]] clause (4).
+  - ⚠️ **BRANCHED OFF THE UNMERGED `feat/delivery-day-load-list` (David's hold) — `BOM_RULES` exists
+    nowhere else — THEN `main` WAS MERGED IN.** Building on that 2-day-old base as-is would have
+    re-archived three §3 entries `main` already held: **byte-identical duplicates, auto-merged with
+    no conflict**, the defect #325's hook exists to catch. 🔴 **It was first done as a REBASE and
+    that had to be undone** — `verify-id-sweep` decides inheritance at `merge-base(HEAD, ref)`, and a
+    rebase destroys the ancestry marking ledger #315 as inherited, so the sweep reported a collision
+    against the branch this work is built on. **A merge keeps both parents.**
+
 ### 🟡 PUSHED, NOT MERGED — #322 (`fix/import-preview-field-checks`, 2026-09-14)
 
 - 🔴 **THE IMPORT PREVIEW NOW RUNS TWO FIELD CHECKS BEFORE ANYTHING IS WRITTEN** — BUILDER-COMPLETE,

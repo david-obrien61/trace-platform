@@ -66,10 +66,26 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore
 //    `#281` is simultaneously a live ledger id and a live tech-debt id, so they are never merged.
 const SPACES = {
   ledger:   { file: 'docs/CLOSE-OUT-LEDGER.md', label: 'close-out', re: /^\| \*\*#(\d+)\*\*/gm,  resRe: /^\| ⏳ \*\*#(\d+) — RESERVED/gmu },
-  techdebt: { file: 'docs/tech-debt-log.md',    label: 'tech-debt', re: /^#{2,4} #(\d+)\b/gm,     resRe: null },
+  // 🔴 BOTH ROW FORMATS (ledger #329). The log holds `## #N` HEADINGS and ~163 legacy TABLE rows
+  //    (`| 139 | 🟡 **THE DAY SHEET …**`), and a table row is a real filing — `verify-id-citations`
+  //    correction ③ established that on 2026-09-11 and its clause B has counted them ever since.
+  //    THIS CAP NEVER DID, and the consequence is tech-debt #286's exact failure in a second place:
+  //    it printed `NEXT FREE: #299` while this very tree held `| 299 |`…`| 303 |`, and it reported
+  //    *"this tree claims none beyond main"* with four COLLIDING rows in the file. Measured
+  //    2026-09-14: that blindness is why tech-debt #290/#291/#292 were claimed twice and then had to
+  //    be renumbered TWICE in one session — the second hop only because a rival's four table rows
+  //    were invisible to this sweep.
+  //    The discriminator is the status marker or bold opening the second cell, so a numeric cell in
+  //    some other table is not mistaken for a filing — the same one correction ③ relies on.
+  //    ⚠️ SECOND COPY OF THAT MATCHER (the other is in `verify-id-citations.mjs`). Deliberate and
+  //    named: the two caps share no module and sharing one is its own build — folded into #303.
+  techdebt: { file: 'docs/tech-debt-log.md',    label: 'tech-debt', re: /(?:^#{2,4} #(\d+)\b)|(?:^\| (\d+) \| (?:🟡|🔴|🟢|✅|⚠️|\*\*|~~))/gmu, resRe: null },
   ruling:   { file: 'docs/RULINGS.md',          label: 'ruling',    re: /\*\*R-(\d+)\b/g,         resRe: null },
 };
-const idsIn = (src, re) => new Set([...src.matchAll(new RegExp(re.source, re.flags))].map(m => +m[1]));
+// A matcher may carry more than one capturing group (the tech-debt space matches a heading OR a
+// table row); the id is whichever group actually matched.
+const idsIn = (src, re) => new Set([...src.matchAll(new RegExp(re.source, re.flags))]
+  .map(m => +(m.slice(1).find(g => g !== undefined))));
 
 // ============================================================
 // 🔴 TWO POPULATIONS, NOT ONE — tech-debt #286, the defect that made this cap hand out taken ids.
@@ -160,6 +176,11 @@ if (SELF_TEST) {
   ok(idsIn('## #284 — a thing\n', SPACES.techdebt.re).has(284), 'a tech-debt heading is invisible');
   ok(idsIn('### #145 — a thing\n', SPACES.techdebt.re).has(145), 'a ### tech-debt heading is invisible');
   ok(!idsIn('see #284 mid-line\n', SPACES.techdebt.re).has(284), 'a bare in-prose id counted as a tech-debt row');
+  // 🔴 ledger #329 — the log's OTHER row format. Without these three the cap hands out a taken id.
+  ok(idsIn('| 139 | 🟡 **THE DAY SHEET** | x |\n', SPACES.techdebt.re).has(139), 'a legacy TABLE row is invisible — the cap will hand out an id that is already filed');
+  ok(!idsIn('| 3 | 4 | a count in some other table |\n', SPACES.techdebt.re).has(3), 'a plain numeric cell counted as a tech-debt filing');
+  ok(!idsIn('see | 139 | 🟡 mid-line\n', SPACES.techdebt.re).has(139), 'a table row not at line start counted as a filing');
+  ok(idsIn('## #7 — a heading\n| 9 | 🔴 **a table row** | x |\n', SPACES.techdebt.re).has(9), 'both formats must be read together, not one or the other');
   ok(idsIn('| 2026-09-12 | 🔴 **R-148 — a ruling**', SPACES.ruling.re).has(148), 'a ruling id is invisible');
   ok(!idsIn('cites R-148 in prose', SPACES.ruling.re).has(148), 'an un-bolded ruling mention counted as a claim');
   // 🔴 THE PROBE THAT MATTERS: the collision detector must be able to SEE a collision.

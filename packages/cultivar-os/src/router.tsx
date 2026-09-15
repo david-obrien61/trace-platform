@@ -21,6 +21,7 @@ import { Orders }            from './pages/Orders';
 import { OrderDetail }       from './pages/OrderDetail';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
+import { LoadList }         from './pages/LoadList';
 import { OperationsCalendar } from './pages/OperationsCalendar';
 import { Settings }          from './pages/Settings';
 import { Campaigns }         from './pages/Campaigns';
@@ -158,6 +159,13 @@ export function AppRouter() {
                 one tile, one delivery list (David's ONE DELIVERY LIST ruling); the permission
                 gate is unchanged, so nobody gains or loses access in the swap. */}
             <Route path="/delivery-schedule" element={<OperationsCalendar />} />
+            {/* The LOAD half of the day. The route goes to the driver digitally; the load goes on
+                paper, and Lauren hand-assembles it today from several printouts. Gated on
+                `deliveries:read` beside the schedule it prints — it is the same day, read the same
+                way, and a person who may see the schedule may see what is on it. What it can SHOW
+                is narrowed further at read time: without `order_items:read` every stop prints
+                "withheld", never an empty one. */}
+            <Route path="/load-list" element={<LoadList />} />
           </Route>
           <Route element={<PermissionRoute permission="deliveries.route:read" />}>
             <Route path="/deliveries"        element={<DeliveryRoute />} />

@@ -243,6 +243,39 @@ const note = [];
   }
 }
 
+// ③ CORRECTION 2026-09-11 (ledger #301) — THE LOG'S OLDER ENTRIES ARE TABLE ROWS, AND ROW_RE COULD NOT SEE
+//    ONE. `| 139 | 🟡 **THE DAY SHEET …** |` sits at docs/tech-debt-log.md:282, yet `tech-debt #139` read as
+//    DANGLING — and #108 and #140 were baselined as "cited-but-unfiled" for the same reason. The cap was
+//    reporting FILED rows as unfiled: a check that could not reach its target (R-33, tech-debt #182's class).
+//    Table rows count as FILED for clause B only. Clause A stays on headings: the two formats were never
+//    meant to be unique across each other. The discriminator is the status marker or bold that opens every
+//    real row's second cell, so a numeric cell in some other table is not mistaken for a filing.
+const TABLE_ROW_RE = /^\| (\d+) \| (?:🟡|🔴|🟢|✅|⚠️|\*\*|~~)/gmu;
+const filedIds = (src) => new Set([...rowIds(src), ...[...src.matchAll(TABLE_ROW_RE)].map(m => +m[1])]);
+if (!filedIds('| 139 | 🟡 **THE DAY SHEET** | x |').has(139)) { console.error('CAP PROBE FAILED: a legacy table row is not counted as filed — correction ③'); process.exit(2); }
+if (filedIds('| 3 | 4 | a count in some other table |').has(3)) { console.error('CAP PROBE FAILED: a numeric table cell with no status marker was counted as a filing'); process.exit(2); }
+if (filedIds('see | 139 | 🟡 mid-line').has(139)) { console.error('CAP PROBE FAILED: a table row not at line start was counted as a filing'); process.exit(2); }
+if (rowIds('| 139 | 🟡 **x** |').length !== 0) { console.error('CAP PROBE FAILED: a table row leaked into clause A\'s duplicate check'); process.exit(2); }
+// ⬆️ MOVED UP 2026-09-14 (ledger #329): `filedIds` is now read by the next-free arithmetic below,
+//    which runs earlier than clause B did. Definition and probes travel together, unchanged.
+
+// 🔴 CORRECTION 2026-09-14 (ledger #329) — THE NEXT-FREE NUMBER WAS COMPUTED OVER ONE OF THE LOG'S
+//    TWO ROW FORMATS, SO IT HANDED OUT IDS THAT WERE ALREADY TAKEN.
+//    `rowIds` reads `## #N` headings; correction ③ below already established that the log ALSO holds
+//    legacy TABLE rows (`| 139 | 🟡 **…**`) and that those are real filings — `filedIds` unions both,
+//    and clause B has counted them since 2026-09-11. **The next-free arithmetic never did.**
+//    MEASURED THE DAY THIS WAS FIXED: the log held table rows `| 295 |`…`| 298 |` and this cap printed
+//    *"max #294 → NEXT FREE: #299"*, i.e. it pointed the next session at an id four rows deep in the
+//    same file. That is not hypothetical — it is how tech-debt **#290/#291/#292** came to be claimed
+//    TWICE, once as table rows on `feat/delivery-day-load-list` and once as headings on `main`, both on
+//    2026-09-12, with every id cap green on both sides. The renumber cost a session.
+//    ⚠️ **SCOPE, STATED: only the REPORTED next-free number is corrected here.** Clause A's DUPLICATE
+//    check still reads headings alone, and that is left deliberately — its own comment says *"the two
+//    formats were never meant to be unique across each other"*, and changing it is a decision about the
+//    log's shape rather than a defect fix. **So a heading and a table row sharing one id still passes.**
+//    Filed as tech-debt **#303** with the measurement; David rules.
+const nextFreeFor = (src) => { const v = [...filedIds(src)]; return (v.length ? Math.max(...v) : 0) + 1; };
+
 if (SELF_TEST) {
   console.log('SELF-TEST — each check, shown refusing a crafted violation then accepting a clean input:\n');
   const a1 = rowIds('## #7 — a\n## #7 — b\n'); const a1dup = a1.length !== new Set(a1).size;
@@ -272,12 +305,24 @@ if (SELF_TEST) {
   // exactly what this line did on its first run, and the probe caught it.
   const e2 = rowShapeViolations(HDR_E + '| **#317** | a | b | c | d | `x \\| y` | KEPT |\n').violations.length === 0;
   console.log(`  E ledger row shape   — violation: ${e1 ? '✅ caught' : '🔴 MISSED'} · clean: ${e2 ? '✅ accepted (an escaped pipe is legitimate)' : '🔴 false positive'}`);
+
+  // F — 🔴 THE NEXT-FREE NUMBER COUNTS BOTH ROW FORMATS (ledger #329).
+  // This is REPORTED, never asserted, so no clause can fail on it — which is precisely why it went
+  // wrong unnoticed and handed out an id four rows deep in its own file. The probe is the only thing
+  // that can disagree with it. Both directions: a log whose highest row is a TABLE row must not
+  // report that row as free, and a log whose highest row is a HEADING must still work.
+  const fTable   = nextFreeFor('## #7 — a heading row\n| 9 | 🟡 **a table row** | x |\n') === 10;
+  const fHeading = nextFreeFor('| 3 | 🟡 **a table row** | x |\n## #7 — a heading row\n')  === 8;
+  // The negative control: a numeric cell in some ordinary table is NOT a filing and must not
+  // inflate the number — the same discriminator correction ③ relies on.
+  const fNoise   = nextFreeFor('## #7 — a heading row\n| 4 | 12 | a count in some other table |\n') === 8;
+  console.log(`  F next-free id       — table row counted: ${fTable ? '✅' : '🔴 MISSED — hands out a taken id'} · heading still counted: ${fHeading ? '✅' : '🔴 MISSED'} · plain numeric cell ignored: ${fNoise ? '✅' : '🔴 false positive'}`);
   process.exit(0);
 }
 
 if (!existsSync(LOG)) { console.error(`MISSING ${LOG}`); process.exit(2); }
 const log = readFileSync(LOG, 'utf8');
-const ids = rowIds(log);
+const ids = [...filedIds(log)].sort((a, b) => a - b);
 const idSet = new Set(ids);
 
 // ── A — no duplicate rows ────────────────────────────────────────────────────
@@ -286,19 +331,6 @@ for (const id of ids) (seen.has(id) ? dup : seen).add(id);
 for (const id of [...dup].sort((a, b) => a - b)) fail.push(`DUPLICATE ROW — tech-debt #${id} has more than one \`## #${id}\` heading in ${LOG}. The later one silently overwrites the earlier.`);
 
 // ── B — no NET-NEW dangling citation (ratchet; see the header for why) ───────
-// ③ CORRECTION 2026-09-11 (ledger #301) — THE LOG'S OLDER ENTRIES ARE TABLE ROWS, AND ROW_RE COULD NOT SEE
-//    ONE. `| 139 | 🟡 **THE DAY SHEET …** |` sits at docs/tech-debt-log.md:282, yet `tech-debt #139` read as
-//    DANGLING — and #108 and #140 were baselined as "cited-but-unfiled" for the same reason. The cap was
-//    reporting FILED rows as unfiled: a check that could not reach its target (R-33, tech-debt #182's class).
-//    Table rows count as FILED for clause B only. Clause A stays on headings: the two formats were never
-//    meant to be unique across each other. The discriminator is the status marker or bold that opens every
-//    real row's second cell, so a numeric cell in some other table is not mistaken for a filing.
-const TABLE_ROW_RE = /^\| (\d+) \| (?:🟡|🔴|🟢|✅|⚠️|\*\*|~~)/gmu;
-const filedIds = (src) => new Set([...rowIds(src), ...[...src.matchAll(TABLE_ROW_RE)].map(m => +m[1])]);
-if (!filedIds('| 139 | 🟡 **THE DAY SHEET** | x |').has(139)) { console.error('CAP PROBE FAILED: a legacy table row is not counted as filed — correction ③'); process.exit(2); }
-if (filedIds('| 3 | 4 | a count in some other table |').has(3)) { console.error('CAP PROBE FAILED: a numeric table cell with no status marker was counted as a filing'); process.exit(2); }
-if (filedIds('see | 139 | 🟡 mid-line').has(139)) { console.error('CAP PROBE FAILED: a table row not at line start was counted as a filing'); process.exit(2); }
-if (rowIds('| 139 | 🟡 **x** |').length !== 0) { console.error('CAP PROBE FAILED: a table row leaked into clause A\'s duplicate check'); process.exit(2); }
 const filed = filedIds(log);
 const base = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : { _comment: '', stamped: null, dangling: {} };
 const current = {};
