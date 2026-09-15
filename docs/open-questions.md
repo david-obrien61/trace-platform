@@ -39,11 +39,18 @@ added 11 more that nothing but §3 was holding.**
 
 These are the ones where a build is stopped, not merely slower. Each is quoted from its owner.
 
-**1 · `20260905_production_planning` — APPLY OR RETIRE?**
-*"It creates `business_operations_config`, `production_plans`, `production_plan_lines`, and **shipped
-code already reads and writes all three** (Settings → Operations, the Uppot plan page,
-`productionHold.ts`)."* Until you answer, **Settings → Operations cannot save and the Uppot plan page
-cannot commit, on every tenant.** → `RULINGS.md` OWED · tech-debt **#253**
+**1 · `20260905_production_planning` — ✅ ANSWERED 2026-09-15. NOT A QUESTION ANY MORE, AND IT WAS
+NEVER THE BLOCKER IT CLAIMED TO BE.**
+🔴 **THE CLAIM IS STRUCK: David ran it live on `c99a4c5` — he changed values in Settings → Operations
+and they PERSISTED ACROSS A RELOAD.** A value that survives a reload was written to and read back from
+`business_operations_config` under real RLS. **The table exists and the save path works.** 🔴 **And the refutation was ALREADY ON `main`:** `docs/recon/2026-09-12-one-fact-many-homes.md`
+(committed 2026-09-12) carries the catalog read for all three tables — `rls=true`, 4 policies each —
+and says *"All three exist … it is describing yesterday."* **This file and that one have contradicted
+each other on `main` for three days.**
+⚠️ **STILL GENUINELY UNPROVEN, and it is a CARD not a blocker: nobody has driven an Uppot plan COMMIT
+end to end.** Unproven is not broken — and the difference is the whole point of this correction.
+🔴 **This was the #1 item on this list for four days and it was false**, gating tech-debt **#299**,
+which is now unblocked. → tech-debt **#253** ✅ RESOLVED
 
 **2 · WHO MAY SEE THE EQUIPMENT LIST WITHOUT SEEING WHAT IT COST?**
 *"Equipment lives in `cost_objects` (confidential, gated on `costs:read`); maintaining it is `pmi:*`.
@@ -90,7 +97,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 **#329 — two BOM rulings (R-155 one mix ratio · R-156 the ring function)**
 - ✅ **ANSWERED IN-SESSION 2026-09-14 — the √ fit.** *"Through"* both anchors needs `d = a√g + b`; no single-coefficient `d = k√g` hits both (k from 15 → 12.58 ft at 95; k from 95 → 4.77 ft at 15). **You confirmed the through-both reading.** Recorded because **no owner-test on real LAWNS sizes can tell the readings apart** — both are exact at 15 and 95. Owns: `docs/RULINGS.md` R-156.
-- 🔴 **OPEN — BUILD THE INSTALL COST MODEL IN THE REPO. ✏️ RE-SCOPED 2026-09-15: I had this as *"find the model and remove its mulch line"* and David corrected it.** There is no model here and there never was — the artefact is a **Python script run in a chat on 2026-09-11** (`install-cost-model.json`, never committed), and **its mulch line, its ring FIVE-ROW LOOKUP and `MULCH_YD = BARK_YD ("TO CONFIRM")` are Lightning's inventions, not LAWNS's facts.** Build it reading `business_operations_config`, no mulch line, the ring as [[R-156]]'s total function, and **no number carried across without a `basis.ts` provenance mark** — a `"TO CONFIRM"` equality is exactly what that type system refuses. ⚠️ **Nothing a customer is charged depends on it today, because it does not exist.** 🔴 **Hard-blocked on #253**: `business_operations_config` is absent on every tenant (`20260905_production_planning` unapplied) — **apply-or-retire is your call and it gates this.** Owns: `docs/tech-debt-log.md` #299.
+- 🔴 **OPEN — BUILD THE INSTALL COST MODEL IN THE REPO. ✏️ RE-SCOPED 2026-09-15: I had this as *"find the model and remove its mulch line"* and David corrected it.** There is no model here and there never was — the artefact is a **Python script run in a chat on 2026-09-11** (`install-cost-model.json`, never committed), and **its mulch line, its ring FIVE-ROW LOOKUP and `MULCH_YD = BARK_YD ("TO CONFIRM")` are Lightning's inventions, not LAWNS's facts.** Build it reading `business_operations_config`, no mulch line, the ring as [[R-156]]'s total function, and **no number carried across without a `basis.ts` provenance mark** — a `"TO CONFIRM"` equality is exactly what that type system refuses. ⚠️ **Nothing a customer is charged depends on it today, because it does not exist.** ✅ **NO LONGER BLOCKED — #253 is RESOLVED (2026-09-15, David's live run): `business_operations_config` exists and saves.** This build can start. Owns: `docs/tech-debt-log.md` #299.
 - 🔴 **OPEN — THE RENUMBER IS THE CALL TO OVERRULE, AND IT HAPPENED TWICE.** The load-list branch's tech-debt `#290`/`#291`/`#292` collided with three different items on `main`; the first renumber landed on `#295`–`#298`, **which `origin/fix/price-unit-ac1-and-four-findings` had reserved 71 seconds earlier**. Final: **#290→#299 · #291→#300 · #292→#301**, plus my **#302**/**#303**. **My ledger id moved with them: #328 → #329.** Owns: `docs/tech-debt-log.md`.
 - ✅ **RESOLVED AT MERGE 2026-09-15 — THE COLLISION IS CLEARED AND THE RENUMBER WENT THE OTHER WAY.** This line read *“NOT MINE TO MOVE — `R-155` IS ALSO CLAIMED BY `origin/feat/container-ladder` (#326), 28 MINUTES LATER, so [[R-148]] clause (4) puts the renumber on them”*. 🔴 **The 28-minute figure paired two different things:** it measured `18:06:37 − 17:38:00`, i.e. the ladder's RULING commit against THIS branch's LEDGER-ID reservation — not against an R-155 claim. **This branch has no commit at 17:38:00 at all** (its commits jump 2026-09-12T18:18:28 to 2026-09-14T18:31:14) and **its first R-155 claim is `bad0e56` at 18:31:32**, which is **LATER** than the ladder's `99c7dbc` at 18:06:37 and its reservation `15be1b0` at 16:18:20. ⚠️ **David was shown the measurement and RULED ANYWAY that the ladder moves**; it was renumbered **R-155 → R-157** in `60e2d4a` (12 citations, 8 files) by another session, since `feat/container-ladder`'s own session had ended. **This branch keeps `R-155` + `R-156`, `verify-id-sweep` is green both ways, and the merge is this commit.**
 - 🟡 **OPEN — SHOULD THE DUPLICATE CHECK SEE BOTH ROW FORMATS?** I fixed the NEXT-FREE arithmetic (it was handing out taken ids) and **deliberately did not widen clause A**: a `## #N` heading and a `| N |` table row sharing one id still passes. The cap's own comment records the opposite intent, and a cap red on arrival against 270 rows is one people switch off (#73). **Measure the live duplicate count first, then widen or declare.** Owns: `docs/tech-debt-log.md` #303.
