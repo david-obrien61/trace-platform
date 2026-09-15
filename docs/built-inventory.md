@@ -2722,6 +2722,83 @@ people disable, and a disabled hook is worse than none because it still reads as
 
 ---
 
+### 4.1d · THE ADDRESS BRANCH — which `BillAddr` line holds the street (2026-09-15, ledger #331)
+
+**PURPOSE:** decide, **per record and from the SHAPE of the value**, which `BillAddr` line holds the
+street — and keep the phone number that is sitting in the other one.
+
+**WHY IT EXISTS.** 4.1c above COUNTED this defect and deliberately repaired nothing. This is the
+repair. 🔴 **LAWNS types a phone number into `BillAddr.Line1` and the street into `Line2`, and the
+importer wrote `Line1` straight into `address_line1`** — so a quarter of the customer book would
+arrive with a phone number where the street belongs, and *a stop addressed to a phone number cannot
+go on a truck.*
+
+**THE RULE, PER RECORD, NEVER BLANKET.** Measured on the complete 2026-09-10 capture (**1,959 of
+1,959, `complete: true`**), classified by the SHIPPED `classifyValueShape` — the same classifier
+4.1c's panel uses, so the panel and the importer cannot disagree about what a value looks like:
+
+| branch | rule | records |
+|---|---|---|
+| `line1-street` | `Line1` is a street → use it | **962** |
+| `line2-street` | `Line1` is a phone AND `Line2` is a street → the street is `Line2` | **448** |
+| `no-street` | `Line1` is a phone AND no `Line2` → no street exists; import BLANK | **27** |
+| `phone-would-be-lost` | the street is there, but taking it would delete a phone | **5** |
+| `unchanged` | any other shape → exactly as today, and counted | **517** |
+
+🔴 **WHY A BLANKET "LINE2 IS THE STREET" RULE IS WRONG, AND IT IS WRONG IN BOTH DIRECTIONS.** It
+writes a phone over a correct street on the **6** records shaped `street` then `phone`, and NULLs the
+street on the **953** whose `Line2` is empty. The branch is chosen per record from the pair of
+shapes, never from a global rule. Probes N2 and N3 feed exactly those two shapes.
+
+🔴 **AND "KEEP THE PHONE" HAS TEETH, WHICH IS THE PART THE PROMPT COULD NOT HAVE KNOWN.** Today the
+`Line1` number survives *by accident*, in the wrong column; taking the street stops that. So the
+resolver asks where the number GOES before it moves anything. Of the **484** whose `Line1` reads as
+a phone: **474** already hold the same number in `PrimaryPhone`/`Mobile` (nothing to do) · **4** hold
+no phone at all, so `customers.phone` is free and the number lands there — **zero migration** ·
+**5** hold a *different* number, a genuine second line, and `customers` has ONE phone column.
+🔴 **On those 5 the two rules genuinely collide and the PHONE WINS: the record is left exactly as
+today and counted as `phoneWouldBeLost`.** Recovering 5 streets by deleting 5 phone numbers held
+nowhere else is not a repair — it is a ruling, and it is David's.
+
+**WHAT SHIPPED.**
+- `qboCustomerAdapter.ts` — **`resolveBillingAddress(raw, heldPhone)`**, pure, replacing `billingOf`:
+  the raw `BillAddr` plus the phone the record already holds in, the resolved address **and the
+  BRANCH taken** out. Plus `AddressBranch` (5 values), `ADDRESS_BRANCH_REASON` (a sentence each, so a
+  report can say WHY rather than print a code), and `heldPhoneOf`.
+- **`adaptCustomerWithAddress` RETURNS the branch**, and `adaptCustomer` is now a projection of it.
+  🔴 **The tally IS the decision, not a second evaluation that could drift from it** ([[R-33]]).
+- `addressResolution` on `CustomerAdaptation` and on `CustomerPlanReport`/`CustomerRunReport`,
+  **present on every plan including a clean one** — 4.1c's own precedent: a report only present when
+  it has something to say cannot be told apart from one that never ran.
+- `BRANCH_TALLY_KEY` is declared as a **total `Record`**, so adding a branch without giving it a
+  counter **fails to compile** rather than silently going uncounted.
+- `[TRACE:CUSTIMPORT] preview` carries the address block (STD-003, on by default).
+
+**THREE DESIGN CALLS WORTH KNOWING.**
+1. 🔴 **`Line2` IS READ, NEVER APPENDED.** `customers` has `billing_line2` and the party editor owns
+   it; concatenating here would make this writer disagree with that one. Mutant D10 is exactly that.
+2. 🔴 **`other` IS NEVER A VERDICT.** 6 records carry a phone **with extra text** in `Line1` and a
+   real street in `Line2` — recoverable, and deliberately NOT recovered. Probe **N10 asserts the
+   limit** rather than leaving it implied, so it breaks loudly if someone widens the classifier
+   without revisiting these counts.
+3. 🔴 **ABSENT IS NOT EMPTY (D-9).** `no-street` writes NULL, not `''` and not the phone number.
+   Mutants D5 and D6 are both directions of getting that wrong.
+
+**PROOF.** `customerImport.test.ts` §N — **19 probes**, including a **population control** (all five
+branches were actually reached, tech-debt #182) and an assertion that the branch rule reads the
+**shipped** `classifyValueShape`. **Driven against the real capture through the shipped adapter:**
+branch counts sum to 1,959 · streets `962 → 1,410` · **0** `Line1` phones held nowhere afterwards ·
+**0** moved rows still carrying a phone as a street · **0** existing `PrimaryPhone` values
+overwritten. **50 mutants on the EXISTING harness (§6 r8 — extended, not a 26th file): 50 caught,
+0 survived, 0 never applied**; D1 is the blanket rule and D2 is the defect itself, restored.
+⚠️ **One mutant survived the first run and was an EQUIVALENT MUTANT, not a gap — recorded in the
+harness rather than quietly swapped**, so nobody re-adds it and reads its survival as a missing
+assertion.
+
+✅ **NO migration · NO schema change · NO policy · NO permission string · NO new dependency · NO UI
+file touched · `api/` 12/12 untouched.** Lands **before** the bulk import, which has never run on
+LAWNS — free now, a data repair afterwards.
+
 ### 4.1c · THE IMPORT PREVIEW'S TWO FIELD CHECKS (2026-09-14, ledger #322)
 
 **PURPOSE:** answer, on the preview screen and before anything is written, two questions the import

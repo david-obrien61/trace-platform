@@ -12,13 +12,17 @@
 > evidence.** That is tech-debt **#280 ②**, and ledger **#303** was recorded complete on
 > preview-only deploys. **If the chip is amber, stop.** *(ledger #321.)*
 
-**Capability:** 3.5 (QuickBooks) · **Ledger:** #278
+**Capability:** 3.5 (QuickBooks) · **Ledger:** #278 · **#331** (the address branch, CARDS 23–26)
 **Story:** ⚠️ **OPEN — and I did not close it by inventing one.** `user_stories.md` has no heading
 covering "bring my customer list across from my accounting system". The same gap #277 recorded for
 the catalogue import. **Recorded OPEN rather than papered over** (§9 story gate).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 0 of 22 covered** (20 `owed` · 2 `needs-test`).
+**Board: 0 of 26 covered** (24 `owed` · 2 `needs-test`).
+⚠️ **CARD 14 IS UNCHANGED IN TEXT BUT ITS SURFACE MOVED (#331, 2026-09-15)** — the billing address is now
+resolved per record from the SHAPE of `BillAddr.Line1`/`Line2` rather than always from `Line1`. It was
+already `owed`, so nothing flips; recorded here because a card whose subject moved and whose text did
+not is exactly how a stale proof survives (OP-14 clause 3).
 ⚠️ **THE IMPORT IS CURRENTLY LANDED ON LAWNS AND WAS NOT UNDONE — DELIBERATE, 2026-09-09**, so Lauren
 can work the findings report. **Assume ~1,972 customers carrying an `import_run_id`, NOT the 30-row
 baseline this board's cards describe.** Every count on every card below was written against that
@@ -333,6 +337,55 @@ nothing to reverse. **Only `updated_at` moves.**
 exemption is a correction toward the books, deliberately kept. Capture step 1's output first if a
 byte-for-byte restore matters.
 
+## CARD 23 — 🔴 A QUARTER OF THE BOOK STOPS CARRYING A PHONE NUMBER WHERE THE STREET GOES · `STATUS: owed` · `DEVICE: desktop`
+LAWNS types a phone into `BillAddr.Line1` and the street into `Line2` on about a quarter of the
+book. Before #331 the importer wrote `Line1` straight into `address_line1`.
+```sql
+-- Customers whose street column still holds something that is only digits and punctuation.
+SELECT count(*) FROM customers
+ WHERE business_id = '<tenant>' AND import_run_id IS NOT NULL
+   AND address_line1 ~ '^[^A-Za-z]+$';
+```
+**PASS: 5, and only 5.** Those five are CARD 25's — records where `Line1` holds a second phone
+number we hold nowhere else, left alone on purpose. **A number near 480 means the fix is not live
+on this run** — re-check GATE 0 before reading anything else on this board.
+
+## CARD 24 — the streets that were one line down are now in the street column · `STATUS: owed` · `DEVICE: desktop`
+```sql
+SELECT count(*) FROM customers
+ WHERE business_id = '<tenant>' AND import_run_id IS NOT NULL AND address_line1 IS NOT NULL;
+```
+**PASS: about 1,410** on a full 1,959-record run — 962 whose `Line1` was already a street, plus
+**448 recovered from `Line2`**. Before #331 the same query returned about 1,460 *including* ~484
+phone numbers; the count going DOWN while CARD 23 goes to 5 is the shape of the repair.
+⚠️ **Read this with CARD 14**, which counts `billing_line1` — the canonical + mirror pair must agree.
+
+## CARD 25 — 🔴 THE FIVE THE PLATFORM REFUSED TO REPAIR, AND WHY · `STATUS: owed` · `DEVICE: desktop`
+On the import **preview**, read the address block of the report (`addressResolution`).
+**PASS:** it reports `phoneWouldBeLost: 5`. Those records have a real street sitting in `Line2`
+that the import **did not take**, because `Line1` holds a *different* phone number from their
+`PrimaryPhone` and `customers` has one phone column — taking the street would delete the number.
+🔴 **THIS IS A DECISION WAITING ON YOU, NOT A BUG.** Either those five keep a phone in the street
+column, or they get their street and lose a number. A second phone column is a migration.
+⚠️ **If this reads 0 on a full LAWNS run, something is wrong** — the number was measured at 5 on
+the 2026-09-10 capture, and a rule that silently stopped finding collisions is the failure mode
+this card exists to catch.
+
+## CARD 26 — nobody's only phone number disappeared · `STATUS: owed` · `DEVICE: desktop`
+Four customers had their ONLY phone number typed into `BillAddr.Line1` and nothing in
+`PrimaryPhone`. The import carries it into the empty `phone` column rather than deleting it with
+the street move.
+```sql
+SELECT count(*) FROM customers
+ WHERE business_id = '<tenant>' AND import_run_id IS NOT NULL
+   AND phone IS NOT NULL AND address_line1 IS NOT NULL
+   AND phone !~ '[A-Za-z]';
+```
+**PASS:** the preview's address block reports `phoneRescued: 4`, and spot-checking any one of those
+four shows a phone in `phone` AND a street in `address_line1` — both, not one.
+⚠️ **The stronger form of this check is a comparison against a pre-import snapshot**, which this
+board cannot express in SQL alone. `customerImport.test.ts` N5/N8 hold it mechanically.
+
 ---
 
 ## NOT COVERED, AND SAID SO
@@ -346,6 +399,13 @@ byte-for-byte restore matters.
   one local customer cannot hold two QuickBooks ids. Waits on `customer_qb_links`.
 - **Terms and discounts.** Deliberately not imported. `SalesTermRef` is on **2 of 1,946** customer
   records; the 96% / "50% Down" pattern is invoice-level and belongs to a different build.
+- **The 6 records whose `Line1` is a phone WITH extra text** (`"(512) 555-0166 (cell 555-0167)"`,
+  `"Contact <name> (817)555-0199"`). The classifier answers `other`, `other` is never a verdict, and
+  the record is left exactly as it was — so **6 recoverable streets sitting in `Line2` are NOT
+  recovered by #331**, deliberately. Widening the classifier is a different change with its own
+  blast radius. `customerImport.test.ts` N10 asserts the limit rather than leaving it implied.
+- **`ShipAddr`.** Untouched by #331. 223 customers carry a routable one that nothing reads; that is
+  tech-debt from #322 and a separate decision.
 - **`customer_type`.** Classified by a stated rule (DisplayName == CompanyName, or no personal
   name), not by anything QuickBooks records. ~559 of 1,946 land as organizations. No card proves
   it because there is no external truth to check it against — **David's eye on the list is the test.**

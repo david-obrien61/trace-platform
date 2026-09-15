@@ -72,7 +72,8 @@
 import { isPushHeld } from './pushHold';
 import { pushPermitted } from '../business-logic/testMode';
 import {
-  CUSTOMER_IMPORT_SOURCE, type AdaptedCustomer, type CustomerAdaptation, type DuplicateFlag,
+  CUSTOMER_IMPORT_SOURCE, type AddressResolutionTally, type AdaptedCustomer,
+  type CustomerAdaptation, type DuplicateFlag,
 } from './qboCustomerAdapter';
 import type { ImportFieldAudit } from './importFieldAudit';
 
@@ -107,6 +108,16 @@ export interface CustomerPlanReport {
    * "never ran", and a blank warnings area can never mean both.
    */
   fieldAudit: ImportFieldAudit;
+  /**
+   * 🔴 WHERE EACH STREET CAME FROM. LAWNS types a phone into `BillAddr.Line1` and the street
+   * into `Line2` on about a quarter of the book, so which line holds the street is decided per
+   * record from the shape of the value — and this is the count of how that landed.
+   *
+   * ⚠️ PRESENT ON EVERY PLAN, INCLUDING ONE WHERE NOTHING MOVED, for the same reason
+   * `fieldAudit` is: a report that is only present when it has something to say cannot be told
+   * apart from one that never ran. `line2Street: 0` is a real answer.
+   */
+  addressResolution: AddressResolutionTally;
   /** Stated, never assumed: a preview writes nothing. */
   wrote: false;
   headline: string | null;
@@ -274,6 +285,7 @@ export async function previewCustomerImport(
     businessId, readable: adaptation.customers.length, toCreate: create.length,
     toReconcile: reconcile.length, exempt: adaptation.exemptCount,
     duplicateRecords: adaptation.duplicateRecordCount,
+    address: adaptation.addressResolution,
   });
   return {
     ok: true,
@@ -287,6 +299,7 @@ export async function previewCustomerImport(
     duplicates: adaptation.duplicates,
     duplicateRecordCount: adaptation.duplicateRecordCount,
     fieldAudit: adaptation.fieldAudit,
+    addressResolution: adaptation.addressResolution,
     existingCustomers,
     wrote: false,
     headline: adaptation.customers.length === 0

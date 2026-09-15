@@ -70,7 +70,7 @@ const MUTANTS = [
     from: "  const a = (raw.BillAddr ?? null) as Record<string, unknown> | null;",
     to:   "  const a = ((raw.BillAddr ?? raw.ShipAddr) ?? null) as Record<string, unknown> | null;" },
   { id: 'A10', file: ADAPTER, why: '🔴 a repeated qb_customer_id is carried into the payload — Postgres rejects the WHOLE batch, failing 1,945 good records for one bad one',
-    from: '      if (seen.has(adapted.qb_customer_id)) { dupId++; continue; }',
+    from: '      if (seen.has(adapted.customer.qb_customer_id)) { dupId++; continue; }',
     to:   '      if (false) { dupId++; continue; }' },
   { id: 'A11', file: ADAPTER, why: '🔴 a record with no name of any kind is written as a placeholder into a real company\'s customer list',
     from: '  if (!displayName) return null;',
@@ -79,8 +79,49 @@ const MUTANTS = [
     from: '    duplicateRecordCount: touched.size,',
     to:   '    duplicateRecordCount: duplicates.reduce((n, d) => n + d.members.length, 0),' },
   { id: 'A13', file: ADAPTER, why: '🔴 duplicates are MERGED rather than flagged — a company and its owner collapse into one row',
-    from: '      if (seen.has(adapted.qb_customer_id)) { dupId++; continue; }\n      seen.add(adapted.qb_customer_id);',
-    to:   '      if (seen.has(adapted.qb_customer_id)) { dupId++; continue; }\n      if (adapted.email && customers.some(x => x.email === adapted.email)) { continue; }\n      seen.add(adapted.qb_customer_id);' },
+    from: '      if (seen.has(adapted.customer.qb_customer_id)) { dupId++; continue; }\n      seen.add(adapted.customer.qb_customer_id);',
+    to:   '      if (seen.has(adapted.customer.qb_customer_id)) { dupId++; continue; }\n      if (adapted.customer.email && customers.some(x => x.email === adapted.customer.email)) { continue; }\n      seen.add(adapted.customer.qb_customer_id);' },
+
+  // ── the adapter: WHICH `BillAddr` LINE HOLDS THE STREET (2026-09-15, ledger #331) ──
+  // D1 and D2 are the two ways to get this wrong that a reviewer would actually propose, and the
+  // suite must refuse BOTH: D1 is the blanket "Line2 is the street" repair, D2 is doing nothing.
+  { id: 'D1', file: ADAPTER, why: '🔴 THE BLANKET RULE. `Line2` is taken whenever it exists — which writes a PHONE over a correct street on the 6 records shaped `street | phone`, and is the single most likely wrong fix for this defect',
+    from: "  if (s1 === 'street') return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'line1-street' };",
+    to:   "  if (s1 === 'street') return { ...rest, address_line1: line2 ?? line1, phone_from_line1: null, branch: 'line1-street' };" },
+  { id: 'D2', file: ADAPTER, why: '🔴 THE DEFECT ITSELF, RESTORED. `Line1` is always the street, so 448 customers arrive with a phone number where their address belongs and the delivery route cannot find them',
+    from: "    if (s2 === 'street') {\n      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };\n      return { ...rest, address_line1: line2, phone_from_line1: rescue, branch: 'line2-street' };",
+    to:   "    if (s2 === 'street') {\n      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };\n      return { ...rest, address_line1: line1, phone_from_line1: rescue, branch: 'line2-street' };" },
+  { id: 'D3', file: ADAPTER, why: '🔴 THE COLLISION IGNORED — the street is taken even when `Line1` holds a SECOND phone number held nowhere else, so 5 customers silently lose a phone number to gain a street. This is the mutant the "keep the phone" rule exists to refuse',
+    from: "    const survives = heldPhone === null || normPhone(heldPhone) === normPhone(line1);",
+    to:   "    const survives = true;" },
+  // ⚠️ D4 WAS FIRST WRITTEN AS `phone: billing.phone_from_line1 ?? heldPhone` AND IT SURVIVED,
+  //    CORRECTLY: that is an EQUIVALENT MUTANT, not a gap in the probes. `resolveBillingAddress`
+  //    sets `phone_from_line1` to a value ONLY when `heldPhone` is null (`heldPhone === null ?
+  //    line1 : null`), so the two operands are mutually exclusive and BOTH `??` orders compute the
+  //    same answer on every possible input. Recorded rather than quietly swapped, so nobody
+  //    re-adds it and reads its survival as a missing assertion. The overwrite it was reaching for
+  //    needs the record's own phone to stop being consulted at all — which is what D4 now does.
+  { id: 'D4', file: ADAPTER, why: '🔴 THE RECORD\'S OWN PHONE IS NEVER CONSULTED, so the number typed into the address line always wins and displaces the `PrimaryPhone` QuickBooks actually means as the phone — and every one of the 474 records that needed nothing is reported as "rescued"',
+    from: "  return str(phone?.FreeFormNumber) ?? str(mobile?.FreeFormNumber);",
+    to:   "  return null;" },
+  { id: 'D5', file: ADAPTER, why: '🔴 A PHONE NUMBER LEFT IN THE STREET COLUMN when there is no street to replace it with — 27 records keep the exact defect this build removes, and the branch still reports `no-street`',
+    from: "      return { ...rest, address_line1: null, phone_from_line1: rescue, branch: 'no-street' };",
+    to:   "      return { ...rest, address_line1: line1, phone_from_line1: rescue, branch: 'no-street' };" },
+  { id: 'D6', file: ADAPTER, why: '🔴 ABSENT RENDERED AS EMPTY (D-9). "no street on file" becomes an empty string, which reads on a screen as a street someone deleted rather than one nobody ever recorded',
+    from: "      return { ...rest, address_line1: null, phone_from_line1: rescue, branch: 'no-street' };",
+    to:   "      return { ...rest, address_line1: '', phone_from_line1: rescue, branch: 'no-street' };" },
+  { id: 'D7', file: ADAPTER, why: '🔴 A STREET INVENTED FROM A SHAPE WE DO NOT UNDERSTAND — `other` promoted to a verdict, so "(512) 555-0166 (cell 555-0167)" becomes an address. `other` is never a verdict, and this is what widening the classifier without revisiting the counts looks like',
+    from: "  if (s1 === 'phone') {",
+    to:   "  if (s1 === 'phone' || s1 === 'other') {" },
+  { id: 'D8', file: ADAPTER, why: '🔴 THE RESCUE NEVER FIRES — the 4 customers whose ONLY phone is in `BillAddr.Line1` lose it the moment the street moves in. Silent, and invisible on any screen',
+    from: "    const rescue = heldPhone === null ? line1 : null;",
+    to:   "    const rescue = null;" },
+  { id: 'D9', file: ADAPTER, why: '🔴 THE TALLY STOPS BEING A PARTITION — the collision branch is folded into `unchanged`, so the 5 records that need a ruling disappear into a bucket nobody reads',
+    from: "  'phone-would-be-lost': 'phoneWouldBeLost',",
+    to:   "  'phone-would-be-lost': 'unchanged'," },
+  { id: 'D10', file: ADAPTER, why: '🔴 `Line2` APPENDED rather than read — the suite number lands in `address_line1` while `billing_line2` also holds it, so this writer and the party editor disagree about the same address',
+    from: "  if (s1 === 'street') return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'line1-street' };",
+    to:   "  if (s1 === 'street') return { ...rest, address_line1: line2 === null ? line1 : `${line1} ${line2}`, phone_from_line1: null, branch: 'line1-street' };" },
 
   // ── the writer: the run-id trap ─────────────────────────────────────────────
   { id: 'W1', file: WRITER, why: '🔴 THE DATA-LOSS BUG. The reconcile stamps the run id onto a PRE-EXISTING customer, and the undo then deletes real customers with real orders',
