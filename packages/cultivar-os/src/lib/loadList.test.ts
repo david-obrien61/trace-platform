@@ -97,10 +97,12 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
      && /tradeGallonFactor/.test(src) && !/tradeGallonFactor/.test(code),
     '🔴 A1d: the comment stripper is REACHING — both forbidden names are in the prose and NOT in the code');
 
-  // A2 (negative) — the cost model's mulch line is materials that are never bought. Lauren states
-  // mulch is not used. Asserted over the SOURCE so nobody can add one back quietly.
+  // A2 (negative) — mulch is materials that are never bought: Lauren states none is used, only the
+  // ingredients in the special mix. Asserted over the SOURCE so nobody can add one back quietly.
+  // ✏️ 2026-09-15: the mulch line this guards against is LIGHTNING'S, from a Python script run in a
+  // chat — not a LAWNS fact and not a model in this repo. #299 is now "build it", not "fix it".
   ok(!/\bmulch\s*[:=]/i.test(src) && !/mulchPerTree|mulchYards|mulchBags/i.test(src),
-    '🔴 A2 (negative): there is NO mulch quantity anywhere in the model (tech-debt #299)');
+    '🔴 A2 (negative): there is NO mulch quantity anywhere in the model (tech-debt #299 — the model to BUILD must not have one either)');
   ok(/no mulch/i.test(LOAD_LIST_COPY.noMulch),
     'A3: the page says so out loud rather than merely omitting it');
 

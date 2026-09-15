@@ -168,17 +168,19 @@ renderer).
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: tech-debt #299 (was #290) — the install cost model's mulch line
+COVERS: tech-debt #299 (was #290) — the install cost model that must be BUILT, without a mulch line
 SIGNAL: —
 
 Same page. Search the printed sheet for the word **mulch**.
 **PASS:** it appears **once**, in section 1, as the statement **"No mulch. Only the ingredients in
 the special mix."** There is no mulch QUANTITY anywhere.
-**FAIL if** any number is attached to mulch. Lauren states mulch is not used; the cost model's
-mulch line ($7.49 at 15G to $43.12 at 95G) is materials that are never bought.
-⚠️ **STILL OPEN AFTER 2026-09-14.** [[R-155]] closed the MIX half of that pair; the mulch half is
-tech-debt **#299** and is untouched, so **the net effect on install cost is still uncomputed and has
-moved further from zero** — mix went UP and mulch has not come OUT.
+**FAIL if** any number is attached to mulch. Lauren states mulch is not used, only the ingredients
+in the special mix.
+✏️ **CORRECTED 2026-09-15.** This card used to cite *"the cost model's mulch line ($7.49 at 15G to
+$43.12 at 95G)"* as though a live model were getting it wrong. **Those figures are Lightning's**,
+from a Python script run in a chat on 2026-09-11 — not a LAWNS fact, and not in this repo.
+**Tech-debt #299 is now BUILD the model without a mulch line**, and the *"net effect uncomputed"*
+wording is gone: there is no model for a net to be computed over.
 
 ### CARD 8 — AN EMPTY DAY SAYS SO AND OFFERS NO PRINT
 STATUS: owed
@@ -273,8 +275,9 @@ on the drive and compacts when watered*. A number a person can question is a num
 **🔴 FAIL if** the mix line is ~30% lower than the tree gallons on the day (e.g. 329 gallons against
 those same 11 trees). That is the 0.7 ratio returning, and on paper it reads perfectly.
 ⚠️ **THIS CARD PROVES THE LOAD SHEET, NOT THE BOOKS.** `BOM_RULES` was already at 1.0 before the
-ruling, so **nothing a customer is charged moved.** The install cost model still holding 0.7 is
-**not in this repo** (tech-debt #299) and no card here can reach it.
+ruling, so **nothing a customer is charged moved.** ✏️ **And nothing was charged wrongly before it
+either: there is no install cost model in this repo to hold the old 0.7.** Building one — no mulch
+line, the ring as R-156's total function — is tech-debt **#299**, and no card here can reach it.
 
 ---
 

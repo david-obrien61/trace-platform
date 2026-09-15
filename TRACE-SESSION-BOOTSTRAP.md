@@ -92,12 +92,17 @@
   95 gal → 12 ft. **The `tPostsFor` five-row-table defect, caught one quantity over before it was
   written** — the 200 gallon Live Oak reads ~17.2 ft ring / ~55 ft fence where a lookup prints
   nothing, and *"rope is a quantity so a missing one reads as zero."*
-  - 🔴 **THE HALF THAT COSTS MONEY IS STILL OPEN AND THE PAIR HAS MOVED FURTHER FROM ZERO.**
-    R-155 closed MIX (up ~30% at every size); **tech-debt #299 has not closed MULCH**, and nobody has
-    computed the net. 🔴 **The install cost model is NOT IN THIS REPO** — grep for `7.49`/`43.12`/
-    `23.55` returns one unrelated hit, `thirds` returns none. **Locating it is step one**, and R-155
-    requires it ship **printing OLD AND NEW SIDE BY SIDE**: *"a pricing event, not a refactor."*
-    ⚠️ `BOM_RULES` was already 1.0, so **nothing a customer is charged moved.**
+  - 🔴 **#299 IS A BUILD, NOT A FIX — RE-SCOPED 2026-09-15 ON DAVID'S CORRECTION.** There is no
+    install cost model in this repo and there never was. The artefact is a **Python script David ran
+    in a chat on 2026-09-11** (output `install-cost-model.json`, never committed), and **its mulch
+    line, its RING FIVE-ROW LOOKUP and `MULCH_YD = BARK_YD ("TO CONFIRM")` are LIGHTNING'S, not
+    LAWNS'S** — the ring lookup independently being the exact shape [[R-156]] rules against.
+    **So: BUILD it here, reading `business_operations_config`, no mulch line, the ring as R-156's
+    total function**, and no number carried across without a `basis.ts` provenance mark.
+    ✏️ **The "pull opposite ways / net uncomputed" pairing with #300 is RETIRED: nothing a customer
+    is charged depends on a model that does not exist**, and #300 was a ratio settled by ruling.
+    🔴 **Hard-blocked on #253** — `20260905_production_planning` is unapplied, so
+    `business_operations_config` is absent on every tenant. **Apply-or-retire gates this.**
   - 🔴 **A CAP WAS HANDING OUT TAKEN IDS, AND THAT IS WHY THIS BRANCH RENUMBERED THREE.**
     `verify-id-citations` computed NEXT FREE over `## #N` headings only while the log also holds
     ~163 legacy TABLE rows its own clause B has counted since 2026-09-11. **Rows 107 → 270; the

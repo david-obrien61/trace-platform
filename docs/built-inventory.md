@@ -3305,9 +3305,4 @@ on that 200 gallon Live Oak**, where a lookup would have printed nothing.
 **⚠️ KNOWN GAPS, each filed:** deer fence **CAPTURE** is recorded NOWHERE — nothing says WHICH trees
 need it, so the page prints a per-size figure for a hand add and **no day total, deliberately** ·
 **tech-debt #301 (was #292)** — 9 real trees state a gallon size the resolver cannot reach, printed
-honestly and not counted · 🔴 **tech-debt #299 (was #290) — the install cost model's mulch line is
-STILL OPEN while its sibling is closed**, so **the net effect on install cost is not merely
-uncomputed, it has moved further from zero**: mix went UP ~30% at every size and mulch has not come
-OUT. **And the model holding those numbers is not in this repo** (grepped: `7.49`/`43.12`/`23.55`
-return one unrelated hit; `thirds` returns none) — locating it is step one, and [[R-155]] requires
-it ship **printing OLD AND NEW SIDE BY SIDE**, *"a pricing event, not a refactor."*
+honestly and not counted · 🔴 **#299 RE-SCOPED 2026-09-15 ON DAVID'S CORRECTION — IT IS A BUILD, NOT A FIX.** There is no install cost model in this repo and there never was: the artefact is a **Python script David ran in a chat on 2026-09-11**, output `install-cost-model.json`, never committed. **Its mulch line, its RING FIVE-ROW LOOKUP and `MULCH_YD = BARK_YD ("TO CONFIRM")` are Lightning's, not LAWNS's** — the ring lookup being independently the exact shape [[R-156]] rules against. **So the row is: BUILD the model here, reading `business_operations_config`, with no mulch line and the ring as R-156's total function.** ✏️ **AND THE "PULL OPPOSITE WAYS / NET UNCOMPUTED" FRAMING IS RETIRED WITH IT: nothing a customer is charged depends on a model that does not exist.** ⚠️ **Hard-blocked on tech-debt #253** — `20260905_production_planning.sql` is unapplied, so `business_operations_config` is absent on every tenant. ⚠️ When it is built, [[R-155]] requires it ship **printing OLD AND NEW SIDE BY SIDE** — *"a pricing event, not a refactor"* — which applies to every later revision of it, since the first build has no old value to print.

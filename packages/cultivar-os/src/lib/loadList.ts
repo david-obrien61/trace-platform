@@ -59,10 +59,14 @@ export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
  *     numbers were 0.7 is a coincidence that has already cost one reconciliation. **The BOM does
  *     not touch it.** Anyone "unifying" the two 0.7s is merging a pot measurement into a recipe.
  *
- * ⚠️ MULCH — still absent, and now on the ruling as well as on Lauren's statement. The install cost
- * model carries a mulch line ($7.49 at 15G to $43.12 at 95G); mulch is NOT used, only the
- * ingredients in the special mix. There is no mulch row here and there must not be one. That model
- * is NOT in this repo (grepped: zero hits for either figure) — see tech-debt #299.
+ * ⚠️ MULCH — absent, on Lauren's statement: mulch is NOT used, only the ingredients in the special
+ * mix. There is no mulch row here and there must not be one.
+ * ✏️ CORRECTED 2026-09-15: this comment used to say *"the install cost model carries a mulch line
+ * ($7.49 at 15G to $43.12 at 95G)"*, which implied a live model in the repo getting it wrong.
+ * There is no such model. Those figures come from a **Python script David ran in a chat on
+ * 2026-09-11** (output `install-cost-model.json`, never committed), and the mulch line is
+ * **Lightning's invention, not a LAWNS fact** — as is that script's RING FIVE-ROW LOOKUP, which is
+ * the very shape R-156 above rules against. Building the model here is tech-debt #299.
  */
 export const BOM_RULES = {
   /**
