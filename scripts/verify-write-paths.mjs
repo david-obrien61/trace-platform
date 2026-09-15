@@ -139,6 +139,60 @@ const ALLOWED_DIVERGENCE = {
   // ⚠️ BOTH WRITES ARE REAL — they are not tech-debt #185's shape (a declared writer that writes
   //    nothing). `campaignLifecycle.test.ts` §F12 asserts both call `.maybeSingle()` and surface a
   //    'did not save' message, which is only meaningful because the writes exist.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // DECLARED 2026-09-15 (the contact record — the vCard shape, ledger #335). ONE table, ONE file.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 TWO GENUINELY DIFFERENT OPERATIONS, AND THE DIFFERENCE IS WHO IS STANDING THERE.
+  //    `customerAddresses.ts` is the INTERACTIVE save: one site, typed by a person, planned by
+  //    `planSaveSite`, which refuses a duplicate LABEL in a sentence written for Lauren ("This
+  //    customer already has a site called X. Pick another name.") and returns a `SavePlan` the UI
+  //    renders. `contactWriter.ts` is the BULK IMPORT: up to three rows per customer across ~1,900
+  //    customers, where a duplicate is not a refusal to show anybody — it is the correct outcome
+  //    of running the import twice, and must be SILENT SUCCESS.
+  //
+  // 🔴 FOLDING THEM WOULD BREAK THE IMPORT IN THE WAY THAT MATTERS: `planSaveSite` refuses on a
+  //    LABEL collision, and the import writes the label "Billing" for every customer it touches.
+  //    Routed through the interactive path, the second customer's billing address would be refused
+  //    as a duplicate label — the labels are per-customer unique, so it would in fact pass, but the
+  //    plan-then-insert shape costs a round trip per row and its refusal VOCABULARY is wrong for a
+  //    caller that is a loop rather than a person. The import instead asks the DATABASE for
+  //    idempotence (`ignoreDuplicates` against the partial unique index on `value_norm`), which is
+  //    a guarantee a read-then-write cannot make — tech-debt #54's TOCTOU lesson.
+  //
+  // ⚠️ §6 r8 SAYS REUSE BEFORE FORKING, SO THIS IS A DELIBERATE DIVERGENCE AND NOT AN OVERSIGHT.
+  //    What makes them separate is not the code, it is the CONTRACT: one returns human refusals,
+  //    the other returns counts and never refuses on a duplicate.
+  //
+  // ⚠️ THE COLUMN SETS CANNOT COLLIDE ON THE ROWS THAT MATTER. Both write the same table, but the
+  //    import only ever writes rows stamped `source LIKE 'quickbooks:%'`, and `customerAddresses.ts`
+  //    writes `source` NULL (it predates the column). So a hand-curated site and an imported one
+  //    are distinguishable in the data, which is what `20260911b` §4 actually cares about:
+  //    history's mistakes must stay tellable apart from curated entries.
+  //
+  // ⚠️ AND THE TWO NEW TABLES ARE NOT LISTED HERE BECAUSE THEY HAVE EXACTLY ONE WRITER EACH.
+  //    `customer_phones` and `customer_emails` are written only by `contactWriter.ts`, so they are
+  //    not a divergence at all. `contactRecord.test.ts` §G asserts that set in both directions and
+  //    fails the build on a second writer OR on a declared writer that has stopped writing.
+  'customer_addresses': {
+    reason: 'The ship-to book has two writers with different CONTRACTS. customerAddresses.ts is the '
+          + 'interactive one-site save: planSaveSite refuses a duplicate label in a sentence written '
+          + 'for the owner and the UI renders that refusal. contactWriter.ts is the bulk QuickBooks '
+          + 'import, where a duplicate is the correct outcome of a second run and must be silent '
+          + 'success — it asks the database for idempotence via ignoreDuplicates against the partial '
+          + 'unique index, a guarantee a read-then-write cannot make (tech-debt #54 TOCTOU). Folding '
+          + 'them would give a loop a refusal vocabulary written for a person, and cost a round trip '
+          + 'per row across ~1,900 customers. The rows are distinguishable: the import stamps source '
+          + "LIKE 'quickbooks:%' and the interactive path leaves source NULL, which is what keeps "
+          + 'curated sites tellable apart from imported history (20260911b §4). customer_phones and '
+          + 'customer_emails are NOT declared here — they have exactly one writer each.',
+    // BOTH writers are named rather than baselining one and declaring the other: the table
+    // postdates `write-paths-baseline.json`, and splitting one explanation across two files
+    // is how a reason stops being readable. The pair is the fact; this is where it is stated.
+    paths: [
+      'packages/shared/src/business-logic/customerAddresses.ts',
+      'packages/shared/src/business-logic/contactWriter.ts',
+    ],
+  },
   'campaigns': {
     reason: 'Edit (dates + focus, R-145) and cancel (R-146) are one-field owner UPDATEs issued from '
           + 'the campaign detail page under the CALLER\'S OWN session, so RLS enforces them: '
