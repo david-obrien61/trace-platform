@@ -65,6 +65,47 @@ const ALLOWED_DIVERGENCE = {
   //
   // ⚠️ THE TRIGGER IS A SECOND READER. `cost_objects` (4 lists) and `receipts` (2) both outrank this
   // one and should be taken together, as #120 says.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // DECLARED 2026-09-15 (the opening stock seed, ledger #333) — ⚠️ PENDING DAVID'S RATIFICATION,
+  // the same standing as every entry in this list.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THESE ARE NOT RESTATEMENTS OF A RECORD SHAPE. THEY ARE THREE-COLUMN AND FOUR-COLUMN
+  //    PROJECTIONS, EACH ANSWERING ONE QUESTION, AND DERIVING THEM FROM A REGISTRY WOULD MAKE
+  //    THEM WORSE. `OpeningStockSeed` asks *which lots are empty and untouched* and needs
+  //    `id,name,qty` — reading a registry's full `business_inventory` shape would pull ~30
+  //    columns across the wire for a question that needs three, on every open of the Settings
+  //    page. `fetchSeededLots` asks *which lots carry a starting number nobody has counted since*
+  //    and needs `inventory_id,kind,occurred_at`. This is the same "a projection is not a
+  //    restatement" reasoning the ShipDate entry below records, and it is why this cap's own
+  //    header calls the count a FLOOR rather than a verdict.
+  //
+  // ⚠️ `InventoryReconcile.tsx:189` IS FLAGGED AND IS NOT NEW. Its ledger list predates this
+  //    build; it moved line because a seed read was inserted above it, and the cap keys on
+  //    `file:line`. Declaring it here records that it was LOOKED AT rather than letting a
+  //    line-shift launder an existing list into a declared one — it is the same eight-column
+  //    window read it always was, and its own comment explains why it reads `kind` and not the
+  //    still-GATED event-store columns.
+  //
+  // ⚠️ THE TRIGGER FOR A REAL REGISTRY IS UNCHANGED AND IS NOT THIS BUILD: tech-debt #120 names
+  //    `cost_objects` (4 lists) and `receipts` (2) as outranking everything else, and minting a
+  //    registry inside a build about a starting number is the drift these caps exist to catch.
+  business_inventory_ledger: {
+    reason: 'Two narrow PROJECTIONS, not two restatements of a record shape. fetchSeededLots '
+          + 'reads inventory_id,kind,occurred_at to answer "which lots carry a starting number '
+          + 'nobody has counted since"; InventoryReconcile reads the eight-column movement window '
+          + 'it has always read (flagged only because a seed read shifted its line number). '
+          + 'Neither is derivable from a registry without pulling columns it does not need, and '
+          + 'both deliberately read `kind` rather than the still-GATED event-store columns.',
+    paths: ['packages/cultivar-os/src/lib/inventoryStates.ts',
+            'packages/cultivar-os/src/pages/InventoryReconcile.tsx'],
+  },
+  business_inventory: {
+    reason: 'ONE three-column projection (id,name,qty) answering "which products are empty and '
+          + 'have never been touched". The seed panel needs three columns to plan a write; a '
+          + 'registry-derived full shape would pull ~30 across the wire on every Settings open, '
+          + 'for a question that needs three. A projection is not a restatement (tech-debt #120).',
+    paths: ['packages/shared/src/components/OpeningStockSeed.tsx'],
+  },
   vendor_preferences: {
     reason: 'Table created by this build; ONE reader (the standing vendor answer on /receipts/:id). '
           + 'No restated record shape exists to derive from yet. A registry is owed when a SECOND '
