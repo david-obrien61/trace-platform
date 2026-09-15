@@ -47,6 +47,8 @@
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBusinessContext } from '@trace/shared/context';
+import { resolveRung, rungsAbove, type Ladder } from '@trace/shared/inventory';
+import { loadContainerLadder, type LadderRead } from '../lib/containerLadderRead';
 import {
   planLots, arithmeticCheck, basisSentence, splitPenalty, minutesPerPot,
   WITHHELD_REASON,
@@ -85,6 +87,7 @@ export default function UppotPlan() {
   const [typed, setTyped] = useState<Record<string, number | null>>({});
   const [targets, setTargets] = useState<Record<string, number>>({});
   const [batchSize, setBatchSize] = useState(40);
+  const [ladderRead, setLadderRead] = useState<LadderRead | null>(null);
   const [reason, setReason] = useState('');
   const [committing, setCommitting] = useState(false);
   const [outcome, setOutcome] = useState<CommitOutcome | null>(null);
@@ -96,13 +99,15 @@ export default function UppotPlan() {
     if (!businessId) return;
     let live = true;
     void (async () => {
-      const [lots, opsCfg] = await Promise.all([
+      const [lots, opsCfg, ladder] = await Promise.all([
         loadPlanLots(businessId),
         loadOperationsConfig(businessId, canReadMoney),
+        loadContainerLadder(businessId),
       ]);
       if (!live) return;
       setRead(lots);
       setCfg(opsCfg);
+      setLadderRead(ladder);
     })();
     return () => { live = false; };
   }, [businessId, canReadMoney]);
@@ -114,6 +119,15 @@ export default function UppotPlan() {
     [read],
   );
 
+  // 🔴 `null` MEANS "NO LADDER", AND IT IS A REAL STATE, NOT A LOADING ARTEFACT. A tenant with no
+  // ladder plans exactly as it did before this build. A FAILED read is also null here — but the
+  // banner below says which, because "we could not read the sizes" and "this nursery has none" are
+  // different sentences and only one of them is the owner's problem.
+  const ladder: Ladder | null = useMemo(
+    () => (ladderRead?.phase === 'loaded' && ladderRead.rungs.length > 0 ? ladderRead.rungs : null),
+    [ladderRead],
+  );
+
   // The plan recomputes on every keystroke. It writes nothing, so this is free and it is the
   // point — the manager types 50 instead of 144 and watches the hours, the pots and the window
   // move together. A "Recalculate" button here would break the comparison the screen is for.
@@ -122,8 +136,20 @@ export default function UppotPlan() {
     return planLots(lots, cfg, {
       managerNumbers: typed, targets, batchSize,
       startDate: cfg.ops.windowStart,
+      ladder,
     });
-  }, [lots, cfg, typed, targets, batchSize]);
+  }, [lots, cfg, typed, targets, batchSize, ladder]);
+
+  // The rung a lot sits on, or null when it is not on the ladder at all. Used by the picker to
+  // decide what to OFFER; the refusal list below explains the nulls.
+  const ladderRung = useCallback(
+    (lot: LotInput) => {
+      if (!ladder) return null;
+      const r = resolveRung(ladder, lot.size);
+      return r.ok ? r.rung : null;
+    },
+    [ladder],
+  );
 
   const checks = cfg ? arithmeticCheck(cfg) : [];
 
@@ -179,6 +205,32 @@ export default function UppotPlan() {
         {read.retiredHidden > 0 && <span>{n0(read.retiredHidden)} retired lots are hidden. </span>}
         {plan && <span>{n0(plan.refused.length)} cannot be planned for other reasons — listed below.</span>}
       </div>
+
+      {/* ── THE LADDER ITSELF — what sizes this nursery runs, and whether we could read them ──
+           🔴 A FAILED READ AND AN ABSENT LADDER ARE DIFFERENT SENTENCES. One is our problem and one
+           is a setup step; rendering both as "no container sizes" would tell the owner to go and
+           fix something that is not broken (D-9). */}
+      {ladderRead?.phase === 'failed' && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, border: '1px solid #A32D2D', background: '#fff4f4', fontSize: 13 }}>
+          <strong>Could not read your container sizes.</strong> {ladderRead.message}
+          {' '}Planning below is falling back to reading sizes as plain numbers.
+        </div>
+      )}
+      {ladderRead?.phase === 'loaded' && ladderRead.rungs.length === 0 && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, border: '1px solid #cfe0bd', background: '#f6faf1', fontSize: 13 }}>
+          No container sizes are set up yet, so sizes are being read as plain numbers.
+          Setting up your ladder — <em>slip, 4", 3/5 gal, 15, 30, 45, 65, 95/100, 200</em> or whatever you actually run —
+          is what stops a plan landing on a size you do not stock.
+        </div>
+      )}
+      {ladderRead?.phase === 'loaded' && ladderRead.conflicts.length > 0 && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, border: '1px solid #A32D2D', background: '#fff4f4', fontSize: 13 }}>
+          <strong>Two of your container sizes clash.</strong> Until this is fixed, a lot of that size has no single rung:
+          <ul style={{ margin: '6px 0 0 18px' }}>
+            {ladderRead.conflicts.map((c, i) => <li key={i}>{c.detail}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* ── THE ARITHMETIC SELF-CHECK — David's must-build ── */}
       {checks.length > 0 && (
@@ -236,9 +288,33 @@ export default function UppotPlan() {
                     <td style={{ padding: '6px', fontWeight: 600 }}>{lot.name}<div style={{ fontSize: 11, color: '#888' }}>{lot.size}</div></td>
                     <td style={{ padding: '6px' }}>{lot.unitValue}</td>
                     <td style={{ padding: '6px' }}>
-                      <input type="number" value={targets[lot.id] ?? ''} placeholder="—"
-                        onChange={(e) => setTargets((t) => ({ ...t, [lot.id]: Number(e.target.value) }))}
-                        style={{ width: 68, minHeight: 44, fontSize: 15 }} />
+                      {/* 🔴 A PICKER, NOT A STEPPER (ledger #326). This was `<input type="number">`
+                          with no min, no step and no list: getting 15 → 30 was fifteen presses of a
+                          spinner, and NOTHING STOPPED A PLAN LANDING ON 47 — a container nobody
+                          sells, which then costs mix, pots and hours against a pot that does not
+                          exist. The options are the rungs ABOVE this lot's own rung, so an
+                          impossible target is unreachable rather than merely discouraged.
+                          ⚠️ The VALUE written is still the same number `mixCubicYardsPerPot` has
+                          always taken, so the model underneath is untouched — a rung with no
+                          volume (a slip) is offered but carries no number, and says so. */}
+                      {ladder && ladderRung(lot) ? (
+                        <select
+                          value={targets[lot.id] ?? ''}
+                          onChange={(e) => setTargets((t) => ({ ...t, [lot.id]: Number(e.target.value) }))}
+                          style={{ width: 104, minHeight: 44, fontSize: 15 }}
+                        >
+                          <option value="">—</option>
+                          {rungsAbove(ladder, ladderRung(lot)!).map((r) => (
+                            <option key={r.label} value={r.volumeGallons ?? ''} disabled={r.volumeGallons == null}>
+                              {r.label}{r.volumeGallons == null ? ' (no volume set)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input type="number" value={targets[lot.id] ?? ''} placeholder="—"
+                          onChange={(e) => setTargets((t) => ({ ...t, [lot.id]: Number(e.target.value) }))}
+                          style={{ width: 68, minHeight: 44, fontSize: 15 }} />
+                      )}
                     </td>
                     <td style={{ padding: '6px' }}>{lot.qty == null ? <em style={{ color: '#8a6d00' }}>never counted</em> : n0(lot.qty)}</td>
                     <td style={{ padding: '6px' }}>{batch ? n0(batch.split.mustKeepSellable) : '—'}</td>
@@ -266,6 +342,36 @@ export default function UppotPlan() {
           {plan && plan.refused.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <h3 style={{ fontSize: 14, color: '#8a6d00' }}>{n0(plan.refused.length)} lots cannot be planned</h3>
+              {/* 🔴 THE UNRESOLVED LIST (David, 2026-09-14): "a size that reads but is not a rung"
+                  is a REAL POPULATION and needs its own list, not burial among the other refusals.
+                  Measured at LAWNS the day this shipped: 121 live rows across 1 · 2 · 3 · 5 · 10 ·
+                  300 gallon. Grouped by the size itself, because the fix is one decision PER SIZE
+                  — add the rung or correct the rows — not one decision per lot. */}
+              {(() => {
+                const offLadder = plan.refused.filter((r) => r.refusal.ok === false && r.refusal.reason === 'off_ladder');
+                if (offLadder.length === 0) return null;
+                const bySize = new Map<string, number>();
+                for (const { lot } of offLadder) {
+                  const k = (lot.size ?? '').trim();
+                  bySize.set(k, (bySize.get(k) ?? 0) + 1);
+                }
+                const rows = [...bySize.entries()].sort((a, b) => b[1] - a[1]);
+                return (
+                  <div style={{ margin: '8px 0 12px', padding: 10, background: '#fffdf5', border: '1px solid #e6d9a8', borderRadius: 6 }}>
+                    <strong style={{ fontSize: 13 }}>
+                      {n0(offLadder.length)} of those read fine — they are just not one of your container sizes
+                    </strong>
+                    <div style={{ fontSize: 12, color: '#666', margin: '2px 0 6px' }}>
+                      Each is one decision: add it to your ladder, or correct the rows that use it.
+                    </div>
+                    <ul style={{ margin: '0 0 0 18px', fontSize: 13 }}>
+                      {rows.map(([size, count]) => (
+                        <li key={size}><strong>{size || '(blank)'}</strong> — {n0(count)} {count === 1 ? 'lot' : 'lots'}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
               <ul style={{ fontSize: 13, lineHeight: 1.6, paddingLeft: 20 }}>
                 {plan.refused.slice(0, 40).map(({ lot, refusal }) => (
                   <li key={lot.id}><strong>{lot.name}</strong> — {!refusal.ok && refusal.detail}</li>

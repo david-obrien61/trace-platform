@@ -3131,8 +3131,56 @@ crew-hours, the batch dates and whether the plan fits the window, **before** any
 seven-day flags (computed, tested, **rendered nowhere**) · the graduation ledger movement · the audit
 row · sales-a-month from history (stage ④) · a UI cancel for a committed plan.
 
-**PROOF:** `productionPlan.test.ts` 156 probes · `uppotPlanRead.test.ts` 28 probes ·
+**PROOF:** `productionPlan.test.ts` 169 probes · `uppotPlanRead.test.ts` 28 probes ·
 `scripts/measure-production-plan-mutants.mjs` **40 mutants, 40 caught, 0 survived**.
+
+### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-157)
+
+**Last updated:** 2026-09-14 · **Status:** BUILDER-COMPLETE · **migration WRITTEN, NOT APPLIED.**
+
+A grower's container sizes are a short, ordered, **per-tenant** list of real trade rungs — at LAWNS
+*slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200*. **Adding a rung is adding a ROW**, and the
+size resolver reads the same list the picker offers, so a new size is recognised everywhere at once.
+
+- `packages/shared/src/inventory/containerLadder.ts` — pure, zero-dep leaf. **The ladder is passed
+  IN as data**, because `parseUnitOfMeasure` is a zero-dep leaf that a client grid, a node backfill
+  and a verify cap all import, and none of them may drag a DB handle in.
+- `supabase/migrations/20260914_container_ladder.sql` — `public.container_ladder`, per-tenant.
+  SELECT is **membership** (not `settings:read` — `STAFF_DEFAULT_BUNDLE` holds no `settings:*`, so
+  gating the read would blind the picker for the people in the yard, tech-debt #188); write is
+  `settings:update`; **no DELETE policy at all** — retiring is an UPDATE (R-133 · ledger #303's shape).
+- `packages/cultivar-os/src/lib/containerLadderRead.ts` — one read. A **failed** read and an
+  **absent** ladder are different sentences and the screen says which.
+- `UppotPlan.tsx` — the target-size cell is now a **next-rung picker**; the unresolved list groups
+  off-ladder sizes **by size**, because the fix is one decision per size, not per lot.
+
+🔴 **THE NUMERIC KEYS OF A RUNG ARE DERIVED, NEVER DECLARED.** A rung claims every number the parser
+reads out of its own label and aliases, so the `3/5 gal` rung claims **both 3 and 5** (Terry: the
+difference is only pot height, R-71 ③) and `95/100` claims both. Nobody types out `15`/`#15`/`15G`.
+
+🔴 **THE PARSER RUNG ORDER CHANGED, AND THE CORPUS WAS RE-RUN AS ITS HEADER REQUIRES.** Box now sits
+ABOVE length: `24 box` read as a container while `20 inch box` read as a **length** — the same pot,
+one word apart, in two different unit kinds, and `rungKey` requires `container`. **Re-run across every
+live size at both tenants: 565 rows unchanged, exactly 3 changed** (`20/24/36 inch box`, Texas Mountain
+Laurel), length → container. ⚠️ **Those 3 rows' STORED projection is now stale and needs a re-derive**
+— the parser moved, not the size, so the DB trigger cannot have caught it.
+
+🔴 **NOTHING ON HAND IS NOW THE REASON GIVEN.** `classifyLot` checks stock FIRST: 97 of Test Dave's 99
+unplannable rows are catalogue rows with no size AND no stock, and every one was being told its *size*
+was unreadable. ⚠️ **This reversed a written assertion** (§D previously asserted a zero-count lot was
+plannable); the old expectation is recorded in the test rather than deleted.
+
+**NOT BUILT, AND SAID SO:** no screen EDITS the ladder yet (the table, the policies and the reader
+exist; adding a rung today is SQL) · per-rung `handling_minutes` is read and carried but **no rung
+sets one**, so every rung falls back to the global rate · the 121 off-ladder rows are LISTED, not
+resolved — that is David's decision per size · the three stale `inch box` projections are not re-derived.
+
+**PROOF:** `containerLadder.test.ts` **60 assertions** · `productionPlan.test.ts` §D2 ·
+`scripts/measure-container-ladder-mutants.mjs` **23 mutants, 23 caught, 0 survived, 0 no-build** —
+and the harness carries a **third `NO-BUILD` verdict** (tech-debt #293's proposal) so a mutant that
+cannot compile is an ERROR rather than a silent pass. ⚠️ **Four of §I's probes exist because four
+mutants SURVIVED the first run.**
+**BOARD:** `docs/owner-tests/uppot-planning-full-surface-test.md` CARDS 22–27, 0 covered.
 **DEMO NOTE:** cannot be shown on LAWNS — 447 lots, 2 counted, each holding one tree. Seed Test
 Dave's with `scripts/seed-uppot-harness.mjs`, which refuses to run against LAWNS.
 

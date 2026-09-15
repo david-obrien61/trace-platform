@@ -151,22 +151,32 @@ export function parseUnitOfMeasure(raw: string | null | undefined): UnitParse | 
   const yd = s.match(new RegExp(String.raw`(${N})\s*(?:yards?|yds?)\b`));
   if (yd) return mk('volume', num(yd[1]), 'yard');
 
-  // ── 5. LENGTH — an explicit foot/inch measure that is the sale size (a 6ft tree). The rope case
+  // ── 5. CONTAINER · BOX — "24 box", "20 inch box" (a box tree; recorded as written rather than
+  //       reinterpreted — faithful-before-connected).
+  //       🔴 THIS RUNG MOVED ABOVE LENGTH ON 2026-09-14 (ledger #326) AND THE REASON IS A MEASURED
+  //       DEFECT, NOT A PREFERENCE. Below length, the word "inch" decided the UNIT KIND: `24 box`
+  //       read as a CONTAINER while `20 inch box` read as a LENGTH — the same physical pot, one
+  //       word apart, in two different kinds. `rungKey` requires `unitKind === 'container'`, so the
+  //       inch-spelled ones could never be planned and the others always could. Three rows were
+  //       live at LAWNS (`20 inch box`, `24 inch box`, `36 inch box`, all Texas Mountain Laurel).
+  //       A box IS a container; the inches are how the trade names its size, exactly as gallons are.
+  //       ⚠️ The corpus was re-run after the move, as this function's header requires: every live
+  //       size at LAWNS and Test Dave's was re-parsed and the ONLY rows that changed kind are those
+  //       three, length → container. Nothing else moved in either direction.
+  const box = s.match(new RegExp(String.raw`(${N})\s*(?:inch\s*|in\s*|")?box(?:es)?\b`));
+  if (box) return mk('container', num(box[1]), 'box');
+
+  // ── 6. LENGTH — an explicit foot/inch measure that is the sale size (a 6ft tree). The rope case
   //       never reaches here; rung 2 took it.
   const ft = s.match(new RegExp(String.raw`(${N})\s*(?:ft|foot|feet)\b`));
   if (ft) return mk('length', num(ft[1]), 'foot');
   const inch = s.match(new RegExp(String.raw`(${N})\s*(?:"|in\b|inch(?:es)?\b)`));
   if (inch) return mk('length', num(inch[1]), 'inch');
 
-  // ── 6. CONTAINER · QUART — "10.0 Qt", and a bare "QT" meaning a one-quart pot.
+  // ── 7. CONTAINER · QUART — "10.0 Qt", and a bare "QT" meaning a one-quart pot.
   const qt = s.match(new RegExp(String.raw`(${N})\s*(?:qts?|quarts?)\b`));
   if (qt) return mk('container', num(qt[1]), 'quart');
   if (/^(?:qt|quart)s?$/.test(s)) return mk('container', 1, 'quart');
-
-  // ── 7. CONTAINER · BOX — "24 box" (a 24-inch box tree; recorded as written, 24 box, rather than
-  //       reinterpreted into inches — faithful-before-connected).
-  const box = s.match(new RegExp(String.raw`(${N})\s*box(?:es)?\b`));
-  if (box) return mk('container', num(box[1]), 'box');
 
   // ── 8. CONTAINER · GALLON RANGE — "#3/5", "10/15 gallon", "25/30". A RANGE IS KEPT AS A RANGE.
   //       This is the rung that exists because `normalizeSize` collapses these three today and
