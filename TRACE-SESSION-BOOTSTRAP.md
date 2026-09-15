@@ -444,7 +444,7 @@
 - ⚠️ **FILED, NOT FIXED:** tech-debt **#192** (`soft_delete_inventory` writes `status='deleted'`, absent from `ALL_STATUS_VALUES`; **5 live rows**, and it corrects a prompt premise) · **#193** · **#194** (`submit.ts` by-id reads unfiltered, declared + owed) · 🔴 **#195 — tech-debt #186–#191 are cited in CLAUDE.md and DO NOT EXIST in `docs/tech-debt-log.md`**, found while claiming an id.
 - ⚠️ **SIX `inventory` CARDS FLIPPED `covered` → `owed`** — their read query moved. Prior wording preserved inline; nothing observable changes at LAWNS today.
 
-### ⭐ THE CONTAINER LADDER — A CONTAINER SIZE IS A RUNG, NOT A NUMBER (2026-09-14, ledger #326, R-155)
+### ⭐ THE CONTAINER LADDER — A CONTAINER SIZE IS A RUNG, NOT A NUMBER (2026-09-14, ledger #326, R-157)
 
 - 🟡 **BUILDER-COMPLETE · CARDS 22–27, 0 COVERED** · ⛔ **MIGRATION `supabase/migrations/20260914_container_ladder.sql` NOT APPLIED — CARDS 22–27 BLOCKED** · `api/` 12/12 · **NO new permission string** (`settings:update` reused) · **60 assertions · 23/23 mutants caught, 0 survived** · → `docs/owner-tests/uppot-planning-full-surface-test.md`
 - 🔴 **THE RECON STOPPED THE BUILD AND WAS RIGHT TO: THE 99 UNPLANNABLE LOTS HAVE NO SIZE AT ALL.** `size IS NULL` on all 99, `unit_parsed_from` NULL, so the parser never ran. **Across all three tenants not one non-blank size refuses it.** David ruled them out of scope — catalogue rows, 97 of 99 at `qty = 0`. ⚠️ **But LAWNS's 111 no-size rows ALL carry `qty > 0` — real stock, no size, and that is a different problem.**
