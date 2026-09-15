@@ -3134,7 +3134,7 @@ row · sales-a-month from history (stage ④) · a UI cancel for a committed pla
 **PROOF:** `productionPlan.test.ts` 169 probes · `uppotPlanRead.test.ts` 28 probes ·
 `scripts/measure-production-plan-mutants.mjs` **40 mutants, 40 caught, 0 survived**.
 
-### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-155)
+### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-157)
 
 **Last updated:** 2026-09-14 · **Status:** BUILDER-COMPLETE · **migration WRITTEN, NOT APPLIED.**
 
