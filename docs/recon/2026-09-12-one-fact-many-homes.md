@@ -3,6 +3,11 @@
 **Ledger:** #317 · **Branch:** `recon/one-fact-many-homes` · **Date:** 2026-09-12 (unattended run)
 **Type:** RECON. **Report only — nothing built, nothing fixed, nothing merged.**
 
+> ✏️ **2026-09-15 — READ THE `#253` SECTION'S CLOSING BLOCK FIRST.** This document
+> carried the refutation of tech-debt **#253** for three days while `main` carried the claim, and
+> corrected neither — **its own thesis, performed by its own document.** #253 is now closed; the
+> block explains what *report only* does and does not license.
+
 > **SCOPE — BY CONSEQUENCE, NOT COMPLETENESS.** This is not an inventory of duplicated strings.
 > It is the set of copies where **one going stale breaks something silently** — the shape that let
 > `campaign_posts` reject `tiktok` for three months while three campaigns committed with zero posts
@@ -366,6 +371,50 @@ build the repo proves it *could* answer the question and does not ask it.
 schedule an apply that already happened; a session reading #310 would not trust a column that is live.
 **Both cost a session, and #253 additionally mis-states the platform's state to anyone auditing it.**
 **Would anything catch it?** **Only if someone runs `--catalog` by hand.** No gate does.
+
+---
+
+### ✏️ 2026-09-15 — THIS DOCUMENT IS THE FINDING. IT CARRIED THE REFUTATION FOR THREE DAYS.
+
+🔴 **The measurement above — `business_operations_config`, `production_plans` and
+`production_plan_lines`, all three `rls=true`, four policies each — was committed to `main` on
+2026-09-12. Tech-debt #253 stayed on `main`, unedited, saying those three tables DO NOT EXIST, until
+2026-09-15.** For three days this repository asserted a fact and its refutation in two files, and
+`git log` shows no one touched either.
+
+**What that cost, measured rather than estimated.** #253 was the **#1 item on the blocking short
+list** in `docs/open-questions.md`, quoted there as *"Settings → Operations cannot save and the Uppot
+plan page cannot commit, on every tenant."* It was cited as the **hard blocker on tech-debt #299**,
+the install cost model — a build that could not start because the table it must read was said not to
+exist. **The table existed the whole time, and this document said so.** The correction came only
+when David ran Settings → Operations by hand, changed a value, and reloaded.
+
+🔴 **AND HERE IS THE PART THAT INDICTS THIS DOCUMENT RATHER THAN THE ROW.** This recon's thesis is
+that one fact living in many homes goes stale silently, and that the damage is done by *the copy
+nobody re-derives*. It then found exactly that — **the highest-severity open row in the log,
+describing yesterday** — wrote the true value down in a **new home**, and **left the false copy
+standing.** It even said so in its own words, two paragraphs up: *"#253's measurement was true when
+taken and the row has not moved since … it is describing yesterday."* The sentence names the defect
+and the row was not corrected.
+
+**So this document did not merely report the pattern. It performed it.** A recon that finds one fact
+in two places and corrects neither has not reduced the number of homes — **it has added one.** That
+is the finding, and it is this file's, not #253's.
+
+⚠️ **WHAT THIS CHANGES FOR ANY FUTURE RECON, stated as a rule rather than a regret:** *report only*
+governs **code, schema and behaviour** — it does not license leaving a **proven-false claim** standing
+in the corpus. A measurement that contradicts a written row obliges the session to **correct the row
+or file the correction as a blocking item**, in the same pass, naming both homes. **Writing the true
+value into a third document is not a correction; it is a third home.**
+
+✅ **CLOSED 2026-09-15 (ledger #332).** #253 is marked RESOLVED in all six homes that carried the
+claim — `CLAUDE.md`, `docs/tech-debt-log.md` (row and blocker), `docs/open-questions.md` (short-list
+item 1 and the #299 line), and `docs/RULINGS.md`'s OWED queue — each citing **this file's** catalog
+read as the proof for the two tables David's reload test does not reach. ⚠️ **One thing is
+deliberately NOT closed: nobody has driven an Uppot plan COMMIT end to end.** It is marked
+**UNPROVEN, not broken** — because the error being corrected here was a claim of breakage that no one
+had measured, and repeating it in the opposite direction would be the same mistake wearing a
+different sign.
 **Tier 2 rather than Tier 1** because the failure is a wasted session, not a wrong number in front of
 a customer — and because a session that *acts* on the stale claim hits a live table and finds out.
 **WOULD FIX** — but as a **report, not a gate**: this run took ~60s of network and needs the PAT, so
