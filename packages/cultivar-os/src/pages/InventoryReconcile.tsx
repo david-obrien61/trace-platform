@@ -27,10 +27,11 @@ import { ScanLine, AlertTriangle, Check, X, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { DataSheet, sheetStyles as SS, type DataSheetColumn } from '@trace/shared/components/datasheet/DataSheet';
-import { fetchCommittedByLot, ALL_STATUS_VALUES, type CommittedByLot } from '../lib/inventoryStates';
+import { fetchCommittedByLot, ALL_STATUS_VALUES, SEEDED_NOTE, type CommittedByLot } from '../lib/inventoryStates';
 import {
-  reconcileRow, buildWritePlan, planNetDelta,
-  type LedgerMovement, type PriorCount, type ReconcileResult, type Attribution, type AttributionKind,
+  reconcileRow, buildWritePlan, planNetDelta, SEED_KIND,
+  type LedgerMovement, type PriorCount, type OpeningSeed, type ReconcileResult,
+  type Attribution, type AttributionKind,
 } from '../lib/reconcileMath';
 
 interface LotRow {
@@ -88,6 +89,12 @@ export function InventoryReconcile() {
   const [lots, setLots] = useState<LotRow[]>([]);
   const [committedByLot, setCommittedByLot] = useState<CommittedByLot>(new Map());
   const [priorByLot, setPriorByLot] = useState<Map<string, PriorCount>>(new Map());
+  /**
+   * 🔴 THE STARTING NUMBERS. A lot is in here only if it was SEEDED and has NOT been counted
+   * since — a real count always wins, because once somebody has physically looked, the
+   * placeholder stops being the thing we replay from.
+   */
+  const [seedByLot, setSeedByLot] = useState<Map<string, OpeningSeed>>(new Map());
   const [movementsByLot, setMovementsByLot] = useState<Map<string, LedgerMovement[]>>(new Map());
   const [unknowns, setUnknowns] = useState<UnknownScan[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -171,12 +178,46 @@ export function InventoryReconcile() {
     }
     setPriorByLot(priors);
 
+    // 3b — THE STARTING NUMBERS. Read BEFORE the window is computed, because a seeded lot with no
+    //      prior count still has a window to replay — it starts at the seed — and the window query
+    //      below is bounded by the earliest of BOTH. Without this a seeded tenant (which is every
+    //      freshly-imported one) has `windows.length === 0`, the ledger is never read at all, and
+    //      every seeded lot silently loses the evidence strip that makes its remainder legible.
+    const seeds = new Map<string, OpeningSeed>();
+    {
+      const { data: seedData, error: seedErr } = await supabase
+        .from('business_inventory_ledger')
+        .select('inventory_id,delta,occurred_at')
+        .eq('business_id', businessId)
+        .eq('kind', SEED_KIND)
+        .order('occurred_at', { ascending: false });
+      if (seedErr) {
+        // Degraded and SAID so — a seeded lot falls back to BASELINE, which under-claims (it shows
+        // the count as the truth) rather than over-claiming. Never silent.
+        console.warn('[TRACE:SEED] starting numbers unreadable — seeded lots fall back to BASELINE', seedErr.message);
+      } else {
+        for (const r of (seedData ?? []) as Array<Record<string, unknown>>) {
+          const lotId = r.inventory_id as string | null;
+          if (!lotId) continue;
+          // A real count always wins over a placeholder.
+          if (priors.has(lotId)) continue;
+          // Ordered occurred_at DESC, so the FIRST row seen for a lot is its most recent seed.
+          if (!seeds.has(lotId)) {
+            seeds.set(lotId, { seeded_qty: Number(r.delta ?? 0), seeded_at: String(r.occurred_at) });
+          }
+        }
+      }
+    }
+    setSeedByLot(seeds);
+
     // 4 — the ledger window. ONE query bounded by the EARLIEST prior count, then split per lot by
     //     that lot's own count time (each lot has its own window). Reads BASE columns only —
     //     aggregate_type/event_type live in the still-GATED 20260720_ledger_event_store migration,
     //     and selecting a column that may not exist live would break the page on a deploy the
     //     owner has not applied. `kind` is the same fact and has been live since LAYER 1.
-    const windows = [...priors.values()].map(p => p.counted_at).sort();
+    const windows = [...priors.values()].map(p => p.counted_at)
+      .concat([...seeds.values()].map(x => x.seeded_at))
+      .sort();
     const byLot = new Map<string, LedgerMovement[]>();
     if (windows.length > 0) {
       const { data: ledgerData, error: ledgerErr } = await supabase
@@ -193,11 +234,14 @@ export function InventoryReconcile() {
           const lotId = m.inventory_id as string | null;
           if (!lotId) continue;
           const prior = priors.get(lotId);
-          if (!prior) continue;
-          // STRICTLY AFTER the count: the count's OWN count_reconcile event is dated at the count
-          // and must not be replayed as a movement since it, or every counted lot would show its
-          // own reconciliation as unexplained drift.
-          if (String(m.occurred_at) <= prior.counted_at) continue;
+          const seed  = prior ? null : seeds.get(lotId) ?? null;
+          if (!prior && !seed) continue;
+          // STRICTLY AFTER the base event. For a COUNT: its own `count_reconcile` row is dated at
+          // the count and must not be replayed as a movement since it, or every counted lot would
+          // show its own reconciliation as unexplained drift. For a SEED the same reasoning holds
+          // — and it is belt-and-braces, because `isMovement` excludes the seed kind anyway.
+          const since = prior ? prior.counted_at : (seed as OpeningSeed).seeded_at;
+          if (String(m.occurred_at) <= since) continue;
           const list = byLot.get(lotId) ?? [];
           list.push({
             id: String(m.id), kind: String(m.kind), delta: Number(m.delta ?? 0),
@@ -213,8 +257,9 @@ export function InventoryReconcile() {
 
     console.log('[TRACE:RECONCILE] load ok', {
       businessId, lots: rows.length,
-      baseline: rows.filter(r => !priors.has(r.id)).length,
+      baseline: rows.filter(r => !priors.has(r.id) && !seeds.has(r.id)).length,
       delta: rows.filter(r => priors.has(r.id)).length,
+      seeded: rows.filter(r => !priors.has(r.id) && seeds.has(r.id)).length,
       unresolvedScans: unknowns.length, lotsWithMovements: byLot.size,
     });
     setLoading(false);
@@ -228,15 +273,22 @@ export function InventoryReconcile() {
       bookOnHand: Number(lot.qty ?? 0),
       committed: committedByLot.get(lot.id) ?? 0,
       prior: priorByLot.get(lot.id) ?? null,
+      seed: seedByLot.get(lot.id) ?? null,
       movementsSincePrior: movementsByLot.get(lot.id) ?? [],
       counted: counted === null || !Number.isFinite(counted) ? null : counted,
     });
-  }, [countedText, committedByLot, priorByLot, movementsByLot]);
+  }, [countedText, committedByLot, priorByLot, seedByLot, movementsByLot]);
 
   /** True when ANY lot in the set is in DELTA mode — drives whether the evidence column exists at
    *  all. On a fresh tenant every lot is BASELINE, so the column is ABSENT rather than empty: an
    *  empty "sold" column on the demo screen reads as a broken feature, not as a clean slate. */
-  const anyDelta = useMemo(() => lots.some(l => priorByLot.has(l.id)), [lots, priorByLot]);
+  const anyDelta = useMemo(
+    // ⚠️ SEEDED LOTS COUNT. A freshly-imported tenant has no prior counts at all, so the old
+    // `priorByLot` test hid the evidence column on exactly the screen this build exists to make
+    // useful — and "3 sold, 4 received since you started this at 5" is the column in question.
+    () => lots.some(l => priorByLot.has(l.id) || seedByLot.has(l.id)),
+    [lots, priorByLot, seedByLot],
+  );
 
   const columns: DataSheetColumn<LotRow>[] = useMemo(() => {
     const cols: DataSheetColumn<LotRow>[] = [
@@ -288,7 +340,10 @@ export function InventoryReconcile() {
 
     if (anyDelta) {
       cols.splice(4, 0, {
-        key: 'evidence', header: 'Since last count',
+        // ⚠️ THE HEADER IS A CLAIM AND IT MUST HOLD FOR EVERY ROW THE COLUMN CAN CONTAIN (§6 r18).
+        // "Since last count" is false on a seeded row — there was no last count — so the header
+        // names the thing both rows share: a starting point, however it was arrived at.
+        key: 'evidence', header: 'Since the starting point',
         render: r => {
           const res = resultFor(r);
           if (res.mode === 'baseline') return <span style={SS.muted}>—</span>;
@@ -406,9 +461,42 @@ export function InventoryReconcile() {
 // ── The per-row math cell ───────────────────────────────────────────────────────────────────
 function MathCell({ lot, res }: { lot: LotRow; res: ReconcileResult }) {
   if (res.residual === null) {
-    return <span style={SS.muted}>{res.mode === 'baseline' ? 'first count' : 'counted before'}</span>;
+    return (
+      <span style={SS.muted}>
+        {res.mode === 'baseline' ? 'first count'
+          : res.mode === 'seeded' ? `${SEEDED_NOTE} — first real count`
+          : 'counted before'}
+      </span>
+    );
   }
   const book = Number(lot.qty ?? 0);
+
+  // 🔴 A SEEDED ROW GETS THE DELTA SCREEN'S ARITHMETIC AND THE BASELINE SCREEN'S TONE, AND THAT
+  // COMBINATION IS THE WHOLE POINT. The replay is real — the sales and the deliveries since the
+  // starting number genuinely happened and are worth netting off — but the number they are being
+  // netted off FROM is a placeholder, so the gap is not a discrepancy anybody has to account for.
+  // Rendering it in the delta screen's red "vs book" voice would ask somebody to explain our guess.
+  if (res.mode === 'seeded') {
+    const counted = Number(book + (res.residual ?? 0));
+    return (
+      <span style={{ fontSize: '0.8rem' }}>
+        started at <strong>{res.replayExpected !== null ? res.replayExpected - res.evidence.reduce((a, e) => a + e.net, 0) : '—'}</strong>
+        {res.evidence.length > 0 && <span style={SS.muted}> · we tracked it to {res.expected}</span>}
+        <span style={SS.muted}> · you counted </span><strong>{counted}</strong>
+        {res.residual !== 0 && (
+          <div style={{ color: '#92400e', fontSize: '0.72rem' }}>
+            {res.residual > 0 ? '+' : ''}{res.residual} — the part we cannot explain. The number we
+            started from was a {SEEDED_NOTE}, so this is expected; your count replaces it.
+          </div>
+        )}
+        {!res.bookAgreesWithReplay && (
+          <div style={{ color: '#b91c1c', fontSize: '0.72rem' }}>
+            ledger replay says {res.replayExpected} — book says {res.expected}
+          </div>
+        )}
+      </span>
+    );
+  }
 
   if (res.mode === 'baseline') {
     // Informational ONLY. There is no history to explain a first count against, so this states
@@ -520,7 +608,8 @@ function AcceptSheet(props: {
       <div style={SS.sheet} onClick={e => e.stopPropagation()}>
         <div style={SS.sheetHeader}>
           <h3 style={SS.sectionTitle}>
-            {res.mode === 'baseline' ? 'Stamp first count' : 'Reconcile count'} — {lot.name}
+            {res.mode === 'baseline' ? 'Stamp first count'
+              : res.mode === 'seeded' ? 'First real count' : 'Reconcile count'} — {lot.name}
           </h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close">
             <X size={20} />
@@ -556,7 +645,13 @@ function AcceptSheet(props: {
           </div>
         )}
 
-        {res.mode === 'baseline' ? (
+        {res.mode === 'seeded' && (
+          <p style={{ ...SS.muted, fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+            This product has never been counted — it was given a <strong>{SEEDED_NOTE}</strong> at
+            setup. Your count replaces it, and nothing here needs explaining away.
+          </p>
+        )}
+        {res.mode === 'baseline' || res.mode === 'seeded' ? (
           <p style={ST.explain}>
             Nothing has been counted here before, so there is no history to explain this against.
             The number you counted <strong>becomes</strong> on-hand, stamped with your name and the time.

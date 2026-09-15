@@ -39,8 +39,15 @@
 //     "I physically verified this number" stamp.
 // ============================================================
 
-/** No prior count on this lot → the count IS the truth, there is no window to explain. */
-export type ReconcileMode = 'baseline' | 'delta';
+/**
+ * `baseline` — no prior count and no seed: the count IS the truth, there is no window to explain.
+ * `delta`    — a prior COUNT exists: replay the movements since it and ask about the remainder.
+ * `seeded`   — no prior count, but the lot was given a STARTING NUMBER somebody chose. There IS a
+ *              window to replay and evidence worth showing, and there is NOTHING to attribute:
+ *              the gap is against a placeholder, and asking a human to account for a variance
+ *              from a number we made up is asking them to explain our own guess.
+ */
+export type ReconcileMode = 'baseline' | 'delta' | 'seeded';
 
 /** A ledger row as this screen reads it. Base-table columns ONLY — deliberately NOT
  *  `aggregate_type`/`event_type`, which live in the still-GATED 20260720_ledger_event_store
@@ -62,6 +69,19 @@ export interface PriorCount {
   counted_at: string;
 }
 
+/**
+ * A starting number somebody chose, as the reconcile reads it back off the ledger.
+ *
+ * 🔴 IT IS NOT A `PriorCount` AND IT IS DELIBERATELY A DIFFERENT TYPE. A count is an observation
+ * of the physical world; this is a placeholder. Giving them one type would let a caller pass
+ * either wherever the other is expected, and the FIRST thing to go would be the distinction this
+ * whole build exists to keep. The compiler is what keeps them apart.
+ */
+export interface OpeningSeed {
+  seeded_qty: number;
+  seeded_at: string;
+}
+
 /** Net movement per kind, for the evidence strip ("3 sold since last count"). */
 export interface MovementSummary {
   kind: string;
@@ -73,7 +93,13 @@ interface ReconcileInput {
   bookOnHand: number;
   committed: number;
   prior: PriorCount | null;
-  /** Ledger rows with occurred_at > prior.counted_at. Empty in baseline mode. */
+  /**
+   * The starting number this lot was seeded with, if it was — and if it has NOT since been
+   * counted. A real count always wins: once somebody has physically looked, the placeholder stops
+   * being the thing we replay from. Callers pass `null` whenever `prior` is set.
+   */
+  seed?: OpeningSeed | null;
+  /** Ledger rows with occurred_at > prior.counted_at (or > seed.seeded_at). Empty in baseline. */
   movementsSincePrior: LedgerMovement[];
   /** null = the owner has not entered a count yet. */
   counted: number | null;
@@ -86,8 +112,17 @@ export interface ReconcileResult {
   expected: number;
   /** counted − expected. null until a count is entered. */
   residual: number | null;
-  /** prior_counted + SUM(all deltas in window). null in baseline mode (no window to replay). */
+  /** prior_counted + SUM(all deltas in window). null in baseline mode (no window to replay).
+   *  In `seeded` mode the base is the SEED, and `expectedIsFromAPlaceholder` says so. */
   replayExpected: number | null;
+  /**
+   * 🔴 TRUE WHEN THE NUMBER THIS COUNT IS BEING COMPARED AGAINST TRACES BACK TO A PLACEHOLDER
+   * NOBODY EVER COUNTED. The screen MUST say so: a residual of 5 against a measured book is a
+   * discrepancy to explain, and a residual of 5 against a seeded book is just the seed being
+   * wrong, which is what everybody expected. Rendering them identically is the lie this flag
+   * exists to prevent (D-9 — a figure must not read as more certain than it is).
+   */
+  expectedIsFromAPlaceholder: boolean;
   /** false = the ledger's `qty == SUM(delta)` guarantee has broken for this lot. Surface it. */
   bookAgreesWithReplay: boolean;
   evidence: MovementSummary[];
@@ -147,8 +182,31 @@ import { availableFrom as available } from './inventoryStates';
  * opening_balance (`:798`; a promoted lot with real stock is written as `count_reconcile`, `:584`).
  * So this never discards a real quantity — it only stops a starting position being counted as a change.
  */
+/** The ledger kind an opening-stock seed writes. Mirrors `openingStock.ts`'s `SEED_LEDGER_KIND`;
+ *  `reconcileMath.test.ts` §S0 asserts the two strings are identical rather than assuming it. */
+export const SEED_KIND = 'opening_stock_seed';
+
+/**
+ * The ledger kinds that ASSERT A POSITION rather than record a CHANGE.
+ *
+ * 🔴 `opening_stock_seed` IS BORN IN HERE, AND THAT IS THE WHOLE REASON IT IS A SEPARATE KIND.
+ * A seed says "this lot was started at 5 because somebody chose 5", which is a starting position
+ * in exactly the sense `opening_balance` is. If it were treated as a movement, a later reconcile
+ * whose window happened to contain it would replay the placeholder as though the stock had
+ * freshly arrived — which is tech-debt #70's live defect (the 2026-07-22 apparent exact doubling,
+ * 60 + 60 = 120 against a book of 60) reproduced on purpose. It is immune by construction, not by
+ * a date working out.
+ *
+ * ⚠️ DECLARED **BEFORE** `isMovement` AND BEFORE ITS OWN MEMBERS, DELIBERATELY. Written the other
+ * way round this Set is built while `SEED_KIND` is still in its temporal dead zone, and the seed
+ * silently fails to be a position kind — which is exactly how §S1/§S3 first ran RED. A bundler
+ * that reorders declarations makes that failure appear and disappear with the build, so the
+ * ordering is the fix rather than a comment warning about it.
+ */
+const POSITION_KINDS = new Set<string>(['opening_balance', SEED_KIND]);
+
 export function isMovement(kind: string): boolean {
-  return kind !== 'opening_balance';
+  return !POSITION_KINDS.has(kind);
 }
 
 export function summarizeMovements(movements: LedgerMovement[]): MovementSummary[] {
@@ -165,16 +223,25 @@ export function summarizeMovements(movements: LedgerMovement[]): MovementSummary
 
 export function reconcileRow(input: ReconcileInput): ReconcileResult {
   const { bookOnHand, committed, prior, movementsSincePrior, counted } = input;
-  const mode: ReconcileMode = prior ? 'delta' : 'baseline';
+  // 🔴 A REAL COUNT ALWAYS WINS OVER A SEED. Once somebody has physically looked at the lot, the
+  // placeholder stops being the thing we replay from — it is history, and a later count is a
+  // better base in every respect. Checked in this order so a caller who passes both (which they
+  // should not) still gets the right answer rather than the one they happened to pass.
+  const seed = prior ? null : (input.seed ?? null);
+  const mode: ReconcileMode = prior ? 'delta' : (seed ? 'seeded' : 'baseline');
 
   // ONE filter, applied ONCE, feeding BOTH the arithmetic and the evidence strip — so the number
   // the owner is asked to explain and the movements they are shown as the explanation can never
   // disagree about what counts as a movement (STD-011).
   const moves = movementsSincePrior.filter(m => isMovement(m.kind));
 
-  const evidence = mode === 'delta' ? summarizeMovements(moves) : [];
+  // Evidence is shown whenever there IS a window — a seeded lot has one, and "5 sold and 4 came
+  // in since you started this at 5" is precisely what makes the remainder legible. Baseline has
+  // no window and nothing to show.
+  const evidence = mode === 'baseline' ? [] : summarizeMovements(moves);
   const netSincePrior = moves.reduce((s, m) => s + Number(m.delta ?? 0), 0);
-  const replayExpected = prior ? prior.counted_qty + netSincePrior : null;
+  const base = prior ? prior.counted_qty : (seed ? seed.seeded_qty : null);
+  const replayExpected = base === null ? null : base + netSincePrior;
 
   // Book is authoritative for `expected` — it is the number the rest of the app transacts
   // against. The replay is the CHECK on it, not a competing answer (correction A).
@@ -193,6 +260,12 @@ export function reconcileRow(input: ReconcileInput): ReconcileResult {
     bookAgreesWithReplay,
     evidence,
     varianceFlag,
+    expectedIsFromAPlaceholder: mode === 'seeded',
+    // 🔴 A SEEDED LOT NEVER REQUIRES ATTRIBUTION, AND THAT IS THE RULING, NOT A CONVENIENCE.
+    // Attribution asks a human to say where units WENT — dead, lost, found. A gap against a
+    // number nobody counted has no such answer: the units were never established to exist. The
+    // seed is THE ONE UNEXPLAINED QUANTITY IN THE CHAIN, and demanding it be explained as
+    // shrinkage would write a permanent, immutable `loss` row for stock that never existed.
     attributionRequired: mode === 'delta' && residual !== null && residual !== 0,
   };
 }

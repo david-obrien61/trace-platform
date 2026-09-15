@@ -27,7 +27,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { resolveStockLine, searchStockLines, stockLineColumnsFor, readFailureMessage } from '@trace/shared/inventory';
 import type { ReadFailure } from '@trace/shared/inventory';
-import { fetchCommittedByLot, checkSellable, availabilityLabel, type CommittedByLot } from '../lib/inventoryStates';
+import { fetchCommittedByLot, fetchSeededLots, checkSellable, availabilityLabel, type CommittedByLot } from '../lib/inventoryStates';
 import type { StockLineRow } from '@trace/shared/inventory';
 import {
   readPricingConfig, normalizeDiscountTypes, resolveTier, RETAIL_TIER_NAME, type DiscountType,
@@ -99,9 +99,18 @@ function customerToInput(r: CustomerSearchHit): CustomerInput {
 /** The picker sub-line: the availability count when sellable, the BLOCKING REASON when not — so a
  *  pick never leads straight into a "Can't be added" the list could have named up front. Both come
  *  from the ONE predicate, so the picker and the review sheet cannot disagree. */
-function pickerSub(row: { qty?: number | null; status?: string | null; sell_price?: number | null }, committed: number): string {
+function pickerSub(
+  row: { qty?: number | null; status?: string | null; sell_price?: number | null },
+  committed: number,
+  /** 🔴 TRUE WHEN THIS LOT'S NUMBER IS A STARTING NUMBER NOBODY HAS COUNTED. This is the surface
+   *  where the problem was visible — 647 rows reading "None in stock" and refusing to be added —
+   *  and it is therefore the surface where the cure must not overcorrect into a false confidence.
+   *  The lot is sellable and says so, and it says in the same breath that the figure is a
+   *  placeholder. Seeing that here is what prompts somebody to go and count it. */
+  seeded = false,
+): string {
   const v = checkSellable({ onHand: row.qty ?? null, committed, status: row.status ?? null, sellPrice: row.sell_price ?? null });
-  return v.sellable ? availabilityLabel(row.qty ?? null, committed) : v.detail;
+  return v.sellable ? availabilityLabel(row.qty ?? null, committed, seeded) : v.detail;
 }
 
 export function ScanOrder() {
@@ -226,9 +235,12 @@ export function ScanOrder() {
   // D-52 committed, held for the session so the REVIEW sheet can cap without a round-trip per
   // scan. Refreshed after each add — a line added here claims units that must not be re-offered.
   const [committedByLot, setCommittedByLot] = useState<CommittedByLot>(new Map());
+  /** Lots whose number is a starting number nobody has counted since. See `fetchSeededLots`. */
+  const [seededLots, setSeededLots] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!businessId) return;
     void fetchCommittedByLot(supabase, businessId).then(setCommittedByLot);
+    void fetchSeededLots(supabase, businessId).then(setSeededLots);
   }, [businessId]);
 
   /** The lot a Plant anchors on — the SAME discriminator submit.ts uses (stock_line_id ?? inventory_id). */
@@ -280,7 +292,7 @@ export function ScanOrder() {
       const choices: PickChoice[] = resolution.candidates.map(row => ({
         inventoryId: row.id,
         title:       (row.size ?? '').trim() || 'Unspecified size',
-        sub:         pickerSub(row, committed.get(row.id) ?? 0),
+        sub:         pickerSub(row, committed.get(row.id) ?? 0, seededLots.has(row.id)),
         row,
       }));
       if (TRACE_CART) console.log('[TRACE:CART] scan size collision — picker:', choices.map(c => c.title).join(' / '));
@@ -330,7 +342,7 @@ export function ScanOrder() {
       title: `${row.name}${(row.size ?? '').trim() ? ` · ${(row.size ?? '').trim()}` : ''}`,
       sub: [
         row.sku ?? '',
-        pickerSub(row, committed.get(row.id) ?? 0),
+        pickerSub(row, committed.get(row.id) ?? 0, seededLots.has(row.id)),
         (row.sell_price != null && Number(row.sell_price) > 0) ? `$${Number(row.sell_price).toFixed(2)}` : '',
       ].filter(Boolean).join(' · '),
       row,
@@ -481,9 +493,19 @@ export function ScanOrder() {
             {/* THE REASON, from the predicate itself — not re-worded here, so what the owner reads
                 is exactly what the code applied. */}
             {!verdict.sellable && <p style={S.blocked}>{verdict.detail}</p>}
-            {verdict.sellable && resolvedCommitted > 0 && (
+            {/* 🔴 THE CONDITION GAINED A SECOND LIMB, AND THAT IS THE POINT. It used to show only
+                when units were COMMITTED — i.e. only when the number needed qualifying. A starting
+                number needs qualifying for exactly the same reason: the figure means something
+                other than what it looks like, and a bare "5" here would assert a count nobody
+                performed. Showing the note only when committed > 0 would hide the placeholder on
+                precisely the freshly-seeded lots this build creates. */}
+            {verdict.sellable && (resolvedCommitted > 0 || (resolvedLotId !== null && seededLots.has(resolvedLotId))) && (
               <p style={S.availNote}>
-                {availabilityLabel(resolved.business_inventory?.qty ?? null, resolvedCommitted)}
+                {availabilityLabel(
+                  resolved.business_inventory?.qty ?? null,
+                  resolvedCommitted,
+                  resolvedLotId !== null && seededLots.has(resolvedLotId),
+                )}
               </p>
             )}
 

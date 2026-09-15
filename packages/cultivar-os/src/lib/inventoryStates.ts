@@ -11,7 +11,8 @@
 //           ONE number, and a stored `committed` would be a second representation of the open
 //           orders that WILL drift from them. The orders ARE the commitment; we read them.
 // DEPENDENCIES: ./orderStatus (ORDER_STATUSES — the lifecycle this keys off).
-// OUTPUTS:  movesOnHand, availableFrom, fetchCommittedByLot, CommittedByLot.
+// OUTPUTS:  movesOnHand, availableFrom, fetchCommittedByLot, CommittedByLot,
+//           fetchSeededLots, SEEDED_NOTE, availabilityLabel.
 //           (holdsCommitment is deliberately module-internal — see its note.)
 // SCOPE:    pure predicates + ONE read query. It NEVER writes and never mutates qty — the only
 //           on-hand writer remains the adjust_inventory_qty RPC (D-42 §11 / D-50 LAYER 1).
@@ -229,13 +230,77 @@ export function checkSellable(x: SellabilityInput): SellableVerdict {
  * Names BOTH numbers whenever units are committed — a bare "0 available" against a lot the owner
  * can SEE holding 29 reads as a bug, not a rule. Same reason D-52's server refusal names both.
  */
-export function availabilityLabel(onHand: number | null | undefined, committed: number): string {
+export function availabilityLabel(
+  onHand: number | null | undefined,
+  committed: number,
+  /**
+   * 🔴 TRUE WHEN THIS LOT'S NUMBER TRACES BACK TO A STARTING NUMBER SOMEBODY CHOSE AND NOBODY HAS
+   * COUNTED SINCE. Defaulted to false so every existing caller is unchanged — but a caller that
+   * CAN know and does not pass it renders a placeholder as though it were a count, which is the
+   * exact lie this build exists to prevent.
+   */
+  seeded = false,
+): string {
   if (onHand == null) return '';
   const n = Number(onHand);
   const avail = availableFrom(n, committed);
-  return committed > 0
+  const base = committed > 0
     ? `${avail} available (${n} on hand, ${committed} committed)`
     : `${avail} available`;
+  return seeded ? `${base} — ${SEEDED_NOTE}` : base;
+}
+
+/**
+ * The words a seeded quantity wears, in ONE place.
+ *
+ * 🔴 IT IS A SUFFIX ON THE NUMBER, NOT A REPLACEMENT FOR IT. Hiding the figure would make the lot
+ * unsellable again and we would be back where we started; showing it bare would assert a count
+ * nobody performed. It is shown AND qualified — which is the same treatment `availabilityLabel`
+ * already gives a committed figure, and for the same reason: a number that means something other
+ * than what it looks like must say so beside itself, never in a legend somewhere else.
+ */
+export const SEEDED_NOTE = 'starting number, not counted';
+
+/**
+ * The lots whose current number traces back to a STARTING NUMBER nobody has counted since.
+ *
+ * 🔴 DERIVED FROM THE LEDGER, NEVER FROM A COLUMN, AND THAT IS WHY IT CANNOT GO STALE. A
+ * `seeded` boolean on `business_inventory` would be a second representation of a fact the ledger
+ * already holds (STD-011), and it is the copy that drifts: the first count writes a
+ * `count_reconcile` row and nothing would remember to clear the flag, so a counted lot would go
+ * on calling itself a placeholder forever.
+ *
+ * THE RULE, IN ONE SENTENCE: a lot is seeded if it has an `opening_stock_seed` row and NO real
+ * count after it. "A real count" is a `count_reconcile` row — the kind both count RPCs emit.
+ *
+ * ⚠️ IT READS `kind` AND NOT THE EVENT-STORE COLUMNS, for the same reason `reconcileMath` does:
+ * `aggregate_type`/`event_type` live in the still-GATED `20260720_ledger_event_store` migration,
+ * and reading a column that may not exist live breaks the page on a deploy nobody has applied.
+ */
+export async function fetchSeededLots(db: any, businessId: string): Promise<Set<string>> {
+  const seeded = new Set<string>();
+  const { data, error } = await db
+    .from('business_inventory_ledger')
+    .select('inventory_id,kind,occurred_at')
+    .eq('business_id', businessId)
+    .in('kind', ['opening_stock_seed', 'count_reconcile'])
+    .order('occurred_at', { ascending: true });
+  // 🔴 A FAILED READ MARKS NOTHING, AND THAT DIRECTION IS DELIBERATE. Marking everything on an
+  // error would put "starting number, not counted" beside 447 genuinely counted lots and destroy
+  // the signal; marking nothing under-claims on a screen that still shows the real figure. Under-
+  // claiming is recoverable — the reconcile still does its arithmetic — and over-claiming is not.
+  if (error) {
+    console.warn('[TRACE:SEED] ledger unreadable — no lot is marked as a starting number (honest: we do not know)', error.message);
+    return seeded;
+  }
+  for (const r of (data ?? []) as { inventory_id: string | null; kind: string }[]) {
+    const id = r.inventory_id === null ? null : String(r.inventory_id);
+    if (id === null) continue;
+    // Ordered oldest-first, so the LAST of these two kinds seen for a lot is the current answer.
+    if (r.kind === 'opening_stock_seed') seeded.add(id);
+    else seeded.delete(id);
+  }
+  return seeded;
 }
 
 // ── The status CONTROL, defined once (BUILD 3) ───────────────────────────────────────────────

@@ -30,6 +30,7 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 import { QboBooksReader } from '../components/QboBooksReader';
 import { QboWriteSwitch } from '../components/QboWriteSwitch';
 import { QboCatalogueImport } from '../components/QboCatalogueImport';
+import { OpeningStockSeed } from '../components/OpeningStockSeed';
 import { ServicesReview } from '../components/services/ServicesReview';
 
 const GREEN = '#27500A';
@@ -929,6 +930,12 @@ export function Settings({
               <QboWriteSwitch businessId={businessId} />
               <QboBooksReader businessId={businessId} />
               <QboCatalogueImport businessId={businessId} />
+              {/* 🔴 BENEATH THE IMPORT, DELIBERATELY, AND THE ORDER IS THE INSTRUCTION. The import
+                  brings a PRODUCT LIST at qty 0 (R-93) and can be wiped and reloaded as many times
+                  as it takes; the seed is what makes that list sellable, and it gives every product
+                  a permanent ledger line. Do the import first and this last — the panel says so in
+                  its own closing sentence rather than relying on the reader noticing the order. */}
+              <OpeningStockSeed />
             </div>
           ) : (
             <div>

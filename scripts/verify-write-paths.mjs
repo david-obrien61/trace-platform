@@ -167,7 +167,34 @@ const ALLOWED_DIVERGENCE = {
           + 'opening_balance ledger rows, and 647 of them per run would make the undo incomplete. '
           + 'It touches only rows carrying its own import_run_id plus the three retirement columns, '
           + 'which no other writer knows about.',
-    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts'],
+    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts',
+            // ══════════════════════════════════════════════════════════════════════════════════
+            // DECLARED 2026-09-15 (the opening stock seed, ledger #333).
+            // ══════════════════════════════════════════════════════════════════════════════════
+            // 🔴 THIS FILE ISSUES NO `INSERT`, `UPDATE` OR `DELETE` AGAINST EITHER TABLE. It READS
+            //    both (`.select`) and it calls ONE RPC — `adjust_inventory_manual` — which is the
+            //    sanctioned D-50 LAYER 1 chokepoint and owns the qty write and the ledger INSERT
+            //    in a single transaction under a `FOR UPDATE` lock. The cap reads SOURCE and
+            //    attributes an RPC's target tables to its caller, which is the correct and
+            //    conservative behaviour (its own header: *"~11 RPC writers are REPORTED and not
+            //    judged… every count here is a FLOOR"*), so the flag is right even though nothing
+            //    here forks a writer.
+            //
+            // 🔴 AND IT IS THE OPPOSITE OF R-93's CASE, WHICH IS WHY THE REASONING MUST BE
+            //    WRITTEN DOWN RATHER THAN INFERRED FROM THE NEIGHBOURING ENTRY. R-93 rules that
+            //    the IMPORT must NOT ride the D-50 RPCs, because a product LIST must leave no
+            //    ledger sediment behind a wipe-and-reload. The SEED is the moment stock is
+            //    asserted, so it MUST ride them: D-50 says on-hand derives from replay, and a
+            //    plain `UPDATE qty` here would leave a quantity with no provenance and a book
+            //    that no longer equals its own ledger. Same table, opposite ruling, one build
+            //    apart — and the two files sit in this same declaration.
+            //
+            // ⚠️ THE CONSEQUENCE IS REAL AND IS FILED, NOT HIDDEN: a seeded lot acquires ledger
+            //    history, and a lot with ledger history CANNOT BE DELETED (the FK is
+            //    `ON DELETE SET NULL`, SET NULL is an UPDATE, and the append-only trigger refuses
+            //    UPDATEs with no exemption). So the catalogue undo refuses on exactly the rows
+            //    the seed touched. Tech-debt #304.
+            'packages/shared/src/components/OpeningStockSeed.tsx'],
   },
   'customers': {
     reason: 'TWO import paths, declared together. (1) The catalogue import\'s UNDO issues a DELETE '
@@ -313,7 +340,13 @@ const ALLOWED_DIVERGENCE = {
             'packages/cultivar-os/src/components/inventory/inventoryEdit.ts',
             'packages/cultivar-os/src/pages/InventoryReconcile.tsx',
             'packages/cultivar-os/src/pages/importWrites.ts',
-            'packages/shared/src/discovery/populate.ts'],
+            'packages/shared/src/discovery/populate.ts',
+            // ADDED 2026-09-15 (the opening stock seed, ledger #333). It writes here ONLY through
+            // `adjust_inventory_manual` — one of the seven RPCs behind the single emitter this
+            // entry already describes — and READS the table to derive which lots carry a starting
+            // number nobody has counted since. The reason above is unchanged and covers it: a
+            // single emitter behind an unamendable ledger is the intended shape.
+            'packages/shared/src/components/OpeningStockSeed.tsx'],
   },
   // ⚠️ DECLARED 2026-08-27 (ledger #223) — PENDING DAVID'S RATIFICATION. Thunder wrote this
   // entry and Thunder is not entitled to grant it; the header of this file is explicit that every
