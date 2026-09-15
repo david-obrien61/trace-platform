@@ -79,6 +79,35 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #331 (`fix/address-import-line2-shape`, 2026-09-15)
+
+- 🔴 **THE ADDRESS IMPORT FIX, PART ① — #322 COUNTED THE DEFECT, THIS REPAIRS IT.** BUILDER-COMPLETE,
+  owner-proof **OWED** (`qb-customer-import` CARDS 23 · 24 · 25 · 26, board 0 of 26).
+  **Which `BillAddr` line holds the street is decided PER RECORD, from the SHAPE of the value**, using
+  the SAME `classifyValueShape` the #322 preview panel ships — so the panel and the importer cannot
+  disagree. Measured on the complete 2026-09-10 capture (**1,959 of 1,959**):
+  **962** `Line1` already a street (untouched) · **448** street RECOVERED from `Line2` ·
+  **27** honestly blank (no street exists; nothing invented) · **522** left exactly as today and counted.
+  **Streets in `address_line1`: 962 → 1,410.**
+  - 🔴 **A BLANKET "Line2 IS THE STREET" RULE IS WRONG IN BOTH DIRECTIONS** — a phone written over a
+    correct street on 6 records, a NULLed street on 953. Probes N2/N3 feed exactly those shapes.
+  - 🔴 **AND THE PHONE IS KEPT — THIS IS THE PART THE PROMPT COULD NOT HAVE KNOWN.** Of the 484 whose
+    `Line1` reads as a phone: **474** already hold the same number in `PrimaryPhone` · **4** hold NO
+    phone at all, so it lands in the free `phone` column (**zero migration**) · **5** hold a
+    *different* number and there is ONE phone column.
+  - 🔴 **THOSE 5 ARE A RULING DAVID OWES, NOT A DEFAULT.** They have a real street we did NOT take,
+    because taking it would delete a phone number held nowhere else. Left **exactly as today** and
+    counted as `phoneWouldBeLost` on every preview → **CARD 25** · `docs/open-questions.md`.
+  - ⚠️ **6 MORE RECOVERABLE STREETS LEFT ON PURPOSE** — their `Line1` is a phone *with extra text*, so
+    the classifier answers `other`, and `other` is never a verdict. **Probe N10 asserts the limit** so
+    it breaks loudly if someone widens the classifier without revisiting these counts.
+  - ✅ **NO migration · NO schema · NO policy · NO permission string · NO UI file touched · `api/` 12/12.**
+    `npm run verify` exit 0 ZERO NET-NEW · 109/109 files · **5,849 assertions** · **50 mutants, 50
+    caught, 0 survived, 0 never applied** (extended the EXISTING harness, §6 r8).
+  - ⚠️ **Lands BEFORE the bulk import, which has NEVER run on LAWNS** — free now, a data repair after.
+  - → `packages/shared/src/quickbooks/qboCustomerAdapter.ts` (`resolveBillingAddress`) ·
+    `customerImport.test.ts` §N · `docs/built-inventory.md` §4.1d · ledger **#331** · builds on **#322**.
+
 ### 🟡 PUSHED, NOT MERGED — #322 (`fix/import-preview-field-checks`, 2026-09-14)
 
 - 🔴 **THE IMPORT PREVIEW NOW RUNS TWO FIELD CHECKS BEFORE ANYTHING IS WRITTEN** — BUILDER-COMPLETE,

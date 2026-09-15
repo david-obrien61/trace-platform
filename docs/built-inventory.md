@@ -1,4 +1,5 @@
-# Last updated: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.)
+# Last updated: 2026-09-15 (**#331 — THE ADDRESS IMPORT FIX, PART ①: WHICH `BillAddr` LINE HOLDS THE STREET IS DECIDED PER RECORD, FROM THE SHAPE OF THE VALUE.** 🔴 **#322 COUNTED IT; THIS REPAIRS IT** — `Line1` street → use it (**962**) · `Line1` phone AND `Line2` street → the street is `Line2` (**448 recovered**) · `Line1` phone AND no `Line2` → **no street exists, imported BLANK, nothing invented** (**27**) · anything else → exactly as today, and COUNTED (**522**). 🔴 **A BLANKET "Line2 IS THE STREET" RULE IS WRONG IN BOTH DIRECTIONS** — a phone over a correct street on 6 records, a NULL street on 953. 🔴 **AND THE PHONE IS KEPT: 474 of the 484 already hold the same number in `PrimaryPhone`, 4 have NO phone at all and it lands in the free column, and 5 hold a DIFFERENT number — those 5 are LEFT EXACTLY AS TODAY and counted as `phoneWouldBeLost`, because recovering a street by deleting a phone number held nowhere else is not a repair.** **0 phone numbers discarded; streets 962 → 1,410.** ✅ **NO migration · NO schema · NO policy · NO permission string · NO UI file touched · api/ 12/12.** **50 mutants, 50 caught, 0 survived, 0 never applied.** Lands BEFORE the bulk import, which has never run on LAWNS.)
+# (prior line, preserved: 2026-09-14 (**#325 — THE PRE-COMMIT HOOK: ONE CHECK, `verify-handoff-retention`, ON `pre-commit` AND `pre-merge-commit`.** 🔴 **Three archive duplicates in three merges, every one AUTO-MERGED WITH NO CONFLICT** — two branches archive the same §3 entry at different offsets under different provenance comments, git takes BOTH, and `entries-in == entries-out` breaks silently. 🔴 **THE HOOK POINT IS THE FINDING: a CLEAN auto-merge fires `pre-merge-commit` and NOT `pre-commit`** (measured, git 2.37), so a pre-commit-only hook would have missed the exact case it was built for — all three real instances conflicted in OTHER files and routed through `git commit` **by luck**. ✅ **Proven red on the defect reproduced end-to-end** (merge exit 0, no CONFLICT line → refused) **and proven green on the same merge without a duplicate.** ⚠️ **NOT ENFORCEMENT, and the header says so: `--no-verify` fires no hook and nothing catches that — measured.** **0.21s. ZERO new dependencies** (`core.hooksPath` via `prepare`, not husky — a stated §6 r10 divergence). **NOT in `npm run verify`**: the chain may be slow, a commit may not.))
 # (prior line, preserved: **#323 — THE TWO ASSERTIONS ARE BUILT.** 🔴 **#280 ① — `scripts/verify-main-ancestry.mjs`, in `npm run verify`:** local `main` must not be AHEAD of `origin/main` (CORE MANDATE rule 9, mechanised for the trunk), and a row claiming *"MERGED TO `main`"* must cite a commit that IS on it. **Proven red with a REAL commit on local main**, then restored. 11 probes. 🔴 **#294a — `verify-id-citations` CLAUSE E:** no close-out row may have MORE cells than the header (unescaped pipes, width derived, prints the DISCARDED text). **Red-first on the real corpus, naming exactly the four predicted** — `#279 · #299 · #311 · #317` — then repaired; **`#311` was a genuine extra column whose cells were MISALIGNED**. All 77 rows fit. 8 probes. ⚠️ **#280 stays 🟡 PARTIAL — ② is unchanged and nothing here reads Vercel.** ⚠️ **`npm run verify` exits 1 on a live `#323` id collision that is another session's to resolve.**)
 # (prior line, preserved: **#322 — THE IMPORT PREVIEW'S TWO FIELD CHECKS — AN UNMAPPED SOURCE FIELD WITH DATA, AND A TYPE-SHAPE MISMATCH PER DESTINATION COLUMN.** 🔴 **486 LAWNS CUSTOMERS CARRY A PHONE NUMBER IN `BillAddr.Line1`, WHICH THE IMPORTER WRITES STRAIGHT INTO `address_line1`, AND EVERY NUMBER ON THE PREVIEW SCREEN WAS CORRECT** — `toCreate`, `toReconcile`, `existingCustomers`, all three right, and the screen said nothing. **458 more carry the real street one line down in `Line2`, a field the importer does not read**, and **223 carry a routable `ShipAddr` that is ignored entirely.** ⚠️ **NEITHER CHECK REPAIRS ANYTHING, DELIBERATELY** — `address_line1 = Line2` would give the 1,473 whose Line1 is already a street their suite number and the 28 with no Line2 a NULL, so the build COUNTS and leaves the remap to a ruling. 🔴 **THE POPULATION IS DERIVED FROM THE DATA; ONLY THE MAPPING IS DECLARED** — source fields are discovered by walking the records, so a field nobody has heard of is reported the first time one carries it; the 16 declared mappings are asserted **against the adapter's real behaviour** (§A), and the ~30 declared-ignored fields each carry a reason (§B). 🔴 **NEITHER CHECK IS EVER SILENT** — `ran` is a literal `true` and a clean capture renders GREEN saying *"Both checks ran and found nothing"*, because a blank panel is indistinguishable from a check that did not run. **87 assertions, red-first on every half; the mirror is counted ONCE (R-110).** ✅ **NO migration · NO schema · NO permission string · api/ 12/12 untouched.** tech-debt **#254** is now SURFACED, not fixed. See also #278, #277.)
 # (prior line, preserved: **#321 — THE PRODUCTION STAMP, MERGED AND READ LIVE.** `origin/main` = `15fe4f2`; `cultivar-os.app` renders **`built Sep 14, 12:28p · 15fe4f2 · prod`** — quiet, no amber chip — **traced through the shipped minified bundle** (`jJ("production","main")` → `{label:"prod", loud:false}`), not inferred from source. The bundle carries its **deployment target**, not only its SHA: `vite.config.ts` bakes `VERCEL_ENV`/`VERCEL_GIT_COMMIT_REF`, the pure `src/lib/deployStamp.ts` turns them into `{label, loud, reason}`, `<VersionStamp>` renders it on every screen. **GATE 0 on all 40 boards now requires the last token to read `prod`.** ⚠️ **Not rendered in a browser — under OP-14 the card flip is David's.** ⚠️ **tech-debt #280 → 🟡 PARTIAL: ② is OBSERVABLE, NO CAP ASSERTS IT; ① still owed and now carries this session's own unpushed-merge incident.** **#294a** separated out — a shell pipe inside inline code splits a ledger row and GFM discards the overflow silently, **a defect #320 made more likely** — with a **check PROPOSED, not built**.)
@@ -2719,6 +2720,83 @@ people disable, and a disabled hook is worse than none because it still reads as
 **Deliberately NOT in the verify chain:** the chain may be slow; a commit may not.
 
 ---
+
+### 4.1d · THE ADDRESS BRANCH — which `BillAddr` line holds the street (2026-09-15, ledger #331)
+
+**PURPOSE:** decide, **per record and from the SHAPE of the value**, which `BillAddr` line holds the
+street — and keep the phone number that is sitting in the other one.
+
+**WHY IT EXISTS.** 4.1c above COUNTED this defect and deliberately repaired nothing. This is the
+repair. 🔴 **LAWNS types a phone number into `BillAddr.Line1` and the street into `Line2`, and the
+importer wrote `Line1` straight into `address_line1`** — so a quarter of the customer book would
+arrive with a phone number where the street belongs, and *a stop addressed to a phone number cannot
+go on a truck.*
+
+**THE RULE, PER RECORD, NEVER BLANKET.** Measured on the complete 2026-09-10 capture (**1,959 of
+1,959, `complete: true`**), classified by the SHIPPED `classifyValueShape` — the same classifier
+4.1c's panel uses, so the panel and the importer cannot disagree about what a value looks like:
+
+| branch | rule | records |
+|---|---|---|
+| `line1-street` | `Line1` is a street → use it | **962** |
+| `line2-street` | `Line1` is a phone AND `Line2` is a street → the street is `Line2` | **448** |
+| `no-street` | `Line1` is a phone AND no `Line2` → no street exists; import BLANK | **27** |
+| `phone-would-be-lost` | the street is there, but taking it would delete a phone | **5** |
+| `unchanged` | any other shape → exactly as today, and counted | **517** |
+
+🔴 **WHY A BLANKET "LINE2 IS THE STREET" RULE IS WRONG, AND IT IS WRONG IN BOTH DIRECTIONS.** It
+writes a phone over a correct street on the **6** records shaped `street` then `phone`, and NULLs the
+street on the **953** whose `Line2` is empty. The branch is chosen per record from the pair of
+shapes, never from a global rule. Probes N2 and N3 feed exactly those two shapes.
+
+🔴 **AND "KEEP THE PHONE" HAS TEETH, WHICH IS THE PART THE PROMPT COULD NOT HAVE KNOWN.** Today the
+`Line1` number survives *by accident*, in the wrong column; taking the street stops that. So the
+resolver asks where the number GOES before it moves anything. Of the **484** whose `Line1` reads as
+a phone: **474** already hold the same number in `PrimaryPhone`/`Mobile` (nothing to do) · **4** hold
+no phone at all, so `customers.phone` is free and the number lands there — **zero migration** ·
+**5** hold a *different* number, a genuine second line, and `customers` has ONE phone column.
+🔴 **On those 5 the two rules genuinely collide and the PHONE WINS: the record is left exactly as
+today and counted as `phoneWouldBeLost`.** Recovering 5 streets by deleting 5 phone numbers held
+nowhere else is not a repair — it is a ruling, and it is David's.
+
+**WHAT SHIPPED.**
+- `qboCustomerAdapter.ts` — **`resolveBillingAddress(raw, heldPhone)`**, pure, replacing `billingOf`:
+  the raw `BillAddr` plus the phone the record already holds in, the resolved address **and the
+  BRANCH taken** out. Plus `AddressBranch` (5 values), `ADDRESS_BRANCH_REASON` (a sentence each, so a
+  report can say WHY rather than print a code), and `heldPhoneOf`.
+- **`adaptCustomerWithAddress` RETURNS the branch**, and `adaptCustomer` is now a projection of it.
+  🔴 **The tally IS the decision, not a second evaluation that could drift from it** ([[R-33]]).
+- `addressResolution` on `CustomerAdaptation` and on `CustomerPlanReport`/`CustomerRunReport`,
+  **present on every plan including a clean one** — 4.1c's own precedent: a report only present when
+  it has something to say cannot be told apart from one that never ran.
+- `BRANCH_TALLY_KEY` is declared as a **total `Record`**, so adding a branch without giving it a
+  counter **fails to compile** rather than silently going uncounted.
+- `[TRACE:CUSTIMPORT] preview` carries the address block (STD-003, on by default).
+
+**THREE DESIGN CALLS WORTH KNOWING.**
+1. 🔴 **`Line2` IS READ, NEVER APPENDED.** `customers` has `billing_line2` and the party editor owns
+   it; concatenating here would make this writer disagree with that one. Mutant D10 is exactly that.
+2. 🔴 **`other` IS NEVER A VERDICT.** 6 records carry a phone **with extra text** in `Line1` and a
+   real street in `Line2` — recoverable, and deliberately NOT recovered. Probe **N10 asserts the
+   limit** rather than leaving it implied, so it breaks loudly if someone widens the classifier
+   without revisiting these counts.
+3. 🔴 **ABSENT IS NOT EMPTY (D-9).** `no-street` writes NULL, not `''` and not the phone number.
+   Mutants D5 and D6 are both directions of getting that wrong.
+
+**PROOF.** `customerImport.test.ts` §N — **19 probes**, including a **population control** (all five
+branches were actually reached, tech-debt #182) and an assertion that the branch rule reads the
+**shipped** `classifyValueShape`. **Driven against the real capture through the shipped adapter:**
+branch counts sum to 1,959 · streets `962 → 1,410` · **0** `Line1` phones held nowhere afterwards ·
+**0** moved rows still carrying a phone as a street · **0** existing `PrimaryPhone` values
+overwritten. **50 mutants on the EXISTING harness (§6 r8 — extended, not a 26th file): 50 caught,
+0 survived, 0 never applied**; D1 is the blanket rule and D2 is the defect itself, restored.
+⚠️ **One mutant survived the first run and was an EQUIVALENT MUTANT, not a gap — recorded in the
+harness rather than quietly swapped**, so nobody re-adds it and reads its survival as a missing
+assertion.
+
+✅ **NO migration · NO schema change · NO policy · NO permission string · NO new dependency · NO UI
+file touched · `api/` 12/12 untouched.** Lands **before** the bulk import, which has never run on
+LAWNS — free now, a data repair afterwards.
 
 ### 4.1c · THE IMPORT PREVIEW'S TWO FIELD CHECKS (2026-09-14, ledger #322)
 
