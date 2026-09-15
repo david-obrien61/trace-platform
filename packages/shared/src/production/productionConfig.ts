@@ -36,10 +36,23 @@
 //   reader, and its default IS grow months. A per-variety override stays available; the DEFAULT
 //   can no longer disagree with the thing it is covering for.
 //
-// AC-1:         generic throughout. No vertical noun in any key, type or identifier. "Uppot" is a
-//               cultivar-vertical LABEL and appears only in the cultivar surface — the precedent is
+// AC-1:         ✅ THE "UPPOT" HALF IS TRUE AND WAS VERIFIED. `uppotNow` is an internal field name
+//               only; the LABEL lives in the cultivar surface — the precedent is
 //               `responsibilityCatalogue.ts`, where *"Uppot or graduate a lot"* is a `text` VALUE on
 //               a row whose `vertical` FIELD carries the identity (AC-1: identity is a value).
+//
+//               ✏️ CORRECTED 2026-09-14 (ledger #328, recon #327). THIS LINE USED TO OPEN
+//               *"generic throughout. NO VERTICAL NOUN IN ANY KEY, TYPE OR IDENTIFIER"* — and that
+//               second clause is FALSE on this page: `tradeGallonFactor` (:56) and
+//               `trueGallonsPerCubicYard` (:58) are grower units, and they are KEYS ON AN EXPORTED
+//               SHARED INTERFACE. A food bank's operations config has neither.
+//               🔴 Being 80% right is why nobody checked the other 20% — tech-debt **#297**.
+//
+//               ✅ THE TABLE UNDERNEATH IS AC-1-CLEAN, AND THAT MATTERS MORE THAN THE TYPE:
+//               `20260905_production_planning.sql:57-62` stores this as a `jsonb config` blob —
+//               variation in DATA, not schema. Only the TypeScript narrows it.
+//               ⚠️ The rename is FREE ONLY UNTIL THAT MIGRATION IS APPLIED (tech-debt #253: it is
+//               not applied, so there is no live row to migrate). See #297 before applying it.
 // DEPENDENCIES: ./basis (every default carries how it was arrived at).
 // OUTPUTS:      OperationsConfig · MoneyConfig · ResolvedConfig · OPERATIONS_DEFAULTS ·
 //               MONEY_DEFAULTS · resolveConfig · coverMonthsFor · WITHHELD_REASON · isWithheld.

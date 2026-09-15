@@ -66,6 +66,8 @@ import { BUNDLE_ITEM_NAMES, type QboInvoiceRow } from '../quickbooks/invoiceList
 import { normalizeSize } from '../utils/sizeLabel';
 // R-120 — a transport row must say who transports; ONE rule, shared with the Settings editor.
 import { categoryScopedFields } from './serviceOfferingShape';
+// ONE price-unit rule, shared with the DB constraint and the discovery seed (§6 r8).
+import { isUsablePriceUnit } from './serviceOfferingEnums';
 
 // ── the thresholds, named so a probe can move them and watch a verdict change ────────────────
 /** More than half the priced lines at one price. Not tuned: "more often than not". */
@@ -93,7 +95,13 @@ export const BUNDLE_DISTINCT_SHARE = 0.9;
 export const SERVICE_CATEGORIES = ['transport', 'addon', 'maintenance', 'inspection', 'subscription'] as const;
 export type ServiceCategory = typeof SERVICE_CATEGORIES[number];
 
-/** The four values `service_offerings.price_unit` will accept. */
+/**
+ * The units offered in the picker — SUGGESTIONS, not the permitted set.
+ * ✏️ CORRECTED 2026-09-14 (ledger #328): this comment read *"The four values
+ * `service_offerings.price_unit` will accept"*, which stopped being true when
+ * `20260914_price_unit_shape_not_enum.sql` made the column a SHAPE. Use `isUsablePriceUnit`
+ * to ask what the column accepts; use this only to populate a `<select>`.
+ */
 export const PRICE_UNITS = ['order', 'plant', 'vehicle', 'visit'] as const;
 export type PriceUnit = typeof PRICE_UNITS[number];
 
@@ -773,7 +781,11 @@ export function buildServiceRows(input: {
     if (!(SERVICE_CATEGORIES as readonly string[]).includes(a.category)) {
       return { ok: false, reason: `"${name}" needs a kind before it can be saved. Nothing was written.` };
     }
-    if (!(PRICE_UNITS as readonly string[]).includes(a.priceUnit)) {
+    // ✏️ WAS a membership test against PRICE_UNITS, and that made a curated dropdown list into a
+    // WRITE GATE — so a vertical's own unit was refused here even once the column accepted it.
+    // The question this check exists to ask is *did she say what the price is per*, which is the
+    // SHAPE question, and it is now asked in the one place that defines it (§6 r8 · ledger #328).
+    if (!isUsablePriceUnit(a.priceUnit)) {
       return { ok: false, reason: `"${name}" needs to say what the price is per. Nothing was written.` };
     }
     const scoped = categoryScopedFields({

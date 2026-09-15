@@ -121,7 +121,7 @@ Return a JSON object matching this exact structure:
       "category": "transport | addon | maintenance | inspection | subscription",
       "description": "one clear sentence",
       "price_type": "flat | per_unit",
-      "price_unit": "order | plant | vehicle | visit",
+      "price_unit": "what ONE unit is, as a short lowercase word — order, visit, vehicle, and whatever this business actually counts (household, bag, plant, room…)",
       "rationale": "one sentence explaining why this fits based on what you observed"
     }
   ]
