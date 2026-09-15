@@ -5,9 +5,13 @@
 //   that share an email or a phone. Nothing here writes, reads a clock, or touches a client —
 //   so every rule below is provable at a desk (`qboCustomerAdapter.test.ts`).
 // DEPENDENCIES: ./customerList (normEmail · normPhone — the SAME normalisers the read's duplicate
-//   SIZING uses, so the flagged pairs and the reported counts cannot disagree).
-// OUTPUTS: CUSTOMER_IMPORT_SOURCE · REASON_NOT_IDENTIFIED · AdaptedCustomer · DuplicateFlag ·
-//   CustomerAdaptation · parseCustomerRecords · adaptCustomers · flagDuplicates.
+//   SIZING uses, so the flagged pairs and the reported counts cannot disagree) · ./importFieldAudit
+//   (classifyValueShape — the SAME classifier the import preview panel ships, so the panel and the
+//   importer cannot disagree about whether a value looks like a street or a phone number).
+// OUTPUTS: CUSTOMER_IMPORT_SOURCE · REASON_NOT_IDENTIFIED · ADDRESS_BRANCH_REASON ·
+//   AdaptedCustomer · DuplicateFlag · CustomerAdaptation · AddressBranch ·
+//   AddressResolutionTally · ResolvedBillingAddress · parseCustomerRecords · heldPhoneOf ·
+//   resolveBillingAddress · adaptCustomerWithAddress · adaptCustomers · flagDuplicates.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 THE EXEMPT FLAG COMES FROM THE CUSTOMER RECORD. IT IS NOT DERIVED FROM INVOICES.
@@ -60,7 +64,7 @@
 // in `tax_exempt_cert_ref`.
 // ─────────────────────────────────────────────────────────────────────────────
 import { normEmail, normPhone } from './customerList';
-import { auditImportFields, type ImportFieldAudit } from './importFieldAudit';
+import { auditImportFields, classifyValueShape, type ImportFieldAudit } from './importFieldAudit';
 
 /** Written to `customers.source` on every row this import creates. */
 export const CUSTOMER_IMPORT_SOURCE = 'quickbooks-customers';
@@ -123,6 +127,35 @@ export interface CustomerAdaptation {
    * beside ~1,900 real people (`maskExample` — every letter `x`, every digit past the third `•`).
    */
   fieldAudit: ImportFieldAudit;
+  /**
+   * 🔴 WHERE EACH RECORD'S STREET CAME FROM — the per-record address branch, tallied.
+   *
+   * ⚠️ The five BRANCH counts are a PARTITION and sum to `customers.length`; a reader can check
+   * the arithmetic without trusting this comment. `phoneRescued` is a CROSS-CUT, not a sixth
+   * branch — it counts records inside `line2Street`/`noStreet` whose `Line1` phone was carried
+   * into an empty `customers.phone`, so it does NOT belong in that sum.
+   *
+   * 🔴 `phoneWouldBeLost` IS THE NUMBER THAT NEEDS A RULING, and it is reported rather than
+   * quietly absorbed: those records have a street one line down that we did NOT take, because
+   * taking it would delete a phone number held nowhere else. Zero is a real and good answer here.
+   */
+  addressResolution: AddressResolutionTally;
+}
+
+/** The branch tally. One entry per `AddressBranch`, plus the cross-cut. */
+export interface AddressResolutionTally {
+  /** ① `Line1` was already a street. Untouched by this rule. */
+  line1Street: number;
+  /** ③ The street was recovered from `Line2` because `Line1` held a phone. */
+  line2Street: number;
+  /** ④ `Line1` held a phone and there was no `Line2` — imported blank, nothing invented. */
+  noStreet: number;
+  /** ⑤ A shape pair this rule does not reason about. Left exactly as today. */
+  unchanged: number;
+  /** The collision: a street in `Line2` NOT taken, because it would have cost a phone number. */
+  phoneWouldBeLost: number;
+  /** CROSS-CUT — records whose `Line1` phone was carried into an otherwise-empty `phone`. */
+  phoneRescued: number;
 }
 
 function str(v: unknown): string | null {
@@ -211,22 +244,175 @@ export function exemptionOf(raw: Record<string, unknown>): Pick<AdaptedCustomer,
   return { tax_exempt: true, tax_exempt_reason: reason, tax_exempt_cert_ref: cert };
 }
 
-/** BillAddr is the billing home; ShipAddr is a job site and is NOT a billing address. */
-function billingOf(raw: Record<string, unknown>) {
-  const a = (raw.BillAddr ?? null) as Record<string, unknown> | null;
-  if (!a || typeof a !== 'object') return { address_line1: null, city: null, state: null, zip: null };
-  // ⚠️ Line2 is deliberately NOT folded into line1 — `customers` has `billing_line2` and the
-  // party editor owns it; concatenating here would make this writer disagree with that one.
-  return {
-    address_line1: str(a.Line1),
-    city: str(a.City),
-    state: str(a.CountrySubDivisionCode),
-    zip: str(a.PostalCode),
-  };
+// ═════════════════════════════════════════════════════════════════════════════════════
+// 🔴 WHICH `BillAddr` LINE HOLDS THE STREET IS DECIDED PER RECORD, FROM THE SHAPE OF THE VALUE.
+// ═════════════════════════════════════════════════════════════════════════════════════
+// LAWNS types a PHONE NUMBER into `BillAddr.Line1` and the street into `Line2`, on about a
+// quarter of the book — and the importer wrote `Line1` straight into `address_line1`, so a
+// quarter of the customers arrived with a phone number where their street belongs.
+//
+// MEASURED against the complete 2026-09-10 capture (1,959 of 1,959, `complete: true`), each
+// line classified by `classifyValueShape` — the SAME classifier the import preview panel ships,
+// so the panel and this writer cannot disagree about what a value looks like:
+//
+//     Line1 street                962      Line2 street   462
+//     Line1 phone                 484      Line2 phone      9
+//     Line1 absent                499      Line2 absent 1,482
+//     Line1 other/postcode/word    14      Line2 other/word 6
+//
+// 🔴 A BLANKET "LINE2 IS THE STREET" RULE IS WRONG IN BOTH DIRECTIONS AND THE DATA SAYS SO:
+// it would overwrite a correct street with a PHONE on the 6 records shaped `street | phone`,
+// and NULL the street on 953 records whose `Line1` is a street and whose `Line2` is empty.
+// So the branch is chosen per record, from the pair of shapes, and never from a global rule.
+//
+// ═════════════════════════════════════════════════════════════════════════════════════
+// 🔴 THE PHONE IN `Line1` IS KEPT. IT IS THERE ON PURPOSE — IT PRINTS ON THE INVOICE.
+// ═════════════════════════════════════════════════════════════════════════════════════
+// Today the number survives by accident, in the wrong column. Taking the street stops that, so
+// the resolver asks where the number GOES before it moves anything. MEASURED, same capture, of
+// the 484 records whose `Line1` reads as a phone:
+//
+//     474  the SAME number is already in `PrimaryPhone`/`Mobile` → already kept, nothing to do
+//       4  NO `PrimaryPhone` and NO `Mobile` at all → `customers.phone` is FREE, the number lands there
+//       5  a DIFFERENT number is in `PrimaryPhone` → a genuine SECOND line, and there is nowhere to put it
+//
+// 🔴 THOSE LAST 5 ARE THE ONE PLACE THE TWO RULES COLLIDE, AND THE PHONE WINS. `customers` has
+// ONE phone column; keeping both numbers needs a second one, which is a MIGRATION and is out of
+// scope for this pass. So those records are left EXACTLY as they are today — phone still in
+// `address_line1` — and COUNTED as `phoneWouldBeLost`, because recovering 5 streets by deleting
+// 5 phone numbers we hold nowhere else is not a repair. They are a ruling, not a default.
+//
+// ⚠️ THE PHONE IS NEVER OVERWRITTEN. The `Line1` number is written to `customers.phone` ONLY
+// when that column would otherwise be null. A `PrimaryPhone` that already exists always wins —
+// it is the field QuickBooks means as the phone, and this one is a number typed into an address.
+//
+// ⚠️ NOTHING IS INVENTED. A record with a phone in `Line1` and no `Line2` has NO STREET, and it
+// imports BLANK rather than carrying a phone number in a street column (D-9 — an absent value
+// must not read as a present one). 27 records, measured.
+
+/**
+ * Which branch the per-record rule took. Carried so the counts on the import report are the
+ * decision itself rather than a second derivation of it.
+ */
+export type AddressBranch =
+  /** `Line1` already reads as a street. Used as-is — 962 records. */
+  | 'line1-street'
+  /** `Line1` is a phone and `Line2` is the street. The street is recovered — 453 records. */
+  | 'line2-street'
+  /** `Line1` is a phone and there is no `Line2`. No street exists; imports blank — 27 records. */
+  | 'no-street'
+  /** Taking the street would discard a phone held nowhere else. Left exactly as today — 5 records. */
+  | 'phone-would-be-lost'
+  /** Every other shape pair. Left exactly as today, and counted — 517 records. */
+  | 'unchanged';
+
+/** One sentence per branch, for a report that has to explain itself to Lauren rather than to us. */
+export const ADDRESS_BRANCH_REASON: Record<AddressBranch, string> = {
+  'line1-street':       'the first address line is a street, and was used as it stands',
+  'line2-street':       'the first address line is a phone number and the second is the street — the street was taken from the second line',
+  'no-street':          'the only address line is a phone number, so this customer has no street on file — imported blank rather than guessed',
+  'phone-would-be-lost': 'the second line is a street, but the first line holds a phone number we hold nowhere else — left unchanged so the number is not lost',
+  'unchanged':          'the address lines do not match any known shape — left exactly as the previous import left them',
+};
+
+/**
+ * Branch → the tally field it increments.
+ *
+ * ⚠️ DECLARED AS A TOTAL `Record`, so adding a branch to `AddressBranch` without giving it a
+ * counter FAILS TO COMPILE rather than silently going uncounted. A tally that quietly loses a
+ * category is exactly the shape of finding this build exists to fix.
+ */
+const BRANCH_TALLY_KEY: Record<AddressBranch, keyof Omit<AddressResolutionTally, 'phoneRescued'>> = {
+  'line1-street': 'line1Street',
+  'line2-street': 'line2Street',
+  'no-street': 'noStreet',
+  'phone-would-be-lost': 'phoneWouldBeLost',
+  'unchanged': 'unchanged',
+};
+
+/**
+ * The phone this record would land in `customers.phone` WITHOUT reading the address at all.
+ *
+ * Extracted so the resolver and `adaptCustomer` ask the same question once. `PrimaryPhone` first,
+ * `Mobile` second — the order the adapter has always used.
+ */
+export function heldPhoneOf(raw: Record<string, unknown>): string | null {
+  const phone = (raw.PrimaryPhone ?? null) as { FreeFormNumber?: unknown } | null;
+  const mobile = (raw.Mobile ?? null) as { FreeFormNumber?: unknown } | null;
+  return str(phone?.FreeFormNumber) ?? str(mobile?.FreeFormNumber);
 }
 
-/** One raw QuickBooks record → one row shaped like `customers`. Returns null when unusable. */
-export function adaptCustomer(raw: Record<string, unknown>): AdaptedCustomer | null {
+export interface ResolvedBillingAddress {
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  /**
+   * The `Line1` phone, when it must be carried into `customers.phone` to survive. NULL whenever
+   * the number is already held — which is the common case, 474 of 484.
+   */
+  phone_from_line1: string | null;
+  branch: AddressBranch;
+}
+
+/**
+ * BillAddr is the billing home; ShipAddr is a job site and is NOT a billing address.
+ *
+ * Pure: the raw `BillAddr` plus the phone the record would otherwise carry, in — the resolved
+ * address and the branch taken, out. No IO, no clock, so every rule above is provable at a desk.
+ *
+ * ⚠️ `Line2` is still NOT folded into `address_line1` when `Line1` is a street. `customers` has
+ * `billing_line2` and the party editor owns it; concatenating here would make this writer
+ * disagree with that one. `Line2` is READ to decide which line is the street, never appended.
+ */
+export function resolveBillingAddress(raw: Record<string, unknown>, heldPhone: string | null): ResolvedBillingAddress {
+  const a = (raw.BillAddr ?? null) as Record<string, unknown> | null;
+  if (!a || typeof a !== 'object') {
+    return { address_line1: null, city: null, state: null, zip: null, phone_from_line1: null, branch: 'unchanged' };
+  }
+  const rest = { city: str(a.City), state: str(a.CountrySubDivisionCode), zip: str(a.PostalCode) };
+  const line1 = str(a.Line1), line2 = str(a.Line2);
+  // `classifyValueShape` answers 'other' for a value it cannot place, and 'other' is never a
+  // verdict — an unrecognised line falls through to `unchanged`, which is today's behaviour.
+  const s1 = line1 === null ? 'absent' : classifyValueShape(line1);
+  const s2 = line2 === null ? 'absent' : classifyValueShape(line2);
+
+  // ① The first line is a street. Nothing to repair. 962 records.
+  if (s1 === 'street') return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'line1-street' };
+
+  if (s1 === 'phone') {
+    // Does the number in `Line1` survive if we stop writing it into the street column?
+    // It survives when nothing else holds it (the free column takes it) or when the SAME number
+    // is already held. It does NOT survive when a DIFFERENT number occupies the one phone column.
+    const rescue = heldPhone === null ? line1 : null;
+    const survives = heldPhone === null || normPhone(heldPhone) === normPhone(line1);
+
+    // ③ The first line is a phone and the second is the street. 453 records.
+    if (s2 === 'street') {
+      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
+      return { ...rest, address_line1: line2, phone_from_line1: rescue, branch: 'line2-street' };
+    }
+    // ④ The first line is a phone and there is no second line. There is NO STREET here. 27 records.
+    if (s2 === 'absent') {
+      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
+      return { ...rest, address_line1: null, phone_from_line1: rescue, branch: 'no-street' };
+    }
+  }
+
+  // ⑤ Anything else — including `phone | phone`, `other | street`, `street | phone` — is left
+  // EXACTLY as the previous import left it, and counted. A shape we have not reasoned about is
+  // not a shape we know how to repair.
+  return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'unchanged' };
+}
+
+/**
+ * One raw QuickBooks record → one row shaped like `customers`, WITH the address branch it took.
+ *
+ * 🔴 THE BRANCH IS RETURNED, NOT RE-DERIVED. The counts on the import report come from this
+ * value, so the number on the screen is the decision that was actually made rather than a second
+ * evaluation that could drift from it ([[R-33]] — a tally that cannot disagree with the write).
+ */
+export function adaptCustomerWithAddress(raw: Record<string, unknown>): { customer: AdaptedCustomer; branch: AddressBranch; phoneRescued: boolean } | null {
   const id = str(raw.Id);
   // No Id = not addressable as an upsert key. There is no second identity to fall back to.
   if (!id) return null;
@@ -239,9 +425,11 @@ export function adaptCustomer(raw: Record<string, unknown>): AdaptedCustomer | n
   const givenName = str(raw.GivenName);
   const type = classifyCustomer(companyName, displayName, givenName);
   const email = (raw.PrimaryEmailAddr ?? null) as { Address?: unknown } | null;
-  const phone = (raw.PrimaryPhone ?? null) as { FreeFormNumber?: unknown } | null;
-  const mobile = (raw.Mobile ?? null) as { FreeFormNumber?: unknown } | null;
+  // The phone this record carries on its own, before the address is read at all.
+  const heldPhone = heldPhoneOf(raw);
+  const billing = resolveBillingAddress(raw, heldPhone);
   return {
+   customer: {
     qb_customer_id: id,
     display_name: displayName,
     customer_type: type,
@@ -269,11 +457,30 @@ export function adaptCustomer(raw: Record<string, unknown>): AdaptedCustomer | n
     last_name: type === 'organization' ? null : str(raw.FamilyName),
     organization_name: companyName,
     email: str(email?.Address),
-    phone: str(phone?.FreeFormNumber) ?? str(mobile?.FreeFormNumber),
-    ...billingOf(raw),
+    // 🔴 THE HELD PHONE ALWAYS WINS. `phone_from_line1` is non-null ONLY when `heldPhone` was
+    // null, so this can fill an empty column and can never overwrite a real `PrimaryPhone`.
+    phone: heldPhone ?? billing.phone_from_line1,
+    address_line1: billing.address_line1,
+    city: billing.city,
+    state: billing.state,
+    zip: billing.zip,
     ...exemptionOf(raw),
     notes: str(raw.Notes),
+   },
+   branch: billing.branch,
+   phoneRescued: billing.phone_from_line1 !== null,
   };
+}
+
+/**
+ * One raw QuickBooks record → one row shaped like `customers`. Returns null when unusable.
+ *
+ * The long-standing entry point, kept because it is what every caller outside this file wants and
+ * what the probes drive. It is a projection of `adaptCustomerWithAddress`, never a second
+ * implementation — there is exactly one place the address decision is made.
+ */
+export function adaptCustomer(raw: Record<string, unknown>): AdaptedCustomer | null {
+  return adaptCustomerWithAddress(raw)?.customer ?? null;
 }
 
 /**
@@ -330,17 +537,23 @@ export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
   // sent; filtering it down to what we could use would hide a field from the check precisely
   // when the record carrying it was the one we could not read.
   const rawRecords: Record<string, unknown>[] = [];
+  const addressResolution: AddressResolutionTally = {
+    line1Street: 0, line2Street: 0, noStreet: 0, unchanged: 0, phoneWouldBeLost: 0, phoneRescued: 0,
+  };
   let unparseable = 0, noId = 0, dupId = 0;
   for (const body of rawBodies) {
     const page = parseCustomerRecords(body);
     if (!page.ok) { unparseable++; continue; }
     for (const raw of page.rows) {
       rawRecords.push(raw);
-      const adapted = adaptCustomer(raw);
+      const adapted = adaptCustomerWithAddress(raw);
       if (!adapted) { noId++; continue; }
-      if (seen.has(adapted.qb_customer_id)) { dupId++; continue; }
-      seen.add(adapted.qb_customer_id);
-      customers.push(adapted);
+      if (seen.has(adapted.customer.qb_customer_id)) { dupId++; continue; }
+      seen.add(adapted.customer.qb_customer_id);
+      customers.push(adapted.customer);
+      // Tallied from the SAME object that produced the row — see `adaptCustomerWithAddress`.
+      addressResolution[BRANCH_TALLY_KEY[adapted.branch]]++;
+      if (adapted.phoneRescued) addressResolution.phoneRescued++;
     }
   }
   const skipped: { reason: string; count: number }[] = [];
@@ -365,5 +578,6 @@ export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
     // the review Lauren is being asked to do by nearly half.
     duplicateRecordCount: touched.size,
     fieldAudit: auditImportFields({ records: rawRecords }),
+    addressResolution,
   };
 }
