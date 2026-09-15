@@ -52,16 +52,24 @@ end to end.** Unproven is not broken — and the difference is the whole point o
 🔴 **This was the #1 item on this list for four days and it was false**, gating tech-debt **#299**,
 which is now unblocked. → tech-debt **#253** ✅ RESOLVED
 
-**1b · THE `#332` RENUMBER — THIS BRANCH WAS THE EARLIER CLAIM AND MOVED ANYWAY.** `f83e044`
-reserved `#332` at **10:21:22**; `ecfb376` claimed it **11:10:33**, 49 minutes later, so by
-[[R-148]] clause (4) `feat/contact-record` keeps it. **But theirs merged first, and
-`verify-id-sweep` refuses to rule on that case — it says so in its own text.** Moved to `#335`
-deliberately and reversibly; **overrule it and the move undoes cleanly.** → CLAUDE.md §3 #335
+**1b · ✅ ANSWERED 2026-09-15 — THE `#332` → `#335` RENUMBER STANDS. DAVID RULED; NOTHING TO
+OVERRULE.** David, 2026-09-15: *"Take the #332 → #335 renumber on feat/contact-record. R-148 clause
+(4). Nothing to overrule."* **So `#335` is this branch's id, the reversal is not pending, and `#332`
+belongs to `ecfb376`'s work — where it is now FILED** (ledger #336, `fix/332-ledger-row`).
+⚠️ **Recorded rather than deleted so no later session re-opens it. THE ORIGINAL, PRESERVED:**
+*"`f83e044` reserved `#332` at 10:21:22; `ecfb376` claimed it 11:10:33, 49 minutes later, so by
+R-148 clause (4) `feat/contact-record` keeps it. But theirs merged first, and `verify-id-sweep`
+refuses to rule on that case — it says so in its own text. Moved to `#335` deliberately and
+reversibly; overrule it and the move undoes cleanly."* → CLAUDE.md §3 #335
 
-**1c · 🔴 `npm run verify` IS RED ON `origin/main` AND IT IS NOT THIS BRANCH'S.** `verify:id-citations`
-reports `#332` claimed in a commit subject with **no ledger row** — `ecfb376`'s close-out filed
-none. **Proven by running the cap in a throwaway worktree at clean `origin/main`.** Someone must
-file that row or declare it; a session cannot write another session's close-out. → ledger #335
+**1c · ✅ ANSWERED 2026-09-15 — THE ROW IS FILED, NOT DECLARED. `main` GOES GREEN WHEN #336 MERGES.**
+This branch's diagnosis was correct in every particular, **including that a session cannot write
+another session's close-out** — so the row that was written states in its own text that it is a
+retroactive FILING and names whose work it records. **Filed rather than withdrawn under [[R-148]]
+clause (3): the work is real and is on `main`** (`889b740` + `ecfb376`). ⚠️ **`origin/main` stays
+red until `fix/332-ledger-row` merges; this branch was never affected.** 🔴 **AND IT MATTERED MORE
+THAN ONE RED CLAUSE: `npm run verify` is an `&&` chain, so 111 test files and three later caps were
+UNREACHED — neither passing nor failing.** → ledger **#336**
 
 **1d · APPLY ORDER FOR THE CONTACT RECORD — `20260915` FIRST, THEN `20260915b`.** The second DROPS
 the columns the first's trigger REPLACES, so out of order leaves `customers` with no address at

@@ -101,11 +101,17 @@
   - 🔴 **APPLY ORDER MATTERS — `20260915` FIRST, THEN `20260915b`.** The second drops the columns the
     first's trigger replaces. `20260915b` **refuses rather than destroys** (pre-flight raise, no
     `CASCADE`); **run its V0 before applying.** Then re-run `scripts/snapshot-customers-columns.mjs`.
-  - ⚠️ **`npm run verify` exits 1 on a clause that is NOT this branch's** — `#332` claimed in
-    `origin/main`'s commit subject with no ledger row (`ecfb376`). **Proven red on clean
-    `origin/main` in a throwaway worktree.** Every other check green.
-  - ⚠️ **`#332` → `#335` renumber is David's to overrule** — this branch held the EARLIER claim by
-    49 minutes, but theirs merged first and `verify-id-sweep` refuses to rule on that case.
+  - ✅ **RESOLVED 2026-09-15 — the `#332` clause is FIXED on `fix/332-ledger-row` (ledger #336).**
+    WAS: *"`npm run verify` exits 1 on a clause that is NOT this branch's — `#332` claimed in
+    `origin/main`'s commit subject with no ledger row (`ecfb376`)."* **This branch's diagnosis was
+    correct in every particular, including that a session cannot write another session's close-out.**
+    The row is **FILED, not withdrawn** ([[R-148]] clause 3 — the work is real and on `main`).
+    ⚠️ **`main` itself stays red until #336 merges**; this branch is unaffected either way.
+  - ✅ **SETTLED 2026-09-15 BY DAVID — THE `#332` → `#335` RENUMBER STANDS. NOTHING TO OVERRULE.**
+    WAS: *"David's to overrule — this branch held the EARLIER claim by 49 minutes, but theirs merged
+    first and `verify-id-sweep` refuses to rule on that case."* **David ruled the move correct, citing
+    [[R-148]] clause (4).** 🔴 **Recorded here so no later session re-opens it: `#335` is this
+    branch's id, the reversal is NOT pending, and `#332` now belongs to `ecfb376`'s work.**
 
 ### 🟡 PUSHED, NOT MERGED — #329 (`fix/bom-one-mix-ratio-and-ring-function`, 2026-09-14)
 
