@@ -163,8 +163,13 @@ const SRC = {
      'C2 the ungated retry subset is a SUBSET of the projection — a retry cannot ask for more than the first try');
   ok(core.length < CUSTOMER_ORDER_FIELDS.length,
      `C3 the retry subset is genuinely narrower (${core.length} of ${CUSTOMER_ORDER_FIELDS.length}) — if it were equal, the retry would repeat the failing query`);
-  ok(core.includes('first_name') && core.includes('address_line1') && core.includes('city'),
-     'C4 the ungated subset still carries a name and the LEGACY address — a pre-migration tenant gets a narrower search, not a broken one');
+  // ✏️ C4 REQUIRED THE LEGACY ADDRESS UNTIL 2026-09-15 (ledger #335). The retry subset exists for
+  // a tenant that has not had the 2026-07-13 gated columns applied, and it used to fall back to
+  // the unprefixed four. Those are DROPPED, so the honest narrow subset is a NAME — an address is
+  // not available to a pre-migration tenant at all, and pretending otherwise would ask for a
+  // column that no longer exists on any tenant.
+  ok(core.includes('first_name') && !core.includes('address_line1'),
+     'C4 the ungated subset carries a name and NO address — the legacy four are gone, so a narrower search is a search by name');
   ok(!core.includes('billing_line1') && !core.includes('organization_name'),
      'C5 …and it drops exactly the 2026-07-13 gated columns, which is the whole point of the retry');
 
@@ -257,7 +262,7 @@ const SRC = {
   if (/customer\.marketing_opt_in !== undefined/.test(up)) namedBranches.add('marketing_opt_in');
 
   const writable = ['first_name', 'last_name', 'email', 'phone',
-                    'address_line1', 'city', 'state', 'zip', 'marketing_opt_in'];
+                    'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in'];
   const dropped = writable.filter(f => !offered.has(f) && !namedBranches.has(f));
   ok(dropped.length === 0,
      `E1 🔴 every field the ORDER PATH can supply reaches customerUpsert's payload. Dropped: ${dropped.join(', ') || '(none)'} — `
@@ -268,9 +273,17 @@ const SRC = {
   ok(namedBranches.has('email'),
      'E3 🔴 `email` is SUPPLIED-WINS by name — the fix from 0840b30 is still there, asserted rather than assumed');
 
-  // The mirror rule the copy depends on: billing_* and the legacy four are written TOGETHER.
-  ok(/address_line1: 'billing_line1', city: 'billing_city', state: 'billing_state', zip: 'billing_zip'/.test(up),
-     'E4 the D-41 canonical+mirror pairing is intact — the premise under billing-first-with-fallback');
+  // ✏️ E4 ASSERTED THE MIRROR'S PRESENCE UNTIL 2026-09-15 AND NOW ASSERTS ITS ABSENCE (#335).
+  // It required `CANONICAL = { address_line1: 'billing_line1', … }` in `customerUpsert` — the map
+  // that wrote each legacy column alongside its canonical twin. That map was the SECOND
+  // hand-maintained copy of the mapping (the first was `CUSTOMER_BILLING_MIRROR`, inverted, and a
+  // third sat inline in `customerImportWriter`). All three are deleted; `billing_*` is derived
+  // from the address list by a database trigger. A mirror re-appearing here would be a second
+  // author of one fact returning, so the probe holds that line from the other side.
+  ok(!/CANONICAL(:\s*Record<string, string>)?\s*=/.test(up),
+     'E4 🔴 the app-level canonical+mirror map is GONE — billing_* is derived by trigger, and a re-introduced mirror would be a second author of one fact (STD-011)');
+  ok(/billing_line1/.test(up),
+     'E4b …and the probe REACHED the file it is judging (it would pass vacuously on an empty read)');
 }
 
 // ══ F · THE COPY ITSELF — BILLING-FIRST, NO STALE VALUE, A9 ══════════════════════════════════
@@ -278,7 +291,6 @@ const SRC = {
   const A = {
     id: 'a', first_name: 'Ada', last_name: 'Alpha', email: 'ada@x.com', phone: '(512) 555-0101',
     billing_line1: '400 Honeycomb Mesa', billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641',
-    address_line1: 'OLD LINE', city: 'OLDCITY', state: 'ZZ', zip: '00000',
     price_tier: 'wholesale', tax_exempt: true, tax_exempt_reason: 'resale', tax_exempt_cert_ref: 'C-1',
     marketing_opt_in: false,
   };
@@ -286,15 +298,15 @@ const SRC = {
   const B = { id: 'b', first_name: 'Bo', last_name: null, email: null, phone: null };
 
   const fa = customerOrderFill(A);
-  ok(fa.address_line1 === '400 Honeycomb Mesa' && fa.city === 'Leander'
-     && fa.state === 'TX' && fa.zip === '78641',
-     'F1 🔴 BILLING-FIRST ON ALL FOUR — the same rule submit.ts:264-274 writes the delivery row with. '
+  ok(fa.billing_line1 === '400 Honeycomb Mesa' && fa.billing_city === 'Leander'
+     && fa.billing_state === 'TX' && fa.billing_zip === '78641',
+     'F1 🔴 ALL FOUR FROM THE ONE COLUMN SET — the same rule submit.ts writes the delivery row with. '
      + 'The old ScanOrder copy was billing-first on line1 and LEGACY-ONLY on city/state/zip, so one row produced two addresses');
   ok(fa.marketing_opt_in === false,
      'F2 🔴 a stored opt-OUT survives the copy — `?? true` here would re-grant consent on every selection');
 
   const fb = customerOrderFill(B);
-  ok(fb.address_line1 === '' && fb.city === '' && fb.state === '' && fb.zip === '',
+  ok(fb.billing_line1 === '' && fb.billing_city === '' && fb.billing_state === '' && fb.billing_zip === '',
      'F3 🔴 B3: a customer with no address yields EMPTY strings — not undefined, which a setter would SKIP, leaving the previous customer\'s values on screen');
   ok(fb.phone === '' && fb.email === '',
      'F4 …and the same for the contact fields');
@@ -315,20 +327,27 @@ const SRC = {
   ok(fb.marketing_opt_in === true,
      'F8 a customer row with NO opt-in column recorded falls back to the same default a blank form uses — and only then');
 
-  // Fallback direction: canonical blank/whitespace → legacy wins. Mirrors submit.ts's `pick`.
-  const legacyOnly = customerOrderFill({
-    first_name: 'C', billing_line1: '   ', address_line1: '9 Oak Ln', billing_city: '', city: 'Kyle',
+  // ✏️ F9 ASSERTED THE OPPOSITE UNTIL 2026-09-15 (ledger #335), AND THE REVERSAL IS THE POINT.
+  // It read: *"a BLANK or whitespace canonical column falls through to the LEGACY one — the
+  // pre-migration customer still gets their address."* There is no legacy column to fall through
+  // to: `address_line1`/`city`/`state`/`zip` are DROPPED from `customers`, and `billing_*` is the
+  // derived view of the address list. A blank canonical column now means the customer HAS no
+  // address, and saying so is A9 — an absent value must not be filled from somewhere else.
+  const blankCanonical = customerOrderFill({
+    first_name: 'C', billing_line1: '   ', billing_city: '',
+    // a stray legacy-named key must be IGNORED, not read — it is not a column any more
+    address_line1: '9 Oak Ln', city: 'Kyle',
   });
-  ok(legacyOnly.address_line1 === '9 Oak Ln' && legacyOnly.city === 'Kyle',
-     'F9 🔴 a BLANK or whitespace canonical column falls through to the legacy one — the pre-migration customer still gets their address');
+  ok(blankCanonical.billing_line1 === '' && blankCanonical.billing_city === '',
+     'F9 🔴 a BLANK canonical column yields EMPTY — there is no legacy column to fall through to, and a stray legacy-named key is NOT read');
 
   // The CustomerInput shape converts '' back to undefined at that one boundary (absent ≠ empty).
   const ib = customerOrderInput(B);
-  ok(ib.city === undefined && ib.zip === undefined && ib.phone === undefined,
+  ok(ib.billing_city === undefined && ib.billing_zip === undefined && ib.phone === undefined,
      'F10 🔴 at the CustomerInput boundary an empty value becomes UNDEFINED — customerUpsert rule (a): a field not supplied is OMITTED, never written as null over a stored value');
   const ia = customerOrderInput(A);
-  ok(ia.city === 'Leander' && ia.address_line1 === '400 Honeycomb Mesa',
-     'F11 …while a real value passes through billing-first, unchanged');
+  ok(ia.billing_city === 'Leander' && ia.billing_line1 === '400 Honeycomb Mesa',
+     'F11 …while a real value passes through unchanged');
   ok(ia.first_name === 'Ada' && typeof ia.email === 'string',
      'F12 the required CustomerInput fields are always strings — never undefined, which the cart type forbids');
 }
@@ -381,12 +400,24 @@ const SRC = {
   // thing is the address on the screen the operator is looking at. The probe is widened to the
   // exact new shape rather than loosened: a bare `pick(...)` with no ternary now FAILS §J of
   // `checkoutDelivery.test.ts` (mutant C1), and a ternary with the wrong fallback fails here.
-  ok(/address_line1: shipTo \? shipTo\.address_line1 : pick\(c\.billing_line1, c\.address_line1\)/.test(sub)
-     && /city:\s+shipTo \? shipTo\.city\s+: pick\(c\.billing_city,\s+c\.city\)/.test(sub)
-     && /state:\s+shipTo \? shipTo\.state\s+: pick\(c\.billing_state, c\.state\)/.test(sub)
-     && /zip:\s+shipTo \? shipTo\.zip\s+: pick\(c\.billing_zip,\s+c\.zip\)/.test(sub),
-     'H1 🔴 submit.ts STILL resolves the delivery address billing-first on all four columns WHEN IT '
-     + 'FALLS BACK TO THE CUSTOMER — the rule customerOrderFill mirrors. If submit changes and this '
+  // ✏️ THE SHAPE CHANGED WITH THE COLUMNS (ledger #335). This required `pick(c.billing_*, c.<legacy>)`
+  // — billing-first WITH a legacy fallback. There is no legacy column to fall back to, and the
+  // resolution is hoisted into `billTo` above the row literal (so that reading a customer value
+  // does not make a `deliveries` row literal look customer-shaped to the address cap). The
+  // assertion is NARROWED to the new shape, not loosened: a bare fallback with no ternary still
+  // fails §J of `checkoutDelivery.test.ts` (mutant C1), and the wrong source still fails here.
+  ok(/address_line1: shipTo \? shipTo\.address_line1 : billTo\.billing_line1/.test(sub)
+     && /city:\s+shipTo \? shipTo\.city\s+: billTo\.billing_city/.test(sub)
+     && /state:\s+shipTo \? shipTo\.state\s+: billTo\.billing_state/.test(sub)
+     && /zip:\s+shipTo \? shipTo\.zip\s+: billTo\.billing_zip/.test(sub)
+     && /billing_line1: pick\(c\.billing_line1\)/.test(sub)
+     // 🔴 THE TRIM, ASSERTED. A first draft of the repoint used `c.billing_line1 ?? null`, which
+     // writes '   ' onto a delivery row as an address; `checkoutDelivery.test.ts` G4 caught it.
+     // `pick` is what keeps a whitespace-only value out (A9), so it is named here rather than
+     // left as an implementation detail a later edit could quietly drop.
+     && /const pick = \(v: unknown\): string \| null =>/.test(sub),
+     'H1 🔴 submit.ts STILL resolves the delivery address from the customer on all four columns WHEN '
+     + 'IT FALLS BACK — the rule customerOrderFill mirrors. If submit changes and this '
      + 'fails, the FORM and the TRUCK have started disagreeing again, which is the divergence this '
      + 'build closed. The order\'s own ship-to (D-41 L2) outranks it, and nothing else may.');
 

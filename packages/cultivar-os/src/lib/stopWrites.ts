@@ -53,6 +53,30 @@ export function shipToLine(s: Partial<ShipTo>): string {
   return SHIP_TO_FIELDS.map(f => clean(s[f])).filter((v): v is string => v !== null).join(', ');
 }
 
+/**
+ * A customer's BILLING address, shaped as a ship-to so `shipToLine` can render it (ledger #335).
+ *
+ * 🔴 THE FALLBACK IT SERVES IS UNCHANGED — a stop with no ship-to of its own is shown at the
+ * customer's billing address. What changed is the customer's column names: `address_line1`/`city`/
+ * `state`/`zip` are dropped and `billing_*` is the derived view of the address list, so the two
+ * shapes no longer happen to share field names and the mapping has to be written down. It is
+ * written ONCE, here, rather than at each call site (§6 r8).
+ *
+ * ⚠️ This produces a ShipTo-SHAPED value for DISPLAY. It is never written to `deliveries` — D-41's
+ * invariant is that a stop carries its own snapshot, and nothing here writes anything.
+ */
+export function billingAsShipTo(c: {
+  billing_line1?: string | null; billing_city?: string | null;
+  billing_state?: string | null; billing_zip?: string | null;
+} | null | undefined): Partial<ShipTo> {
+  return {
+    address_line1: c?.billing_line1 ?? null,
+    city:          c?.billing_city  ?? null,
+    state:         c?.billing_state ?? null,
+    zip:           c?.billing_zip   ?? null,
+  };
+}
+
 export function shipToFormOf(s: Partial<ShipTo>): ShipToForm {
   return { address_line1: s.address_line1 ?? '', city: s.city ?? '', state: s.state ?? '', zip: s.zip ?? '' };
 }

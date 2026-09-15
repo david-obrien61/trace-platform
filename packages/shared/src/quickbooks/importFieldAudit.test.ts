@@ -13,7 +13,9 @@
  *        §A2 asserts the probe TABLE covers every map entry, so adding a mapping without a
  *        probe is a build failure rather than a silent hole.
  *
- *   §E — THE MIRROR IS COUNTED ONCE. D-41 writes `address_line1` AND `billing_line1` from one
+ *   §E — THE MIRROR IS COUNTED ONCE. ✏️ D-41's mirror is RETIRED (ledger #335) and there is one
+ *        destination per source now, so E3 asserts the count STAYS single rather than guarding a
+ *        live double-write. Originally: D-41 wrote `address_line1` AND `billing_line1` from one
  *        source value. Counting both reports 972 phone numbers where there are 486 — R-110's
  *        exact shape, *a surface asserting a number it did not get from the operation it
  *        describes*. The probe asserts the count is 486 AND that no finding names a mirror as
@@ -135,10 +137,10 @@ const MAP_PROBES: { path: string; record: Record<string, unknown>; expect: (c: A
   { path: 'Taxable',                     record: { Id: '1', DisplayName: 'D', Taxable: false },                      expect: c => c.tax_exempt === true },
   { path: 'ResaleNum',                   record: { Id: '1', DisplayName: 'D', Taxable: false, ResaleNum: 'School' }, expect: c => c.tax_exempt_cert_ref === 'School' },
   { path: 'TaxExemptionReasonId',        record: { Id: '1', DisplayName: 'D', Taxable: false, TaxExemptionReasonId: '3' }, expect: c => (c.tax_exempt_reason ?? '').includes('3') },
-  { path: 'BillAddr.Line1',                  record: { Id: '1', DisplayName: 'D', BillAddr: { Line1: '400 Honeycomb Mesa' } }, expect: c => c.address_line1 === '400 Honeycomb Mesa' },
-  { path: 'BillAddr.City',                   record: { Id: '1', DisplayName: 'D', BillAddr: { City: 'Leander' } },       expect: c => c.city === 'Leander' },
-  { path: 'BillAddr.CountrySubDivisionCode', record: { Id: '1', DisplayName: 'D', BillAddr: { CountrySubDivisionCode: 'TX' } }, expect: c => c.state === 'TX' },
-  { path: 'BillAddr.PostalCode',             record: { Id: '1', DisplayName: 'D', BillAddr: { PostalCode: '78641' } },   expect: c => c.zip === '78641' },
+  { path: 'BillAddr.Line1',                  record: { Id: '1', DisplayName: 'D', BillAddr: { Line1: '400 Honeycomb Mesa' } }, expect: c => c.billing_line1 === '400 Honeycomb Mesa' },
+  { path: 'BillAddr.City',                   record: { Id: '1', DisplayName: 'D', BillAddr: { City: 'Leander' } },       expect: c => c.billing_city === 'Leander' },
+  { path: 'BillAddr.CountrySubDivisionCode', record: { Id: '1', DisplayName: 'D', BillAddr: { CountrySubDivisionCode: 'TX' } }, expect: c => c.billing_state === 'TX' },
+  { path: 'BillAddr.PostalCode',             record: { Id: '1', DisplayName: 'D', BillAddr: { PostalCode: '78641' } },   expect: c => c.billing_zip === '78641' },
 ];
 
 for (const probe of MAP_PROBES) {
@@ -164,7 +166,7 @@ ok(MAP_PROBES.length === CUSTOMER_FIELD_MAP.length,
   // arrives, the leaf has gone — after §F proved the broad form reported five findings against a
   // capture with nothing wrong with it. A probe aimed at the OLD behaviour would have been a probe
   // that could not fail on the new one.
-  const liar: FieldMapEntry[] = [...CUSTOMER_FIELD_MAP, { path: 'BillAddr.Line9', column: 'address_line1' }];
+  const liar: FieldMapEntry[] = [...CUSTOMER_FIELD_MAP, { path: 'BillAddr.Line9', column: 'billing_line1' }];
   const withLie = auditImportFields({ records: RECORDS, map: liar });
   ok(withLie.declarationFindings.some(d => d.kind === 'mapped-but-absent' && d.path === 'BillAddr.Line9'),
     'A4 — RED-FIRST: a mapping whose PARENT arrives on every record and whose LEAF arrives on none is reported. That is what an upstream rename looks like from in here, and it is the direction a one-way check would miss');
@@ -260,7 +262,7 @@ ok(AUDIT.unmappedWithData[0].withData >= AUDIT.unmappedWithData[AUDIT.unmappedWi
 // and would call itself a fix.
 {
   const brokenStreetColumns = AUDIT.columnShapeFindings
-    .find(f => f.column === 'address_line1' && f.detected === 'phone')!.count;
+    .find(f => f.column === 'billing_line1' && f.detected === 'phone')!.count;
   const streetsHidingInLine2 = STREET_IN_LINE2;
   ok(brokenStreetColumns - streetsHidingInLine2 === NO_LINE2,
     `D8 — ${brokenStreetColumns} broken street columns minus ${streetsHidingInLine2} streets recoverable from Line2 = ${NO_LINE2} records with NO street anywhere in the capture. Neither check states this on its own; the pair does`);
@@ -269,29 +271,34 @@ ok(AUDIT.unmappedWithData[0].withData >= AUDIT.unmappedWithData[AUDIT.unmappedWi
 // ══════════════════════════════════════════════════════════════════════════════════════════
 console.log('\n§E — CHECK ②: A DESTINATION COLUMN HOLDING THE WRONG SHAPE — AND THE MIRROR COUNTED ONCE');
 // ══════════════════════════════════════════════════════════════════════════════════════════
-const line1Finding = AUDIT.columnShapeFindings.find(f => f.column === 'address_line1' && f.detected === 'phone');
+const line1Finding = AUDIT.columnShapeFindings.find(f => f.column === 'billing_line1' && f.detected === 'phone');
 ok(line1Finding?.count === PHONE_IN_LINE1,
-  `E1 — THE GO-LIVE BLOCKER: ${PHONE_IN_LINE1} of the values mapped into \`address_line1\` look like phone numbers (got ${line1Finding?.count}). A stop addressed to a phone number cannot go on a truck`);
+  `E1 — THE GO-LIVE BLOCKER: ${PHONE_IN_LINE1} of the values mapped into \`billing_line1\` look like phone numbers (got ${line1Finding?.count}). A stop addressed to a phone number cannot go on a truck`);
 ok(line1Finding?.ofValues === TOTAL,
   `E2 — the finding carries its DENOMINATOR: ${PHONE_IN_LINE1} of ${TOTAL}, not a bare count. R-110 — a surface may only assert what it got from the operation it describes`);
 
 // 🔴 THE R-110 GUARD, AND IT IS THE ASSERTION MOST LIKELY TO SAVE SOMEBODY LATER.
 ok(line1Finding!.count !== PHONE_IN_LINE1 * 2,
-  `E3 — THE MIRROR IS NOT DOUBLE-COUNTED. D-41 writes address_line1 AND billing_line1 from ONE source value; counting both reports ${PHONE_IN_LINE1 * 2} phone numbers where there are ${PHONE_IN_LINE1}`);
+  `E3 — THE MIRROR IS NOT DOUBLE-COUNTED. D-41 USED TO write address_line1 AND billing_line1 from ONE source value; counting both reported ${PHONE_IN_LINE1 * 2} phone numbers where there were ${PHONE_IN_LINE1}. The mirror is retired (ledger #335) and the count must STAY single`);
 const mirrorColumns = new Set(CUSTOMER_FIELD_MAP.flatMap(m => m.mirrors ?? []));
 ok(!AUDIT.columnShapeFindings.some(f => mirrorColumns.has(f.column)),
   `E4 — no finding is RAISED AGAINST a mirror column [${[...mirrorColumns].join(', ')}]. The mirrors are named inside the canonical finding instead`);
-ok((line1Finding?.mirrors ?? []).includes('billing_line1'),
-  'E5 — and the mirror IS named, so nobody reads the finding as "only one of the two columns is wrong"');
+// ✏️ E5 REQUIRED THE MIRROR TO BE NAMED IN THE FINDING AND NOW ASSERTS THERE IS NONE (#335).
+// It read: *"the mirror IS named, so nobody reads the finding as 'only one of the two columns is
+// wrong'."* There is one column per source value now, so a finding naming a mirror would be
+// describing a write that no longer happens — and that is the more useful thing to hold: if a
+// mirror ever returns, this goes red and E4's machinery is still here to handle it.
+ok(mirrorColumns.size === 0 && (line1Finding?.mirrors ?? []).length === 0,
+  `E5 — NO mirror is declared anywhere in the map, and the finding names none: one source value, one destination column (mirrors found: ${[...mirrorColumns].join(', ') || 'none'})`);
 
-ok(!AUDIT.columnShapeFindings.some(f => f.column === 'city' || f.column === 'state' || f.column === 'zip' || f.column === 'email'),
+ok(!AUDIT.columnShapeFindings.some(f => f.column === 'billing_city' || f.column === 'billing_state' || f.column === 'billing_zip' || f.column === 'email'),
   'E6 — the columns that are CORRECT report nothing. A check that flags everything is as useless as one that flags nothing');
 
 {
   // RED-FIRST on check ②: make the city column hold phone numbers and watch it fire.
   const broken = RECORDS.map(r => ({ ...r, BillAddr: { ...(r.BillAddr as Record<string, unknown>), City: '(512) 555-0100' } }));
   const a = auditImportFields({ records: broken });
-  const f = a.columnShapeFindings.find(x => x.column === 'city');
+  const f = a.columnShapeFindings.find(x => x.column === 'billing_city');
   ok(f?.detected === 'phone' && f.count === TOTAL,
     `E7 — RED-FIRST: put a phone in every City and check ② reports ${TOTAL} of ${TOTAL} against \`city\`. The check can refuse, which is the only reason its green means anything (§6 r19)`);
 }
@@ -362,7 +369,7 @@ console.log('\n§H — MUTANTS THAT CHANGE THE POPULATION, NOT THE SUBJECT (tech
   const a = auditImportFields({ records: renamed });
   ok(a.recordsExamined === TOTAL && a.declarationFindings.some(d => d.kind === 'mapped-but-absent' && d.path === 'BillAddr.Line1'),
     `H3 — ${TOTAL} records keep BillAddr and lose Line1, and the audit names \`BillAddr.Line1\` as mapped-but-absent. Without this the import would write ${TOTAL} empty street addresses and every count on the preview would still be right`);
-  ok(!a.columnShapeFindings.some(f => f.column === 'address_line1'),
+  ok(!a.columnShapeFindings.some(f => f.column === 'billing_line1'),
     'H4 — and the shape finding for `address_line1` GOES AWAY when the values do, rather than persisting off a stale tally');
 }
 {
@@ -397,7 +404,7 @@ console.log('\n§J — THE WIRING: the audit reaches the preview through adaptCu
   const adaptation = adaptCustomers([body]);
   ok(adaptation.fieldAudit.ran === true && adaptation.fieldAudit.recordsExamined === 500,
     'J1 — `adaptCustomers` computes the audit over the RAW records it parsed, which is the last layer that still holds them');
-  ok(adaptation.fieldAudit.columnShapeFindings.some(f => f.column === 'address_line1'),
+  ok(adaptation.fieldAudit.columnShapeFindings.some(f => f.column === 'billing_line1'),
     'J2 — and the go-live finding survives the trip through the real entry point, not just the direct call (R-110: drive the real entry points)');
 }
 {

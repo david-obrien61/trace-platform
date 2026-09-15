@@ -85,10 +85,12 @@ export interface AdaptedCustomer {
   organization_name: string | null;
   email: string | null;
   phone: string | null;
-  address_line1: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
+  // ✏️ RENAMED FROM `address_line1`/`city`/`state`/`zip` (ledger #335). Those four columns are
+  // DROPPED from `customers`; `billing_*` is the derived view of the address list.
+  billing_line1: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
   tax_exempt: boolean;
   /** Null when the customer is taxable — a reason on a taxable row would be a contradiction. */
   tax_exempt_reason: string | null;
@@ -248,7 +250,7 @@ export function exemptionOf(raw: Record<string, unknown>): Pick<AdaptedCustomer,
 // 🔴 WHICH `BillAddr` LINE HOLDS THE STREET IS DECIDED PER RECORD, FROM THE SHAPE OF THE VALUE.
 // ═════════════════════════════════════════════════════════════════════════════════════
 // LAWNS types a PHONE NUMBER into `BillAddr.Line1` and the street into `Line2`, on about a
-// quarter of the book — and the importer wrote `Line1` straight into `address_line1`, so a
+// quarter of the book — and the importer wrote `Line1` straight into the street column, so a
 // quarter of the customers arrived with a phone number where their street belongs.
 //
 // MEASURED against the complete 2026-09-10 capture (1,959 of 1,959, `complete: true`), each
@@ -279,7 +281,7 @@ export function exemptionOf(raw: Record<string, unknown>): Pick<AdaptedCustomer,
 // 🔴 THOSE LAST 5 ARE THE ONE PLACE THE TWO RULES COLLIDE, AND THE PHONE WINS. `customers` has
 // ONE phone column; keeping both numbers needs a second one, which is a MIGRATION and is out of
 // scope for this pass. So those records are left EXACTLY as they are today — phone still in
-// `address_line1` — and COUNTED as `phoneWouldBeLost`, because recovering 5 streets by deleting
+// the street column — and COUNTED as `phoneWouldBeLost`, because recovering 5 streets by deleting
 // 5 phone numbers we hold nowhere else is not a repair. They are a ruling, not a default.
 //
 // ⚠️ THE PHONE IS NEVER OVERWRITTEN. The `Line1` number is written to `customers.phone` ONLY
@@ -343,10 +345,10 @@ export function heldPhoneOf(raw: Record<string, unknown>): string | null {
 }
 
 export interface ResolvedBillingAddress {
-  address_line1: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
+  billing_line1: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
   /**
    * The `Line1` phone, when it must be carried into `customers.phone` to survive. NULL whenever
    * the number is already held — which is the common case, 474 of 484.
@@ -361,16 +363,16 @@ export interface ResolvedBillingAddress {
  * Pure: the raw `BillAddr` plus the phone the record would otherwise carry, in — the resolved
  * address and the branch taken, out. No IO, no clock, so every rule above is provable at a desk.
  *
- * ⚠️ `Line2` is still NOT folded into `address_line1` when `Line1` is a street. `customers` has
+ * ⚠️ `Line2` is still NOT folded into `billing_line1` when `Line1` is a street. `customers` has
  * `billing_line2` and the party editor owns it; concatenating here would make this writer
  * disagree with that one. `Line2` is READ to decide which line is the street, never appended.
  */
 export function resolveBillingAddress(raw: Record<string, unknown>, heldPhone: string | null): ResolvedBillingAddress {
   const a = (raw.BillAddr ?? null) as Record<string, unknown> | null;
   if (!a || typeof a !== 'object') {
-    return { address_line1: null, city: null, state: null, zip: null, phone_from_line1: null, branch: 'unchanged' };
+    return { billing_line1: null, billing_city: null, billing_state: null, billing_zip: null, phone_from_line1: null, branch: 'unchanged' };
   }
-  const rest = { city: str(a.City), state: str(a.CountrySubDivisionCode), zip: str(a.PostalCode) };
+  const rest = { billing_city: str(a.City), billing_state: str(a.CountrySubDivisionCode), billing_zip: str(a.PostalCode) };
   const line1 = str(a.Line1), line2 = str(a.Line2);
   // `classifyValueShape` answers 'other' for a value it cannot place, and 'other' is never a
   // verdict — an unrecognised line falls through to `unchanged`, which is today's behaviour.
@@ -378,7 +380,7 @@ export function resolveBillingAddress(raw: Record<string, unknown>, heldPhone: s
   const s2 = line2 === null ? 'absent' : classifyValueShape(line2);
 
   // ① The first line is a street. Nothing to repair. 962 records.
-  if (s1 === 'street') return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'line1-street' };
+  if (s1 === 'street') return { ...rest, billing_line1: line1, phone_from_line1: null, branch: 'line1-street' };
 
   if (s1 === 'phone') {
     // Does the number in `Line1` survive if we stop writing it into the street column?
@@ -389,20 +391,20 @@ export function resolveBillingAddress(raw: Record<string, unknown>, heldPhone: s
 
     // ③ The first line is a phone and the second is the street. 453 records.
     if (s2 === 'street') {
-      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
-      return { ...rest, address_line1: line2, phone_from_line1: rescue, branch: 'line2-street' };
+      if (!survives) return { ...rest, billing_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
+      return { ...rest, billing_line1: line2, phone_from_line1: rescue, branch: 'line2-street' };
     }
     // ④ The first line is a phone and there is no second line. There is NO STREET here. 27 records.
     if (s2 === 'absent') {
-      if (!survives) return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
-      return { ...rest, address_line1: null, phone_from_line1: rescue, branch: 'no-street' };
+      if (!survives) return { ...rest, billing_line1: line1, phone_from_line1: null, branch: 'phone-would-be-lost' };
+      return { ...rest, billing_line1: null, phone_from_line1: rescue, branch: 'no-street' };
     }
   }
 
   // ⑤ Anything else — including `phone | phone`, `other | street`, `street | phone` — is left
   // EXACTLY as the previous import left it, and counted. A shape we have not reasoned about is
   // not a shape we know how to repair.
-  return { ...rest, address_line1: line1, phone_from_line1: null, branch: 'unchanged' };
+  return { ...rest, billing_line1: line1, phone_from_line1: null, branch: 'unchanged' };
 }
 
 /**
@@ -460,10 +462,10 @@ export function adaptCustomerWithAddress(raw: Record<string, unknown>): { custom
     // 🔴 THE HELD PHONE ALWAYS WINS. `phone_from_line1` is non-null ONLY when `heldPhone` was
     // null, so this can fill an empty column and can never overwrite a real `PrimaryPhone`.
     phone: heldPhone ?? billing.phone_from_line1,
-    address_line1: billing.address_line1,
-    city: billing.city,
-    state: billing.state,
-    zip: billing.zip,
+    billing_line1: billing.billing_line1,
+    billing_city: billing.billing_city,
+    billing_state: billing.billing_state,
+    billing_zip: billing.billing_zip,
     ...exemptionOf(raw),
     notes: str(raw.Notes),
    },

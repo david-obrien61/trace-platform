@@ -1,14 +1,12 @@
 {
   "table": "customers",
   "columns": [
-    "address_line1",
     "billing_city",
     "billing_line1",
     "billing_line2",
     "billing_state",
     "billing_zip",
     "business_id",
-    "city",
     "created_at",
     "credit_limit",
     "customer_type",
@@ -28,7 +26,6 @@
     "price_tier",
     "qb_customer_id",
     "source",
-    "state",
     "status",
     "tax_exempt",
     "tax_exempt_cert_doc_url",
@@ -36,11 +33,11 @@
     "tax_exempt_expires",
     "tax_exempt_reason",
     "tax_id",
-    "updated_at",
-    "zip"
+    "updated_at"
   ],
   "taken_at": "2026-09-07T14:28:53.914Z",
-  "source": "live PostgREST projection (SELECT * LIMIT 1) — customers has NO CREATE TABLE in the migration corpus (tech-debt #39), so the corpus cannot answer this question",
+  "source": "live PostgREST projection (SELECT * LIMIT 1) taken 2026-09-07, MINUS the four columns dropped by supabase/migrations/20260915b_drop_legacy_customer_address.sql (ledger #335). \u26a0\ufe0f THIS FILE IS NO LONGER A PURE MEASUREMENT AND SAYS SO: the drop migration is WRITTEN and NOT APPLIED, so the live table still has address_line1/city/state/zip until David runs it. The four were removed here rather than left in, because a snapshot listing a column the repo's own migration deletes is a stale declaration nobody re-derives (tech-debt #73 / R-26's class) \u2014 and the import's insert list must be checked against what it is allowed to write, not against what history allowed. RE-RUN scripts/snapshot-customers-columns.mjs IMMEDIATELY AFTER APPLYING to make this a measurement again.",
   "refresh_with": "node scripts/snapshot-customers-columns.mjs",
-  "guarded_by": "packages/shared/src/quickbooks/customerImport.test.ts §M — asserts the import's insert list is a subset of this, AND that every ALTER TABLE customers ADD COLUMN in the corpus is a subset of this (so a migration without a refresh fails the build)"
+  "guarded_by": "packages/shared/src/quickbooks/customerImport.test.ts \u00a7M \u2014 asserts the import's insert list is a subset of this, AND that every ALTER TABLE customers ADD COLUMN in the corpus is a subset of this (so a migration without a refresh fails the build)",
+  "pending_migration": "20260915b_drop_legacy_customer_address.sql (written, NOT applied)"
 }

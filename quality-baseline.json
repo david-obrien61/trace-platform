@@ -1,8 +1,8 @@
 {
   "_comment": "Baseline-and-ratchet quality gate. `npm run verify` fails on NET-NEW only (any metric above baseline). These numbers are debt — shrink them, never grow them. Regenerate with `npm run quality:baseline` after fixing violations to lock in the lower number.",
-  "generated": "2026-09-01",
+  "generated": "2026-09-15",
   "tsc": {
-    "errors": 5
+    "errors": 4
   },
   "eslint": {
     "total": 244

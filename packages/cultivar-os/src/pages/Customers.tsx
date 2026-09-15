@@ -53,10 +53,8 @@ interface CustomerRow {
   last_name: string;
   phone: string | null;
   email: string | null;
-  address_line1: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
+  // ✏️ THE LEGACY FOUR WERE DECLARED HERE (ledger #335) and are gone with the columns. The
+  // canonical `billing_*` four are declared once, below, with the rest of the party record.
   price_tier: string | null;
   customer_type: string | null;
   // D-40: the persistent tax exemption (gated cols 20260713; optional so a pre-migration read is safe).

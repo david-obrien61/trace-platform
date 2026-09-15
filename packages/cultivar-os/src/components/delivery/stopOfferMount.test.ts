@@ -82,12 +82,13 @@ function ok(cond: boolean, label: string) {
 const STOP_A = 'stop-a'; const STOP_B = 'stop-b';
 const stop = (id: string): StopRow => ({
   id, customer_id: `cust-${id}`, delivery_date: '2026-09-12',
+  // the STOP's own snapshot — `deliveries` keeps these four (D-41's surviving invariant)
   address_line1: '770 Oak Creek Dr', city: 'Leander', state: 'TX', zip: '78641',
   status: 'scheduled', service_type: 'delivery', notes: null, order_id: null,
   created_at: '2026-09-12T00:00:00Z', started_at: null, completed_at: null,
   review_asked_at: null, review_ask_outcome: null,
   customers: { first_name: 'John', last_name: 'Smith', phone: null, email: null,
-    address_line1: null, city: null, state: null, zip: null },
+    billing_line1: null, billing_city: null, billing_state: null, billing_zip: null },
 });
 const read: StopRead = {
   stops: [stop(STOP_A), stop(STOP_B)], fulfilmentColumns: true,

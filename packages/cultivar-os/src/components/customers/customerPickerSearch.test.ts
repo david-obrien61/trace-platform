@@ -14,7 +14,7 @@
  *
  * and `CUSTOMER_SEARCH_FIELDS` is TEN. **The four it lacked are the legacy address columns —
  * `address_line1` · `city` · `state` · `zip` — so Diane was missed on an ADDRESS field, not on a
- * name field.** That matters twice: it is why the fixture below gives Diane `city: 'Cedar Park'`
+ * name field.** That matters twice: it is why the fixture below gives Diane `billing_city: 'Cedar Park'`
  * and no "cedar" anywhere in her name, and it is why removing `organization_name` from the list
  * does NOT reproduce the measured symptom (probe RED-2 records exactly that).
  *
@@ -141,10 +141,10 @@ interface Row {
   customer_type?: string | null;
   phone?: string | null;
   email?: string | null;
-  address_line1?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
+  billing_line1?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  billing_zip?: string | null;
 }
 
 // The row BOTH searches always found. "cedar" is in `organization_name`, which the OLD picker read.
@@ -155,7 +155,7 @@ const CEDAR_HOA: Row = {
   // ⚠️ the email deliberately carries NO "hoa": C8b below proves `organization_name` SPECIFICALLY,
   // and it can only do that if the term appears in exactly one field of this row.
   phone: '(512) 555-0140', email: 'ap@cpassoc.example.com',
-  address_line1: '1 Discovery Blvd', city: 'Cedar Park', state: 'TX', zip: '78613',
+  billing_line1: '1 Discovery Blvd', billing_city: 'Cedar Park', billing_state: 'TX', billing_zip: '78613',
 };
 
 // 🔴 THE ROW THE PICKER COULD NOT SEE. "cedar" appears in `city` and NOWHERE in any name field —
@@ -164,7 +164,7 @@ const DIANE: Row = {
   id: '0ee368fe-5b2f-4458-a75d-d4498024a605',
   first_name: 'Diane', last_name: 'Foster', customer_type: 'person',
   phone: '(512) 555-0101', email: 'diane@example.com',
-  address_line1: '904 Hialeah Circle', city: 'Cedar Park', state: 'TX', zip: '78613',
+  billing_line1: '904 Hialeah Circle', billing_city: 'Cedar Park', billing_state: 'TX', billing_zip: '78613',
 };
 
 // Identity lives ONLY in `display_name` (the invoice name) — the picker has always matched it.
@@ -173,7 +173,7 @@ const NUNEZ: Row = {
   first_name: 'Robert', last_name: 'Nunez', customer_type: 'person',
   display_name: 'Nunez Grounds Maintenance LLC',
   phone: '(512) 555-0103', email: 'robert@example.com',
-  address_line1: '77 Ranch Rd', city: 'Leander', state: 'TX', zip: '78641',
+  billing_line1: '77 Ranch Rd', billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641',
 };
 
 // Every searchable field absent except the NOT NULL first name — the A9 subject.
@@ -181,12 +181,12 @@ const SPARSE: Row = {
   id: '99999999-0000-4000-8000-000000000007',
   first_name: 'Sparse', last_name: null,
   organization_name: null, display_name: null,
-  phone: null, email: null, address_line1: null, city: null, state: null, zip: null,
+  phone: null, email: null, billing_line1: null, billing_city: null, billing_state: null, billing_zip: null,
 };
 
 // Two rows identical in every searchable field, differing only by id — the shape a dedup survives.
-const TWIN_A: Row = { id: 'aaaa0000-0000-4000-8000-00000000000a', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', city: 'Leander', state: 'TX' };
-const TWIN_B: Row = { id: 'bbbb0000-0000-4000-8000-00000000000b', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', city: 'Leander', state: 'TX' };
+const TWIN_A: Row = { id: 'aaaa0000-0000-4000-8000-00000000000a', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', billing_city: 'Leander', billing_state: 'TX' };
+const TWIN_B: Row = { id: 'bbbb0000-0000-4000-8000-00000000000b', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', billing_city: 'Leander', billing_state: 'TX' };
 
 const ROWS: Row[] = [CEDAR_HOA, DIANE, NUNEZ, SPARSE, TWIN_A, TWIN_B];
 const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
@@ -303,7 +303,7 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
      'C8b 🔴 an `organization_name`-only term is returned — the field the prompt named, proven on its own');
   ok(fieldsMatching(CEDAR_HOA, 'hoa').join(',') === 'organization_name',
      `C9b …and "hoa" is in EXACTLY ONE field of that row — got "${fieldsMatching(CEDAR_HOA, 'hoa').join(',')}"`);
-  ok(fieldsMatching(DIANE, 'cedar').join(',') === 'city',
+  ok(fieldsMatching(DIANE, 'cedar').join(',') === 'billing_city',
      `C9c 🔴 THE MEASUREMENT'S OWN MECHANISM, derived not claimed: "cedar" reaches Diane through \`city\` and NOTHING else — got "${fieldsMatching(DIANE, 'cedar').join(',')}"`);
 
   // ④ a term matching nothing → empty, no throw.
@@ -374,7 +374,7 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
   // ④ `.limit(25)` — UNCHANGED BY THIS BUILD and the reason the id-set rule has a ceiling.
   const MANY: Row[] = Array.from({ length: 30 }, (_, i) => ({
     id: `dddd0000-0000-4000-8000-0000000000${String(i).padStart(2, '0')}`,
-    first_name: 'Bulk', last_name: `Row${i}`, customer_type: 'person', city: 'Leander', state: 'TX',
+    first_name: 'Bulk', last_name: `Row${i}`, customer_type: 'person', billing_city: 'Leander', billing_state: 'TX',
   }));
   ok(pickerSearch(MANY, 'bulk').length === 25,
      'D8 🔴 ⚠️ the picker TRUNCATES at 25 (CustomerSearch.tsx:122, untouched by this build)');
@@ -394,7 +394,7 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
   ok(OLD_PICKER_FIELDS.includes('organization_name') && OLD_PICKER_FIELDS.includes('display_name'),
      'RED-3 🔴 the correction to the prompt\'s premise, asserted: the old list ALREADY held organization_name and display_name');
   const missing = CUSTOMER_SEARCH_FIELDS.filter(f => !OLD_PICKER_FIELDS.includes(f));
-  ok(missing.join(',') === 'address_line1,city,state,zip',
+  ok(missing.join(',') === 'billing_line1,billing_city,billing_state,billing_zip',
      `RED-4 🔴 the exact delta this build closed is the four legacy address columns — got "${missing.join(',')}"`);
 }
 

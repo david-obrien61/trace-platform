@@ -197,7 +197,7 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
 
   // ShipAddr is on all 1,946 LAWNS records but only 754 carry a Line1: the rest are id-only husks.
   const shipOnly = adaptCustomer(person({ BillAddr: undefined, ShipAddr: { Id: '4' } }))!;
-  ok(shipOnly.address_line1 === null && shipOnly.city === null,
+  ok(shipOnly.billing_line1 === null && shipOnly.billing_city === null,
     '🔴 an id-only ShipAddr husk yields NO address — testing the OBJECT rather than a field counts 1,946 addresses where there are 1,448');
   // 🔴 THE FIXTURE THAT CATCHES THE FALLBACK. The husk above has no Line1, so reading it changes
   // nothing — mutant A9 survived there. This record has NO billing address and a REAL job-site
@@ -206,10 +206,10 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
     BillAddr: undefined,
     ShipAddr: { Id: '4', Line1: '9 Job Site Rd', City: 'Georgetown', CountrySubDivisionCode: 'TX', PostalCode: '78626' },
   }))!;
-  ok(jobSiteOnly.address_line1 === null && jobSiteOnly.city === null && jobSiteOnly.zip === null,
+  ok(jobSiteOnly.billing_line1 === null && jobSiteOnly.billing_city === null && jobSiteOnly.billing_zip === null,
     '🔴 a real ShipAddr is NOT used as the billing address — ShipAddr is a JOB SITE (Dave\'s Tree Svs bills one office and ships to three sites), and billing an invoice to a work site is a wrong address that looks entirely plausible');
   const billed = adaptCustomer(person())!;
-  ok(billed.address_line1 === '1 Oak St' && billed.city === 'Leander' && billed.state === 'TX' && billed.zip === '78641',
+  ok(billed.billing_line1 === '1 Oak St' && billed.billing_city === 'Leander' && billed.billing_state === 'TX' && billed.billing_zip === '78641',
     'a real BillAddr fills all four columns');
 
   const a = adaptCustomers([body([person({ Id: '1' }), person({ Id: '1' })])]);
@@ -492,8 +492,12 @@ async function main() {
   ok(Object.keys(ins.payload[0]).sort().join(',') === [...CUSTOMER_INSERT_COLUMNS].sort().join(','),
     'the INSERT payload matches the declared column list exactly — a wider write would be a visible edit, not a silent one');
   const row = rowForCustomer(BIZ, RUN, a.customers[0]);
-  ok(row.billing_line1 === row.address_line1 && row.billing_city === row.city,
-    '🔴 canonical + mirror (D-41): billing_* and the legacy four are written TOGETHER, or the invoice prints one address and the delivery route shows another');
+  // ✏️ THIS ASSERTED THE MIRROR AND NOW ASSERTS ITS ABSENCE (ledger #335). It read: *"canonical +
+  // mirror (D-41): billing_* and the legacy four are written TOGETHER, or the invoice prints one
+  // address and the delivery route shows another."* The legacy four are DROPPED; writing one would
+  // now be a 42703 on every insert, so the payload must name only the canonical four.
+  ok(row.billing_line1 === '1 Oak St' && !('address_line1' in row) && !('city' in row),
+    '🔴 the insert payload names the CANONICAL address columns and NOT the dropped legacy four — one source value, one destination');
   ok(row.business_id === BIZ, 'every row is scoped to the tenant (AC-3)');
 }
 
@@ -721,7 +725,7 @@ async function main() {
 // `business_inventory`'s CREATE TABLE out of the migration corpus. `customers` HAS NO CREATE
 // TABLE ANYWHERE IN THE CORPUS (live-only schema, tech-debt #39) and 10 of the 23 columns this
 // import writes — `qb_customer_id`, `source`, `first_name`, `last_name`, `email`, `phone`,
-// `address_line1`, `city`, `state`, `zip` — appear in NO migration at all. Run the corpus check
+// `billing_*` (added 2026-07-13) and the rest — appear in NO migration at all. Run the corpus check
 // against this table and it reports ten real columns as unknown.
 //
 // So the assertion rests on a COMMITTED SNAPSHOT of the live column list

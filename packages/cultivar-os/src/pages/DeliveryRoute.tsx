@@ -26,11 +26,10 @@ interface DeliveryOrder {
     first_name: string;
     last_name: string;
     phone: string | null;
-    address_line1: string | null;
-    billing_line1?: string | null; billing_city?: string | null; billing_state?: string | null; billing_zip?: string | null;
-    city: string | null;
-    state: string | null;
-    zip: string | null;
+    billing_line1: string | null;
+    billing_city: string | null;
+    billing_state: string | null;
+    billing_zip: string | null;
   } | null;
   // description/sku carried so a line with no lot can still name itself (a history order has no
   // lot on any line, by invariant). Shape kept compatible with OrderItemAnchorFields.
@@ -47,8 +46,8 @@ function fullAddress(c: DeliveryOrder['customers']): string {
 // D-41 read repoint (2026-07-29): billing_* is canonical, the unprefixed columns are its
 // legacy mirror. Read canonical FIRST and fall back — the same order the QBO invoice already used,
 // which is why the invoice printed the curated address while these surfaces showed the stale one.
-  const parts = [c.billing_line1 ?? c.address_line1, c.billing_city ?? c.city,
-                 c.billing_state ?? c.state, c.billing_zip ?? c.zip].filter(Boolean);
+  // ✏️ ONE COLUMN SET (ledger #335) — the `?? legacy` fallbacks are gone with the columns.
+  const parts = [c.billing_line1, c.billing_city, c.billing_state, c.billing_zip].filter(Boolean);
   return parts.join(', ');
 }
 
@@ -429,7 +428,7 @@ export function DeliveryRoute() {
       .from('orders')
       .select(`
         id, created_at, notes,
-        customers ( first_name, last_name, phone, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip ),
+        customers ( first_name, last_name, phone, billing_line1, billing_city, billing_state, billing_zip ),
         order_items ( description, sku, business_inventory ( name ) )
       `)
       .eq('business_id', businessId!)
@@ -440,7 +439,11 @@ export function DeliveryRoute() {
 
     if (err) { setError(err.message); setLoading(false); return; }
 
-    const rows = (data ?? []) as DeliveryOrder[];
+    // `as unknown as` matches `stopRead.ts:118`'s established form for a PostgREST EMBED: the
+    // client infers `customers` as an ARRAY for a join while this code reads it as one row. The
+    // mismatch is pre-existing; it surfaced here only when the projection narrowed (ledger #335)
+    // and TypeScript's overlap heuristic stopped tolerating the direct cast.
+    const rows = (data ?? []) as unknown as DeliveryOrder[];
     setOrders(rows);
 
     // Pre-select orders that have an address

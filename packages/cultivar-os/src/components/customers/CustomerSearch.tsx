@@ -69,16 +69,13 @@ export interface CustomerSearchHit {
   customer_type?: string | null;
   phone: string | null;
   email: string | null;
-  // the address, BOTH column sets — resolution is billing-first with a legacy fallback (D-41), and
-  // a fallback needs both halves present to fall back TO.
+  // ✏️ ONE COLUMN SET (ledger #335). This carried BOTH because resolution was billing-first with
+  // a legacy fallback and a fallback needs both halves present to fall back to. The legacy four
+  // are dropped; `billing_*` is the derived view of the address list.
   billing_line1?: string | null;
   billing_city?: string | null;
   billing_state?: string | null;
   billing_zip?: string | null;
-  address_line1?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
   price_tier?: string | null;
   tax_exempt?: boolean | null;
   tax_exempt_reason?: string | null;

@@ -16,7 +16,7 @@
 //               comment out), with tax_id / credit_limit VALUE-MASKED (BENCH-C).
 // ============================================================
 import { supabase } from '../../lib/supabase';
-import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIELDS, CUSTOMER_BILLING_MIRROR } from './customerFieldRegistry';
+import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIELDS } from './customerFieldRegistry';
 
 // RESIDUAL of list 5 (E6): the runtime list is now derived from `customerFields.ts`; this UNION is
 // its compile-time half and is still written by hand. It collapses in phase B, when the form's
@@ -160,16 +160,15 @@ export function buildCustomerPatch(params: {
   // ── text fields, from the registry ──
   for (const field of CUSTOMER_TEXT_FIELDS) {
     if (field === 'tax_exempt_cert_ref') continue;             // owned by the tax block below
-    if (Object.values(CUSTOMER_BILLING_MIRROR).includes(field)) continue; // legacy mirrors are derived, never edited
     const raw = draft[field];
     if (raw === undefined) continue;
     const trimmed = String(raw ?? '').trim();
     const notNull = CUSTOMER_NOT_NULL_FIELDS.includes(field);
     const value = trimmed === '' ? (notNull ? '' : null) : trimmed;
     put(field, value);
-    // D-41 bridge: a canonical billing field carries its legacy twin with it.
-    const mirror = CUSTOMER_BILLING_MIRROR[field];
-    if (mirror && (creating ? value != null : value !== saved[mirror])) values[mirror] = value;
+    // ✏️ THE D-41 MIRROR WRITE IS GONE (ledger #335). A canonical `billing_*` field used to carry
+    // its legacy twin with it on every save. The legacy columns are dropped, and `billing_*` is
+    // now derived from the address list by a database trigger — one author, nothing to mirror.
   }
 
   // ── typed fields ──

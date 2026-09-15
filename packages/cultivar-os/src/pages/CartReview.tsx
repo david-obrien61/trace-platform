@@ -614,9 +614,18 @@ export function CartReview() {
         {customer.phone && (
           <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.phone}</p>
         )}
-        {customer.address_line1 && (
+        {/* 🔴 FIXED 2026-09-15 (ledger #335, David's instruction). THIS READ THE LEGACY FOUR ONLY,
+            WITH NO BILLING FALLBACK — so a customer whose address lived in `billing_*` and not in
+            the legacy columns showed NO ADDRESS AT ALL on the review screen, while the delivery
+            row, the invoice push and the checkout form all resolved it correctly from
+            `billing_*`. Four surfaces, one address, and this was the only one reading the wrong
+            column set. That is precisely what the second copy cost, live and in front of a
+            customer at the till — and it is the argument for dropping the legacy four rather than
+            keeping them mirrored. There is now ONE column set, so there is nothing to disagree
+            with. */}
+        {customer.billing_line1 && (
           <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>
-            {customer.address_line1}{customer.city ? `, ${customer.city}` : ''}{customer.state ? ` ${customer.state}` : ''}{customer.zip ? ` ${customer.zip}` : ''}
+            {customer.billing_line1}{customer.billing_city ? `, ${customer.billing_city}` : ''}{customer.billing_state ? ` ${customer.billing_state}` : ''}{customer.billing_zip ? ` ${customer.billing_zip}` : ''}
           </p>
         )}
         {deliveryDate && (

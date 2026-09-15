@@ -41,7 +41,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readStops } from '../lib/stopRead';
-import { shipToLine } from '../lib/stopWrites';
+import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
 import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem } from '../lib/loadList';
 
 const TRACE_LOADLIST = true; // [TRACE:LOADLIST] STD-003 — ON until David owner-proves
@@ -133,7 +133,7 @@ export function LoadList() {
     const built = buildLoadList(date, res.value.stops.map(s => ({
       stopId: s.id,
       customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
-      address: shipToLine(s) || shipToLine(s.customers ?? {}),
+      address: shipToLine(s) || shipToLine(billingAsShipTo(s.customers)),
       serviceType: s.service_type,
       orderId: s.order_id,
       canReadLines: res.value.canReadLines,

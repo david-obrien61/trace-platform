@@ -715,10 +715,12 @@ export function ReceiptKeeper() {
           customer_type: isOrg ? 'organization' : 'person',
           email:         invoice.customerEmail.trim() || null,
           phone:         invoice.customerPhone.trim() || null,
-          address_line1: invoice.billLine1.trim() || invoice.shipLine1.trim() || null,
-          city:          invoice.billCity.trim()  || invoice.shipCity.trim()  || null,
-          state:         invoice.billState.trim() || invoice.shipState.trim() || null,
-          zip:           invoice.billZip.trim()   || invoice.shipZip.trim()   || null,
+          // ✏️ RENAMED (ledger #335) — this is a CUSTOMER payload, and the four columns it used
+          // to name are dropped. `billing_*` is the derived view of the address list.
+          billing_line1: invoice.billLine1.trim() || invoice.shipLine1.trim() || null,
+          billing_city:  invoice.billCity.trim()  || invoice.shipCity.trim()  || null,
+          billing_state: invoice.billState.trim() || invoice.shipState.trim() || null,
+          billing_zip:   invoice.billZip.trim()   || invoice.shipZip.trim()   || null,
         },
       };
       // Attach the delivery block only when scheduling — prefers ship-to (the destination),
