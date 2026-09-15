@@ -21,8 +21,8 @@
  */
 
 import {
-  checkSellable, availabilityLabel, deriveStatus, isManualCondition,
-  MANUAL_CONDITION_STATUSES, DERIVED_STATUSES,
+  checkSellable, availabilityLabel, deriveStatus, isManualCondition, fetchSeededLots,
+  SEEDED_NOTE, MANUAL_CONDITION_STATUSES, DERIVED_STATUSES,
 } from './inventoryStates';
 
 let passed = 0, failed = 0;
@@ -96,5 +96,98 @@ function ok(cond: boolean, msg: string): void {
   ok(availabilityLabel(null, 0) === '', 'an unknown qty says NOTHING rather than fabricating a 0 (D-9)');
 }
 
-console.log(`\n  checkSellable: ${passed} passed, ${failed} failed`);
-if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }
+
+// ══ §T — A SEEDED NUMBER WEARS ITS PROVENANCE, AND A COUNTED ONE DOES NOT ══════════════════
+
+{
+  ok(availabilityLabel(5, 0, true) === `5 available — ${SEEDED_NOTE}`,
+     `T1  🔴 A SEEDED LOT SHOWS ITS NUMBER **AND** QUALIFIES IT. Hiding the figure makes the lot unsellable again; showing it bare asserts a count nobody performed (got "${availabilityLabel(5, 0, true)}")`);
+  ok(availabilityLabel(5, 0, false) === '5 available',
+     'T2  NEGATIVE CONTROL — the same lot, not seeded, is unchanged. §T1 measured the flag and not a constant suffix');
+  ok(availabilityLabel(5, 0) === '5 available',
+     'T3  🔴 AND THE DEFAULT IS THE OLD BEHAVIOUR EXACTLY, so every existing caller is untouched by this build');
+  ok(availabilityLabel(29, 57, true) === `0 available (29 on hand, 57 committed) — ${SEEDED_NOTE}`,
+     'T4  committed and seeded compose — both qualifications are shown, neither replaces the other');
+  ok(availabilityLabel(null, 0, true) === '',
+     'T5  🔴 AN UNKNOWN QTY STILL SAYS NOTHING. A lot with no number cannot have a seeded number, and printing the note alone would assert a placeholder that does not exist (D-9)');
+}
+
+// ── fetchSeededLots is ASYNC, so its probes live in an IIFE: the runner bundles to CJS, where a
+// top-level `await` is a build error rather than a test failure — and a test file that will not
+// BUILD is the shape tech-debt #293 is about (a no-build scoring as a pass).
+void (async () => {
+  function fakeLedger(rows: { inventory_id: string | null; kind: string; occurred_at: string }[], error: { message: string } | null = null) {
+    const q = {
+      select: () => q, eq: () => q, in: () => q,
+      order: () => Promise.resolve({ data: error ? null : rows, error }),
+    };
+    return { from: () => q };
+  }
+
+  {
+    const seeded = await fetchSeededLots(fakeLedger([
+      { inventory_id: 'a', kind: 'opening_stock_seed', occurred_at: '2026-09-15T09:00:00Z' },
+      { inventory_id: 'b', kind: 'opening_stock_seed', occurred_at: '2026-09-15T09:00:00Z' },
+      { inventory_id: 'b', kind: 'count_reconcile',    occurred_at: '2026-09-20T09:00:00Z' },
+    ]), 'biz');
+    ok(seeded.has('a'), 'T6  a lot that was seeded and never counted IS a placeholder');
+    ok(!seeded.has('b'), 'T7  🔴 A LOT THAT HAS SINCE BEEN COUNTED IS NOT. A real count always wins — and this is why the answer is DERIVED from the ledger rather than stored as a flag nobody would remember to clear (STD-011)');
+    ok(!seeded.has('c'), 'T8  a lot with no ledger rows at all is not a placeholder');
+  }
+
+  {
+    // A lot seeded AGAIN after a count is a placeholder again — order matters, not mere presence.
+    const seeded = await fetchSeededLots(fakeLedger([
+      { inventory_id: 'a', kind: 'opening_stock_seed', occurred_at: '2026-09-15T09:00:00Z' },
+      { inventory_id: 'a', kind: 'count_reconcile',    occurred_at: '2026-09-16T09:00:00Z' },
+      { inventory_id: 'a', kind: 'opening_stock_seed', occurred_at: '2026-09-17T09:00:00Z' },
+    ]), 'biz');
+    ok(seeded.has('a'), 'T9  the LAST event wins — a re-seed after a count is a placeholder again (a presence test would get this wrong)');
+  }
+
+  {
+    // 🔴 THE WARNING IS CAPTURED, NOT ASSUMED. A degraded read that marks nothing AND SAYS NOTHING
+    // is indistinguishable from a clean read that found nothing — which is tech-debt #75's class
+    // (a check whose failure path is invisible). The silence is the defect, so the probe asserts
+    // the announcement and not only the return value.
+    const warns: string[] = [];
+    const realWarn = console.warn;
+    console.warn = (...a: unknown[]) => { warns.push(a.map(String).join(' ')); };
+    let seeded: Set<string>;
+    try {
+      seeded = await fetchSeededLots(fakeLedger([], { message: 'permission denied' }), 'biz');
+    } finally {
+      console.warn = realWarn;
+    }
+    ok(seeded.size === 0,
+       'T10 🔴 A FAILED READ MARKS NOTHING. Marking everything on an error would put "starting number, not counted" beside hundreds of genuinely counted lots and destroy the signal; under-claiming is recoverable, over-claiming is not');
+    ok(warns.length === 1,
+       `T10b 🔴 AND IT SAYS SO. A read that degraded in silence looks exactly like one that succeeded and found nothing (got ${warns.length} warnings)`);
+    ok(warns.join(' ').includes('permission denied'),
+       'T10c naming what actually went wrong, so the next person does not have to reproduce it to find out');
+  }
+
+  {
+    // NEGATIVE CONTROL for T10b, changing the POPULATION rather than the subject (tech-debt #182):
+    // a CLEAN read must be silent, or T10b would pass on a function that warns unconditionally.
+    const warns: string[] = [];
+    const realWarn = console.warn;
+    console.warn = (...a: unknown[]) => { warns.push(a.map(String).join(' ')); };
+    try {
+      await fetchSeededLots(fakeLedger([{ inventory_id: 'a', kind: 'opening_stock_seed', occurred_at: '2026-09-15T09:00:00Z' }]), 'biz');
+    } finally {
+      console.warn = realWarn;
+    }
+    ok(warns.length === 0, 'T10d NEGATIVE CONTROL — a clean read warns NOTHING, so T10b measured a failure path and not a constant');
+  }
+
+  {
+    const seeded = await fetchSeededLots(fakeLedger([
+      { inventory_id: null, kind: 'opening_stock_seed', occurred_at: '2026-09-15T09:00:00Z' },
+    ]), 'biz');
+    ok(seeded.size === 0, 'T11 a ledger row whose lot is gone anchors nothing (inventory_id is nullable by design)');
+  }
+
+  console.log(`\n  checkSellable: ${passed} passed, ${failed} failed`);
+  if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }
+})();

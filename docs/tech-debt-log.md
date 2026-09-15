@@ -3673,3 +3673,115 @@ write a value the column rejects.
 whose owner needs to name their own unit.**
 
 **Trigger.** A commissioned second vertical.
+---
+
+## #304 — 🟡 **PARTIAL 2026-09-15 (ledger #337): THE HALF-WIPE IS FIXED, THE MEANING IS STILL DAVID'S — AND THE PREMISE WAS WRONG IN THE DIRECTION THAT MATTERS.**
+
+🔴 **IT DID NOT NEED THE SEED. IT WAS ALREADY LIVE ON LAWNS, AND THIS ROW SAID THE OPPOSITE.**
+The row below reads *"WHY IT HAS NOT BITTEN YET — the imported rows have no ledger history at all
+… The seed is the first thing that gives them any."* **Measured 2026-09-15: order
+`6a60a0ca-dedf-4c1d-a58c-804bf1e64c79` — LAWNS, 2026-09-09, `order_kind = test`, `status =
+fulfilled`, **$1,875**, self-transport — moved stock against an imported lot.** One test order
+against one imported lot was enough. **The seed would do it 647 times; the seed is not what made
+it live**, and this item was filed as a cost the seed *would* impose when it had already been
+imposed six days earlier. ✏️ **[[R-26]]'s shape inside the row that was filed about [[R-26]]'s
+shape** — a written claim about the world, not checked against it.
+
+✅ **WHAT IS FIXED — GATE 2, and it is the ordering rather than the refusal.** `undoItemImport`
+now reads the run's lots inner-joined to `business_inventory_ledger` **before any write** and
+refuses the **whole** run with a sentence naming the held products. `handleBooksUndo` already
+short-circuits on `items.refused`, so the customer half never runs either — the existing seam,
+reused rather than forked.
+
+🔴 **AND THE DEFECT WAS WORSE THAN THIS ROW'S "BLAST RADIUS" PARAGRAPH SAID, WHICH IS THE OTHER
+CORRECTION.** That paragraph is right that the undo *"would delete the customers, then throw"*
+and calls it *"not silent, but not what the button says either."* **It is worse than that: the
+catch returns `{ ...empty }`, so the report says `customersDeleted: 0` for rows that were already
+gone.** The error was honest and **every number beside it was wrong** — which reads as *nothing
+happened*, and that is the state an owner would act on.
+
+✏️ **THE MEASUREMENT THIS ROW ASKED FOR IS ANSWERED, AND NOT BY CARD 13.** It asked which of two
+things happens — a visible refusal, or a reported success with the rows still present. **It was
+always the VISIBLE REFUSAL:** `inv.error` is checked and thrown, and the leftover re-read is a
+second, independent net. **The thing nobody had named was the customer delete that landed FIRST.**
+CARD 13 on the opening-stock board is still worth running, but it is no longer the open question.
+
+🔴 **WHAT IS STILL OPEN — AND IT IS THE WHOLE OF THE ORIGINAL ITEM: WHAT SHOULD THE UNDO *MEAN*?**
+The three options below are untouched and none was taken. Making the refusal honest is not the
+same as deciding whether *"import, look, wipe and reload"* survives a first sale — **and on LAWNS
+it already has not.** Board `CARD 10` (*THE WIPE*) can no longer pass there.
+
+---
+
+### ORIGINAL ROW, PRESERVED VERBATIM BELOW
+
+<!-- Deliberately NOT a `## #NNN —` heading: verify-id-citations clause C parses those as ROWS, and
+     a second row for one id is a duplicate. It happens to pass today because the parenthetical sits
+     between the id and the em-dash — which is an accident of a regex, not a decision, and the kind
+     of thing that breaks on the next widening. The id appears in the preserved TEXT instead, so the
+     log holds exactly one #304 row: the corrected one above. -->
+
+🔴 **SEEDING A CATALOGUE MAKES ITS ROWS UNDELETABLE, SO THE IMPORT'S UNDO CAN NO LONGER DO WHAT IT SAYS** (NEW 2026-09-15, ledger #333)
+
+**THE DEFECT, IN ONE SENTENCE.** The catalogue import promises Lauren she can *"import, look, wipe
+and reload as many times as it takes"* (R-93). The opening stock seed writes a permanent ledger
+row against every product it touches. **A lot with ledger history cannot be deleted** — so after a
+seed, `undoImportRun`'s `DELETE FROM business_inventory WHERE import_run_id = <run>` **refuses**,
+and the undo cannot complete.
+
+**THE MECHANISM, MEASURED FROM THE CORPUS RATHER THAN ASSUMED.**
+`business_inventory_ledger.inventory_id` is declared `ON DELETE SET NULL`. **SET NULL is an
+UPDATE**, and §2 of the same migration installs
+`BEFORE UPDATE OR DELETE … FOR EACH ROW … RAISE EXCEPTION` **with no exemption** — a referential
+cascade fires row triggers like any other write. Its own header records this, and records that it
+was **observed live**:
+
+> `20260720_inventory_movement_ledger.sql:136-151` — *"⚠️ CORRECTED 2026-07-30 — THE `ON DELETE
+> SET NULL` CLAUSE BELOW IS INERT. DO NOT RELY ON IT. … DELETE on business_inventory → SET NULL
+> here → REFUSED (observed live: "business_inventory_ledger is append-only: UPDATE is not
+> permitted"). **A lot with history is UNDELETABLE.**"*
+
+🔴 **AND THE IMPORT WRITER'S OWN COMMENT SAYS THE OPPOSITE, WHICH IS THE PART WORTH FILING.**
+`itemImportWriter.ts:485-490`, immediately above the DELETE:
+
+> *"Every FK pointing at `business_inventory` in the migration corpus is `ON DELETE SET NULL`
+> (cultivar_plants.inventory_id, order_items.business_inventory_id, inventory_counts.inventory_id,
+> **business_inventory_ledger.inventory_id**) — **so those rows survive with a null anchor and
+> nothing cascades.**"*
+
+**That is true of three of the four and false of the fourth**, and the migration had recorded the
+correction **forty-eight days earlier**. It is [[R-26]]'s shape inside our own corpus — a written
+declaration nobody checked against reality, steering a decision — and it is load-bearing, because
+it is precisely the sentence a builder reads before deciding the undo is safe.
+
+**WHY IT HAS NOT BITTEN YET.** The imported rows have **no ledger history at all** — that is R-93's
+whole point, and it is why the undo works today. The seed is the first thing that gives them any.
+
+**BLAST RADIUS, AND IT IS NOT THE WHOLE UNDO.** `undoImportRun` deletes `customers` **first**, then
+`business_inventory`. So a seeded run's undo would **delete the customers, then throw** — a partial
+undo, stopped in the middle, with the error surfaced (the code throws rather than swallowing, and
+the panel reports what landed). Not silent, but not what the button says either.
+
+**THE THREE OPTIONS, NONE OF THEM TAKEN IN THIS PASS.**
+- **(a) "The seed ends the rehearsal" — no code, a sentence.** The seed panel already says so in
+  its closing line (*"Once a product has a starting number it has a history, and re-importing your
+  product list will no longer clear it. Do your import first and press this last."*). Cheapest,
+  honest, and possibly just correct: the ledger beginning IS the end of the rehearsal, which is
+  R-93's own *"THE LEDGER BEGINS WHEN WRITES GO ON."*
+- **(b) The undo TOMBSTONES instead of deleting.** `soft_delete_inventory` already exists and is
+  the R-133 shape. It changes the import's contract from *"gone"* to *"retired"*, and the
+  fingerprint checks that prove a clean undo would all need re-pointing.
+- **(c) Exempt the referential cascade from the append-only trigger.** A migration, and it is
+  **tech-debt #79's open question** — the same clause blocks deleting a whole tenant, which blocks
+  the OP-12 reference-environment teardown. Deciding it here would settle it there too.
+
+🔴 **WHAT IS OWED FIRST IS A MEASUREMENT, NOT A RULING: owner-test CARD 13 on the opening-stock
+board.** It presses Undo after a seed on Test Dave's and records which of two things happens — a
+visible refusal, or a reported success with the rows still present. **The second would be far
+worse** (every later count reconciling against a catalogue somebody believes was removed), and
+nothing in the repository settles which one it is, because the path has never been run.
+
+**NOT FIXED IN THIS PASS, DELIBERATELY.** Re-shaping the import's undo inside a build that adds a
+starting number is the scope creep that makes a diff unreviewable — and every option above is a
+decision about what the undo MEANS, which is David's.
+
