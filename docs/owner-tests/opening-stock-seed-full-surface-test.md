@@ -252,6 +252,30 @@ exactly this reason — a stored boolean is the copy nobody remembers to clear.
 
 ## CARD 13 — 🔴 THE COST, PROVEN RATHER THAN PROMISED: THE UNDO NOW REFUSES
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+> ✏️ **REWRITTEN IN PART 2026-09-15 (ledger #337) — THIS CARD'S OPEN QUESTION IS ALREADY ANSWERED,
+> AND THE ANSWER CAME FROM THE CODE RATHER THAN FROM A RUN.** The card below asks which of two
+> things happens, and says *"this card is what tells us."* **It was always the VISIBLE REFUSAL, and
+> never the silent success:** `itemImportWriter.ts` checks `inv.error` and throws, and the leftover
+> re-read is a second, independent net that counts what still carries the run id.
+>
+> 🔴 **WHAT NOBODY HAD NAMED — AND IT IS WORSE THAN EITHER OPTION ON THIS CARD — IS THAT THE UNDO
+> DELETED THE CUSTOMERS FIRST.** They are separate statements in separate transactions, so the run
+> removed the customers, then threw on the inventory. **A half-wiped tenant** — and the report said
+> `customersDeleted: 0`, because the catch returns zeroed counts. **FIXED 2026-09-15: GATE 2 reads
+> the ledger before any write and refuses the whole run.**
+>
+> ⚠️ **AND THE SEED IS NOT WHAT MADE IT LIVE.** Order `6a60a0ca` (LAWNS, 2026-09-09, `order_kind =
+> test`, $1,875) moved stock against an imported lot six days before this board was written. **One
+> test order against one imported lot was enough.**
+>
+> ✅ **STILL WORTH RUNNING, FOR A DIFFERENT REASON.** The question is no longer *which behaviour* —
+> it is whether the refusal **reads as a deliberate protection** to somebody who just seeded, and
+> whether **the numbers beside it are right**. Add the check the fix makes possible: **after the
+> refusal, confirm in SQL that the CUSTOMER count did not move.** A dropped customer count is the
+> half-wipe and means GATE 2 did not run.
+>
+> **THE ORIGINAL CARD, UNCHANGED, FOLLOWS.**
 ⚠️ **Do this on a tenant you are willing to leave in this state — Test Dave's, not LAWNS.**
 After seeding, go back to **Import products & services** and press **Undo this import**.
 

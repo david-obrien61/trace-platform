@@ -3675,7 +3675,53 @@ whose owner needs to name their own unit.**
 **Trigger.** A commissioned second vertical.
 ---
 
-## #304 — 🔴 SEEDING A CATALOGUE MAKES ITS ROWS UNDELETABLE, SO THE IMPORT'S UNDO CAN NO LONGER DO WHAT IT SAYS (NEW 2026-09-15, ledger #333)
+## #304 — 🟡 **PARTIAL 2026-09-15 (ledger #337): THE HALF-WIPE IS FIXED, THE MEANING IS STILL DAVID'S — AND THE PREMISE WAS WRONG IN THE DIRECTION THAT MATTERS.**
+
+🔴 **IT DID NOT NEED THE SEED. IT WAS ALREADY LIVE ON LAWNS, AND THIS ROW SAID THE OPPOSITE.**
+The row below reads *"WHY IT HAS NOT BITTEN YET — the imported rows have no ledger history at all
+… The seed is the first thing that gives them any."* **Measured 2026-09-15: order
+`6a60a0ca-dedf-4c1d-a58c-804bf1e64c79` — LAWNS, 2026-09-09, `order_kind = test`, `status =
+fulfilled`, **$1,875**, self-transport — moved stock against an imported lot.** One test order
+against one imported lot was enough. **The seed would do it 647 times; the seed is not what made
+it live**, and this item was filed as a cost the seed *would* impose when it had already been
+imposed six days earlier. ✏️ **[[R-26]]'s shape inside the row that was filed about [[R-26]]'s
+shape** — a written claim about the world, not checked against it.
+
+✅ **WHAT IS FIXED — GATE 2, and it is the ordering rather than the refusal.** `undoItemImport`
+now reads the run's lots inner-joined to `business_inventory_ledger` **before any write** and
+refuses the **whole** run with a sentence naming the held products. `handleBooksUndo` already
+short-circuits on `items.refused`, so the customer half never runs either — the existing seam,
+reused rather than forked.
+
+🔴 **AND THE DEFECT WAS WORSE THAN THIS ROW'S "BLAST RADIUS" PARAGRAPH SAID, WHICH IS THE OTHER
+CORRECTION.** That paragraph is right that the undo *"would delete the customers, then throw"*
+and calls it *"not silent, but not what the button says either."* **It is worse than that: the
+catch returns `{ ...empty }`, so the report says `customersDeleted: 0` for rows that were already
+gone.** The error was honest and **every number beside it was wrong** — which reads as *nothing
+happened*, and that is the state an owner would act on.
+
+✏️ **THE MEASUREMENT THIS ROW ASKED FOR IS ANSWERED, AND NOT BY CARD 13.** It asked which of two
+things happens — a visible refusal, or a reported success with the rows still present. **It was
+always the VISIBLE REFUSAL:** `inv.error` is checked and thrown, and the leftover re-read is a
+second, independent net. **The thing nobody had named was the customer delete that landed FIRST.**
+CARD 13 on the opening-stock board is still worth running, but it is no longer the open question.
+
+🔴 **WHAT IS STILL OPEN — AND IT IS THE WHOLE OF THE ORIGINAL ITEM: WHAT SHOULD THE UNDO *MEAN*?**
+The three options below are untouched and none was taken. Making the refusal honest is not the
+same as deciding whether *"import, look, wipe and reload"* survives a first sale — **and on LAWNS
+it already has not.** Board `CARD 10` (*THE WIPE*) can no longer pass there.
+
+---
+
+### ORIGINAL ROW, PRESERVED VERBATIM BELOW
+
+<!-- Deliberately NOT a `## #NNN —` heading: verify-id-citations clause C parses those as ROWS, and
+     a second row for one id is a duplicate. It happens to pass today because the parenthetical sits
+     between the id and the em-dash — which is an accident of a regex, not a decision, and the kind
+     of thing that breaks on the next widening. The id appears in the preserved TEXT instead, so the
+     log holds exactly one #304 row: the corrected one above. -->
+
+🔴 **SEEDING A CATALOGUE MAKES ITS ROWS UNDELETABLE, SO THE IMPORT'S UNDO CAN NO LONGER DO WHAT IT SAYS** (NEW 2026-09-15, ledger #333)
 
 **THE DEFECT, IN ONE SENTENCE.** The catalogue import promises Lauren she can *"import, look, wipe
 and reload as many times as it takes"* (R-93). The opening stock seed writes a permanent ledger
