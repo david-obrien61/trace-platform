@@ -137,6 +137,54 @@ usually omits.
 
 _Capture → extract (one engine) → infer type → confirm → fan-out to many destinations._
 
+### The imported catalogue can be sold from
+STATUS: written
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: ocr-doc-routing
+MAPS-TO: 5.1, 3.5
+PIECES: opening_stock_suggestion, seed_screen, seed_ledger_row, seeded_reconcile_mode, placeholder_rendering
+NEEDS: nothing to write it — written 2026-09-15 alongside #333 under the story-reconciliation gate, because the build had no upstream story and one had to exist first. ⚠️ **OWED: whether seeding should be undoable.** It is not today, and the reason is structural rather than an omission — a seeded lot has ledger history and a lot with ledger history cannot be deleted, so the catalogue undo refuses on exactly the rows the seed touched (tech-debt #304). Ruling wanted on whether the undo should TOMBSTONE instead of delete, or whether "the seed ends the rehearsal" is simply the rule.
+
+The import brings her a **price card**, and it says so: what LAWNS sells and what it costs, 647
+rows of it, every one at zero. That is the right thing for an import to bring — a product list is
+not stock, and pretending otherwise would invent quantities nobody counted. But the consequence is
+that the whole catalogue reads **“None in stock”** and every row refuses to be added to an order.
+Lauren cannot ring up a sale, cannot show anybody the system working, and cannot begin.
+
+So she gives it a starting number. **She** does — not us, and not silently: the screen tells her
+what state her list is in, shows her what her own invoices say a typical product moves in a month,
+and suggests a number **deliberately lower** than she would pick herself, with the reason written
+beside it. **A low number runs out sooner, and something running out is what sends somebody out to
+count it** — which is the only event that ever puts a true number into an inventory. A generous
+number feels helpful and quietly removes it. She can go up to fifty and no further, and the ceiling
+says why rather than just refusing.
+
+🔴 **What she creates is a placeholder, and it never stops admitting that.** It is written as a
+dated line in the movement ledger — not a bare quantity — so the on-hand figure still derives from
+a replay rather than from somebody's edit, and it carries its own kind, so nothing downstream can
+mistake it for a count. Wherever the number shows, the words *starting number, not counted* show
+with it: in the picker on the phone, on the reconcile screen, beside the availability. **A figure
+that means something other than what it looks like says so beside itself**, never in a legend
+somewhere else.
+
+Then the tracking starts, and this is the part that makes the guess safe. Every sale takes units
+off and every delivery puts them on, all of it dated. When somebody finally walks that row and
+counts it, the screen does not ask *"why is this wrong?"* — it nets off the sales and the
+deliveries since the starting number and hands her **only the part it cannot explain**. Started at
+5, sold 3, added 4, counted 11: the system accounts for six of those and hands her five. **And it
+asks her to account for nothing**, because the number it was comparing against was one she made up
+at setup — asking where five trees "went" from a figure nobody counted would write a permanent loss
+that never happened.
+
+Her count replaces the placeholder for good. That row has been seen now, and from then on it
+reconciles like any other.
+
+⚠️ **The order is not reversible and the screen says so before she presses.** The import can be
+wiped and reloaded as many times as it takes, because it writes no history. The seed writes
+history, and history cannot be un-written — so the import comes first and the starting numbers come
+last.
+
 ### Lauren decides once how her sizes read, and the old price list steps aside for the real one
 STATUS: written
 SCOPE: platform, vertical:cultivar

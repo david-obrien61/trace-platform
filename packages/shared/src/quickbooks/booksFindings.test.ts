@@ -375,7 +375,13 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
 // ══ §G THE SHAPES — THE PRODUCT IS THE RULE, NOT THE FINDING ═══════════════
 {
   const shapes = Object.keys(SHAPES);
-  ok(shapes.length === 8, 'there are eight shapes');
+  // ✏️ WAS `=== 8` UNTIL 2026-09-15 (#333), AND THE CHANGE IS DELIBERATE RATHER THAN A PROBE
+  // BENDING TO FIT. `position-never-stated` is the ninth, and it is the FIRST shape that is not a
+  // defect: the eight above are things WRONG with a set of books, and this one is a thing books do
+  // not contain at all — an invoice history says what SOLD and a price card says what things COST,
+  // and neither has ever stated what was STANDING THERE. A count that only ever goes up is not an
+  // assertion, so the number is pinned rather than the comparison loosened to `>= 8`.
+  ok(shapes.length === 9, 'there are nine shapes — eight defects and one absence');
   ok(BOOKS_RULES.every(r => shapes.includes(r.shape)),
     'every rule states which shape it is an instance of — a rule that states no shape is a one-off finding wearing a rule\'s clothes');
   const covered = new Set(BOOKS_RULES.map(r => r.shape));
@@ -653,6 +659,67 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   // ⑥ NEGATIVE CONTROL — the rule can return NOTHING AT ALL, not merely zero.
   ok(findingFor([], [CD10]) === undefined || findingFor([], [CD10])?.measured === false,
     'a business with no discount lines at all is not measured — absent is not the same as clean');
+}
+
+
+// ══ §I — EVERY RULE CARRIES A VERSION, BECAUSE THE COMPARISON IS THE PRODUCT ═══════════════
+// Stored results are compared on `(rule_id, rule_version)`. A rule with no version cannot be
+// compared across runs, and "33 unreadable sizes last month, 13 today" is the one demonstration
+// this product has.
+
+ok(BOOKS_RULES.every(r => Number.isInteger(r.version) && r.version >= 1),
+   '🔴 §I1 EVERY rule declares an integer version ≥ 1 — the half of the comparison key that says WHICH measurement a stored result came from');
+ok(new Set(BOOKS_RULES.map(r => r.id)).size === BOOKS_RULES.length,
+   '§I2 rule ids are unique — two rules sharing an id would silently merge two measurements in storage');
+{
+  const f = evaluateBooks({ invoices: [], items: [], customers: CUSTOMERS });
+  ok(f.every(x => Number.isInteger(x.version)),
+     '🔴 §I3 AND THE VERSION REACHES THE FINDING, not only the rule. A version that stops at the rule table never reaches the stored row, and the comparison key is half-null');
+  ok(f.every(x => x.version === (BOOKS_RULES.find(r => r.id === x.id)?.version ?? -1)),
+     '§I4 and it is the RULE’s version, carried through — never a constant the runner made up');
+}
+
+// ══ §J — THE ONE RULE WHOSE `value` IS NOT MONEY ═══════════════════════════════════════════
+// `opening-stock-suggestion` returns a RATE (units a month) in `value`, which is a recorded
+// divergence (§6 r10). It is safe only while no OTHER tidiness rule returns a number, because
+// `evaluateBooks` sorts within a tier by `value` — and a rate sorted against a dollar figure is
+// the unit confusion that makes a report worse than no report.
+{
+  const stockRule = BOOKS_RULES.find(r => r.id === 'opening-stock-suggestion');
+  ok(stockRule !== undefined, '§J1 the opening-stock rule is registered');
+  ok(stockRule?.tier === 'tidiness', '§J2 in the tidiness tier — it is not a defect and not a money finding');
+  ok(stockRule?.shape === 'position-never-stated',
+     '§J3 🔴 AND IT DECLARES THE NINTH SHAPE. Forcing it into one of the eight defect shapes would degrade the taxonomy that IS the product — books do not contain an opening position, and that is not an error anybody made');
+
+  // 🔴 THE COLLISION PROBE. If a future tidiness rule starts returning a dollar value, this fails
+  // and names it — rather than the sort quietly comparing dollars against units a month.
+  const invoices = [
+    inv('1001', '1001', [line('i1', 'Shumard Oak 45', 100, 400, 4)], { txnDate: '2025-01-15' }),
+    inv('1002', '1002', [line('i1', 'Shumard Oak 45', 100, 400, 4)], { txnDate: '2025-02-15' }),
+  ];
+  const findings = evaluateBooks({ invoices, items: [], customers: CUSTOMERS });
+  const tidyWithValue = findings.filter(f => f.tier === 'tidiness' && f.measured && f.value !== null);
+  ok(tidyWithValue.length === 1 && tidyWithValue[0].id === 'opening-stock-suggestion',
+     `🔴 §J4 EXACTLY ONE TIDINESS FINDING CARRIES A NUMBER, AND IT IS THIS ONE. A second would be sorted against a rate as though both were dollars — got [${tidyWithValue.map(f => f.id).join(', ')}]`);
+
+  const stock = findings.find(f => f.id === 'opening-stock-suggestion');
+  ok(stock?.measured === true, '§J5 with real invoices it measures');
+  ok(stock?.value === 4, `§J6 8 units (4 in January, 4 in February) over a 2-month window is 4 a month (got ${stock?.value})`);
+  ok(stock?.population.noun === 'units a month for a typical item',
+     '§J7 and the noun names the UNIT of that value — David’s word, and in the stored row it sits directly beside it');
+  ok((stock?.sentence ?? '').includes('low'),
+     '🔴 §J8 THE SENTENCE CARRIES THE REASON THE SUGGESTION IS LOW. A low number runs out sooner, and running out is what sends somebody to count — a suggestion without its reason is a number somebody will simply raise');
+}
+
+{
+  // 🔴 NO SALES HISTORY → NOT MEASURED, AND IT SAYS WHY. This is the honest path and the screen
+  // is built on it, so it is asserted rather than assumed.
+  const findings = evaluateBooks({ invoices: [], items: [], customers: CUSTOMERS });
+  const stock = findings.find(f => f.id === 'opening-stock-suggestion');
+  ok(stock?.measured === false, '§J9 no invoices → NOT measured. Never a fabricated suggestion that would look measured');
+  ok((stock?.notMeasured ?? '').includes('choose'),
+     '§J10 and the reason tells the owner what happens instead — they choose the number themselves');
+  ok(stock?.value === null, '§J11 and an unmeasured finding carries no value, so it cannot enter the sort as though it were worth nothing');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);

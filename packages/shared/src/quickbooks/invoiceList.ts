@@ -524,6 +524,23 @@ export const TOP_ITEM_LIMIT = 30;
 /** Concrete invoices shown per discount item, so a verdict count can be spot-checked. */
 export const DISCOUNT_EXAMPLE_LIMIT = 3;
 
+/**
+ * The GOODS lines of an invoice: something was sold, at a stated price, in a stated quantity.
+ *
+ * ⚠️ THE NON-NULL `unitPrice` IS THE WHOLE FILTER. A `DescriptionOnly` note, a subtotal and a
+ * discount line all have no unit price, and a reader that let them through would treat each as a
+ * sale at $0 — manufacturing the very "sold below list" finding it was measuring.
+ *
+ * 🔴 IT LIVES HERE, AND IT LIVES HERE ONCE. It was defined privately inside `booksFindings.ts`
+ * and a second reader (`openingStock.ts`) now needs the same operation; a near-duplicate copy is
+ * the drifted-equivalent logic §6 r8 exists to prevent, and `booksFindings` cannot export it
+ * because it IMPORTS `openingStock`. Its home is beside `QboInvoiceLine`, whose "`unitPrice` is
+ * READ, never derived" doctrine is what the filter enforces.
+ */
+export function goodsLines(inv: QboInvoiceRow): QboInvoiceLine[] {
+  return inv.lines.filter(l => l.itemName !== null && l.unitPrice !== null && (l.amount ?? 0) > 0);
+}
+
 const MONTH_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
@@ -533,7 +550,7 @@ const MONTH_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
  * UTC midnight and then renders in local time. A seasonality curve built that way moves every
  * invoice dated the 1st into the previous month, and it looks entirely plausible.
  */
-function monthOf(txnDate: string | null): string | null {
+export function monthOf(txnDate: string | null): string | null {
   if (!txnDate) return null;
   const m = MONTH_RE.exec(txnDate.trim());
   if (!m) return null;
@@ -543,7 +560,7 @@ function monthOf(txnDate: string | null): string | null {
 }
 
 /** Every month from `first` to `last` inclusive, so a month with NO sales is a visible zero. */
-function monthsBetween(first: string, last: string): string[] {
+export function monthsBetween(first: string, last: string): string[] {
   const out: string[] = [];
   let [y, m] = [Number(first.slice(0, 4)), Number(first.slice(5, 7))];
   const [ly, lm] = [Number(last.slice(0, 4)), Number(last.slice(5, 7))];
