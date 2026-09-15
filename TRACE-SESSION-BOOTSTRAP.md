@@ -79,6 +79,37 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED — #333 (`feat/opening-stock-seed`, 2026-09-15)
+
+- 🔴 **THE OPENING STOCK SEED — AN IMPORTED CATALOGUE BECOMES SELLABLE WITHOUT ANY NUMBER IN IT
+  PRETENDING TO BE A COUNT.** BUILDER-COMPLETE, owner-proof **OWED**
+  (`opening-stock-seed-full-surface-test.md`, **0 of 14**). **NO migration, no schema, no policy,
+  no permission string, api/ 12/12.** The import writes `qty 0` by design (R-93), so all 647 rows
+  read *"None in stock"* and refuse to be added — **a price card is not an inventory.**
+  **① THE RULE — `opening-stock-suggestion`, BUSINESS-WIDE, ONE NUMBER NEVER 647** (R-23 clause b):
+  the MEDIAN units sold per item per month from the invoice history, with the p25/p75 spread, on a
+  denominator that starts at **the ITEM's own first sale**. **`measured:false` with no sales
+  history — the honest path, and the case the screen is built on, not an edge it falls off.**
+  **② THE SEED WRITES A LEDGER ROW, NOT A BARE QTY** (`adjust_inventory_manual`, kind
+  `opening_stock_seed` — no CHECK on `kind`, hence no migration). **Capped at 50 because the cap IS
+  the mechanism:** a low number runs out sooner, and running out is what sends somebody to count.
+  **③ THE RECONCILE READS IT — a third mode `seeded`:** delta's replay and evidence strip, **and no
+  attribution**, because a gap against a number nobody counted has no answer.
+  **26/26 mutants caught.** Two were EQUIVALENT first — *"a real count beats a placeholder"* is held
+  by two clauses that protect each other, so neither is testable alone.
+  - 🔴 **DAVID: APPLY `supabase/migrations/20260908_books_report_runs.sql`** (SQL editor, as
+    `postgres`, **never the table editor** — §6 r17). It is in your tree, unrun. **Until it is
+    applied the seed screen says *"we have no sales history"*, which is a REAL answer it gives
+    legitimately — so an un-applied migration is indistinguishable from a business with no
+    invoices.** Board GATE says so; run its V1–V6 block and paste the output back.
+  - 🔴 **TECH-DEBT #304 — SEEDING MAKES THE IMPORT'S UNDO REFUSE.** A seeded lot has ledger history,
+    and a lot with ledger history **cannot be deleted** (`ON DELETE SET NULL` is an UPDATE; the
+    append-only trigger refuses UPDATEs with no exemption — *observed live*). **The undo deletes
+    `customers` FIRST, so it would stop half-way.** Three options written out, none taken; **CARD 13
+    measures which of two things actually happens** before anybody rules.
+  - ⚠️ **ORDER IS NOT REVERSIBLE: import first, seed last.** The panel says so in its own closing
+    line rather than relying on the reader noticing.
+
 ### 🟡 PUSHED, NOT MERGED — #329 (`fix/bom-one-mix-ratio-and-ring-function`, 2026-09-14)
 
 - 🔴 **TWO BOM RULINGS APPLIED — [[R-155]] REMOVES A CONFIG KEY, [[R-156]] REPLACES A TABLE THAT WAS
