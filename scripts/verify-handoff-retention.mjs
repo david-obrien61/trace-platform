@@ -171,6 +171,91 @@ if (dupes.length) {
   );
 }
 
+/** A heading, normalised for comparison: emphasis stripped, whitespace collapsed. */
+const normHeading = h => h.replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * ── 3b — 🔴 THE ARCHIVE HOLDING ONE HEADING TWICE ──────────────────────────
+ *
+ * WHY THIS EXISTS BESIDE CHECK 3, WHICH ALREADY LOOKS FOR DUPLICATES.
+ * Check 3 compares whole entry TEXT, and on 2026-09-15 it missed the defect it
+ * was built for THREE TIMES IN ONE EVENING — the #327, #328 and #333 merges.
+ * In each, the duplicate arrived TRUNCATED: the copy the merge inserted carried
+ * the heading and little else, the original carried the full body. Normalised,
+ * one was a strict PREFIX of the other — 1,029 characters against 3,498 for the
+ * #325 entry — so a whole-text comparison saw two DIFFERENT entries and passed.
+ *
+ * A duplicate that arrives truncated is still a duplicate, and the HEADING is the
+ * part that survives truncation. So the heading is what must be compared.
+ *
+ * ⚠️ AND THIS IS WHY IT TAKES A DECLARATION LIST RATHER THAN COMPARING HEADINGS
+ * OUTRIGHT. The first version of check 3 did compare headings alone and was
+ * abandoned for crying wolf on a real pair: two DIFFERENT 2026-06-09 sessions
+ * share the title "Ignition OS Reality Audit → STD-010 + built-inventory update",
+ * 13,898 and 7,782 characters of different work. That pair is now DECLARED, with
+ * its reason, instead of silently skipped — and the list prunes itself in the
+ * other direction too (tech-debt #73: a gap list that only grows stops being read).
+ *
+ * Ledger #338.
+ */
+function checkArchiveHeadingDuplicates(archivedEntries, declarationsRaw) {
+  const problems = [];
+  let declared;
+  try {
+    declared = JSON.parse(declarationsRaw).declarations ?? {};
+  } catch (err) {
+    return [`${DUP_DECLARATIONS} is not valid JSON (${err.message}). The exceptions list must parse or the check cannot run — and a check that cannot run is not a check (§6 r19).`];
+  }
+
+  const groups = new Map();
+  for (const e of archivedEntries) {
+    const k = normHeading(e.heading);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  }
+
+  const duplicated = [...groups.entries()].filter(([, es]) => es.length > 1);
+
+  // ── direction one — an UNDECLARED duplicate heading ───────────────────────
+  const undeclared = duplicated.filter(([k]) => !(k in declared));
+  for (const [k, es] of undeclared) {
+    // Diagnostic that would have named the 2026-09-15 defect on sight: is one
+    // copy a truncated version of another? That is the shape check 3 cannot see.
+    const bodies = es.map(e => norm(e.text));
+    let shape = 'the copies differ — inspect before deleting either';
+    if (bodies.every(b => b === bodies[0])) {
+      shape = 'the copies are IDENTICAL — a clean merge artefact';
+    } else {
+      const sorted = [...bodies].sort((a, b) => a.length - b.length);
+      if (sorted.slice(0, -1).every(b => sorted[sorted.length - 1].startsWith(b))) {
+        shape = 'one copy is TRUNCATED (a strict prefix of another) — a SPLIT entry, which is exactly what whole-text check 3 cannot see. KEEP THE LONGEST.';
+      }
+    }
+    problems.push(
+      `a heading appears ${es.length}× in ${ARCHIVE}:\n` +
+      `       · ${es[0].heading.slice(0, 110)}\n` +
+      `     normalised body sizes: ${bodies.map(b => b.length).join(' · ')}\n` +
+      `     ${shape}\n` +
+      `     The archive is append-and-preserve; one entry, one heading. If these are\n` +
+      `     genuinely different work that shares a title, declare it in ${DUP_DECLARATIONS}\n` +
+      `     with the reason — do not delete real history to quiet the check.`,
+    );
+  }
+
+  // ── direction two — a declaration that no longer describes a duplicate ────
+  const duplicatedKeys = new Set(duplicated.map(([k]) => k));
+  const stale = Object.keys(declared).filter(k => !duplicatedKeys.has(k));
+  if (stale.length) {
+    problems.push(
+      `${stale.length} declaration(s) in ${DUP_DECLARATIONS} are STALE — the heading is no longer duplicated in ${ARCHIVE}:\n` +
+      stale.map(k => `       · ${k.slice(0, 110)}`).join('\n') +
+      `\n     Remove them. A list of exceptions that cannot rot is the whole point (tech-debt #73).`,
+    );
+  }
+
+  return problems;
+}
+
 // ── 5 — 🔴 EVERY LEDGER ROW HAS A §3 ENTRY ────────────────────────────────
 //
 // 🔴 HOW AN ENTRY'S OWN LEDGER ID IS READ, AND WHY IT IS NOT "ANY #NNN IN THE TEXT".
@@ -187,6 +272,7 @@ if (dupes.length) {
 // run at all.
 const LEDGER = 'docs/CLOSE-OUT-LEDGER.md';
 const DECLARATIONS = 'handoff-entry-declarations.json';
+const DUP_DECLARATIONS = 'archive-duplicate-heading-declarations.json';
 
 /** Close-out rows only. A `⏳ RESERVED` row is a claim, not a close-out, and owes no entry. */
 function ledgerCloseOutIds(md) {
@@ -243,6 +329,7 @@ function checkEveryRowHasAnEntry(ledgerMd, declarationsRaw, allEntries) {
 }
 
 if (!SELF_TEST) {
+  problems.push(...checkArchiveHeadingDuplicates(archived, readFileSync(DUP_DECLARATIONS, 'utf8')));
   problems.push(...checkEveryRowHasAnEntry(
     readFileSync(LEDGER, 'utf8'),
     readFileSync(DECLARATIONS, 'utf8'),
@@ -267,7 +354,7 @@ if (problems.length && !SELF_TEST) {
 
 if (!SELF_TEST) {
   const rowCount = ledgerCloseOutIds(readFileSync(LEDGER, 'utf8')).length;
-  console.log(`✅ handoff-retention — §3 holds ${live.length}/${MAX_SECTION3}; archive holds ${archived.length}; no entry in two places; all ${rowCount} close-out ledger rows have an entry or a declaration.`);
+  console.log(`✅ handoff-retention — §3 holds ${live.length}/${MAX_SECTION3}; archive holds ${archived.length}; no entry in two places; no duplicate heading; all ${rowCount} close-out ledger rows have an entry or a declaration.`);
 }
 
 // ============================================================================
@@ -282,6 +369,7 @@ if (!SELF_TEST) {
 if (SELF_TEST) {
   const entry = h => ({ heading: h, text: '### ' + h });
   const decls = o => JSON.stringify({ declarations: o });
+  const dup = (h, body) => ({ heading: h, text: '### ' + h + '\n\n' + body });
   const probes = [
     // ── P1 — 🔴 THE REAL DEFECT, VERBATIM (STD-024). #302 built the open-questions
     //    register to catch what §3 drops at N=3, and §3 never recorded #302 itself.
@@ -351,11 +439,96 @@ if (SELF_TEST) {
       ledger: '| **#302** | x |', decls: '{ not json',
       entries: [entry('2026-09-11 — THUNDER **THE REGISTER. #302.**')],
       expect: true, why: 'must REFUSE — a gate whose exceptions list will not parse must not pass' },
+
+    // ========================================================================
+    // CHECK 3b — the ARCHIVE holding one HEADING twice. Ledger #338.
+    // ========================================================================
+
+    // ── D1 — 🔴 THE REAL DEFECT, VERBATIM (STD-024). The 2026-09-15 #327 and
+    //    #328 merges: the copy the merge inserted was TRUNCATED to its heading
+    //    and first paragraph, the original kept the full body. Normalised, one
+    //    is a strict PREFIX of the other — 1,031 chars against 3,503 — so the
+    //    whole-text comparison in check 3 saw two different entries and PASSED.
+    //    Both misses were replayed end-to-end from the original commits and the
+    //    shipped checker was watched passing on them before this was written.
+    { name: 'D1  the real defect: a TRUNCATED duplicate (one body a prefix of the other)',
+      dupEntries: [
+        dup('2026-09-14 — THUNDER **THE PRE-COMMIT HOOK. #325.**', 'Type: tooling.'),
+        dup('2026-09-14 — THUNDER **THE PRE-COMMIT HOOK. #325.**', 'Type: tooling. Flagged for David: it is not enforcement, and the header says so.'),
+      ],
+      dupDecls: decls({}),
+      expect: true, why: 'must REFUSE — check 3 cannot see this, which is why 3b exists' },
+
+    // ── D2 — the passing direction. Without it D1 could be a check that always fails.
+    { name: 'D2  every heading appearing once',
+      dupEntries: [dup('2026-09-14 — THUNDER **A. #325.**', 'body a'),
+                   dup('2026-09-13 — THUNDER **B. #324.**', 'body b')],
+      dupDecls: decls({}), expect: false, why: 'must PASS — no heading is repeated' },
+
+    // ── D3 — 🔴 THE PAIR THE FIRST HEADING-LEVEL DRAFT WAS ABANDONED FOR.
+    //    Two DIFFERENT 2026-06-09 sessions share one title, 13,898 and 7,782
+    //    characters of different work. DECLARED, so it passes.
+    { name: 'D3  a genuinely-shared title, DECLARED, passes',
+      dupEntries: [dup('2026-06-09 — THUNDER: Ignition OS Reality Audit', 'first session, long'),
+                   dup('2026-06-09 — THUNDER: Ignition OS Reality Audit', 'second session, different work entirely')],
+      dupDecls: decls({ '2026-06-09 — thunder: ignition os reality audit': 'two different sessions reused one title' }),
+      expect: false, why: 'must PASS — real history, declared with its reason' },
+
+    // ── D4 — the same pair UNDECLARED. This is what proves the declaration is
+    //    what permits it, not a hardcoded exemption the check quietly carries.
+    { name: 'D4  the same shared title UNDECLARED is refused',
+      dupEntries: [dup('2026-06-09 — THUNDER: Ignition OS Reality Audit', 'first session, long'),
+                   dup('2026-06-09 — THUNDER: Ignition OS Reality Audit', 'second session, different work entirely')],
+      dupDecls: decls({}), expect: true, why: 'must REFUSE — nothing is exempt without a written reason' },
+
+    // ── D5 — the list prunes itself (tech-debt #73). A declaration for a heading
+    //    that is no longer duplicated is STALE and fails.
+    { name: 'D5  a declaration for a heading that is NOT duplicated is stale',
+      dupEntries: [dup('2026-09-14 — THUNDER **A. #325.**', 'body a')],
+      dupDecls: decls({ '2026-06-09 — thunder: ignition os reality audit': 'no longer duplicated' }),
+      expect: true, why: 'must REFUSE — an exceptions list that cannot rot is the point' },
+
+    // ── D6 — the byte-identical case check 3 already caught must still fail here.
+    //    #333's duplicate was this shape, and check 3 DID catch that one.
+    { name: 'D6  a byte-identical duplicate is refused by 3b as well',
+      dupEntries: [dup('2026-09-14 — THUNDER **TWO BOM RULINGS. #329.**', 'same body'),
+                   dup('2026-09-14 — THUNDER **TWO BOM RULINGS. #329.**', 'same body')],
+      dupDecls: decls({}), expect: true, why: 'must REFUSE — 3b is a superset of 3 on this shape' },
+
+    // ── D7 — 🔴 NEGATIVE CONTROL (#182: mutate the POPULATION, not the subject).
+    //    Same declaration, EMPTY archive. If the checker ignored its entries this
+    //    would agree with D3 for the wrong reason.
+    { name: 'D7  negative control — the verdict tracks the ARCHIVE, not a constant',
+      dupEntries: [],
+      dupDecls: decls({ '2026-06-09 — thunder: ignition os reality audit': 'declared' }),
+      expect: true, why: 'must REFUSE as STALE (nothing is duplicated), proving entries are read' },
+
+    // ── D8 — a check that cannot run is not a check (§6 r19).
+    { name: 'D8  unparseable duplicate-declarations file fails loudly',
+      dupEntries: [dup('2026-09-14 — THUNDER **A. #325.**', 'body a')],
+      dupDecls: '{ not json', expect: true,
+      why: 'must REFUSE — a gate whose exceptions list will not parse must not pass' },
+
+    // ── D9 — three copies, not two. The message must report the real count.
+    { name: 'D9  three copies of one heading are refused',
+      dupEntries: [dup('2026-09-14 — THUNDER **A. #325.**', 'x'),
+                   dup('2026-09-14 — THUNDER **A. #325.**', 'y'),
+                   dup('2026-09-14 — THUNDER **A. #325.**', 'z')],
+      dupDecls: decls({}), expect: true, why: 'must REFUSE — duplication is not limited to pairs' },
+
+    // ── D10 — headings differing only in emphasis/whitespace are the SAME heading.
+    //    This is what the normalisation buys, and without the probe it is untested.
+    { name: 'D10 headings differing only in emphasis or spacing are one heading',
+      dupEntries: [dup('2026-09-14 — THUNDER **A. #325.**', 'x'),
+                   dup('2026-09-14  —  THUNDER  A. #325.', 'y')],
+      dupDecls: decls({}), expect: true, why: 'must REFUSE — normalisation must not let a copy hide behind formatting' },
   ];
 
   let failed = 0;
   for (const p of probes) {
-    const got = checkEveryRowHasAnEntry(p.ledger, p.decls, p.entries).length > 0;
+    const got = p.dupEntries !== undefined
+      ? checkArchiveHeadingDuplicates(p.dupEntries, p.dupDecls).length > 0
+      : checkEveryRowHasAnEntry(p.ledger, p.decls, p.entries).length > 0;
     const ok = got === p.expect;
     if (!ok) failed++;
     console.log(`  ${ok ? '✓' : '✗'} ${p.name} — ${p.why}${ok ? '' : `  [GOT ${got ? 'refuse' : 'pass'}]`}`);
