@@ -59,8 +59,20 @@ import { goodsLines } from './invoiceList';
 import { measureOpeningStock, suggestOpeningStock, OPENING_STOCK_RULE_ID } from './openingStock';
 import { itemPercentOf } from '../business-logic/discountReview';
 import type { QboItemRow } from './itemList';
+import { isRetired } from './qboRead';
 import type { CustomerBreakdown } from './customerList';
 import { QBO_DETAIL_TYPE } from './invoiceLineShapes';
+
+/**
+ * 🔴 THE LIST AS IT IS NOW (#341). The item read now returns items the owner made inactive, because
+ * a past sale of a retired item is still a sale and must be attributable to it. A rule that
+ * DESCRIBES HER LIST — how many accounts it spans, what in it has never sold, what formula it
+ * follows — reads this instead, so a clean-up in QuickBooks shrinks the finding rather than
+ * growing it. A rule that PRICES A PAST SALE reads `x.items` whole.
+ */
+function listedItems(items: QboItemRow[]): QboItemRow[] {
+  return items.filter(it => !isRetired(it));
+}
 
 /** Money before risk before tidiness. The array order IS the sort order. */
 export const FINDING_TIERS = ['money', 'risk', 'tidiness'] as const;
@@ -518,7 +530,8 @@ export const BOOKS_RULES: Rule[] = [
       const c = x.customers;
       const dup = Math.max(c.byEmail.recordsInvolved, c.byPhone.recordsInvolved);
       return {
-        matched: dup, of: c.total,
+        // The denominator is the ACTIVE list, the population the duplicate tally is taken over (#341).
+        matched: dup, of: Math.max(0, c.total - c.inactive),
         noun: 'customers',
         sentence: `At least ${plural(dup, 'customer looks', 'customers look')} like they may be the same person entered twice — they share an email address or a phone number with another record — so their history is split in two.`,
         needsAnswer: dup === 0 ? undefined : {
@@ -575,10 +588,11 @@ export const BOOKS_RULES: Rule[] = [
     remeasured: '13 accounts across the 685 products, 9 of which appear on an invoice line. 41 is not derivable from any of the three reads.',
     run: (x) => {
       if (!x.items) return null;
+      const listed = listedItems(x.items);
       const accounts = new Set<string>();
-      for (const it of x.items) if (it.incomeAccount) accounts.add(it.incomeAccount);
+      for (const it of listed) if (it.incomeAccount) accounts.add(it.incomeAccount);
       return {
-        matched: accounts.size, of: x.items.length, noun: 'products & services',
+        matched: accounts.size, of: listed.length, noun: 'products & services',
         sentence: `Your sales are split across ${plural(accounts.size, 'income account', 'income accounts')}. That decides how your profit and loss reads, so it is worth knowing how many there are.`,
       };
     },
@@ -592,7 +606,9 @@ export const BOOKS_RULES: Rule[] = [
       for (const inv of x.invoices) for (const l of inv.lines) if (l.itemId) sold.add(l.itemId);
       // Categories are FOLDERS in QuickBooks and can never appear on an invoice line, so
       // counting them as "never sold" would be counting a filing cabinet as unsold stock.
-      const sellable = x.items.filter(it => (it.type ?? '').toLowerCase() !== 'category');
+      // Retired items are out too: "not sold once" said of something the owner already took off
+      // her list is a finding she has already acted on (#341).
+      const sellable = listedItems(x.items).filter(it => (it.type ?? '').toLowerCase() !== 'category');
       const never = sellable.filter(it => !sold.has(it.id)).length;
       return {
         matched: never, of: sellable.length, noun: 'products & services',
@@ -649,8 +665,10 @@ export const BOOKS_RULES: Rule[] = [
       const ratios: number[] = [];
       for (const it of x.items) {
         if (it.purchaseCost !== null && it.purchaseCost > 0) {
+          // The cost of a past sale reads every item; the FORMULA her list follows reads only
+          // what is still on it (#341).
           cost.set(it.id, it.purchaseCost);
-          if (it.unitPrice !== null && it.unitPrice > 0) ratios.push(round2(it.unitPrice / it.purchaseCost));
+          if (!isRetired(it) && it.unitPrice !== null && it.unitPrice > 0) ratios.push(round2(it.unitPrice / it.purchaseCost));
         }
       }
       if (ratios.length === 0) return null;

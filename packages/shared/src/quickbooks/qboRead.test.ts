@@ -20,7 +20,8 @@
  *     --bundle --platform=node --format=cjs | node
  */
 import {
-  QBO_ENTITIES, QBO_ROUTE, QBO_PAGE_SIZE, QBO_MAX_PAGES, QBO_WALK_CEILING, maxPagesFor, ceilingCheck,
+  QBO_ENTITIES, QBO_ROUTE, QBO_LIST_ENTITIES, QBO_TRANSACTION_ENTITIES, QBO_MINOR_VERSION,
+  qboRequestParams, isCountQueryFor, queryAskedForInactive, isRetired, QBO_PAGE_SIZE, QBO_MAX_PAGES, QBO_WALK_CEILING, maxPagesFor, ceilingCheck,
   qboCountQuery, qboPageQuery, parseCount, parseRows,
   pageIsLast, completeness, rawCaptureFileName, classifyFailure,
 } from './qboRead';
@@ -41,11 +42,11 @@ const ENTITIES = QBO_ENTITIES;
 
 // ══ §A THE QUERIES — READ-ONLY, BOTH ENTITIES, EVERY PAGE POSITION ═══════════
 {
-  ok(qboCountQuery('Item') === 'select count(*) from Item', 'the item count query is exact');
-  ok(qboCountQuery('Customer') === 'select count(*) from Customer', 'the customer count query is exact');
-  ok(qboPageQuery('Item', 1) === 'select * from Item startposition 1 maxresults 1000',
+  ok(qboCountQuery('Item') === 'select count(*) from Item where Active in (true, false)', 'the item count query is exact — and asks for inactive items too (#341)');
+  ok(qboCountQuery('Customer') === 'select count(*) from Customer where Active in (true, false)', 'the customer count query is exact — and asks for inactive customers too (#341)');
+  ok(qboPageQuery('Item', 1) === 'select * from Item where Active in (true, false) startposition 1 maxresults 1000',
     'a page query carries BOTH startposition and maxresults — #229 carried neither, and Intuit silently gave 100');
-  ok(qboPageQuery('Customer', 1001) === 'select * from Customer startposition 1001 maxresults 1000',
+  ok(qboPageQuery('Customer', 1001) === 'select * from Customer where Active in (true, false) startposition 1001 maxresults 1000',
     'the second page starts at 1001, not 1000 — STARTPOSITION is 1-BASED, and the off-by-one here silently drops one row per page');
 
   // 🔴 R-23 clause (a), asserted rather than trusted, across the whole generated surface.
@@ -71,6 +72,71 @@ const ENTITIES = QBO_ENTITIES;
     '🔴 a page size above the cap is CLAMPED to 1000 — QuickBooks silently truncates an over-cap request, which is the exact failure this file exists to end');
   ok(QBO_PAGE_SIZE === 1000, 'the page size is the documented QuickBooks maximum');
   ok(QBO_MAX_PAGES > 0, 'there is an absolute page ceiling so a server that keeps answering cannot spin the loop forever');
+}
+
+// ══ §A2 🔴 #341 — THE QUERY ASKED FOR LESS THAN EVERYTHING ═══════════════════════════════════
+// Intuit filters name lists to Active = true unless told otherwise, and filters the COUNT the same
+// way, so completeness held while every record the owner had retired was missing. Each probe below
+// is written to fail on the pre-#341 query.
+{
+  ok(QBO_LIST_ENTITIES.length === 2 && QBO_LIST_ENTITIES.includes('Item') && QBO_LIST_ENTITIES.includes('Customer'),
+    'the name lists are exactly Item and Customer');
+  ok(QBO_TRANSACTION_ENTITIES.every(e => !QBO_LIST_ENTITIES.includes(e))
+     && QBO_LIST_ENTITIES.length + QBO_TRANSACTION_ENTITIES.length === ENTITIES.length,
+    'lists and transactions partition the entities — no gap, no overlap');
+  for (const e of ['Estimate', 'Payment', 'SalesReceipt', 'CreditMemo', 'RefundReceipt'] as const) {
+    ok(ENTITIES.includes(e), `🔴 ${e} is read — a sales fact that never lives on an invoice was invisible before #341`);
+  }
+
+  // BOTH DIRECTIONS: a list query asks for inactive records; a transaction query never carries the clause.
+  for (const e of ENTITIES) {
+    const listish = QBO_LIST_ENTITIES.includes(e);
+    const c = qboCountQuery(e), p = qboPageQuery(e, 1);
+    ok(/where Active in \(true, false\)/.test(c) === listish, `${e}: the COUNT ${listish ? 'asks' : 'does not ask'} for inactive records`);
+    ok(/where Active in \(true, false\)/.test(p) === listish, `${e}: the PAGE ${listish ? 'asks' : 'does not ask'} for inactive records`);
+    ok(queryAskedForInactive(e, c) === (listish ? true : null) && queryAskedForInactive(e, p) === (listish ? true : null),
+      `🔴 ${e}: count and page AGREE — a page that asks under a count that does not reads as OVER and is refused, and the reverse is the defect itself`);
+    ok(p.indexOf(' where ') < 0 || p.indexOf(' where ') < p.indexOf(' startposition '),
+      `${e}: the filter sits BEFORE startposition, where Intuit's grammar requires it`);
+    ok(QBO_WALK_CEILING[e] > 0, `${e} has a walk ceiling`);
+    ok(maxPagesFor(e) >= 1, `${e} has a page ceiling`);
+  }
+
+  // The pre-#341 count query is still recognised — every file saved before this build carries it.
+  ok(isCountQueryFor('Item', 'select count(*) from Item'), '🔴 a PRE-#341 count query is still a count page — the 2026-09-10 file must stay readable');
+  ok(isCountQueryFor('Item', qboCountQuery('Item')), 'and so is the current one');
+  ok(!isCountQueryFor('Item', qboPageQuery('Item', 1)), 'a page query is never taken for a count');
+  ok(!isCountQueryFor('Item', 'select count(*) from Customer'), 'a count for ANOTHER entity is not this entity\'s count');
+  ok(!isCountQueryFor('Item', 'select count(*) from ItemGroup'), 'a longer entity name that starts with this one is not a match');
+  ok(!isCountQueryFor('Item', undefined) && !isCountQueryFor('Item', 42), 'a non-string query is not a count');
+  ok(queryAskedForInactive('Item', 'select count(*) from Item') === false,
+    '🔴 a pre-#341 list query reports FALSE — the file is complete about active records only');
+  ok(queryAskedForInactive('Invoice', 'select count(*) from Invoice') === null,
+    'a transaction reports NULL — the question does not apply, and null is not false');
+  ok(queryAskedForInactive('Customer', undefined) === false, 'an unreadable query is not evidence that inactive records were asked for');
+
+  // The request parameters.
+  ok(QBO_MINOR_VERSION === 75, '🔴 minor version 75 — Intuit has ignored anything lower since 2025-08-01, so 65 misdescribed the request');
+  for (const e of ENTITIES) ok(qboRequestParams(e).startsWith('minorversion=75'), `${e} sends minorversion=75`);
+  for (const e of ['Invoice', 'Estimate', 'SalesReceipt', 'CreditMemo', 'RefundReceipt'] as const) {
+    ok(qboRequestParams(e).includes('include=enhancedAllCustomFields'),
+      `🔴 ${e} asks for the newer custom fields — without it an empty CustomField array cannot mean "none"`);
+  }
+  for (const e of ['Item', 'Customer', 'Payment'] as const) {
+    ok(!qboRequestParams(e).includes('include='), `${e} carries no include parameter — it has no custom fields to ask for`);
+  }
+  ok(!/[\s?#]/.test(qboRequestParams('Invoice')), 'the parameter tail is URL-safe as written — no space, no second "?", no fragment');
+
+  // What "retired" means.
+  ok(isRetired({ active: false }) === true, 'Active false is retired');
+  ok(isRetired({ active: true }) === false, 'Active true is not');
+  ok(isRetired({ active: null }) === false, '🔴 an UNREAD flag is not retired — absence is not evidence that anybody hid the record');
+
+  // Route words are distinct, so no two entities fetch or file under the same name.
+  const words = ENTITIES.map(e => QBO_ROUTE[e]);
+  ok(new Set(words).size === words.length, 'every entity has its own route word');
+  ok(rawCaptureFileName('Payment', '1', new Date(0)).startsWith('qbo-payments-1-'),
+    'a payment capture is filed as payments, never under another entity\'s name');
 }
 
 // ══ §B THE COUNT — UNREADABLE IS null, NEVER 0 ══════════════════════════════

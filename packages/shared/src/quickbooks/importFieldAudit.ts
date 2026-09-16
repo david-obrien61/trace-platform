@@ -168,7 +168,7 @@ export const CUSTOMER_IGNORED_SOURCE_FIELDS: Record<string, string> = {
   'FullyQualifiedName':       'DisplayName with the parent job prefixed. Already carried by display_name; a second copy would be the one that drifts (STD-011).',
   'PrintOnCheckName':         'A cheque-printing preference. We do not print cheques.',
   // ── Real facts with nowhere to put them yet. These are DEFERRALS, and they say so. ──
-  'Active':                   'QuickBooks\' own active flag. `customers.status` exists and nothing has ruled how the two reconcile — importing it would pick that ruling by accident.',
+  'Active':                   'QuickBooks\' own active flag. READ to skip: a customer made inactive in QuickBooks is not imported (#341). Not STORED: `customers.status` exists and nothing has ruled how the two reconcile — writing it would pick that ruling by accident.',
   'Balance':                  'An accounts-receivable figure that belongs to QuickBooks and goes stale the moment it is copied. Read live, never stored.',
   'BalanceWithJobs':          'An accounts-receivable figure including sub-customer jobs. As Balance: it belongs to QuickBooks and goes stale the moment it is copied.',
   'Job':                      'Marks a sub-customer. The parent/child model is not built here; see ParentRef.',

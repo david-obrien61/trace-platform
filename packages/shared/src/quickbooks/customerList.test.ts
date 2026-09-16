@@ -149,5 +149,21 @@ const body = (rows: unknown[]) => JSON.stringify({ QueryResponse: { Customer: ro
   ok(previewCustomers(many)[0].id === '1', 'the preview is the FIRST rows, in the order the books returned them — not a sample somebody has to reason about');
 }
 
+// ══ 🔴 #341 — DUPLICATES ARE MEASURED OVER THE ACTIVE LIST ═══════════════════════════════════
+{
+  const r = parseCustomerList(body([
+    { Id: '1', DisplayName: 'A', Active: true,  PrimaryEmailAddr: { Address: 'same@example.com' } },
+    { Id: '2', DisplayName: 'A (old)', Active: false, PrimaryEmailAddr: { Address: 'same@example.com' } },
+    { Id: '3', DisplayName: 'B', Active: true,  PrimaryPhone: { FreeFormNumber: '512-555-0000' } },
+    { Id: '4', DisplayName: 'B', Active: true,  PrimaryPhone: { FreeFormNumber: '(512) 555-0000' } },
+  ]));
+  const s = summariseCustomers(r.customers);
+  ok(s.inactive === 1 && s.total === 4, '#341 the retired record is read and counted');
+  ok(s.byEmail.recordsInvolved === 0,
+    '🔴 #341 an email shared only with a RETIRED record is not a duplicate — making the old record inactive is how she fixed it');
+  ok(s.byPhone.recordsInvolved === 2, '#341 negative control — two ACTIVE records sharing a phone still count');
+  ok(s.withEmail === 2, '#341 coverage still counts every record read, retired included');
+}
+
 console.log(`\ncustomerList: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }

@@ -5,9 +5,21 @@
 //   an HTTP status means. `Item`, `Customer` and `Invoice` are the same operation with one word
 //   changed, so they are ONE implementation here rather than three that drift (§6 r8).
 // DEPENDENCIES: none. No network, no secrets, no storage.
-// OUTPUTS: QBO_ENTITIES · QboEntity · QBO_ROUTE · QBO_PAGE_SIZE · QBO_WALK_CEILING · maxPagesFor ·
-//   ceilingCheck · qboCountQuery · qboPageQuery · parseCount · parseRows · pageIsLast ·
-//   completeness · rawCaptureFileName · classifyFailure.
+// OUTPUTS: QBO_ENTITIES · QboEntity · QBO_LIST_ENTITIES · QBO_TRANSACTION_ENTITIES ·
+//   QBO_MINOR_VERSION · qboRequestParams · QBO_ROUTE · QBO_PAGE_SIZE · QBO_WALK_CEILING ·
+//   maxPagesFor · ceilingCheck · qboCountQuery · qboPageQuery · isCountQueryFor ·
+//   queryAskedForInactive · isRetired · parseCount · parseRows · pageIsLast · completeness ·
+//   rawCaptureFileName · classifyFailure.
+//
+// 🔴 THE QUERY ASKED FOR LESS THAN EVERYTHING, AND "complete: true" COULD NOT SEE IT (#341).
+//   Intuit's query language quietly applies `Active = true` to list entities unless the query
+//   says otherwise — and it applies it to the COUNT too, so expected == retrieved held and the
+//   completeness proof above was a proof about ACTIVE records only. Measured on LAWNS's
+//   2026-09-10 capture: 30 invoice lines worth $25,022.50 pointed at 9 items the item read never
+//   returned, because the owner had made them inactive — in response to our own findings report.
+//   Every clean-up she does in QuickBooks would have made our read of her books thinner. So the
+//   list queries now say `where Active in (true, false)`, in BOTH the count and the page, and
+//   `isRetired` is the one place that decides what an inactive record means downstream.
 //
 // 🔴 WHY THIS FILE EXISTS AT ALL — THE ONE-PAGE SCOPE BAR WAS WRONG AND ITS OWN FLAG SAID SO.
 //   #229 shipped `select * from Item` with no STARTPOSITION, and flagged that a truncated list
@@ -35,10 +47,57 @@
  * instead of the moment somebody remembers to widen a hand-written list in a test. A coverage
  * list that has to be maintained by hand is a coverage list that eventually under-covers (R-19).
  */
-export const QBO_ENTITIES = ['Item', 'Customer', 'Invoice'] as const;
+export const QBO_ENTITIES = [
+  'Item', 'Customer', 'Invoice',
+  // 🔴 THE SALES FACTS THAT DO NOT LIVE ON AN INVOICE (#341). An invoice links to its Estimate and
+  // its Payment by id (`LinkedTxn`, 1,430 of LAWNS's 1,496), a cancelled-and-refunded order is
+  // still a full-value invoice whose refund lives in a RefundReceipt or CreditMemo, and a
+  // counter sale paid on the spot is a SalesReceipt that never becomes an invoice at all. None was
+  // read, so every one of them was invisible to the findings. They are walked AFTER the three the
+  // findings already use, so a refusal on one of these stops the narration without taking the
+  // existing review down with it (W5 halts at the walk that failed, not before it).
+  'Estimate', 'Payment', 'SalesReceipt', 'CreditMemo', 'RefundReceipt',
+] as const;
 
 /** Adding one is a string in the array above, not a second client. */
 export type QboEntity = (typeof QBO_ENTITIES)[number];
+
+/**
+ * 🔴 THE ENTITIES INTUIT FILTERS TO `Active = true` UNLESS TOLD NOT TO. Name lists carry an
+ * `Active` flag and are silently narrowed; transactions carry none and are not. A `Record` over
+ * the union would force a decision for every new entity — this is a list because the question
+ * has only one interesting answer, and `qboRead.test.ts` §A asserts it both directions.
+ */
+export const QBO_LIST_ENTITIES: readonly QboEntity[] = ['Item', 'Customer'];
+
+/** Everything that is not a name list. Derived, so the two can never overlap or leave a gap. */
+export const QBO_TRANSACTION_ENTITIES: readonly QboEntity[] =
+  QBO_ENTITIES.filter(e => !QBO_LIST_ENTITIES.includes(e));
+
+/**
+ * 🔴 THE MINOR VERSION WE SEND, AND IT IS THE ONE WE GET. The code said `65` while Intuit has
+ * ignored every value below 75 since 2025-08-01 and answered as 75 regardless — a written claim
+ * about the request that nothing checked. One constant, so the companyinfo call and the query
+ * call cannot disagree, and so the day Intuit moves the floor again there is one line to move.
+ */
+export const QBO_MINOR_VERSION = 75;
+
+/**
+ * 🔴 THE ENTITIES WHOSE CUSTOM FIELDS ARE ONLY RETURNED WHEN ASKED FOR. QuickBooks' newer custom
+ * fields (Settings → Custom Fields) are absent from a transaction's `CustomField` array unless
+ * the request carries `include=enhancedAllCustomFields`. LAWNS's 1,496 invoices all came back
+ * with an EMPTY array — which reads identically whether the business has no custom fields or we
+ * never asked. Now we ask, so an empty array means empty. Payment carries no custom fields.
+ */
+const ASKS_FOR_CUSTOM_FIELDS: ReadonlySet<QboEntity> =
+  new Set<QboEntity>(['Invoice', 'Estimate', 'SalesReceipt', 'CreditMemo', 'RefundReceipt']);
+
+/** The query-string tail sent with every read of `entity`. Tested, so it is not a guess at a call site. */
+export function qboRequestParams(entity: QboEntity): string {
+  const params = [`minorversion=${QBO_MINOR_VERSION}`];
+  if (ASKS_FOR_CUSTOM_FIELDS.has(entity)) params.push('include=enhancedAllCustomFields');
+  return params.join('&');
+}
 
 /**
  * QuickBooks caps a page at 1000 rows and silently returns 100 when MAXRESULTS is absent —
@@ -66,6 +125,13 @@ export const QBO_WALK_CEILING: Record<QboEntity, number> = {
   Item:     QBO_MAX_PAGES * QBO_PAGE_SIZE,
   Customer: QBO_MAX_PAGES * QBO_PAGE_SIZE,
   Invoice:  10_000,
+  // Every transaction carries a nested Line[] (a Payment carries its applied-to lines), so each
+  // takes the invoice ceiling for the invoice's reason.
+  Estimate:      10_000,
+  Payment:       10_000,
+  SalesReceipt:  10_000,
+  CreditMemo:    10_000,
+  RefundReceipt: 10_000,
 };
 
 /**
@@ -110,7 +176,19 @@ export function ceilingCheck(entity: QboEntity, expected: number | null): Ceilin
  * advance and completeness is PROVABLE rather than assumed from "the last page looked short".
  */
 export function qboCountQuery(entity: QboEntity): string {
-  return `select count(*) from ${entity}`;
+  return `select count(*) from ${entity}${activeClause(entity)}`;
+}
+
+/**
+ * `where Active in (true, false)` for a name list, nothing for a transaction.
+ *
+ * 🔴 IT IS ONE FUNCTION USED BY BOTH QUERIES BECAUSE THE TWO MUST AGREE. A page query that asks for
+ * inactive records under a count query that does not would make every walk that finds one read
+ * as OVER by that many and be refused as INCOMPLETE — and the reverse pair would be the defect
+ * this build exists to remove, with the completeness proof agreeing again.
+ */
+function activeClause(entity: QboEntity): string {
+  return QBO_LIST_ENTITIES.includes(entity) ? ' where Active in (true, false)' : '';
 }
 
 /**
@@ -120,7 +198,50 @@ export function qboCountQuery(entity: QboEntity): string {
 export function qboPageQuery(entity: QboEntity, startPosition: number, pageSize = QBO_PAGE_SIZE): string {
   const start = Number.isFinite(startPosition) && startPosition >= 1 ? Math.floor(startPosition) : 1;
   const size  = Number.isFinite(pageSize) && pageSize >= 1 ? Math.min(Math.floor(pageSize), QBO_PAGE_SIZE) : QBO_PAGE_SIZE;
-  return `select * from ${entity} startposition ${start} maxresults ${size}`;
+  return `select * from ${entity}${activeClause(entity)} startposition ${start} maxresults ${size}`;
+}
+
+/**
+ * Is `query` the COUNT query for `entity` — under the current wording OR any earlier one?
+ *
+ * 🔴 A SAVED FILE RECORDS THE QUERY THAT WAS SENT, AND THE QUERY CHANGED (#341). Every capture
+ * saved before this build carries `select count(*) from Item` with no clause. Matching only the
+ * current wording would refuse every one of them as having no count page — including the
+ * 2026-09-10 file behind the report the owner acted on, which is exactly the file a before/after
+ * comparison needs. Matched on shape, anchored at both ends, so a page query can never pass for
+ * a count and a count for a different entity can never pass for this one.
+ */
+export function isCountQueryFor(entity: QboEntity, query: unknown): boolean {
+  if (typeof query !== 'string') return false;
+  const re = new RegExp(`^select count\\(\\*\\) from ${entity}(\\s+where\\s+.+)?$`, 'i');
+  return re.test(query.trim());
+}
+
+/**
+ * Did this query ask for INACTIVE records too? `null` for a transaction entity, where the
+ * question does not apply — kept distinct from `false`, which is the defect.
+ *
+ * 🔴 WHY A SAVED FILE NEEDS TO BE ASKED THIS. A capture made by the old query is complete about
+ * ACTIVE records and silent about the rest, and nothing inside its rows says so: `Active = false`
+ * appears on zero of them BECAUSE none was requested. The only evidence is the query text itself.
+ */
+export function queryAskedForInactive(entity: QboEntity, query: unknown): boolean | null {
+  if (!QBO_LIST_ENTITIES.includes(entity)) return null;
+  if (typeof query !== 'string') return false;
+  return /\bwhere\s+active\s+in\s*\(\s*true\s*,\s*false\s*\)/i.test(query);
+}
+
+/**
+ * 🔴 THE ONE ANSWER TO "HAS THE OWNER RETIRED THIS RECORD?" — `Active === false`, and nothing else.
+ *
+ * `null` (the flag absent) is NOT retired: Intuit sends the flag on every list record, and a
+ * record whose flag we could not read is not evidence that anybody hid it. Every consumer that
+ * describes the list AS IT IS NOW (the import, collisions, never-sold, duplicate customers) reads
+ * this; every consumer that ATTRIBUTES a past sale to its item does not, because a retired item
+ * was still what was sold.
+ */
+export function isRetired(row: { active: boolean | null }): boolean {
+  return row.active === false;
 }
 
 export interface CountResult {
@@ -257,6 +378,11 @@ export const QBO_ROUTE: Record<QboEntity, string> = {
   Item: 'items',
   Customer: 'customers',
   Invoice: 'invoices',
+  Estimate: 'estimates',
+  Payment: 'payments',
+  SalesReceipt: 'sales-receipts',
+  CreditMemo: 'credit-memos',
+  RefundReceipt: 'refund-receipts',
 };
 
 export function rawCaptureFileName(entity: QboEntity, realmId: string, at: Date): string {

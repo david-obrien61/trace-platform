@@ -540,12 +540,18 @@ export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
   const addressResolution: AddressResolutionTally = {
     line1Street: 0, line2Street: 0, noStreet: 0, unchanged: 0, phoneWouldBeLost: 0, phoneRescued: 0,
   };
-  let unparseable = 0, noId = 0, dupId = 0;
+  let unparseable = 0, noId = 0, dupId = 0, retired = 0;
   for (const body of rawBodies) {
     const page = parseCustomerRecords(body);
     if (!page.ok) { unparseable++; continue; }
     for (const raw of page.rows) {
       rawRecords.push(raw);
+      // 🔴 A CUSTOMER THE OWNER MADE INACTIVE IS NOT IMPORTED (#341) — pushed to `rawRecords`
+      // first, so the field audit still sees every field QuickBooks sent. Until #341 the read never
+      // returned one, so this preserves the import as it behaved; importing them would reopen every
+      // record the owner merged or hid, and how `Active` reconciles with `customers.status` is
+      // still unruled (the declaration in importFieldAudit.ts).
+      if (raw.Active === false) { retired++; continue; }
       const adapted = adaptCustomerWithAddress(raw);
       if (!adapted) { noId++; continue; }
       if (seen.has(adapted.customer.qb_customer_id)) { dupId++; continue; }
@@ -560,6 +566,7 @@ export function adaptCustomers(rawBodies: string[]): CustomerAdaptation {
   if (unparseable) skipped.push({ reason: 'a page of the capture could not be read', count: unparseable });
   if (noId) skipped.push({ reason: 'no QuickBooks id, or no name of any kind', count: noId });
   if (dupId) skipped.push({ reason: 'the same QuickBooks id appeared twice in this capture', count: dupId });
+  if (retired) skipped.push({ reason: 'made inactive in QuickBooks — not imported', count: retired });
 
   const duplicates = flagDuplicates(customers);
   const touched = new Set<string>();

@@ -51,7 +51,8 @@
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useDevSurface } from '../devtools';
-import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
+import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, QBO_LIST_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
+import type { TransactionBreakdown } from '../quickbooks/transactionList';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
 import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
@@ -72,6 +73,8 @@ const BUNDLE_LABEL = BUNDLE_ITEM_NAMES.join(' / ');
 /** The owner's word for each entity. Never `Item`/`Customer`/`Invoice` on a screen she reads. */
 const ENTITY_NOUN: Record<QboEntity, string> = {
   Item: 'products & services', Customer: 'customers', Invoice: 'invoices',
+  Estimate: 'estimates', Payment: 'payments received', SalesReceipt: 'sales receipts',
+  CreditMemo: 'credit memos', RefundReceipt: 'refunds',
 };
 
 // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -212,7 +215,7 @@ interface ReadResponse {
   complete?: boolean;
   pages_fetched?: number;
   items?: QboItemRow[];
-  breakdown?: ItemBreakdown | CustomerBreakdown | InvoiceBreakdown;
+  breakdown?: ItemBreakdown | CustomerBreakdown | InvoiceBreakdown | TransactionBreakdown;
   preview?: QboCustomerRow[];
   headline?: string;
   points_at?: string;
@@ -420,12 +423,18 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       // REFUSED anything short of its own pre-counted total (R-24), so this is surfacing a
       // proof rather than making a claim — and it is on screen even when it agrees, because a
       // completeness claim nobody can see is a completeness claim nobody checks.
+      // 🔴 FOR A NAME LIST, "ALL OF THEM" NOW INCLUDES WHAT THE OWNER MADE INACTIVE (#341), and the
+      // line says how many — otherwise a list that grew by her retired items reads as new records.
+      const retired = QBO_LIST_ENTITIES.includes(entity)
+        ? (body.breakdown as ItemBreakdown | CustomerBreakdown | undefined)?.inactive ?? 0
+        : 0;
+      const retiredClause = retired > 0 ? `, including ${retired.toLocaleString()} you have made inactive` : '';
       setNarration(prev => [...prev.slice(0, -1), {
         kind: 'done',
-        text: `Read ${(body.retrieved_total ?? 0).toLocaleString()} ${ENTITY_NOUN[entity]} — that is all of them.`,
+        text: `Read ${(body.retrieved_total ?? 0).toLocaleString()} ${ENTITY_NOUN[entity]}${retiredClause} — that is all of them.`,
       }]);
     }
-    setNarration(prev => [...prev, { kind: 'notice', text: 'All three reads finished. Everything below came from your own books.' }]);
+    setNarration(prev => [...prev, { kind: 'notice', text: `All ${QBO_ENTITIES.length} reads finished. Everything below came from your own books.` }]);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -475,9 +484,15 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       savedAs: null, saveFailed: false, error: null,
       note: `Loaded from ${f.name} — a saved read, not a live pull.`,
     });
+    // 🔴 A FILE SAVED BEFORE #341 IS COMPLETE ABOUT ACTIVE RECORDS ONLY, AND NOTHING IN ITS ROWS
+    // SAYS SO. The count query it carries is the only evidence, so the note states it rather than
+    // letting "loaded 673" read as the whole list.
+    const activeOnly = replayed.askedForInactive === false
+      ? ` This file was saved before the read asked QuickBooks for inactive ${ENTITY_NOUN[projected.entity]}, so anything made inactive before it was saved is not in it.`
+      : '';
     setFileNote({
       ok: true,
-      text: `Loaded ${projected.retrieved_total.toLocaleString()} ${ENTITY_NOUN[projected.entity]} from ${f.name}. QuickBooks was not contacted.`,
+      text: `Loaded ${projected.retrieved_total.toLocaleString()} ${ENTITY_NOUN[projected.entity]} from ${f.name}. QuickBooks was not contacted.${activeOnly}`,
     });
   }
 
@@ -593,6 +608,8 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   const itemBreak = state?.entity === 'Item' ? (b?.breakdown as ItemBreakdown | undefined) : undefined;
   const custBreak = state?.entity === 'Customer' ? (b?.breakdown as CustomerBreakdown | undefined) : undefined;
   const invBreak  = state?.entity === 'Invoice' ? (b?.breakdown as InvoiceBreakdown | undefined) : undefined;
+  const txnBreak  = state && state.entity !== 'Invoice' && !QBO_LIST_ENTITIES.includes(state.entity)
+    ? (b?.breakdown as TransactionBreakdown | undefined) : undefined;
   const peakMonth = invBreak ? Math.max(1, ...invBreak.byMonth.map(m => m.invoices)) : 1;
 
   return (
@@ -958,7 +975,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           {state.entity !== 'Item' && (
             <span style={{ color: AMBER, display: 'block', marginTop: 4 }}>
               ⚠ That file holds your customers&apos; names
-              {state.entity === 'Invoice' ? ', what each of them bought and what they paid' : ', addresses, phone numbers and email'}.
+              {state.entity === 'Customer' ? ', addresses, phone numbers and email' : ', what each of them bought and what they paid or were paid back'}.
               It is outside this application and outside the code repository — keep it that way.
             </span>
           )}
@@ -1393,6 +1410,30 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
             This table adds to {invBreak.linesTotal.toLocaleString()} — every line is in it. A line
             type this read does not interpret appears here under its own name rather than going
             missing from the totals.
+          </p>
+        </div>
+      )}
+
+      {/* 🔴 THE FIVE TRANSACTION READS (#341) — counts, money and dates only, dev-gated like the
+          other census panels. What a refund or a credit memo DOES to a finding is not decided
+          here; this proves the read and sizes it. */}
+      {devOn && txnBreak && b?.ok && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <Stat label={ENTITY_NOUN[txnBreak.entity]} value={txnBreak.total} />
+            <Stat label="linked to an invoice" value={txnBreak.linkedToAnInvoice} of={txnBreak.total} />
+            <Stat label="with a custom field" value={txnBreak.withCustomFields} of={txnBreak.total} />
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: DARK, margin: 0, lineHeight: 1.5 }}>
+            {txnBreak.total === 0
+              ? `The read succeeded and this QuickBooks company has no ${ENTITY_NOUN[txnBreak.entity]}.`
+              : <>
+                  ${txnBreak.amountTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across{' '}
+                  {txnBreak.withAmount.toLocaleString()} with a readable total
+                  {txnBreak.total > txnBreak.withAmount && <> ({(txnBreak.total - txnBreak.withAmount).toLocaleString()} without one, not counted as $0)</>}
+                  {txnBreak.dateRange.earliest && <>, dated {txnBreak.dateRange.earliest} to {txnBreak.dateRange.latest}</>}
+                  {txnBreak.dateRange.undated > 0 && <> ({txnBreak.dateRange.undated.toLocaleString()} undated)</>}.
+                </>}
           </p>
         </div>
       )}

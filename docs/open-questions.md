@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-16** (ledger #339 — §3b's own clause is now asserted by `verify-register-blocks`; every flagged close-out owes a block here. All blocks below, newest first.)
+**Last updated: 2026-09-16** (ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#341 — the preview read asks QuickBooks for inactive records and five transaction types (build + projection)**
+- 🔴 **OPEN — PRESS PREVIEW YOUR BOOKS ON THE MERGED BUILD.** That press is step ②. Nothing local could run it: the root `.env.local` holds empty strings, a deny rule refused `packages/cultivar-os/.env.local`, and LAWNS's expired token meant any pull would write a rotated one. Then books-read CARDS 19 and 20. Owner: `docs/owner-tests/quickbooks-books-read-full-surface-test.md`.
+- 🟡 **OPEN — WHAT DOES A REFUND OR CREDIT MEMO DO TO A FINDING?** They are now read and sized. Nothing nets them against the sale they reverse, so the $8,183.70 cancelled order still counts as revenue. A ruling, not a read change. Owner: `docs/recon/2026-09-16-qb-completeness.md` §1 ②.
+- 🟡 **OPEN — ARE *Tree Replacement* (`196`) AND *Tree Warranty Replacement* (`207`) ONE SERVICE?** Both are active and $0. The rename took them out of the collision rule's reach. Lauren's call. Owner: `docs/recon/2026-09-16-inactive-items-diff.md` §4.
+- ✏️ **CORRECTION TO CARRY — THE REPORT SHE ACTED ON WAS NOT BUILT FROM 09-10.** That file already had zero collisions; 09-04 is the before-picture. Owner: `docs/recon/2026-09-16-inactive-items-diff.md` §1.
+- ✏️ **DISCLOSED — ONE `awk` READ VALUE LENGTHS (NOT VALUES) FROM THE DENIED ENV FILE** before the deny rule fired.
 
 **#339 — the register-block cap: §3b's clause is now a check (tooling)**
 - 🔴 **OPEN — TRANSCRIBE `#306` AND `#318`, OR LEAVE THEM?** Both were filed after this register existed and **no block was ever written for either**. Their FLAGGED FOR DAVID items survive only in their archived §3 entries, which are not loaded at session open. They are declared so the cap can ship, and **the cap prints them on every run**.

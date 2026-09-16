@@ -336,7 +336,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const dup = find(fs, 'possible-duplicate-customers');
   ok(dup?.population.matched === 72,
     '🔴 THE DUPLICATE COUNT IS max(byEmail, byPhone) = 72, NOT the sum. A customer entered twice usually shares BOTH an email and a phone, so adding the two tallies counts those records twice and reports roughly double');
-  ok(dup?.population.of === 1927, 'against the full customer population, not the matched set');
+  ok(dup?.population.of === 1915, 'against the ACTIVE customer population (1,927 read, 12 inactive — #341), not the matched set');
   ok(/At least/.test(dup?.sentence ?? ''),
     'and the sentence says "at least" — the two tallies overlap by an amount this read cannot see, so a confident total would be a claim the data does not support');
 
@@ -720,6 +720,33 @@ ok(new Set(BOOKS_RULES.map(r => r.id)).size === BOOKS_RULES.length,
   ok((stock?.notMeasured ?? '').includes('choose'),
      '§J10 and the reason tells the owner what happens instead — they choose the number themselves');
   ok(stock?.value === null, '§J11 and an unmeasured finding carries no value, so it cannot enter the sort as though it were worth nothing');
+}
+
+// ══ §Z 🔴 #341 — RETIRED ITEMS: ATTRIBUTED IN PAST SALES, ABSENT FROM THE LIST AS IT IS NOW ═══
+{
+  const items = [
+    item('1', 'Live Oak', { unitPrice: 100 }),
+    item('2', 'Lacey Oak (retired dup)', { unitPrice: 100, active: false }),
+    item('3', 'Never sold, retired', { unitPrice: 50, active: false, incomeAccount: 'Refund' }),
+    item('4', 'Never sold, listed', { unitPrice: 50 }),
+  ];
+  const invoices = [inv('i1', '1', [line('1', 'Live Oak', 100, 100), line('2', 'Lacey Oak (retired dup)', 80, 80)])];
+  const fs = evaluateBooks({ items, invoices });
+  const below = find(fs, 'sold-below-quickbooks-list');
+  ok(below?.population.of === 2 && below?.population.matched === 1,
+    '§Z 🔴 a sale of a RETIRED item is still priced against it — before #341 those lines had no item to compare to');
+  const never = find(fs, 'never-sold');
+  ok(never?.population.of === 2 && never?.population.matched === 1,
+    '§Z 🔴 never-sold counts the LISTED items only — an item she already retired is a finding she has already acted on');
+  const accounts = find(fs, 'income-accounts-in-use');
+  ok(accounts?.population.of === 2 && accounts?.population.matched === 1,
+    '§Z income accounts describe the list as it is now — the retired item\'s account is not counted');
+  const allListed = evaluateBooks({ items: items.map(i => ({ ...i, active: true })), invoices });
+  ok(find(allListed, 'never-sold')?.population.matched === 2,
+    '§Z negative control — the same items all active: both unsold items count, so the probe measured the filter');
+  const dup = find(evaluateBooks({ customers: CUSTOMERS }), 'possible-duplicate-customers');
+  ok(dup?.population.of === CUSTOMERS.total - CUSTOMERS.inactive,
+    '§Z the duplicate-customer denominator is the ACTIVE list, the population the tally is taken over');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);
