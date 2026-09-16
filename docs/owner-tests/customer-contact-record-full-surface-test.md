@@ -18,17 +18,26 @@
 **Story:** ⚠️ **NO MATCH — a story is OWED to David.** `user_stories.md:1862` still carries the saved address book as `STATUS: scoped-out`, which `20260911b` already inverted and this build inverts further. **A status flip is David's, not Thunder's.**
 **Surfaces:** the two new tables + the derived-column trigger · the QuickBooks customer import · the checkout customer step · Cart Review · Order detail · the delivery route · the stop card · the customer roster and search.
 
-> 🔴 **NOTHING ON THIS BOARD HAS BEEN RUN. BOTH MIGRATIONS ARE WRITTEN AND NOT APPLIED.**
+> 🔴 **NOTHING ON THIS BOARD HAS BEEN RUN. ALL THREE MIGRATIONS ARE WRITTEN AND NOT APPLIED.**
 > This build touched no database. Every card below is `owed`.
 
-> 🔴 **THE APPLY ORDER IS NOT OPTIONAL — `20260915` FIRST, THEN `20260915b`.**
-> The second DROPS the four columns the first's trigger REPLACES. Applied out of order, `customers`
-> has **no address at all** in between. They are two files precisely so the destructive half can be
-> read on its own before it is run.
+> 🔴 **THE APPLY ORDER IS NOT OPTIONAL — THREE FILES, IN THIS ORDER** *(amended 2026-09-16)*:
+> **①** `20260915_backfill_legacy_customer_address.sql` — copies a legacy-only value into `billing_*`
+> **②** `20260915_contact_record.sql` — **seeds the three lists from the flat columns**, then derives them
+> **③** `20260915b_drop_legacy_customer_address.sql` — drops the legacy four
+> ② seeds from `billing_*` and never reads the legacy four, so **a value that is still legacy-only when
+> ② runs never reaches the list, and ③ then destroys it** — that is why ① is first. ③ removes columns
+> ②'s trigger replaces; applied before ②, `customers` has no address at all in between.
+
+> 🔴 **CARDS 7, 8 AND 12 ARE EXPECTED TO FAIL UNTIL TECH-DEBT #306 IS RESOLVED — DO NOT RUN THEM YET.**
+> The import's writer asks PostgREST to ignore duplicates **on the primary key**, not on the
+> `value_norm` or one-primary indexes. Since ② seeds every customer's existing phone and email as the
+> primary row, the import's first write for most customers collides on one of those indexes and
+> **errors** instead of being skipped. Before the seed, the same collision waited for the SECOND run.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
-> **David can run these now, Supabase SQL editor, no phone:** CARDS 1, 2, 3, 4, 5, 6, 12, 13.
-> **David's own login, Test Dave's — these WRITE:** CARDS 7, 8, 9, 10.
+> **David can run these now, Supabase SQL editor, no phone:** CARDS 1, 2, 3, 3b, 4, 5, 6, 13.
+> **David's own login, Test Dave's — these WRITE:** CARDS 9, 10 · and **7, 8, 12 only after #306**.
 > 🔴 **Never on LAWNS** until CARD 14: a checkout there pushes a real invoice.
 > **David's own login, LAWNS, LOOKING ONLY:** CARD 11, CARD 14.
 
@@ -57,6 +66,14 @@ SELECT id, first_name, organization_name,
 **FAIL:** any row — **do not run CARD 5.** The migration will refuse anyway (it raises), but the
 point of running it here is to see the list while you can still do something about it.
 
+**IF IT FAILS (it did, 2026-09-15 — 20 rows: 19 `state='TX'` alone, plus Paul `58e9e0f9…` with a real
+street): apply ① `20260915_backfill_legacy_customer_address.sql` in the SQL editor, then run this
+card again.** ① copies each legacy-only value into its empty `billing_*` column and refuses its own
+transaction if any row is left over. **PASS after ①: zero rows.**
+⚠️ **This card does not see a row where BOTH columns hold a value and they DISAGREE** — ③ discards the
+legacy side of such a row silently. That blind spot is **tech-debt #305**. On 2026-09-15 there was one
+such row (Test Dave's, both addresses fabricated) and David ruled it needs nothing.
+
 ---
 
 ### CARD 2 — apply `20260915_contact_record.sql`, in the SQL editor
@@ -70,7 +87,11 @@ COVERS: ledger #335
 
 Paste everything from `BEGIN;` to `COMMIT;`. The V-block below it is commented out — leave it.
 
-**PASS:** completes with no error. It is idempotent; a second run is a no-op.
+**PASS:** completes with no error, and the messages show `SEEDED: N billing address row(s)`. It is
+idempotent; a second run is a no-op.
+**PASS, equally:** it REFUSES with `REFUSED: … hold a billing address, … a phone and … an email with NO
+list row` — the whole transaction is undone and nothing changed. That is §5c refusing to install a
+trigger that would blank those values; report it, do not work around it.
 
 ---
 
@@ -98,6 +119,48 @@ so the absent policy is fail-closed by design, not an omission.
 
 ---
 
+### CARD 3b — 🔴 THE SEED LANDED: every flat value has a list row behind it
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+**Run it straight after CARD 2** — before any import. Without this seed, the trigger derives every
+customer's address, phone and email from three EMPTY tables, and the first list write blanks all three.
+
+```sql
+SELECT
+  (SELECT count(*) FROM public.customers
+    WHERE COALESCE(btrim(billing_line1),'') <> '' OR COALESCE(btrim(billing_city),'') <> ''
+       OR COALESCE(btrim(billing_state),'') <> '' OR COALESCE(btrim(billing_zip),'')  <> '') AS customers_with_address,
+  (SELECT count(*) FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*')  AS seeded_addresses,
+  (SELECT count(*) FROM public.customers WHERE COALESCE(btrim(phone),'') <> '')                  AS customers_with_phone,
+  (SELECT count(*) FROM public.customer_phones WHERE source = 'migrated:customers.phone')        AS seeded_phones,
+  (SELECT count(*) FROM public.customers WHERE COALESCE(btrim(email),'') <> '')                  AS customers_with_email,
+  (SELECT count(*) FROM public.customer_emails WHERE source = 'migrated:customers.email')        AS seeded_emails,
+  (SELECT count(*) FROM public.customer_phones
+    WHERE source = 'migrated:customers.phone' AND value_norm IS NULL)                            AS phones_with_no_digits;
+```
+
+**PASS:** `customers_with_address = seeded_addresses` · `customers_with_phone = seeded_phones` ·
+`customers_with_email = seeded_emails`.
+⚠️ `phones_with_no_digits` should be 0. A non-zero count is a phone column holding text with no digits
+(`n/a`, `call office`) — it was seeded as written and it is not a defect, but read those rows.
+
+Then Paul, the one real address the backfill rescued:
+
+```sql
+SELECT label, kind, line1, city, state, zip, is_default, source
+  FROM public.customer_addresses
+ WHERE customer_id = '58e9e0f9-6ac6-49c5-a954-0061f201d134';
+```
+
+**PASS:** one row — `20401 Gilbert Cove`, `Lago Vista`, **`TX`**, **a ZIP**, `kind = billing`,
+`is_default = true`. 🔴 **A blank state or ZIP here means ② ran before ①** — and ③ would then destroy
+the only copy. Stop before CARD 5.
+
+---
+
 ### CARD 4 — 🔴 THE TRIGGER ACTUALLY DERIVES. This is the one that proves the mechanism.
 STATUS: owed
 LAST-PROVEN: —
@@ -106,18 +169,34 @@ COVERS: ledger #335
 
 Run it whole. **It rolls itself back and writes nothing.**
 
+✏️ **CHANGED 2026-09-16, after the seed.** The first version inserted a second PRIMARY phone for the
+oldest customer; once ② seeds that customer's existing phone as primary, that insert hits the
+one-primary index and **errors**. This version demotes the existing primary first (inside the same
+rolled-back transaction), picks a customer who HAS an address, and reads the address back — so it
+proves the seed as well as the trigger.
+
 ```sql
 BEGIN;
+  UPDATE public.customer_phones SET is_primary = false
+   WHERE customer_id = (SELECT id FROM public.customers
+                         WHERE COALESCE(btrim(billing_line1),'') <> ''
+                         ORDER BY created_at, id LIMIT 1);
   INSERT INTO public.customer_phones (business_id, customer_id, label, value, is_primary, source)
   SELECT business_id, id, 'mobile', '(512) 555-0142', true, 'v-block'
-    FROM public.customers ORDER BY created_at LIMIT 1;
-  SELECT c.id, c.phone AS derived_flat_column, p.value AS list_value, p.value_norm
+    FROM public.customers
+   WHERE COALESCE(btrim(billing_line1),'') <> ''
+   ORDER BY created_at, id LIMIT 1;
+  SELECT c.id, c.phone AS derived_flat_column, p.value AS list_value, p.value_norm,
+         c.billing_line1 AS address_after_the_write
     FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id
    WHERE p.source = 'v-block';
 ROLLBACK;
 ```
 
-**PASS:** `derived_flat_column` = `(512) 555-0142` and `value_norm` = `5125550142`.
+**PASS:** exactly **one** row · `derived_flat_column` = `(512) 555-0142` · `value_norm` = `5125550142` ·
+**`address_after_the_write` is a street, not NULL.**
+🔴 **A NULL `address_after_the_write` is the defect the seed exists to prevent** — the phone write
+recomputed the address from an empty list. Stop and report it.
 🔴 **If `derived_flat_column` is NULL or the old value, the trigger is not firing** — and the whole
 "the list is the truth, the columns are a view" claim is false. Stop and report it.
 
@@ -301,6 +380,6 @@ nobody has designed yet**, which is the thing OP-14's `needs-test` state exists 
 
 ---
 
-> **COVERAGE: 0 of 14.** Thunder may never mark a card `covered` — only David's live run flips one,
-> with a date. **Cards 1–6 and 12–13 are SQL and need no deploy; cards 7–11 need the build in front
+> **COVERAGE: 0 of 15.** Thunder may never mark a card `covered` — only David's live run flips one,
+> with a date. **Cards 1–6 (with 3b) and 12–13 are SQL and need no deploy; cards 7–11 need the build in front
 > of you, and GATE 0 is what settles which build that is.**

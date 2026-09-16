@@ -3786,6 +3786,73 @@ starting number is the scope creep that makes a diff unreviewable — and every 
 decision about what the undo MEANS, which is David's.
 
 
-## #305 — ⏳ RESERVED 2026-09-16 (ledger #335) — the legacy-address guard is blind to a DISAGREEING pair; entry follows in this branch
+## #305 — 🟡 THE LEGACY-ADDRESS GUARD IS BLIND TO A DISAGREEING PAIR: BOTH COLUMNS POPULATED, DIFFERENT VALUES, AND THE DROP DISCARDS ONE SILENTLY (NEW 2026-09-16, ledger #335)
 
-## #306 — ⏳ RESERVED 2026-09-16 (ledger #335) — the contact writer's ignoreDuplicates targets the primary key, not the value_norm / one-primary indexes; entry follows in this branch
+**The defect.** `20260915b` §1 refuses to drop `customers.address_line1/city/state/zip` while any row
+holds a legacy value that `billing_*` does not. Its predicate — and owner-test CARD 1, which is the
+same predicate as a list — is *legacy non-empty **AND** billing **EMPTY***. A row where **both**
+columns hold a value and they **disagree** passes the guard, is not listed by CARD 1, and loses its
+legacy value when the column is dropped. Nothing names it, nothing counts it, nothing refuses.
+
+**Why billing wins, and why that is not the whole answer.** D-41 made `billing_*` canonical and the
+legacy four a mirror, so keeping billing is the ruled outcome. But the guard's stated purpose is
+*"refuse if dropping the column would destroy a value"* — and in a disagreeing pair it does destroy
+one. **The guard asserts less than its own sentence claims.**
+
+**Measured 2026-09-15 (David): ONE such row, on Test Dave's, both addresses fabricated. Ruled: nothing
+to fix.** So this is not a live data loss — it is a guard that would have let one through without a
+word, and the next destructive migration written from it inherits the blind spot.
+
+**Surfaced, not guarded.** `20260915_backfill_legacy_customer_address.sql` §3 now COUNTS disagreeing
+pairs in a NOTICE and its V3 lists them; CARD 1 names the blind spot in words. Neither refuses.
+
+**Fix (not taken — the guard's shape is David's).** A second clause in `20260915b` §1 that either
+refuses on a disagreeing pair or requires each one to be DECLARED (id + which side wins). ⚠️ A refusal
+would have blocked on the one ruled-harmless Test Dave's row, which is the argument for a declaration
+over a bare refusal (#73: a check that is red on arrival gets switched off).
+
+
+## #306 — 🔴 THE CONTACT WRITER'S `ignoreDuplicates` TARGETS THE PRIMARY KEY, SO A COLLISION ON `value_norm` OR ON THE ONE-PRIMARY INDEX ERRORS INSTEAD OF BEING SKIPPED — AND THE SEED MOVES THAT FROM THE SECOND IMPORT RUN TO THE FIRST (NEW 2026-09-16, ledger #335)
+
+**The claim in the code.** `contactWriter.ts` says the import is *"IDEMPOTENT BY CONSTRUCTION"*: it
+calls `.upsert(rows, { ignoreDuplicates: true })` and relies on the partial unique indexes on
+`(business_id, customer_id, value_norm)` to turn a re-imported number into a silent no-op.
+
+**What the two systems document.** PostgREST (`docs.postgrest.org`, tables & views → upsert): *"By
+default, upsert operates based on the primary key columns."* No `onConflict` is passed, so the
+conflict target is `id`. Postgres (`INSERT` → `ON CONFLICT`): with a conflict target, the inferred
+**arbiter** indexes are the ones handled; only when the target is **omitted** does `DO NOTHING` cover
+*"all usable constraints (and unique indexes)."* The rows carry no `id`, so they never collide on the
+arbiter — and a collision on `customer_phones_one_per_value` or `customer_phones_one_primary` is
+**raised (23505)**, not absorbed. `writeContactRecord` then returns `ok: false`.
+
+⚠️ **PROVENANCE: INFERRED FROM THE TWO DOCUMENTS, NOT MEASURED.** No live PostgREST request was made.
+The proof is owner-test CARD 12 (a second import run) — which the board now says not to run yet.
+
+**Why the suite is green.** `contactWriter.test.ts`'s double returns *"SUCCESS WITH ZERO ROWS AND NO
+ERROR"* for ANY collision in `dup` mode and calls it *"the real PostgREST behaviour"* — it never asks
+WHICH index collided or what conflict target was requested. **Tech-debt #138's class exactly: a double
+more forgiving than the real system** (§6 r19 (a)).
+
+**Why it matters NOW (ledger #335, 2026-09-16).** `20260915` §5b seeds every customer's existing phone
+and email as an active PRIMARY row. The import then plans a primary for the same customer:
+  · same number → collides on `one_per_value`;
+  · different number → collides on `one_primary`.
+**Either way the FIRST import run errors for most customers.** Without the seed the same defect waited
+for the SECOND run (CARD 12). The seed is still right — without it the first list write blanks every
+customer's address, phone and email — but it makes this blocking.
+
+**Blocks:** owner-test CARDS 7, 8 and 12, and the LAWNS import (CARD 14).
+
+**Options (David's call — none taken):**
+1. **An RPC** doing `INSERT … ON CONFLICT DO NOTHING` with the target OMITTED — covers every unique
+   index. Costs a migration and moves the write into SQL; the 12-function ceiling is unaffected (an RPC
+   is not an `api/` file).
+2. **Pass `onConflict: 'business_id,customer_id,value_norm'`** — ⚠️ PostgREST cannot express the
+   partial index's `WHERE` predicate, so Postgres will not infer a PARTIAL index from it; this likely
+   fails outright unless the index is made non-partial. Does nothing for `one_primary`.
+3. **Plan `is_primary` from what exists**: read the customer's current rows first, never plan a second
+   primary. ⚠️ A read-then-write — tech-debt #54's race — acceptable only because the import is a
+   single-operator run.
+**Whatever is chosen, the double must learn to refuse:** model the arbiter, and make a non-arbiter
+collision return 23505.
