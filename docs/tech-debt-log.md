@@ -4061,3 +4061,7 @@ never called. So a truck run completed in the app leaves every order open.
 **Automatic SPM consumption depends on it**: stock (and the per-order consumption it will record) moves on
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
+
+## #309 — ⏳ RESERVED 2026-09-16 (ledger #343, branch `feat/ladder-one-source`)
+
+Reserved before content is written (R-149). Body lands with the build.
