@@ -23,7 +23,8 @@
 //               the same one the import preview panel uses, so the panel and the writer cannot
 //               disagree). No IO, no clock, no client: every rule below is provable at a desk.
 // OUTPUTS:      `buildContactRecord` → the three lists + `findings`, the report of what was seen
-//               and NOT taken. · THE SEED RULE (foot of file): `DECLARED_CONTACT_SEEDERS`,
+//               and NOT taken. · `addressKey` (shared with contactWriter's already-held check).
+//               · THE SEED RULE (foot of file): `DECLARED_CONTACT_SEEDERS`,
 //               `HISTORY_TABLES`, `contactSeedStatements`, `historySourceViolation` — `20260911b`
 //               §4 as code, read by `customerAddresses.test.ts` §F and `contactRecord.test.ts` §H.
 // ============================================================
@@ -200,7 +201,7 @@ function secondaryLine(block: Record<string, unknown> | null, streetLine: string
 }
 
 /** The comparable identity of an address — street plus city plus postcode, case-folded. */
-function addressKey(a: ContactAddress): string {
+export function addressKey(a: Pick<ContactAddress, 'line1' | 'city' | 'zip'>): string {
   return [a.line1, a.city, a.zip].map(v => (v ?? '').trim().toLowerCase()).join('|');
 }
 

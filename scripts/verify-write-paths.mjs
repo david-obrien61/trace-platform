@@ -155,9 +155,12 @@ const ALLOWED_DIVERGENCE = {
   //    Routed through the interactive path, the second customer's billing address would be refused
   //    as a duplicate label — the labels are per-customer unique, so it would in fact pass, but the
   //    plan-then-insert shape costs a round trip per row and its refusal VOCABULARY is wrong for a
-  //    caller that is a loop rather than a person. The import instead asks the DATABASE for
-  //    idempotence (`ignoreDuplicates` against the partial unique index on `value_norm`), which is
-  //    a guarantee a read-then-write cannot make — tech-debt #54's TOCTOU lesson.
+  //    caller that is a loop rather than a person. The import reads what the customer holds and
+  //    inserts only what is new (`reconcileContactRows`), counting the rest as HELD.
+  //    ✏️ CORRECTED 2026-09-16 (tech-debt #306): this said the import got idempotence from
+  //    `ignoreDuplicates` against the partial unique index. MEASURED FALSE — PostgREST's conflict
+  //    target is the primary key, so a collision raised 23505. The read-then-write is #54's race,
+  //    accepted for a single-operator import; the indexes remain the backstop.
   //
   // ⚠️ §6 r8 SAYS REUSE BEFORE FORKING, SO THIS IS A DELIBERATE DIVERGENCE AND NOT AN OVERSIGHT.
   //    What makes them separate is not the code, it is the CONTRACT: one returns human refusals,
@@ -178,8 +181,9 @@ const ALLOWED_DIVERGENCE = {
           + 'interactive one-site save: planSaveSite refuses a duplicate label in a sentence written '
           + 'for the owner and the UI renders that refusal. contactWriter.ts is the bulk QuickBooks '
           + 'import, where a duplicate is the correct outcome of a second run and must be silent '
-          + 'success — it asks the database for idempotence via ignoreDuplicates against the partial '
-          + 'unique index, a guarantee a read-then-write cannot make (tech-debt #54 TOCTOU). Folding '
+          + 'success — it reads what the customer holds and inserts only what is new, with the partial '
+          + 'unique indexes as the backstop (tech-debt #306; the read-then-write race of #54 is accepted '
+          + 'for a single-operator import). Folding '
           + 'them would give a loop a refusal vocabulary written for a person, and cost a round trip '
           + 'per row across ~1,900 customers. The rows are distinguishable: the import stamps source '
           + "LIKE 'quickbooks:%' and the interactive path leaves source NULL, which is what keeps "

@@ -29,15 +29,16 @@
 > ② runs never reaches the list, and ③ then destroys it** — that is why ① is first. ③ removes columns
 > ②'s trigger replaces; applied before ②, `customers` has no address at all in between.
 
-> 🔴 **CARDS 7, 8 AND 12 ARE EXPECTED TO FAIL UNTIL TECH-DEBT #306 IS RESOLVED — DO NOT RUN THEM YET.**
-> The import's writer asks PostgREST to ignore duplicates **on the primary key**, not on the
-> `value_norm` or one-primary indexes. Since ② seeds every customer's existing phone and email as the
-> primary row, the import's first write for most customers collides on one of those indexes and
-> **errors** instead of being skipped. Before the seed, the same collision waited for the SECOND run.
+> ✏️ **CHANGED 2026-09-16 — TECH-DEBT #306 IS FIXED ON THIS BRANCH** (the writer reads what each
+> customer holds and adds only what is new; a seeded billing row that disagrees with QuickBooks is
+> retired and replaced). **It was the writer's defect, and the writer's tests now prove the fix.**
+> 🔴 **BUT CARDS 7, 8, 9 AND 12 STILL CANNOT BE RUN — NO SCREEN CALLS THE CONTACT WRITER.** Measured
+> 2026-09-16: `writeContactRecord` has no caller outside its own tests, so "run a QuickBooks customer
+> import" today does not reach this code at all. Those cards wait on the import being wired to it.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
 > **David can run these now, Supabase SQL editor, no phone:** CARDS 1, 2, 3, 3b, 4, 5, 6, 13.
-> **David's own login, Test Dave's — these WRITE:** CARDS 9, 10 · and **7, 8, 12 only after #306**.
+> **David's own login, Test Dave's — these WRITE:** CARD 10 · and **7, 8, 9, 12 only once the import calls the contact writer** (see above).
 > 🔴 **Never on LAWNS** until CARD 14: a checkout there pushes a real invoice.
 > **David's own login, LAWNS, LOOKING ONLY:** CARD 11, CARD 14.
 
@@ -342,9 +343,11 @@ SELECT (SELECT count(*) FROM public.customer_phones)    AS phones,
        (SELECT count(*) FROM public.customer_addresses) AS addresses;
 ```
 
-**PASS:** identical before and after. 🔴 **Idempotence is enforced by the partial unique indexes,
-not by the code checking first** — a read-then-write is a race (tech-debt #54). This card is what
-proves the index is doing it.
+**PASS:** identical before and after, **and the import finishes without an error on any customer.**
+✏️ **CHANGED 2026-09-16 (tech-debt #306).** This card used to say the partial unique indexes did the
+work. **They cannot** — measured: the old write raised a duplicate-key error on the second run. The
+import now reads what each customer already holds and adds only what is new; the indexes stay as
+the backstop, so a collision shows up as an error, never as a duplicate row.
 
 ---
 

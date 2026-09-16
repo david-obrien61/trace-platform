@@ -3856,3 +3856,28 @@ customer's address, phone and email — but it makes this blocking.
    single-operator run.
 **Whatever is chosen, the double must learn to refuse:** model the arbiter, and make a non-arbiter
 collision return 23505.
+
+🟡 **FIXED ON `feat/contact-record`, 2026-09-16 — NOT YET MERGED. Option 3 taken; options 1 and 2 were MEASURED, not inferred.**
+**The measurement (PGlite — a real Postgres engine — run in a scratch directory, not the repo):**
+  · the old write (`upsert`, `ignoreDuplicates`, conflict target = primary key) on a re-import →
+    **23505 `customer_phones_one_primary`** — this entry's claim, now measured;
+  · **option 2** (`onConflict: 'business_id,customer_id,value_norm'`) → **42P10, on EVERY call** —
+    Postgres infers a partial index only when its predicate is restated, and PostgREST cannot send one.
+    **It would have broken the FIRST import, not just the second;**
+  · option 1's shape (`ON CONFLICT DO NOTHING`, target omitted) → absorbs a genuinely new primary
+    number **silently — data loss**, so it would have needed option 3's primary logic anyway.
+**The fix.** `reconcileContactRows` (pure) plans against what the customer already holds, and the writer
+**INSERTs** only what is new: a held value is counted `held`; a new number is added non-primary if a
+primary exists. **Addresses:** an identical one is held; a billing row that disagrees with a
+**`migrated:` seed** retires the seed (`active = false`, R-133) and takes the default; any other clash
+leaves hand-entered and earlier-import rows untouched (a taken default → the import lands non-default;
+a taken label → reported in `notTaken`). The indexes stay the backstop, so a lost race is a loud 23505.
+🔴 **WHY THE SEED RULE WAS NEEDED — MEASURED LIVE: 464 LAWNS customers have their PHONE as their billing
+street** (the old importer never read `BillAddr.Line2`, #254). The seed copies that into a default
+"Billing" row, and every one of them would have collided with the import's real street.
+**The double now refuses what Postgres refuses** — every unique index from `20260911b` + `20260915`,
+with predicates, derived-and-compared against the migrations (§I) — and its negative controls
+reproduce both measured errors (F8, F9). **Red-first: 28 failures on the old writer, all #306's error.
+64/64 after. 7 mutants, 7 caught.**
+⚠️ **NOT PROVEN LIVE, AND IT CANNOT BE YET: `writeContactRecord` HAS NO CALLER** — no import screen
+reaches it (measured 2026-09-16). CARDS 7, 8, 9, 12 wait on that wiring, not on this fix.
