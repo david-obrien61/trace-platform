@@ -109,7 +109,7 @@
     two builds. **#325's hook runs `verify-handoff-retention` only and its header forbids a second
     check.** A real gap; the fix is a decision about where the check belongs.
 
-### 🟡 PUSHED, NOT MERGED — #333 (`feat/opening-stock-seed`, 2026-09-15)
+### 🟢 MERGED TO `main` — #333 (`feat/opening-stock-seed`, merged 2026-09-15 as `f5517b2`)
 
 - 🔴 **THE OPENING STOCK SEED — AN IMPORTED CATALOGUE BECOMES SELLABLE WITHOUT ANY NUMBER IN IT
   PRETENDING TO BE A COUNT.** BUILDER-COMPLETE, owner-proof **OWED**
@@ -140,7 +140,7 @@
   - ⚠️ **ORDER IS NOT REVERSIBLE: import first, seed last.** The panel says so in its own closing
     line rather than relying on the reader noticing.
 
-### 🟡 PUSHED, NOT MERGED — #331 (`fix/address-import-line2-shape`, 2026-09-15)
+### 🟢 MERGED TO `main` — #331 (`fix/address-import-line2-shape`, merged 2026-09-15 as `abd3c5a`)
 
 - 🔴 **THE ADDRESS IMPORT FIX, PART ① — #322 COUNTED THE DEFECT, THIS REPAIRS IT.** BUILDER-COMPLETE,
   owner-proof **OWED** (`qb-customer-import` CARDS 23 · 24 · 25 · 26, board 0 of 26).

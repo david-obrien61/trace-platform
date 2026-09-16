@@ -1,0 +1,19 @@
+{
+  "_what": "Archive entry HEADINGS that legitimately appear more than once in docs/handoff-archive.md, each with the reason. Asserted by scripts/verify-handoff-retention.mjs (check 3b).",
+
+  "_the_rule_being_declared_against": "An entry is moved to the archive VERBATIM, so one heading should appear exactly once. Two entries under one heading is normally the concurrent-merge defect: two branches each archived the same overflow entry, git auto-merged both insertions with no conflict, and the archive's entries-in == entries-out arithmetic broke with nothing on screen.",
+
+  "_why_this_check_exists_beside_check_3": "🔴 CHECK 3 COMPARES WHOLE ENTRY TEXT AND MISSED THIS DEFECT THREE TIMES IN ONE EVENING — the #327, #328 and #333 merges of 2026-09-15. In each, the duplicate was PARTIAL: the copy the merge inserted carried the heading and little else, while the original carried the full body. Normalised, one was a strict PREFIX of the other (1,029 chars against 3,498 for the #325 entry), so a whole-text comparison saw two DIFFERENT entries and passed. A duplicate that arrives TRUNCATED is still a duplicate, and the heading is the part that survives truncation — so the heading is what must be compared. Ledger #338.",
+
+  "_why_a_declaration_and_not_a_hardcoded_exemption": "The first version of check 3 compared headings alone and was abandoned because it cried wolf on the 2026-06-09 pair below. A hardcoded skip would fix that and teach nobody why. A declaration names the reason at the point of exception, and — unlike a skip — it ROTS LOUDLY: see below.",
+
+  "_this_list_prunes_itself": "The cap asserts these in the OTHER direction too: a declared heading that is NOT actually duplicated in the archive is STALE and FAILS THE BUILD. That is tech-debt #73's lesson — verify-universals' OWNER_ONLY_PENDING is a hardcoded gap list that only grows, six of nine entries went stale, and it prints on every run, which is how a gap list stops being read. A list that cannot rot is the fix.",
+
+  "_the_bar": "A heading is admissible here only if the entries under it are GENUINELY DIFFERENT WORK that happens to share a title — not one entry copied, and not one entry split. If one copy's body is a prefix or subset of the other's, it is the defect, not an exception.",
+
+  "_key_format": "The heading, normalised the way the checker normalises it: markdown emphasis characters (* _ `) removed, whitespace collapsed to single spaces, trimmed, lowercased.",
+
+  "declarations": {
+    "2026-06-09 — thunder: ignition os reality audit → std-010 + built-inventory update": "Two DIFFERENT sessions on 2026-06-09 reused one title. Bodies are 13,898 and 7,782 raw characters and describe different work — neither is a prefix or subset of the other. A same-day second session reusing a title is ordinary; this is real history, and the archive is append-and-preserve. This is the exact pair that made the first heading-level draft of this check cry wolf, which is why it is declared rather than skipped."
+  }
+}
