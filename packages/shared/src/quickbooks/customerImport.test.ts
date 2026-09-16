@@ -662,6 +662,23 @@ async function main() {
     '🔴 §J5b a customer carrying a HAND-ADDED phone is blocked and named — the undo never takes what a person typed');
 }
 
+// ══ §K #335 — THE CUSTOMERS-ONLY UNDO HAS NO ENTRY POINT ═════════════════════════════════
+// `undoCustomerImport` is a sequence of separate PostgREST calls. The only undo a caller can reach
+// must be the all-or-nothing one, so the router's customers-undo route goes to handleBooksUndo.
+{
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const router = readFileSync(join(process.cwd(), 'packages/cultivar-os/api/qbo/router.ts'), 'utf8');
+  const code = router.split('\n').filter(l => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n');
+  ok(/case 'customers-undo':\s*return handleBooksUndo\(req, res\);/.test(code),
+    '🔴 §K1 /api/qbo/customers/undo is served by the ONE undo (handleBooksUndo), not a customers-only sequence');
+  ok(!/undoCustomerImport/.test(code),
+    '🔴 §K2 no deployed route can call undoCustomerImport (the non-atomic undo) — it is referenced nowhere in the router');
+  ok(/case 'books-undo':\s*return handleBooksUndo\(req, res\);/.test(code), '§K3 (control) the books route is still wired, so K1 read a real dispatch');
+  const vercel = readFileSync(join(process.cwd(), 'vercel.json'), 'utf8');
+  ok(vercel.includes('_route=customers-undo'), '§K4 (control) the public URL still exists — it now reaches the atomic undo instead of 404ing a caller');
+}
+
 // ══ §J4 A NON-FK ERROR IS NOT A BLOCKED CUSTOMER ══════════════════════════════════════
 {
   // 🔴 THE DIFFERENCE BETWEEN "the database protected an order" AND "something went wrong".
