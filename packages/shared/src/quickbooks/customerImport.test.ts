@@ -817,53 +817,53 @@ async function main() {
 
   // ── ① `Line1` is already a street ────────────────────────────────────────────────────
   const n1 = at({ BillAddr: addr('1 Oak St'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n1.branch === 'line1-street' && n1.customer.address_line1 === '1 Oak St' && n1.customer.phone === '(512) 555-0101',
+  ok(n1.branch === 'line1-street' && n1.customer.billing_line1 === '1 Oak St' && n1.customer.phone === '(512) 555-0101',
     'N1 — a street in `Line1` is used as it stands, and the record\'s own phone is untouched (962 records)');
 
   const n2 = at({ BillAddr: addr('501 Shadow Glen', '(737) 555-0199'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n2.customer.address_line1 === '501 Shadow Glen',
+  ok(n2.customer.billing_line1 === '501 Shadow Glen',
     '🔴 N2 — THE BLANKET-RULE KILLER, DIRECTION ONE. `Line1` is a street and `Line2` is a PHONE (6 real records). A "Line2 is the street" implementation writes the phone number over a correct street here');
 
   const n3 = at({ BillAddr: addr('1250 W Parmer Ln', 'Bldg 1, Ste 320'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n3.customer.address_line1 === '1250 W Parmer Ln',
+  ok(n3.customer.billing_line1 === '1250 W Parmer Ln',
     '🔴 N3 — `Line2` is READ to choose a line, never APPENDED to one. `customers` has `billing_line2` and the party editor owns it; concatenating here would make this writer disagree with that one (3 real records)');
 
   // ── ③ `Line1` is a phone and `Line2` is the street — the repair ──────────────────────
   const n4 = at({ BillAddr: addr('(254) 555-0142', '2700 Ranch Road'), PrimaryPhone: { FreeFormNumber: '(254) 555-0142' } });
-  ok(n4.branch === 'line2-street' && n4.customer.address_line1 === '2700 Ranch Road',
+  ok(n4.branch === 'line2-street' && n4.customer.billing_line1 === '2700 Ranch Road',
     'N4 — a phone in `Line1` and a street in `Line2`: the STREET is taken from `Line2` (448 records)');
   ok(n4.customer.phone === '(254) 555-0142' && n4.phoneRescued === false,
     '🔴 N4b — the SAME number is already in `PrimaryPhone`, so nothing is rescued and nothing is lost. 474 of the 484 are this case, which is why the repair is cheap');
 
   const n5 = at({ BillAddr: addr('832-555-0177', '2700 Ranch Road') });
-  ok(n5.branch === 'line2-street' && n5.customer.address_line1 === '2700 Ranch Road' && n5.customer.phone === '832-555-0177' && n5.phoneRescued === true,
+  ok(n5.branch === 'line2-street' && n5.customer.billing_line1 === '2700 Ranch Road' && n5.customer.phone === '832-555-0177' && n5.phoneRescued === true,
     '🔴 N5 — KEEP THE PHONE. No `PrimaryPhone` and no `Mobile`, so the `Line1` number is the ONLY one this customer has: it lands in the empty `phone` column rather than being deleted along with the street move (2 real records)');
 
   const n6 = at({ BillAddr: addr('(213) 555-0188', '2700 Ranch Road'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n6.branch === 'phone-would-be-lost' && n6.customer.address_line1 === '(213) 555-0188',
+  ok(n6.branch === 'phone-would-be-lost' && n6.customer.billing_line1 === '(213) 555-0188',
     '🔴 N6 — THE COLLISION, AND THE PHONE WINS. `Line2` holds a street, but `Line1` holds a SECOND, DIFFERENT number and `customers` has one phone column. The record is left EXACTLY as today and counted, because recovering a street by deleting a phone number held nowhere else is not a repair (5 real records)');
   ok(n6.customer.phone === '(512) 555-0101',
-    '🔴 N6b — and the `PrimaryPhone` is NOT displaced by the one in the address. This probe is what a "just discard it" implementation fails: the second number is still on the row, in `address_line1`, where it was');
+    '🔴 N6b — and the `PrimaryPhone` is NOT displaced by the one in the address. This probe is what a "just discard it" implementation fails: the second number is still on the row, in `billing_line1` (was `address_line1`, ledger #335), where it was');
 
   // ── ④ `Line1` is a phone and there is no `Line2` — there is no street ────────────────
   const n7 = at({ BillAddr: addr('(512) 555-0133'), PrimaryPhone: { FreeFormNumber: '(512) 555-0133' } });
-  ok(n7.branch === 'no-street' && n7.customer.address_line1 === null,
-    '🔴 N7 — NOTHING IS INVENTED. A phone in `Line1` and no `Line2` means this customer HAS no street: `address_line1` is NULL, not the phone number and not an empty string (D-9 — an absent value must not read as a present one). 27 records');
+  ok(n7.branch === 'no-street' && n7.customer.billing_line1 === null,
+    '🔴 N7 — NOTHING IS INVENTED. A phone in `Line1` and no `Line2` means this customer HAS no street: `billing_line1` is NULL, not the phone number and not an empty string (D-9 — an absent value must not read as a present one). 27 records');
   const n8 = at({ BillAddr: addr('404 555-0121') });
-  ok(n8.branch === 'no-street' && n8.customer.address_line1 === null && n8.customer.phone === '404 555-0121' && n8.phoneRescued === true,
+  ok(n8.branch === 'no-street' && n8.customer.billing_line1 === null && n8.customer.phone === '404 555-0121' && n8.phoneRescued === true,
     'N8 — and the phone is still kept when there is no street to take at all (2 real records)');
 
   // ── ⑤ every other shape — left EXACTLY as today, and counted ─────────────────────────
   const n9 = at({ BillAddr: addr('(512) 555-0144', '(512) 555-0155') });
-  ok(n9.branch === 'unchanged' && n9.customer.address_line1 === '(512) 555-0144',
+  ok(n9.branch === 'unchanged' && n9.customer.billing_line1 === '(512) 555-0144',
     'N9 — two phones and no street anywhere: left exactly as the previous import left it (3 real records)');
 
   const n10 = at({ BillAddr: addr('(512) 555-0166 (cell 555-0167)', '2600 Round Rock Ave'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n10.branch === 'unchanged' && n10.customer.address_line1 === '(512) 555-0166 (cell 555-0167)',
+  ok(n10.branch === 'unchanged' && n10.customer.billing_line1 === '(512) 555-0166 (cell 555-0167)',
     '🔴 N10 — THE LIMIT OF THIS PASS, ASSERTED RATHER THAN ASSUMED. `Line1` is a phone WITH extra text, so the classifier answers `other`, and `other` is never a verdict — the record is left alone even though `Line2` plainly holds a street. 6 real records have a recoverable street this rule does NOT reach; widening the classifier is a different change, and this probe is what would break loudly if someone widened it without revisiting these counts');
 
   const n11 = at({ BillAddr: undefined });
-  ok(n11.branch === 'unchanged' && n11.customer.address_line1 === null && n11.customer.city === null,
+  ok(n11.branch === 'unchanged' && n11.customer.billing_line1 === null && n11.customer.billing_city === null,
     'N11 — no `BillAddr` object at all yields no address and no branch decision (499 records)');
 
   // ── the tally: a PARTITION, and a cross-cut that is not part of it ───────────────────
@@ -901,7 +901,7 @@ async function main() {
 
   // The resolver is pure and independently drivable — no record, no adapter, no IO.
   const direct = resolveBillingAddress({ BillAddr: addr('(254) 555-0142', '2700 Ranch Road') }, null);
-  ok(direct.address_line1 === '2700 Ranch Road' && direct.phone_from_line1 === '(254) 555-0142' && direct.branch === 'line2-street',
+  ok(direct.billing_line1 === '2700 Ranch Road' && direct.phone_from_line1 === '(254) 555-0142' && direct.branch === 'line2-street',
     'N18 — `resolveBillingAddress` is pure and takes the held phone as an argument, so every rule above is provable at a desk without building a customer record');
   ok(heldPhoneOf({ Mobile: { FreeFormNumber: '(512) 555-0102' } }) === '(512) 555-0102'
     && heldPhoneOf({ PrimaryPhone: { FreeFormNumber: '(512) 555-0101' }, Mobile: { FreeFormNumber: '(512) 555-0102' } }) === '(512) 555-0101',

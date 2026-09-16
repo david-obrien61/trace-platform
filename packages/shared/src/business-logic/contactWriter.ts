@@ -27,7 +27,8 @@
 //    normalisation has exactly one home. Sending it from here would be a second implementation of
 //    one rule, which is the STD-011 defect this whole build exists to remove.
 //
-// DEPENDENCIES: a supabase client passed in (never constructed here) + contactRecord (pure).
+// DEPENDENCIES: a supabase client passed in (never constructed here) + contactRecord (pure) +
+//               contactFields (the column lists).
 // OUTPUTS:      CONTACT_PHONE_COLUMNS · CONTACT_EMAIL_COLUMNS · CONTACT_ADDRESS_READ_COLUMNS ·
 //               planContactRows · reconcileContactRows · writeContactRecord
 // ============================================================
@@ -35,20 +36,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContactRecord } from './contactRecord';
 import { addressKey, normalizeEmailValue, normalizePhoneValue } from './contactRecord';
+import { CONTACT_ADDRESS_READ_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_PHONE_COLUMNS } from './contactFields';
 
 // STD-003: ON by default until OWNER-PROVEN. Do not comment out (§7 standing instruction).
 const TRACE_CONTACT = true;
 
-/** The columns read back after a write. Hand-written ONCE, here, and asserted against the
- *  migration by `contactRecord.test.ts` — #179's lesson: a declarative list that does not match
- *  what its migration creates is invisible to tsc, eslint, knip and every probe. */
-export const CONTACT_PHONE_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active';
-export const CONTACT_EMAIL_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active';
-
-/** What the already-held check reads from `customer_addresses`. NARROW on purpose — not the
- *  interactive path's `CUSTOMER_ADDRESS_COLUMNS`, which predates `source` and `kind` (20260915).
- *  Asserted against the migrations by `contactWriter.test.ts` §E4. */
-export const CONTACT_ADDRESS_READ_COLUMNS = 'id,label,kind,line1,city,zip,is_default,source';
+// The column lists live in `contactFields.ts` — `verify-field-lists` counts a list declared beside
+// its reader as hand-written, and an imported one as derived (the `customerAddressFields.ts` shape).
+export { CONTACT_PHONE_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS };
 
 export interface ContactRowPlan {
   phones: Record<string, unknown>[];
