@@ -3,7 +3,8 @@
 //   file instead of from a live connection. David must be able to see exactly what Lauren will
 //   see — same screens, same order, same sentences — without being the first person to run the
 //   import against LAWNS, because if he runs it first there is nothing left for her to show him.
-// DEPENDENCIES: ./qboRead (QBO_ENTITIES · qboCountQuery · parseCount · parseRows · completeness).
+// DEPENDENCIES: ./qboRead (QBO_ENTITIES · isCountQueryFor · queryAskedForInactive · parseCount ·
+//   parseRows · completeness).
 //   Pure: no db, no network, no env, no clock it did not receive, no DOM.
 // OUTPUTS: CaptureReplay · ReplayRefusal · ReplayResult · readCaptureFile · REPLAY_SOURCE.
 //
@@ -37,11 +38,11 @@
 // `select count(*)` response into `pages` alongside the row pages. Parsing it as rows yields
 // zero rows and would therefore be SILENT — it would not break anything, it would just make
 // every re-count one page's worth of nothing. It is identified by its DERIVED query string
-// (`qboCountQuery(entity)`), never by its position in the array, because position is an
+// (`isCountQueryFor(entity, query)`), never by its position in the array, because position is an
 // assumption about a writer this module does not control.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  QBO_ENTITIES, qboCountQuery, parseCount, parseRows, completeness,
+  QBO_ENTITIES, isCountQueryFor, queryAskedForInactive, parseCount, parseRows, completeness,
   type QboEntity,
 } from './qboRead';
 
@@ -77,6 +78,13 @@ export interface CaptureReplay {
   rowBodies: string[];
   /** Row pages only — the count page is excluded, so this is not `pages.length`. */
   rowPageCount: number;
+  /**
+   * 🔴 DID THE READ THAT MADE THIS FILE ASK FOR INACTIVE RECORDS? (#341) `false` means the file is
+   * complete about ACTIVE records only — anything the owner had made inactive before it was saved
+   * is missing and nothing in its rows says so. `null` for a transaction, where it does not apply.
+   * Read off the saved COUNT query, which is the only evidence the file carries.
+   */
+  askedForInactive: boolean | null;
 }
 
 export type ReplayResult = CaptureReplay | ReplayRefusal;
@@ -118,9 +126,10 @@ export function readCaptureFile(parsed: unknown): ReplayResult {
   }
 
   // ── ① split the count page off the row pages, by DERIVED QUERY, never by position ──
-  const countQuery = qboCountQuery(ent);
-  const countPages = pages.filter(p => isObj(p) && p.query === countQuery);
-  const rowPages   = pages.filter(p => isObj(p) && p.query !== countQuery);
+  // Matched on SHAPE, not on today's exact wording: files saved before #341 carry a count query
+  // with no `where Active` clause, and they are still valid reads of what they asked for.
+  const countPages = pages.filter(p => isObj(p) && isCountQueryFor(ent, p.query));
+  const rowPages   = pages.filter(p => isObj(p) && !isCountQueryFor(ent, p.query));
 
   if (countPages.length === 0) {
     return refuse('NO_COUNT_PAGE',
@@ -183,5 +192,6 @@ export function readCaptureFile(parsed: unknown): ReplayResult {
     retrievedTotal: retrieved,
     rowBodies,
     rowPageCount: rowBodies.length,
+    askedForInactive: queryAskedForInactive(ent, (countPages[0] as Record<string, unknown>).query),
   };
 }

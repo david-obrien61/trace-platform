@@ -54,6 +54,7 @@
 // implementation R-27 forbids; adding one to `unitOfMeasure.ts` is how the vocabulary grows.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { QboItemRow } from './itemList';
+import { isRetired } from './qboRead';
 import { parseUnitOfMeasure } from '../inventory/unitOfMeasure';
 import { findShapeCollisions } from '../inventory/shapeCollision';
 import type { IncomingItem } from '../inventory/retireAndReplace';
@@ -106,6 +107,8 @@ export interface AdaptedItemList {
     readIn: number;
     /** `Type: 'Category'` — the hierarchy, excluded. */
     categories: number;
+    /** `Active: false` — made inactive by the owner in QuickBooks, excluded (#341). */
+    retired: number;
     /** What an invoice line can point at, and what becomes a catalogue row. */
     sellable: number;
     sized: number;
@@ -264,12 +267,19 @@ export function readProductFromDescription(raw: string | null | undefined): Prod
  */
 export function adaptQboItems(rows: QboItemRow[]): AdaptedItemList {
   const items: AdaptedItem[] = [];
-  let categories = 0;
+  let categories = 0, retired = 0;
 
   for (const row of rows) {
     // Case-insensitive: comparing against Intuit's casing is the bug class `normalizeSize` exists
     // for, and `summariseItems` already counts categories this exact way.
     if ((row.type ?? '').toLowerCase() === 'category') { categories++; continue; }
+    // 🔴 AN ITEM THE OWNER MADE INACTIVE IS NOT PUT BACK IN HER CATALOGUE (#341). Until #341 the
+    // read never returned one, so this filter preserves the import exactly as it behaved. Without
+    // it, asking QuickBooks for inactive items would re-create every product she retired — and the
+    // collisions below would report the duplicates she FIXED as still colliding, because the
+    // retired half of each pair would be back in the comparison. Retiring the duplicate is how
+    // QuickBooks resolves one; a report that cannot see that punishes the owner for following it.
+    if (isRetired(row)) { retired++; continue; }
 
     const read = readProductFromDescription(row.description);
     items.push({
@@ -314,6 +324,7 @@ export function adaptQboItems(rows: QboItemRow[]): AdaptedItemList {
     counts: {
       readIn: rows.length,
       categories,
+      retired,
       sellable: items.length,
       sized,
       notStated,

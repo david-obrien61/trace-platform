@@ -38,6 +38,7 @@ import { parseItemList, summariseItems, type QboItemRow, type ItemBreakdown } fr
 import { parseCustomerList, summariseCustomers, previewCustomers,
          type QboCustomerRow, type CustomerBreakdown } from './customerList';
 import { parseInvoiceList, summariseInvoices, type InvoiceBreakdown } from './invoiceList';
+import { summariseTransactions, type TransactionBreakdown } from './transactionList';
 
 /**
  * The keys each entity's LIVE payload carries, as data, so a probe can hold this file to it.
@@ -53,6 +54,12 @@ export const PROJECTED_KEYS = {
   Item:     ['items', 'breakdown'],
   Customer: ['breakdown', 'preview'],
   Invoice:  ['breakdown'],
+  // The five transaction reads (#341) carry a breakdown only, for the invoice's reason.
+  Estimate:      ['breakdown'],
+  Payment:       ['breakdown'],
+  SalesReceipt:  ['breakdown'],
+  CreditMemo:    ['breakdown'],
+  RefundReceipt: ['breakdown'],
 } as const;
 
 /**
@@ -75,7 +82,7 @@ export interface ProjectedRead {
   pages_fetched: number;
   /** Item only — see the asymmetry note above. */
   items?: QboItemRow[];
-  breakdown: ItemBreakdown | CustomerBreakdown | InvoiceBreakdown;
+  breakdown: ItemBreakdown | CustomerBreakdown | InvoiceBreakdown | TransactionBreakdown;
   /** Customer only. */
   preview?: QboCustomerRow[];
   /** Stated, never assumed: reading a file persists nothing, exactly as the live read does not. */
@@ -152,6 +159,12 @@ export function projectCapture(replay: CaptureReplay): ProjectedRead {
     const customers = replay.rowBodies.flatMap(raw => parseCustomerList(raw).customers);
     return { ...base, breakdown: summariseCustomers(customers), preview: previewCustomers(customers) };
   }
-  const invoices = replay.rowBodies.flatMap(raw => parseInvoiceList(raw).invoices);
-  return { ...base, breakdown: summariseInvoices(invoices) };
+  if (replay.entity === 'Invoice') {
+    const invoices = replay.rowBodies.flatMap(raw => parseInvoiceList(raw).invoices);
+    return { ...base, breakdown: summariseInvoices(invoices) };
+  }
+  // 🔴 AN EXPLICIT BRANCH, NOT THE FALL-THROUGH (#341). Before this, anything that was not an Item
+  // or a Customer was parsed AS AN INVOICE — a saved payment list would have projected as zero
+  // invoices, a true-looking answer about the wrong question.
+  return { ...base, breakdown: summariseTransactions(replay.rowBodies, replay.entity) };
 }

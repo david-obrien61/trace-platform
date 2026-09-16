@@ -232,5 +232,33 @@ function replay(entity: Ent, n: number): CaptureReplay {
     '🔴 every entity projects `capture` — the live handlers all return `capture: done.capture`, and a key common to all three is invisible to a witness made of differences');
 }
 
+// ── §Z 🔴 #341 — A TRANSACTION FILE IS NOT PROJECTED AS INVOICES ────────────────────────────
+{
+  const payFile = {
+    entity: 'Payment', realm_id: '9341455222430707', queried_at: '2026-09-16T10:00:00.000Z',
+    expected_total: 2, retrieved_total: 2, complete: true,
+    pages: [
+      { query: qboCountQuery('Payment'), start_position: 0, http_status: 200,
+        body: JSON.stringify({ QueryResponse: { totalCount: 2 } }) },
+      { query: 'select * from Payment startposition 1 maxresults 1000', start_position: 1, http_status: 200,
+        body: JSON.stringify({ QueryResponse: { Payment: [
+          { Id: '1', TxnDate: '2026-05-01', TotalAmt: 150.5, Line: [{ LinkedTxn: [{ TxnId: '9', TxnType: 'Invoice' }] }] },
+          { Id: '2', TxnDate: '2026-06-02' },
+        ] } }) },
+    ],
+  };
+  const r = readCaptureFile(payFile);
+  ok(r.ok === true, 'a payment capture passes the gate');
+  if (r.ok) {
+    const p = projectCapture(r);
+    const b = p.breakdown as unknown as Record<string, unknown>;
+    ok(b.entity === 'Payment' && b.total === 2,
+      '🔴 a payment file projects as PAYMENTS — the old fall-through parsed it as invoices and reported zero of them');
+    ok(b.amountTotal === 150.5 && b.withAmount === 1, 'money is summed over the readable totals only; a missing total is not $0');
+    ok(b.linkedToAnInvoice === 1, 'a payment applied to an invoice is counted as linked');
+    ok(!('invoices' in b), 'and it carries no invoice breakdown keys');
+  }
+}
+
 console.log(`\n  captureProjection — ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

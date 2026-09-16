@@ -40,6 +40,11 @@ export const WALK_TITLE: Record<QboEntity, string> = {
   Item:     'Your products & services',
   Customer: 'Your customers',
   Invoice:  'Your invoice history',
+  Estimate:      'Your estimates',
+  Payment:       'Your payments received',
+  SalesReceipt:  'Your sales receipts',
+  CreditMemo:    'Your credit memos',
+  RefundReceipt: 'Your refunds',
 };
 
 export interface WalkState {

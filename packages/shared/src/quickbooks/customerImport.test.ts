@@ -906,6 +906,26 @@ async function main() {
 
 } // end main
 
+// ══ §Z 🔴 #341 — A RETIRED CUSTOMER IS NOT IMPORTED, AND THE AUDIT STILL SEES IT ═════════════
+{
+  const a = adaptCustomers([body([
+    person({ Id: '1' }),
+    person({ Id: '2', Active: false, DisplayName: 'Merged Away', PrimaryEmailAddr: { Address: 'gone@example.com' },
+             ShipAddr: { Line1: '9 Elm St' } }),
+  ])]);
+  ok(a.customers.length === 1 && a.customers[0].qb_customer_id === '1',
+    '§Z 🔴 an Active:false customer is NOT imported — importing it would reopen every record the owner merged or hid');
+  ok(a.skipped.some(s => s.reason.includes('inactive') && s.count === 1),
+    '§Z and it is COUNTED under a named reason, never silently dropped');
+  const allActive = adaptCustomers([body([person({ Id: '1' }), person({ Id: '2' })])]);
+  ok(allActive.customers.length === 2 && !allActive.skipped.some(s => s.reason.includes('inactive')),
+    '§Z negative control — the same two records, both active, both import and nothing is skipped');
+  const retiredOnlyField = adaptCustomers([body([person({ Id: '2', Active: false, ShipAddr: { Line1: '9 Elm St' } })])]);
+  const heard = JSON.stringify(retiredOnlyField.fieldAudit);
+  ok(heard.includes('ShipAddr.Line1'),
+    '§Z 🔴 the field audit still sees a field carried ONLY by a retired record — it asks what QuickBooks sent, not what we kept');
+}
+
 main().then(() => {
   console.log(`\n  customerImport: ${passed} passed, ${failed} failed`);
   if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }

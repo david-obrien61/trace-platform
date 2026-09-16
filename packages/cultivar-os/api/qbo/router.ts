@@ -11,6 +11,8 @@
  *   GET  /api/qbo/items     → _route=items      (READ-ONLY, paginated, complete)
  *   GET  /api/qbo/customers → _route=customers  (READ-ONLY, paginated, complete)
  *   GET  /api/qbo/invoices  → _route=invoices   (READ-ONLY, paginated, complete, ceiling-capped)
+ *   GET  /api/qbo/estimates|payments|sales-receipts|credit-memos|refund-receipts
+ *                           → _route=<same>     (READ-ONLY, paginated, complete, ceiling-capped — #341)
  *   GET  /api/qbo/deliveries/preview → _route=deliveries-preview (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
  *   GET  /api/qbo/orders/preview     → _route=orders-preview  (READ-ONLY — plans, writes nothing)
@@ -33,11 +35,13 @@ import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 import { readQBSecrets, writeQBSecrets, QBO_CONNECTION_COLUMNS } from '../../../shared/src/quickbooks/secrets';
 import {
   type QboEntity, QBO_PAGE_SIZE, maxPagesFor, ceilingCheck,
-  qboCountQuery, qboPageQuery, parseCount, pageIsLast, completeness, classifyFailure,
+  qboCountQuery, qboPageQuery, parseCount, parseRows, pageIsLast, completeness, classifyFailure,
+  QBO_MINOR_VERSION, qboRequestParams, QBO_TRANSACTION_ENTITIES, QBO_ROUTE,
 } from '../../../shared/src/quickbooks/qboRead';
 import { parseItemList, summariseItems } from '../../../shared/src/quickbooks/itemList';
 import { parseCustomerList, summariseCustomers, previewCustomers } from '../../../shared/src/quickbooks/customerList';
 import { parseInvoiceList, summariseInvoices } from '../../../shared/src/quickbooks/invoiceList';
+import { summariseTransactions, countWithCustomFields } from '../../../shared/src/quickbooks/transactionList';
 import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest';
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
@@ -273,7 +277,7 @@ async function handleCallback(req: any, res: any) {
   let companyName = 'QuickBooks';
   try {
     const infoResp = await fetch(
-      `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=65`,
+      `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=${QBO_MINOR_VERSION}`,
       { headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: 'application/json' } },
     );
     if (infoResp.ok) {
@@ -438,6 +442,12 @@ interface CapturedPage {
   query: string;
   start_position: number;
   http_status: number;
+  /**
+   * The query-string tail the request carried (`minorversion=75&include=…`). 🔴 RECORDED BECAUSE
+   * AN EMPTY FIELD MEANS NOTHING WITHOUT IT (#341): an invoice with no custom fields reads the same
+   * whether the business has none or the request never asked for them, and only this says which.
+   */
+  request_params: string;
   /** Intuit's response text, UNTOUCHED. Never re-shaped, never parsed on the way in. */
   body: string;
 }
@@ -496,11 +506,11 @@ async function openQboRead(req: any, res: any, entity: QboEntity):
 }
 
 /** One GET against `/query`. Returns the status and the VERBATIM text, always both. */
-async function qboQuery(realmId: string, token: string, query: string):
+async function qboQuery(realmId: string, token: string, query: string, params: string):
   Promise<{ status: number; body: string } | { networkError: string }> {
   try {
     const resp = await fetch(
-      `${QBO_API_BASE}/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`,
+      `${QBO_API_BASE}/${realmId}/query?query=${encodeURIComponent(query)}&${params}`,
       { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
     );
     // Read as text before anything else looks at it: on failure this body IS the artifact worth
@@ -527,16 +537,17 @@ async function readAllPages(
   const { realmId, token } = opened;
   const queriedAt = new Date().toISOString();
   const pages: CapturedPage[] = [];
+  const params = qboRequestParams(entity);
 
   // ── ① THE COUNT, FIRST, SO COMPLETENESS IS PROVABLE ───────────────────────
   const countQuery = qboCountQuery(entity);
-  const countResp = await qboQuery(realmId, token, countQuery);
+  const countResp = await qboQuery(realmId, token, countQuery, params);
   if ('networkError' in countResp) {
     console.log('[TRACE:QBO] count — request to Intuit did not complete', { entity, realmId, message: countResp.networkError });
     res.status(502).json({ error: 'The request to QuickBooks did not complete.', code: 'UPSTREAM_UNREACHABLE', detail: countResp.networkError });
     return null;
   }
-  pages.push({ query: countQuery, start_position: 0, http_status: countResp.status, body: countResp.body });
+  pages.push({ query: countQuery, start_position: 0, http_status: countResp.status, request_params: params, body: countResp.body });
   if (countResp.status < 200 || countResp.status >= 300) {
     const note = classifyFailure(countResp.status);
     console.log('[TRACE:QBO] count — Intuit refused the read', { entity, realmId, http_status: countResp.status, points_at: note.points_at, raw_bytes: countResp.body.length });
@@ -579,7 +590,7 @@ async function readAllPages(
   let start = 1;
   for (let page = 1; page <= pageCeiling; page++) {
     const q = qboPageQuery(entity, start);
-    const resp = await qboQuery(realmId, token, q);
+    const resp = await qboQuery(realmId, token, q, params);
     if ('networkError' in resp) {
       console.log('[TRACE:QBO] page — request to Intuit did not complete', { entity, realmId, page, retrieved, message: resp.networkError });
       res.status(502).json({
@@ -590,7 +601,7 @@ async function readAllPages(
       });
       return null;
     }
-    pages.push({ query: q, start_position: start, http_status: resp.status, body: resp.body });
+    pages.push({ query: q, start_position: start, http_status: resp.status, request_params: params, body: resp.body });
 
     if (resp.status < 200 || resp.status >= 300) {
       const note = classifyFailure(resp.status);
@@ -669,6 +680,7 @@ async function handleItems(req: any, res: any) {
     expected: walked.expected, retrieved: items.length,
     categories: breakdown.categories, sellable: breakdown.sellable,
     has_item_id_1: breakdown.itemId1 !== null, income_accounts: breakdown.byIncomeAccount.length,
+    inactive: breakdown.inactive,
   });
 
   return res.status(200).json({
@@ -702,6 +714,7 @@ async function handleCustomers(req: any, res: any) {
     expected: walked.expected, retrieved: customers.length,
     with_email: breakdown.withEmail, with_phone: breakdown.withPhone, with_address: breakdown.withAddress,
     shared_emails: breakdown.byEmail.sharedValues, shared_phones: breakdown.byPhone.sharedValues,
+    inactive: breakdown.inactive,
   });
 
   return res.status(200).json({
@@ -732,6 +745,7 @@ async function handleInvoices(req: any, res: any) {
   if (!done) return;
 
   const breakdown = summariseInvoices(invoices);
+  const customFieldsPresent = countWithCustomFields(walked.rows, 'Invoice');
   // Counts and dates only. `QboInvoiceRow` has no customer NAME field at all, so nothing
   // personal can reach this line even by accident (R-24 clause c).
   console.log('[TRACE:QBO] invoices — read COMPLETE', {
@@ -741,6 +755,7 @@ async function handleInvoices(req: any, res: any) {
     lines: breakdown.linesTotal, lines_with_item: breakdown.linesWithItemRef,
     lines_on_item_1: breakdown.linesOnItemId1, distinct_items: breakdown.distinctItemsSold,
     total_qty: breakdown.totalQtySold, distinct_customers: breakdown.distinctCustomers,
+    custom_fields_present: customFieldsPresent,
   });
 
   return res.status(200).json({
@@ -748,10 +763,51 @@ async function handleInvoices(req: any, res: any) {
     expected_total: walked.expected, retrieved_total: invoices.length, complete: true,
     pages_fetched: walked.pages.length - 1,
     breakdown,
+    // Asked WITH `include=enhancedAllCustomFields`, so 0 here now means none (#341).
+    custom_fields_present: customFieldsPresent,
     stored: false,
     capture: done.capture,
   });
 }
+
+// 🔴 THE FIVE TRANSACTION TYPES THE PREVIEW NEVER READ (#341) — ONE HANDLER, SHAPED LIKE THE
+// INVOICE ONE FOR THE INVOICE'S REASON: a payment names who paid and a refund names who was paid
+// back, so only COUNTS, MONEY and DATES leave this function. The verbatim bodies go to the
+// operator's file and nowhere else. Nothing here decides what these records do to a finding — a
+// refund netting against the sale it reverses is a ruling, and it is not taken on a read path.
+async function handleTransactions(req: any, res: any, entity: QboEntity) {
+  const walked = await readAllPages(req, res, entity, raw => {
+    const p = parseRows(raw, entity);
+    return { ok: p.ok, count: p.rows.length, parseError: p.parseError };
+  });
+  if (!walked) return;
+
+  const retrieved = walked.rows.reduce((n, raw) => n + parseRows(raw, entity).rows.length, 0);
+  const done = completenessOrRefuse(res, entity, walked.realmId, walked.queriedAt, walked.expected, retrieved, walked.pages);
+  if (!done) return;
+
+  const breakdown = summariseTransactions(walked.rows, entity);
+  console.log('[TRACE:QBO] transactions — read COMPLETE', {
+    entity, expected: walked.expected, retrieved,
+    with_amount: breakdown.withAmount, amount_total: breakdown.amountTotal,
+    earliest: breakdown.dateRange.earliest, latest: breakdown.dateRange.latest,
+    linked_to_invoice: breakdown.linkedToAnInvoice, custom_fields_present: breakdown.withCustomFields,
+  });
+
+  return res.status(200).json({
+    ok: true, entity, realm_id: walked.realmId, queried_at: walked.queriedAt,
+    expected_total: walked.expected, retrieved_total: retrieved, complete: true,
+    pages_fetched: walked.pages.length - 1,
+    breakdown,
+    stored: false,
+    capture: done.capture,
+  });
+}
+
+/** `_route` word → transaction entity, derived from the one route map so the two cannot drift. */
+const TRANSACTION_BY_ROUTE: Record<string, QboEntity> = Object.fromEntries(
+  QBO_TRANSACTION_ENTITIES.filter(e => e !== 'Invoice').map(e => [QBO_ROUTE[e], e]),
+);
 
 // ─── ShipDate → deliveries ────────────────────────────────────────────────────
 //
@@ -1326,7 +1382,10 @@ export default async function handler(req: any, res: any) {
     case 'customers-preview':  return handleCustomersPreview(req, res);
     case 'customers-ingest':   return handleCustomersIngest(req, res);
     case 'customers-undo':     return handleCustomersUndo(req, res);
-    default:
+    default: {
+      const txn = TRANSACTION_BY_ROUTE[route];
+      if (txn) return handleTransactions(req, res, txn);
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
+    }
   }
 }

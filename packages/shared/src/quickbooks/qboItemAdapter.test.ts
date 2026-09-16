@@ -283,5 +283,26 @@ const it = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow =
      '§I 🔴 a FRONT-loaded size is not read — a named shortfall, not a silent one');
 }
 
+// ══ §J 🔴 #341 — A RETIRED ITEM IS NOT PUT BACK IN THE CATALOGUE ════════════════════════════
+// The read now returns items the owner made inactive. Each probe fails if the adapter lets one in.
+{
+  const rows = [
+    it('756', 'Lacey Oak 45G', { description: 'Lacey Oak 45 Gallon', unitPrice: 1250 }),
+    it('76',  'Lacey Oak 45G', { description: 'Lacey Oak 45 Gallon', unitPrice: 375, type: 'Service', active: false }),
+    it('900', 'Ghost', { description: 'Something Else 5 Gallon', active: null }),
+  ];
+  const a = adaptQboItems(rows);
+  ok(a.counts.retired === 1, '§J an Active:false item is COUNTED as retired');
+  ok(!a.items.some(i => i.qboId === '76'), '§J 🔴 and is NOT a catalogue row — re-creating what the owner retired would undo her clean-up');
+  ok(a.collisions.length === 0,
+    '§J 🔴 A PAIR WHOSE DUPLICATE WAS RETIRED NO LONGER COLLIDES — retiring it is how QuickBooks resolves one, and reporting it still colliding punishes the fix');
+  ok(a.items.some(i => i.qboId === '900'), '§J an item whose flag is UNREAD is kept — absence is not evidence of retirement');
+  ok(a.counts.sellable === a.items.length && a.counts.readIn === rows.length,
+    '§J readIn still counts everything read; sellable counts only what became a row');
+  const both = adaptQboItems([rows[0], { ...rows[1], active: true }]);
+  ok(both.collisions.length === 1 && both.collisions[0].pricesDiffer,
+    '§J negative control — the SAME pair with both active DOES collide, so the probe above measured the filter');
+}
+
 console.log(`\nqboItemAdapter — ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

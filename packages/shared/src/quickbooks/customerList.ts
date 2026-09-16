@@ -28,7 +28,7 @@
 //      by construction (clause c).
 // ══════════════════════════════════════════════════════════════════════════════
 
-import { parseRows } from './qboRead';
+import { parseRows, isRetired } from './qboRead';
 
 /**
  * One customer, reduced to what the two questions need: field coverage, and duplicate sizing.
@@ -187,11 +187,15 @@ export function summariseCustomers(customers: QboCustomerRow[]): CustomerBreakdo
     if (!c.email && !c.phone && !c.address) withNoContactAtAll++;
     if (c.active === false) inactive++;
   }
+  // 🔴 DUPLICATES ARE MEASURED OVER THE ACTIVE LIST ONLY (#341). Making the duplicate record
+  // inactive is how an owner resolves one in QuickBooks; counting it again would report her fix as
+  // the problem it fixed. The coverage counts above stay over everything read.
+  const live = customers.filter(c => !isRetired(c));
   return {
     total: customers.length,
     withEmail, withPhone, withAddress, withCompanyName, withNoContactAtAll, inactive,
-    byEmail: tally(customers.map(c => normEmail(c.email))),
-    byPhone: tally(customers.map(c => normPhone(c.phone))),
+    byEmail: tally(live.map(c => normEmail(c.email))),
+    byPhone: tally(live.map(c => normPhone(c.phone))),
   };
 }
 

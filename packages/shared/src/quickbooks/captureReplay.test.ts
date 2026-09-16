@@ -79,7 +79,8 @@ const file = (entity: 'Item' | 'Customer' | 'Invoice', total: number, rows: numb
   ok(notCapture.ok === false && notCapture.code === 'NOT_A_CAPTURE', 'JSON that is not a capture envelope is refused separately');
   const noEntity = readCaptureFile({ ...file('Item', 1, [1]), entity: undefined });
   ok(noEntity.ok === false && noEntity.code === 'UNKNOWN_ENTITY', 'a file that does not say what it holds is refused');
-  const wrongEntity = readCaptureFile({ ...file('Item', 1, [1]), entity: 'Payment' });
+  // `Vendor`, not `Payment`: Payment became a read entity in #341, so it no longer tests the refusal.
+  const wrongEntity = readCaptureFile({ ...file('Item', 1, [1]), entity: 'Vendor' });
   ok(wrongEntity.ok === false && wrongEntity.code === 'UNKNOWN_ENTITY', 'an entity this platform does not read is refused, not guessed at');
   const noPages = readCaptureFile({ ...file('Item', 1, [1]), pages: [] });
   ok(noPages.ok === false && noPages.code === 'NO_PAGES', 'an empty pages array is refused');
@@ -176,6 +177,24 @@ const file = (entity: 'Item' | 'Customer' | 'Invoice', total: number, rows: numb
   }), '🔴 every capture the gate ACCEPTS has expectedTotal === retrievedTotal — the completeness refusal makes any other pair unreachable');
   ok(readCaptureFile(file('Item', 685, [600], { retrieved_total: 600 })).ok === false,
     'and a pair that differs is refused rather than returned, which is what makes the invariant hold');
+}
+
+// ── §Z 🔴 #341 — FILES SAVED BEFORE AND AFTER THE QUERY CHANGED ─────────────────────────────
+{
+  const legacy = file('Item', 2, [2]);
+  (legacy.pages[0] as { query: string }).query = 'select count(*) from Item';
+  const r = readCaptureFile(legacy);
+  ok(r.ok === true, '🔴 a file saved with the PRE-#341 count query still loads — the 2026-09-10 file must stay readable');
+  ok(r.ok && r.askedForInactive === false,
+    '🔴 and it says it asked for ACTIVE records only — nothing in its rows could say so');
+  const current = readCaptureFile(file('Item', 2, [2]));
+  ok(current.ok && current.askedForInactive === true, 'a file saved with the current query says it asked for inactive records too');
+  const inv = readCaptureFile(file('Invoice', 1, [1]));
+  ok(inv.ok && inv.askedForInactive === null, 'an invoice file says NULL — the question does not apply, and null is not false');
+  const wrongCount = file('Item', 2, [2]);
+  (wrongCount.pages[0] as { query: string }).query = 'select count(*) from Customer';
+  const w = readCaptureFile(wrongCount);
+  ok(w.ok === false && w.code === 'NO_COUNT_PAGE', 'a count page for ANOTHER entity is not accepted as this file\'s count');
 }
 
 console.log(`\n  captureReplay — ${passed} passed, ${failed} failed`);
