@@ -3785,3 +3785,5 @@ nothing in the repository settles which one it is, because the path has never be
 starting number is the scope creep that makes a diff unreviewable — and every option above is a
 decision about what the undo MEANS, which is David's.
 
+
+## #305 — ⏳ RESERVED 2026-09-16 (ledger #335) — the legacy-address guard is blind to a DISAGREEING pair; entry follows in this branch
