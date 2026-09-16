@@ -1,9 +1,19 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260911b — THE SHIP-TO ADDRESS BOOK (`customer_addresses`) · D-41's L2 HOOK · ledger #303
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it, in the SQL EDITOR — never the table editor (§6 r17:
--- a table created in the table editor is owned by `supabase_admin`, whose default ACL hands `anon`
--- TRUNCATE and REFERENCES, and TRUNCATE is outside row-level security entirely).
+-- ✅ APPLIED 2026-09-12 BY DAVID, in the SQL editor — board CARD 1 `covered`, and CARD 3 verified the
+-- result against the catalog: 14 columns · RLS on · exactly three policies naming `customers:*` and
+-- no `owner_id` · two UNIQUE partial indexes · 0 rows · no LEAK row.
+-- ✏️ CORRECTED 2026-09-15 (ledger #337 · R-158, reserved on `origin/docs/r158-correct-the-row` as
+-- ledger #334). 🔴 THIS LINE READ "WRITTEN, NOT APPLIED. David applies it" FOR THREE DAYS AFTER IT
+-- WAS APPLIED, and it is the reason three separate sessions opened believing this table did not
+-- exist. Only the COMMENT is corrected — not one character of SQL below §1 is touched (§6 r1: a
+-- migration that has run is never amended, and the header saying so wrongly is precisely why).
+--
+-- ⚠️ THE APPLY INSTRUCTION IS KEPT BELOW AS THE RECORD OF HOW IT WAS RUN, NOT AS AN OUTSTANDING
+-- TASK: it was applied in the SQL EDITOR — never the table editor (§6 r17: a table created in the
+-- table editor is owned by `supabase_admin`, whose default ACL hands `anon` TRUNCATE and
+-- REFERENCES, and TRUNCATE is outside row-level security entirely).
 --
 -- ── WHAT THIS IS ────────────────────────────────────────────────────────────────────────────
 -- D-41 (David, 2026-07-16) ruled the address model and named this table in the same breath:
