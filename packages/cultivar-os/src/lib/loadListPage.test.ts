@@ -55,14 +55,41 @@ function ok(cond: boolean, msg: string): void {
     ok(src.includes(`${bucket}.map(`),
       `🔴 A: the page RENDERS ${bucket} — a bucket the model fills and the page ignores is the same omission, one layer out`);
   }
-  ok(/model\.unresolved\.length > 0 \?/.test(src),
+  // ✏️ A6's pattern widened 2026-09-16 (ledger #343): the block now also opens for unknown fence stops.
+  ok(/model\.unresolved\.length > 0 \|\| model\.deerFenceUnknownStops > 0 \?/.test(src),
     'A6: the unresolved block is rendered when there is anything in it (P1 mutates exactly this)');
   ok(/model\.unreadStops > 0 \?/.test(src),
     '🔴 A7: a day containing a withheld or unreadable stop warns at the TOP that the list may be short');
   ok(/model\.totalsAreFloors \?/.test(src),
     '🔴 A8: the FLOOR warning is rendered — otherwise a partial T-post total prints as a complete one');
-  ok(/deerFenceGap/.test(src) && /deerFence95Open/.test(src),
-    '🔴 A9: the deer-fence gap AND the open 95 gallon question are both on the page');
+  // ✏️ A9 CHANGED 2026-09-16 (ledger #343). It asserted the page printed `deerFence95Open` — the
+  // "does a 95 gallon need 4 more?" question. The in-total wording of David's rule settles it (a
+  // tree already carrying 4 takes none), so that sentence is gone and the page prints the in-total
+  // figure instead — and lists the unknown fence stops on the UNRESOLVED block.
+  ok(/deerFenceGap/.test(src) && /deerFenceTotal\(/.test(src),
+    '🔴 A9: the deer-fence gap AND the in-total fence figure are both on the page');
+  ok(!/deerFence95Open/.test(code), 'A9b (negative): the settled 95 gallon question is no longer printed as open');
+  ok(/model\.deerFenceUnknownStops > 0/.test(src),
+    '🔴 A10: stops whose fence is unknown are printed on the UNRESOLVED block, counted');
+  ok(/model\.offLadderTreeCount > 0 \?/.test(src) && /model\.noVolumeTrees\.length > 0 \?/.test(src),
+    '🔴 A11: off-ladder trees and sizes with no volume are both printed — counted, never silently dropped');
+}
+
+// ══ §S THE SIZES AND THE FIGURES (ledger #343) ═════════════════════════════════════
+{
+  ok(/readLoadListSettings\(/.test(src), '🔴 S1: the page reads the ladder and the figures through ONE reader');
+  ok(/settingsRead\?\.sizes === 'failed'/.test(src) && /LOAD_LIST_COPY\.sizesFailed/.test(src),
+    '🔴 S2: "could not read sizes" is its own state on the page');
+  ok(/settingsRead\?\.sizes === 'none'/.test(src) && /LOAD_LIST_COPY\.sizesNone/.test(src),
+    '🔴 S3: "no sizes set up" is a DIFFERENT state with a different sentence');
+  ok(/model\.valuesUsed\.rungs\.map\(/.test(src) && /LOAD_LIST_COPY\.valuesHeading/.test(src),
+    '🔴 S4: the page PRINTS the figures it used — the ratios and every rung on the day');
+  for (const k of ['installMixContainerVolumesPerTree', 'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree', 'gallonsPerCubicYard']) {
+    ok(src.includes(`model.valuesUsed.${k}`), `S5: the printed figures include ${k}`);
+  }
+  ok(/defaults_withheld/.test(src),
+    '🔴 S6: a login that cannot read the settings is TOLD the figures are the standard ones (tech-debt #309)');
+  ok(/can\('settings:read'\)/.test(src), 'S7: whether the figures can be read is asked, not inferred from an empty row');
 }
 
 // ══ §B THE PER-STOP BREAKDOWN CARRIES THE PROBLEM SENTENCE ════════════════════════
@@ -76,7 +103,9 @@ function ok(cond: boolean, msg: string): void {
   // B3b (negative) — the out-of-ladder concept is GONE from the page too, not just from the model.
   // A page still rendering "no T-post rule" over a model that always has one would be a printed
   // sentence contradicting the number beside it.
-  ok(!/no T-post rule|work out by hand|tPostsUnknownTrees/.test(src),
+  // ✏️ B3b CHANGED 2026-09-16 (ledger #343): unchanged in intent, now read against CODE, because
+  // the model's comments legitimately quote the retired wording.
+  ok(!/no T-post rule|work out by hand|tPostsUnknownTrees/.test(code),
     '🔴 B3b (negative): no "work it out by hand" text survives anywhere — every readable size is computed');
   ok(/No address recorded/.test(src),
     'B4: a stop with no address says so rather than printing an empty line (D-9)');
@@ -117,8 +146,15 @@ function ok(cond: boolean, msg: string): void {
     'D3: every number on the page comes from the pure model — the page computes no bill of materials of its own');
 
   // D4 (negative) — no arithmetic in the .tsx. A number computed in a render cannot be asserted.
-  ok(!/tPostsByGallons|mixContainerVolumesPerTree|ringByGallons/.test(src),
+  // ✏️ D4 CHANGED 2026-09-16 (ledger #343): it forbade the NAME `mixContainerVolumesPerTree`; that
+  // key is gone and the page now legitimately PRINTS `installMixContainerVolumesPerTree` from
+  // `valuesUsed`. What must not appear is arithmetic on it, or a typed conversion — the old per-stop
+  // `201.974025974` was exactly that, and the model now hands the page `s.mixYards`.
+  ok(!/tPostsByGallons|ringByGallons|tPostsFor|BOM_RULES/.test(code),
     '🔴 D4 (negative): the bill-of-materials rules are NEVER re-derived in the page');
+  ok(!/201\.97|46656|GALLONS_PER_CUBIC_YARD/.test(code),
+    '🔴 D4b (negative): the page types no yard conversion — the per-stop figure is the model’s `mixYards`');
+  ok(/s\.mixYards/.test(src), 'D4c: the per-stop mix comes from the model');
 }
 
 // ══ §E INSTRUMENTATION + ROUTE ════════════════════════════════════════════════════

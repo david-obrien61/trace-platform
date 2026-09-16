@@ -28,6 +28,12 @@
 //   field: these constants are interdependent (crew sizes, the window and the departure date are
 //   read together), and a half-applied revision is exactly the thing E2 exists to prevent.
 //
+// 🔴 PLANTING MATERIALS (ledger #343). The load list's four per-tree figures — mix per gallon of
+//   container, rope per T-post, bubblers per tree, deer-fence posts in total — live here now, in
+//   their own group with their provenance, under plain labels (never a key name). They are a
+//   DIFFERENT recipe from the uppot figures above them and must not be merged with them (R-155).
+//   T-posts per SIZE are not here: they are a column on each size, in Settings → Container sizes.
+//
 // DEPENDENCIES: @trace/shared/production · ../../lib/supabase.
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
@@ -35,6 +41,7 @@ import { supabase } from '../../lib/supabase';
 import {
   OPERATIONS_DEFAULTS, OPERATIONS_BASIS, WITHHELD_REASON,
   minutesPerPot, arithmeticCheck, resolveConfig,
+  PLANTING_MATERIAL_KEYS, PLANTING_MATERIAL_LABELS, plantingMaterialProblems,
   type OperationsConfig,
 } from '@trace/shared/production';
 
@@ -59,6 +66,11 @@ const GROUPS: Array<{ title: string; note?: string; keys: NumKey[] }> = [
     keys: ['crewSizeInSeason', 'crewSizeWinter', 'mixerCubicYardsPerHour', 'peopleMakingMix'],
   },
   {
+    title: 'Planting materials',
+    note: 'What the delivery-day load list sends out with each planted tree. T-posts per size are set on each size in Container sizes; these four are per tree. Changing one changes the next load list printed — never an order or a plan already made.',
+    keys: [...PLANTING_MATERIAL_KEYS],
+  },
+  {
     title: 'Holding back',
     note: 'Months of cover defaults to the grow time, because cover exists to bridge the gap until the uppotted stock is ready. Leave the override blank to keep them tied.',
     keys: ['growMonthsDefault', 'cushionPctDefault', 'survivalRate', 'potRecoveryRate'],
@@ -80,6 +92,7 @@ const LABELS: Partial<Record<NumKey, string>> = {
   cushionPctDefault: 'Cushion (share)',
   survivalRate: 'Survive the move (share)',
   potRecoveryRate: 'Pots recovered rather than binned (share)',
+  ...PLANTING_MATERIAL_LABELS,
 };
 
 export default function OperationsSettings({ businessId, canWrite, canReadMoney }: Props) {
@@ -95,7 +108,9 @@ export default function OperationsSettings({ businessId, canWrite, canReadMoney 
         supabase.from('business_operations_config').select('config').eq('business_id', businessId).maybeSingle(),
         supabase.from('business_pricing_config').select('config').eq('business_id', businessId).maybeSingle(),
       ]);
-      setOps({ ...OPERATIONS_DEFAULTS, ...((o.data?.config ?? {}) as Partial<OperationsConfig>) });
+      // Through resolveConfig, so a missing or unusable stored key shows its DEFAULT rather than a
+      // blank box that would save as 0 (ledger #343).
+      setOps({ ...((o.data?.config ?? {}) as Record<string, unknown>), ...resolveConfig((o.data?.config ?? null) as Partial<OperationsConfig> | null, null, false).ops });
       setMixCost(((m.data?.config as any)?.production?.blendedMixCostPerCubicYard ?? null) as number | null);
       console.log('[TRACE:UPPOT] operations settings loaded', { businessId, hasRow: !!o.data });
     })();
@@ -106,6 +121,12 @@ export default function OperationsSettings({ businessId, canWrite, canReadMoney 
   };
 
   const save = useCallback(async () => {
+    const problems = plantingMaterialProblems(ops);
+    if (problems.length) {
+      console.log('[TRACE:UPPOT] operations settings REFUSED before write', { businessId, problems });
+      setNotice(`Not saved — ${problems.join(' ')}`);
+      return;
+    }
     setSaving(true);
     // 🔴 E5 / R-12 — a write that changed nothing must not report success. An upsert refused by
     // policy returns NO error, so the returned row is what is checked, never the absence of one.

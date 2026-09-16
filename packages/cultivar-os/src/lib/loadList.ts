@@ -12,85 +12,69 @@
 //               the difference between 'no T-posts needed' and 'we could not work it out.'"* So
 //               every line resolves into exactly one of four KINDS and every one of them is
 //               printed. `unresolved` is a first-class outcome with the raw text beside it, not a
-//               filter. This is D-9 / A9 (absent is not empty) applied to a piece of paper, where
-//               it matters more than on a screen: nobody can click a blank on a printout to ask
-//               what it meant.
+//               filter. This is D-9 / A9 (absent is not empty) applied to a piece of paper.
+//
+// 🔴 ONE LOCATION, MANY READS (ledger #343 — David, 2026-09-16): *"Every size is read from the
+//               ladder; each consumer applies its own math. No second list of sizes, no size
+//               thresholds, no size parsed outside the resolver."* So this file holds NO numbers of
+//               its own. The per-SIZE figures (volume, T-posts) are the RUNG's —
+//               `container_ladder`, read by `containerLadderRead.ts`. The per-TREE figures (mix
+//               ratio, rope, bubblers, deer-fence posts, gallons per yard) are the business's
+//               Operations config. Both arrive as `LoadListSettings`; this file only multiplies.
 //
 // DEPENDENCIES: ./stopLoad (StopOrderItem — the SAME line shape the stop card reads, §6 r8) ·
-//               @trace/shared/quickbooks/qboItemAdapter (readProductFromDescription) ·
-//               @trace/shared/inventory/unitOfMeasure (parseUnitOfMeasure) ·
-//               @trace/shared/utils/sizeLabel (normalizeSize). Otherwise PURE — no db, no clock,
-//               no DOM, no env.
-// OUTPUTS:      LoadItemKind · ResolvedLoadItem · LoadStop · LoadListModel · BOM_RULES ·
-//               RING_ANCHORS · ringDiameterFeet · ringCircumferenceFeet · LOAD_LIST_COPY ·
-//               GALLONS_PER_CUBIC_YARD · resolveLoadItem · tPostsFor · buildLoadList.
+//               @trace/shared/quickbooks/qboItemAdapter (readProductFromDescription — finds the
+//               size-shaped fragment in an invoice sentence) · @trace/shared/inventory
+//               (resolveRung — the ONE place a size is interpreted) · @trace/shared/production
+//               (the OperationsConfig type). Otherwise PURE — no db, no clock, no DOM, no env.
+// OUTPUTS:      LoadItemKind · ResolvedLoadItem · TreeTally · LoadStop · LoadListModel ·
+//               LoadListSettings · LoadStopInput · RING_ANCHORS · ringDiameterFeet ·
+//               ringCircumferenceFeet · LOAD_LIST_COPY · resolveLoadItem · buildLoadList.
 //
 // AC-1: this file lives in `cultivar-os`, NOT in `shared`, and deliberately. Its vocabulary —
 //       tree, special mix, T-post, bubbler, deer fence — is a TREE FARM's bill of materials, and
 //       putting it in `shared` would hardcode one vertical's operations into platform code. The
-//       two things that ARE general (reading a size out of a sentence, naming a unit) are
+//       two things that ARE general (finding a size in a sentence, placing it on a ladder) are
 //       imported FROM shared rather than re-implemented here (R-27).
 // ============================================================
 
 import { readProductFromDescription } from '@trace/shared/quickbooks/qboItemAdapter';
-import { parseUnitOfMeasure } from '@trace/shared/inventory/unitOfMeasure';
-import { normalizeSize } from '@trace/shared/utils/sizeLabel';
+import { resolveRung, type Ladder, type Rung } from '@trace/shared/inventory';
+import type { OperationsConfig } from '@trace/shared/production';
 import type { StopOrderItem } from './stopLoad';
 
-/** US gallons in one cubic yard. The special mix is bought and loaded by the yard; the bill of
- *  materials is computed per container gallon, so the two meet here. 231 in³ per gallon,
- *  46,656 in³ per cubic yard. */
-export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
-
 /**
- * 🔴 DAVID'S BILL OF MATERIALS — dictated 2026-09-12, CORRECTED BY TWO RULINGS 2026-09-14.
+ * 🔴 THE FIGURES THIS PAGE MULTIPLIES BY, AND WHERE EACH ONE LIVES.
  *
- * [[R-155]] — ONE MIX RATIO, AND IT IS 1.0. *"1 gal of mix per 1 gal of container. One ratio, not
- * two. A 45 gallon tree takes 45 gallons of mix, for loading AND for costing."* His reasoning is
- * physical rather than a tolerance: *"fill it to the top, it settles on the drive, water it and it
- * compacts. The container volume is not an overestimate, it is roughly what goes in."*
- *   🔴 **SO THERE IS NO COSTING RATIO AND NO LOADING RATIO. Do not re-split this key.** The split
- *     was a live proposal — `mixRatioCosting` / `mixRatioLoading` — and the ruling removes a key
- *     rather than adding one. A second ratio would be two representations of one fact (STD-011),
- *     and the copy that drifts is always the one nobody loads against.
- *   🔴 **`OPERATIONS_DEFAULTS.tradeGallonFactor = 0.7` IS A DIFFERENT FACT AND STAYS AT 0.7.** It
- *     is trade gallons vs true gallons — a statement about the POT, used by the uppot production
- *     model (`productionMath.ts`). It is NOT a mix ratio, it never was, and the fact that both
- *     numbers were 0.7 is a coincidence that has already cost one reconciliation. **The BOM does
- *     not touch it.** Anyone "unifying" the two 0.7s is merging a pot measurement into a recipe.
+ * [[R-155]] — ONE MIX RATIO. ✏️ **AMENDED 2026-09-15/16: the ratio is 2.0, not 1.0.** David:
+ * *"install mix is TWICE the container volume (30 gal → 60 gal). The earlier 1.0 was Lightning's
+ * figure, not LAWNS's."* And it is CONFIGURATION now (`installMixContainerVolumesPerTree`), because
+ * a figure pinned in code is exactly what made the wrong one unchangeable without a build.
+ *   🔴 **STILL ONE RATIO — THERE IS NO COSTING RATIO AND NO LOADING RATIO. Do not re-split it.** The
+ *     split was a live proposal — `mixRatioCosting` / `mixRatioLoading` — and the ruling removed a
+ *     key rather than adding one. A second ratio would be two representations of one fact
+ *     (STD-011), and the copy that drifts is always the one nobody loads against.
+ *   🔴 **`OPERATIONS_DEFAULTS.tradeGallonFactor = 0.7` IS A DIFFERENT FACT.** It is trade gallons vs
+ *     true gallons — a statement about the POT, used by the uppot production model. **The BOM does
+ *     not touch it.** Anyone "unifying" the two is merging a pot measurement into a recipe.
+ *
+ * T-POSTS — the RUNG's `install_t_posts_per_tree`. There is no threshold here any more: *"2 up to
+ * and including 65, 4 at 95 and above"* is now DATA on nine rows, and a grower who stakes a 45 with
+ * three posts edits one row. Rope, bubblers and deer-fence posts are per-tree Operations keys.
  *
  * ⚠️ MULCH — absent, on Lauren's statement: mulch is NOT used, only the ingredients in the special
- * mix. There is no mulch row here and there must not be one.
- * ✏️ CORRECTED 2026-09-15: this comment used to say *"the install cost model carries a mulch line
- * ($7.49 at 15G to $43.12 at 95G)"*, which implied a live model in the repo getting it wrong.
- * There is no such model. Those figures come from a **Python script David ran in a chat on
- * 2026-09-11** (output `install-cost-model.json`, never committed), and the mulch line is
- * **Lightning's invention, not a LAWNS fact** — as is that script's RING FIVE-ROW LOOKUP, which is
- * the very shape R-156 above rules against. Building the model here is tech-debt #299.
+ * mix. There is no mulch row here and there must not be one. The mulch line in the 2026-09-11
+ * install-cost figures was **Lightning's invention, not a LAWNS fact**; building that cost model is
+ * tech-debt #299.
  */
-export const BOM_RULES = {
-  /**
-   * Container volumes of special mix per tree. **1.0 — the only ratio there is** ([[R-155]]).
-   * A 45 gallon tree takes 45 gallons, for loading and for costing alike.
-   */
-  mixContainerVolumesPerTree: 1.0,
-  /** 🔴 T-POSTS ARE COMPUTED FROM THE CONTAINER, NOT LOOKED UP. 2 per tree up to and INCLUDING
-   *  65 gallon; 4 per tree at 95 gallon AND ANYTHING LARGER. There is no upper bound and no
-   *  hand-work case. See `tPostsFor` for why the table this replaced was the defect. */
-  tPostsSmallThresholdGallons: 65,
-  tPostsAtOrBelowThreshold: 2,
-  tPostsAboveThreshold: 4,
-  /** Feet of rope per T-post. This is the STAKING rope and has nothing to do with the ring. */
-  ropeFeetPerTPost: 4,
-  /** Bubblers per tree. */
-  bubblersPerTree: 1,
-  /** T-posts a deer-fenced tree needs in total — so a tree already carrying 2 needs 2 MORE.
-   *  ⚠️ NOT APPLIED ANYWHERE IN THIS MODEL: nothing in the data marks a stop as needing fence
-   *  (measured 2026-09-12 — zero order lines and zero stop notes mention deer, fence, T-post or
-   *  stake across the whole tenant). The number is recorded so the page can PRINT THE RULE for a
-   *  person to apply by hand, which is what David asked for rather than a stop. */
-  deerFenceTPostsPerTree: 4,
-} as const;
+export interface LoadListSettings {
+  /** This tenant's container ladder — retired rungs INCLUDED (they still resolve, R-133). An EMPTY
+   *  ladder is legal: every container line then prints as unresolved, "no sizes set up". */
+  ladder: Ladder;
+  ops: Pick<OperationsConfig,
+    | 'installMixContainerVolumesPerTree' | 'ropeFeetPerTPost' | 'bubblersPerTree'
+    | 'deerFenceTPostsPerTree' | 'trueGallonsPerCubicYard'>;
+}
 
 /**
  * 🔴 [[R-156]] — THE RING DIAMETER IS A TOTAL FUNCTION OF CONTAINER GALLONS, NEVER A TABLE.
@@ -150,50 +134,67 @@ export function ringCircumferenceFeet(gallons: number): number {
 
 /** What one line turned out to be. Four outcomes, all of them printed — see the header. */
 export type LoadItemKind =
-  /** Resolved to a gallon container: a tree. The only kind that earns a bill of materials. */
+  /** Resolved to a RUNG on this nursery's ladder: a tree. The only kind that earns a bill of materials. */
   | 'tree'
-  /** Resolved to a real unit that is NOT a gallon container — a 50 lb bag, a 4.4 cf bale, a
-   *  24 box. It loads; it takes no stake, mix or bubbler, and we are not guessing that it does. */
+  /** Resolved to a real unit that is NOT a container — a 50 lb bag, a 4.4 cf bale. It loads; it
+   *  takes no stake, mix or bubbler, and we are not guessing that it does. */
   | 'other_goods'
   /** Read in full and states no size — Trip Charge, Tree Bubbler, Deer Fencing, Trunk Protection.
    *  🔴 This is NOT a claim that the line is a fee. Nothing stored classifies a line (R-144 /
    *  tech-debt #139): it is a statement about what we could READ, which is all we know. */
   | 'no_size_stated'
-  /** We tried and failed, or there was nothing to try. Printed loudest. */
+  /** We tried and failed, or there was nothing to try — or it is a container size this nursery's
+   *  ladder does not have (`offLadder`). Printed loudest. */
   | 'unresolved';
 
 export interface ResolvedLoadItem {
   quantity: number;
-  /** The product name as its source wrote it. NEVER normalised — the yard person is matching
-   *  against what is physically printed on the tag (D-23, faithful before connected). */
+  /** The product name as its source wrote it. NEVER normalised (D-23). */
   name: string;
-  /** The size exactly as written ("45 Gallon", "15 gallon"), or null. */
+  /** The size exactly as written ("45 Gallon", "#3/5"), or null. */
   sizeText: string | null;
-  /** Container gallons, when the size is a gallon container. Null otherwise. */
+  /** The rung this line landed on. Null unless `kind === 'tree'`. */
+  rung: Rung | null;
+  /** The RUNG's container volume in gallons — never a number read out of the size text. Null when
+   *  the line is not a tree, and null for a tree whose rung has no volume set (a slip). */
   gallons: number | null;
   kind: LoadItemKind;
+  /** True when the size reads as a container this nursery's ladder does not have. Such a line is
+   *  almost certainly a tree, so it is COUNTED as one — it simply cannot be staked or mixed. */
+  offLadder: boolean;
   /** Why this line is not a tree, in the yard person's words. Null for a tree. */
   reason: string | null;
   sku: string | null;
-  /** The exact fragment we tried to read as a size and could not. Null unless we tried. */
+  /** The exact fragment we tried to read as a size and could not place. Null unless we tried. */
   unreadText: string | null;
 }
 
 /** One consolidated tree row: "Live Oak 45 gallon ×2". */
 export interface TreeTally {
   name: string;
+  /** A spelling the source used — the first one seen for this row (D-23). */
   sizeText: string;
-  gallons: number;
+  /** The rung's label — what consolidated this row. */
+  rungLabel: string;
+  /** Ladder position, for ordering. Never sort by volume: a slip has none. */
+  sortOrder: number;
+  /** The rung's volume, or null when the rung has none set. */
+  gallons: number | null;
   quantity: number;
-  /** T-posts for this row. Always a number — every readable container size has a rule. */
+  /** T-posts for ONE tree, read off the rung. */
   tPosts: number;
-  /** Watering-ring diameter in feet for ONE tree of this size ([[R-156]]). Always a number. */
-  ringDiameterFeet: number;
-  /** Feet of deer fence for ONE tree of this size — the ring's circumference, bought by the roll.
-   *  🔴 NOT added into any day total: nothing in the data says which trees are fenced. It is here
-   *  so the printed page carries a NUMBER for the hand-add instead of a rule to work out. */
-  fenceFeetPerTree: number;
+  /** Where that post count came from (the rung's own note). */
+  tPostsBecause: string;
+  /** Special mix for ONE tree, in gallons — rung volume × the configured ratio. Null without a volume. */
+  mixGallonsPerTree: number | null;
+  /** Watering-ring diameter in feet for ONE tree ([[R-156]]). Null when the rung has no volume. */
+  ringDiameterFeet: number | null;
+  /** Feet of deer fence for ONE tree — the ring's circumference, bought by the roll. Null without a volume. */
+  fenceFeetPerTree: number | null;
 }
+
+/** Whether a stop needs deer fence, as far as anything stored can say. */
+type DeerFenceState = 'yes' | 'no' | 'unknown';
 
 export interface LoadStop {
   stopId: string;
@@ -205,52 +206,75 @@ export interface LoadStop {
   items: ResolvedLoadItem[];
   /** Trees on this stop, consolidated. */
   trees: TreeTally[];
+  /** Every tree on the stop, INCLUDING the ones whose size is off the ladder. */
   treeCount: number;
   mixGallons: number;
+  /** Special mix for this stop alone, rounded up to the next half yard. */
+  mixYards: number;
   tPosts: number;
-  /** Lines on this stop whose size could not be read at all — the ONLY unresolved case now. */
+  /** Extra posts deer fence adds on this stop. 0 unless the stop says it is fenced. */
+  deerFencePosts: number;
+  deerFence: DeerFenceState;
+  /** Trees on this stop whose size is not on the ladder. Counted; not staked or mixed. */
+  offLadderTreeCount: number;
+  /** Lines on this stop that are UNRESOLVED (unreadable, or off the ladder). */
   unresolvedCount: number;
+}
+
+/** The figures the page used, printed so nobody has to trust a number they cannot see. */
+export interface ValuesUsed {
+  installMixContainerVolumesPerTree: number;
+  ropeFeetPerTPost: number;
+  bubblersPerTree: number;
+  deerFenceTPostsPerTree: number;
+  gallonsPerCubicYard: number;
+  /** Every rung that appears on the day, in ladder order (biggest first). */
+  rungs: Array<{ label: string; volumeGallons: number | null; tPosts: number; tPostsBecause: string }>;
 }
 
 export interface LoadListModel {
   date: string;
   stopCount: number;
-  /** Every stop, in the order given. A stop with no order still appears — it is a place the
-   *  trailer goes, and printing five stops on a six-stop day is the failure this guards. */
+  /** Every stop, in the order given. A stop with no order still appears. */
   stops: LoadStop[];
 
   // ── the consolidated headline ──────────────────────────────────────────────
   /** Special mix, rounded UP to the next half yard. Loads FIRST, trees on top. */
   mixYards: number;
   mixGallons: number;
-  /** Trees across the whole day, consolidated by name + size, biggest first. */
+  /** Trees on the ladder, consolidated by name + rung, biggest rung first. */
   trees: TreeTally[];
+  /** Every tree on the day, INCLUDING off-ladder ones — a bubbler does not depend on the size. */
   treeCount: number;
-  /** T-posts for the day. Complete for every tree whose container size could be read. */
+  /** Staking T-posts, read off each tree's rung. */
   tPosts: number;
-  /** Feet of rope. A FLOOR on the same condition as `tPosts`. */
+  /** Extra posts for the stops that SAY they are fenced. Never guessed. */
+  deerFencePosts: number;
+  /** Feet of staking rope — staking posts × the configured feet per post. */
   ropeFeet: number;
   bubblers: number;
+  /** Trees whose size is not on the ladder: counted, not staked or mixed. */
+  offLadderTreeCount: number;
+  /** Tree rows whose rung has no volume set: counted and staked, their mix unknown. */
+  noVolumeTrees: TreeTally[];
+  /** Stops carrying trees where nothing stored says whether deer fence is needed. */
+  deerFenceUnknownStops: number;
   /**
-   * True when something on this day could not be read, so every total is a FLOOR.
-   *
-   * 🔴 THIS NO LONGER MEANS "A SIZE WE HAVE NO RULE FOR" — that state is gone: `tPostsFor` is total
-   * over every readable container size, so a 200 gallon tree is as fully computed as a 15. It now
-   * means what it should always have meant: a LINE WE COULD NOT READ, or a STOP WE COULD NOT READ.
-   * Either could be a tree, and if it is, everything above is short.
+   * True when something on this day could not be worked out, so every total is a FLOOR: a line or
+   * stop we could not read, a container size not on the ladder, or a rung with no volume.
+   * ⚠️ DEER FENCE IS NOT IN THIS FLAG — it is unknown on every day LAWNS has, so a flag that included
+   * it would fire always and mean nothing. It has its own count and its own printed line.
    */
   totalsAreFloors: boolean;
 
+  valuesUsed: ValuesUsed;
+
   // ── everything the headline does not cover, never dropped ──────────────────
-  /** Lines that resolved to a non-gallon unit. They load; they take no bill of materials. */
   otherGoods: ResolvedLoadItem[];
-  /** Lines that state no size. Listed so the yard person sees Trip Charge, Trunk Protection,
-   *  a bubbler line and anything else that was on the paperwork. */
   noSizeStated: ResolvedLoadItem[];
-  /** 🔴 Lines we could not work out at all. The reason this page can be trusted. */
+  /** 🔴 Lines we could not work out at all, or could not place on the ladder. */
   unresolved: ResolvedLoadItem[];
-  /** Stops whose lines could not be read (permission or a failed query) — NEVER rendered as an
-   *  empty stop, which would assert a fact about the business from a fact about the viewer. */
+  /** Stops whose lines could not be read (permission or a failed query). */
   unreadStops: number;
 }
 
@@ -260,134 +284,125 @@ export interface LoadListModel {
  * THE RESOLUTION ORDER, AND WHY THE SKU IS NOT IN IT:
  *   1. The anchored LOT. A checkout line carries `business_inventory`, whose `size` is its own
  *      column — our catalogue record, and the strongest thing available.
- *   2. The line's own DESCRIPTION, through the shared `readProductFromDescription`. Every line of
- *      every QuickBooks and photographed invoice takes this path (a history line has no lot by
- *      invariant), which on LAWNS is every line there is.
- *   3. There is no step 3. 🔴 **THE SKU IS NOT A SIZE SOURCE AND THE MEASUREMENT IS WHY.** The
- *      tree codes look like they carry one — `MS45`, `LAO45`, `CHO95` — and then `TSK2` is a
- *      T-POST COUNT, `R190` is a fertiliser, and `OS98615`, `MT10002`, `TX412X`, `HE6849`,
- *      `SY38687` are catalogue codes whose digits mean nothing. A digit-scraping fallback would
- *      turn a 1 lb ant killer into a 10,002-gallon container. Reading a trailing number out of a
- *      code is the confident wrong answer D-9 forbids, so this refuses instead and says so.
+ *   2. The line's own DESCRIPTION, through the shared `readProductFromDescription`, which finds
+ *      the size-shaped fragment at the end of the sentence. Every QuickBooks and photographed
+ *      invoice line takes this path, which on LAWNS is every line there is.
+ *   3. There is no step 3. 🔴 **THE SKU IS NOT A SIZE SOURCE AND THE MEASUREMENT IS WHY.** `MS45`
+ *      looks like it carries a size and then `TSK2` is a T-POST COUNT and `MT10002` is a 1 lb ant
+ *      killer. A digit-scraping fallback is the confident wrong answer D-9 forbids.
+ *
+ * 🔴 AND WHATEVER SIZE TEXT IS FOUND GOES TO THE LADDER — NOWHERE ELSE (ledger #343). This file
+ * does not parse a size; `resolveRung` says whether it is a rung, goods, off the ladder, or
+ * unreadable, and this file only maps that answer to a kind.
  */
-export function resolveLoadItem(item: StopOrderItem): ResolvedLoadItem {
+export function resolveLoadItem(item: StopOrderItem, ladder: Ladder): ResolvedLoadItem {
   const quantity = Number(item.quantity) || 0;
   const sku = item.sku?.trim() || null;
 
   // ── 1. the anchored lot ───────────────────────────────────────────────────
   const lotName = item.business_inventory?.name?.trim() || null;
   const lotSize = item.business_inventory?.size?.trim() || null;
-  if (lotName) {
-    const parsed = lotSize ? parseUnitOfMeasure(lotSize) : null;
-    return classify(quantity, lotName, lotSize, parsed, sku, null);
-  }
+  if (lotName) return classify(quantity, lotName, lotSize, sku, ladder);
 
   // ── 2. the line's own words ───────────────────────────────────────────────
   const read = readProductFromDescription(item.description);
   if (read.state === 'could_not_read') {
     return {
-      quantity,
-      name: read.name ?? sku ?? 'Unnamed line',
-      sizeText: null, gallons: null, kind: 'unresolved', sku,
+      quantity, name: read.name ?? sku ?? 'Unnamed line',
+      sizeText: null, rung: null, gallons: null, kind: 'unresolved', offLadder: false, sku,
       unreadText: read.unreadSizeText,
       reason: read.name === null
         ? 'This line carries no description and no size — nothing on it says what it is.'
         : `We could not read “${read.unreadSizeText}” as a size. Check the invoice.`,
     };
   }
-  const parsed = read.size ? parseUnitOfMeasure(read.size) : null;
-  return classify(quantity, read.name ?? sku ?? 'Unnamed line', read.size, parsed, sku, null);
+  return classify(quantity, read.name ?? sku ?? 'Unnamed line', read.size, sku, ladder);
 }
-
-type Parsed = ReturnType<typeof parseUnitOfMeasure>;
 
 function classify(
-  quantity: number, name: string, sizeText: string | null, parsed: Parsed,
-  sku: string | null, unreadText: string | null,
+  quantity: number, name: string, sizeText: string | null, sku: string | null, ladder: Ladder,
 ): ResolvedLoadItem {
-  const base = { quantity, name, sizeText, sku, unreadText };
-
-  if (!parsed) {
-    // A size was written and the shared parser declined it — or none was written at all. The two
-    // are different facts and are kept apart: an unread size is a defect, a stated absence is not.
-    if (sizeText) {
-      return { ...base, gallons: null, kind: 'unresolved', unreadText: sizeText,
-        reason: `We could not read “${sizeText}” as a size. Check the invoice.` };
-    }
-    return { ...base, gallons: null, kind: 'no_size_stated',
-      reason: 'No container size on this line, so it is not counted as a tree.' };
+  const base = { quantity, name, sizeText, sku, rung: null, gallons: null, offLadder: false, unreadText: null };
+  if (!sizeText) {
+    return { ...base, kind: 'no_size_stated', reason: 'No container size on this line, so it is not counted as a tree.' };
   }
 
-  // 🔴 A RANGE IS NOT A SIZE YOU CAN LOAD AGAINST. "#3/5" means one of two containers and the
-  // bill of materials would differ. Refused rather than collapsed to either end.
-  if (parsed.kind === 'container' && parsed.unit === 'gallon' && parsed.valueMax != null) {
-    return { ...base, gallons: null, kind: 'unresolved', unreadText: sizeText,
-      reason: `“${sizeText}” is a range, so the mix and posts cannot be worked out. Ask which size shipped.` };
+  const r = resolveRung(ladder, sizeText);
+  if (r.ok) {
+    return { ...base, rung: r.rung, gallons: r.rung.volumeGallons, kind: 'tree', reason: null };
   }
-
-  if (parsed.kind === 'container' && parsed.unit === 'gallon' && parsed.value != null) {
-    return { ...base, gallons: parsed.value, kind: 'tree', reason: null };
+  switch (r.reason) {
+    case 'blank':
+      return { ...base, kind: 'no_size_stated', reason: 'No container size on this line, so it is not counted as a tree.' };
+    case 'not_container':
+      return { ...base, kind: 'other_goods', reason: `Sold by ${r.unit}, not by container — no stake, mix or bubbler counted for it.` };
+    case 'off_ladder':
+      return {
+        ...base, kind: 'unresolved', offLadder: true, unreadText: sizeText,
+        reason: ladder.length === 0
+          ? `No container sizes are set up for this nursery, so “${sizeText}” cannot be staked or mixed. Set them up in Settings → Container sizes.`
+          : `“${sizeText}” is not one of this nursery's container sizes — counted as a tree, but its mix and posts are not. Add the size in Settings → Container sizes, or check the invoice.`,
+      };
+    case 'unreadable':
+      return { ...base, kind: 'unresolved', unreadText: sizeText, reason: `We could not read “${sizeText}” as a size. Check the invoice.` };
   }
-
-  return { ...base, gallons: null, kind: 'other_goods',
-    reason: `Sold by ${parsed.unit}, not by container — no stake, mix or bubbler counted for it.` };
 }
 
-/** The comparison key for consolidating two tree rows. Case and spacing folded for the KEY only;
- *  the DISPLAYED name stays exactly as its source wrote it (D-23). */
-function treeKey(name: string, sizeText: string | null): string {
-  return `${name.toLowerCase().replace(/\s+/g, ' ').trim()}|${normalizeSize(sizeText).toLowerCase()}`;
+/** The comparison key for consolidating two tree rows: the NAME folded, and the RUNG. Case and
+ *  spacing are folded for the KEY only; the displayed name stays as its source wrote it (D-23). */
+function treeKey(name: string, rung: Rung): string {
+  return `${name.toLowerCase().replace(/\s+/g, ' ').trim()}|${rung.label}`;
 }
 
-/**
- * T-posts for one tree of this container size. **TOTAL — every readable container size gets a
- * number.**
- *
- * 🔴 THIS WAS A TABLE OF FIVE ROWS (15·30·45·65·95) AND THAT IS WHY THE 200 GALLON LIVE OAK ON
- * SATURDAY 2026-08-29 FELL OFF THE END. A lookup answers only for the sizes somebody thought to
- * type, and every size nobody typed became a hand-work case on a printed page. David's correction,
- * 2026-09-12: *"the ladder does not stop at 95 gal … There is no upper bound and no hand-work
- * case. The rule is the container, not a lookup in a table of five sizes."* So the rule is a
- * THRESHOLD, and a 200 gallon, a 300 gallon and a size nobody has sold yet all resolve.
- *
- * ⚠️ THE 66–94 GALLON BAND IS NOT A SIZE LAWNS SELLS AND THE RULE STILL HAS TO ANSWER FOR IT.
- * David gave two anchors — 2 up to and including 65, 4 at 95 and above — and said nothing about
- * between. It reads 4, on his own standing instruction for this build (*"err large, do not
- * skimp"*): two stakes short on a tree that wanted four is a tree on the ground, and two spare
- * stakes cost nothing. Recorded because it is an INFERENCE from two anchors, not something he said.
- *
- * ⚠️ **DO NOT REACH FOR `lib/constants.ts`'s `CONTAINER_SIZES` / `LARGE_CONTAINERS`.** They exist,
- * they look like the vocabulary this needs, and they are **demo-era lists with ZERO importers**
- * (knip reports both unused) whose sizes — `60 gal`, `100 gal` — are not sizes LAWNS sells and do
- * not match David's boundaries of 65 and 95. Wiring them here would reintroduce a lookup table
- * that is both a table AND wrong. Named rather than left for the next reader to rediscover.
- */
-export function tPostsFor(gallons: number): number {
-  return gallons <= BOM_RULES.tPostsSmallThresholdGallons
-    ? BOM_RULES.tPostsAtOrBelowThreshold
-    : BOM_RULES.tPostsAboveThreshold;
-}
-
-function tallyTrees(items: ResolvedLoadItem[]): TreeTally[] {
+function tallyTrees(items: ResolvedLoadItem[], s: LoadListSettings): TreeTally[] {
   const by = new Map<string, TreeTally>();
   for (const it of items) {
-    if (it.kind !== 'tree' || it.gallons == null) continue;
-    const k = treeKey(it.name, it.sizeText);
+    if (it.kind !== 'tree' || !it.rung) continue;
+    const k = treeKey(it.name, it.rung);
     const existing = by.get(k);
     if (existing) { existing.quantity += it.quantity; continue; }
+    const v = it.rung.volumeGallons;
     by.set(k, {
       name: it.name,
-      sizeText: it.sizeText ?? `${it.gallons} gallon`,
-      gallons: it.gallons,
+      sizeText: it.sizeText ?? it.rung.label,
+      rungLabel: it.rung.label,
+      sortOrder: it.rung.sortOrder,
+      gallons: v,
       quantity: it.quantity,
-      tPosts: tPostsFor(it.gallons),
-      ringDiameterFeet: ringDiameterFeet(it.gallons),
-      fenceFeetPerTree: ringCircumferenceFeet(it.gallons),
+      tPosts: it.rung.installTPostsPerTree,
+      tPostsBecause: it.rung.installTPostsBecause,
+      mixGallonsPerTree: v == null ? null : v * s.ops.installMixContainerVolumesPerTree,
+      ringDiameterFeet: v == null ? null : ringDiameterFeet(v),
+      fenceFeetPerTree: v == null ? null : ringCircumferenceFeet(v),
     });
   }
-  // Biggest first: the yard person loads big trees before small ones, and the exceptions (the
-  // sizes with no T-post rule) are almost always at the extremes where they are easiest to see.
-  return [...by.values()].sort((a, b) => b.gallons - a.gallons || a.name.localeCompare(b.name));
+  // Biggest rung first — LADDER order, never volume: the yard person loads big trees first.
+  return [...by.values()].sort((a, b) => b.sortOrder - a.sortOrder || a.name.localeCompare(b.name));
+}
+
+/** Round UP to the next half yard. David: *"err large, do not skimp."* A yard person who runs out
+ *  of mix on the last tree has to drive back; a half yard over costs nothing. */
+function toHalfYards(gallons: number, s: LoadListSettings): number {
+  return Math.ceil((gallons / s.ops.trueGallonsPerCubicYard) * 2) / 2;
+}
+
+interface Sums {
+  treeCount: number; offLadderTreeCount: number; mixGallons: number; tPosts: number; deerFencePosts: number;
+}
+
+function sumTrees(trees: TreeTally[], items: ResolvedLoadItem[], fence: DeerFenceState, s: LoadListSettings): Sums {
+  const offLadderTreeCount = items.filter(i => i.offLadder).reduce((n, i) => n + i.quantity, 0);
+  return {
+    treeCount: trees.reduce((n, t) => n + t.quantity, 0) + offLadderTreeCount,
+    offLadderTreeCount,
+    mixGallons: trees.reduce((n, t) => n + (t.mixGallonsPerTree ?? 0) * t.quantity, 0),
+    tPosts: trees.reduce((n, t) => n + t.tPosts * t.quantity, 0),
+    // 🔴 FENCE BRINGS A TREE TO THE FIGURE *IN TOTAL*. A tree already staked with that many or more
+    // takes none — which settles the old "does a 95 gallon need 4 more?" question by the rule's own
+    // words. Applied ONLY where the stop says so; an unknown stop adds nothing.
+    deerFencePosts: fence !== 'yes' ? 0
+      : trees.reduce((n, t) => n + Math.max(0, s.ops.deerFenceTPostsPerTree - t.tPosts) * t.quantity, 0),
+  };
 }
 
 export interface LoadStopInput {
@@ -401,20 +416,26 @@ export interface LoadStopInput {
   /** The lines query ran and did not error. */
   linesRead: boolean;
   items: StopOrderItem[];
+  /**
+   * Whether this stop needs deer fence, if anything stored says so. `null` = the data cannot tell.
+   * ⚠️ TODAY IT IS ALWAYS NULL: measured 2026-09-12 across the LAWNS tenant, zero order lines and
+   * zero stop notes mention deer, fence, T-post or stake, and nothing on a stop marks it. The field
+   * exists so the arithmetic is written and proven for the day something does.
+   */
+  deerFence?: boolean | null;
 }
 
 /**
  * Build the whole day.
  *
- * 🔴 EVERY STOP APPEARS, WHATEVER STATE IT IS IN. A stop with no linked order, a stop whose lines
- * are withheld from this viewer, a stop whose read failed — each prints with a sentence saying
- * which of those it is. A six-stop day that prints five stops is the failure this exists to
- * prevent, and it is silent by nature: nothing on the page would be wrong, there would just be
- * less of it.
+ * 🔴 EVERY STOP APPEARS, WHATEVER STATE IT IS IN. A six-stop day that prints five stops is the
+ * failure this exists to prevent, and it is silent by nature.
  */
-export function buildLoadList(date: string, input: LoadStopInput[]): LoadListModel {
+export function buildLoadList(date: string, input: LoadStopInput[], settings: LoadListSettings): LoadListModel {
   const stops: LoadStop[] = [];
   let unreadStops = 0;
+  let deerFenceUnknownStops = 0;
+  let deerFencePosts = 0;
 
   for (const s of input) {
     const problem =
@@ -425,40 +446,64 @@ export function buildLoadList(date: string, input: LoadStopInput[]): LoadListMod
       : null;
     if (problem && s.orderId && (!s.canReadLines || !s.linesRead)) unreadStops++;
 
-    const items = s.items.map(resolveLoadItem);
-    const trees = tallyTrees(items);
-    const treeCount = trees.reduce((n, t) => n + t.quantity, 0);
-    const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixContainerVolumesPerTree, 0);
-    const tPosts = trees.reduce((n, t) => n + t.tPosts * t.quantity, 0);
-    const unresolvedCount = items.filter(i => i.kind === 'unresolved').length;
+    const items = s.items.map(i => resolveLoadItem(i, settings.ladder));
+    const trees = tallyTrees(items, settings);
+    const fence: DeerFenceState = s.deerFence === true ? 'yes' : s.deerFence === false ? 'no' : 'unknown';
+    const sums = sumTrees(trees, items, fence, settings);
+    if (fence === 'unknown' && sums.treeCount > 0) deerFenceUnknownStops++;
+    deerFencePosts += sums.deerFencePosts;
 
     stops.push({
       stopId: s.stopId, customerName: s.customerName, address: s.address,
-      serviceType: s.serviceType, problem, items, trees, treeCount,
-      mixGallons, tPosts, unresolvedCount,
+      serviceType: s.serviceType, problem, items, trees,
+      treeCount: sums.treeCount,
+      mixGallons: sums.mixGallons,
+      mixYards: toHalfYards(sums.mixGallons, settings),
+      tPosts: sums.tPosts,
+      deerFencePosts: sums.deerFencePosts,
+      deerFence: fence,
+      offLadderTreeCount: sums.offLadderTreeCount,
+      unresolvedCount: items.filter(i => i.kind === 'unresolved').length,
     });
   }
 
   const allItems = stops.flatMap(s => s.items);
-  const trees = tallyTrees(allItems);
-  const treeCount = trees.reduce((n, t) => n + t.quantity, 0);
-  const mixGallons = trees.reduce((n, t) => n + t.gallons * t.quantity * BOM_RULES.mixContainerVolumesPerTree, 0);
-  const tPosts = trees.reduce((n, t) => n + t.tPosts * t.quantity, 0);
+  const trees = tallyTrees(allItems, settings);
+  const day = sumTrees(trees, allItems, 'no', settings);
   const unresolved = allItems.filter(i => i.kind === 'unresolved');
+  const noVolumeTrees = trees.filter(t => t.gallons == null);
+
+  const seen = new Map<string, ValuesUsed['rungs'][number]>();
+  for (const t of trees) {
+    if (!seen.has(t.rungLabel)) {
+      seen.set(t.rungLabel, { label: t.rungLabel, volumeGallons: t.gallons, tPosts: t.tPosts, tPostsBecause: t.tPostsBecause });
+    }
+  }
 
   return {
     date,
     stopCount: stops.length,
     stops,
-    // Round UP to the next half yard. David: *"err large, do not skimp."* A yard person who runs
-    // out of mix on the last tree has to drive back; a half yard over costs nothing.
-    mixYards: Math.ceil((mixGallons / GALLONS_PER_CUBIC_YARD) * 2) / 2,
-    mixGallons,
-    trees, treeCount,
-    tPosts,
-    ropeFeet: tPosts * BOM_RULES.ropeFeetPerTPost,
-    bubblers: treeCount * BOM_RULES.bubblersPerTree,
-    totalsAreFloors: unresolved.length > 0 || unreadStops > 0,
+    mixYards: toHalfYards(day.mixGallons, settings),
+    mixGallons: day.mixGallons,
+    trees,
+    treeCount: day.treeCount,
+    tPosts: day.tPosts,
+    deerFencePosts,
+    ropeFeet: day.tPosts * settings.ops.ropeFeetPerTPost,
+    bubblers: day.treeCount * settings.ops.bubblersPerTree,
+    offLadderTreeCount: day.offLadderTreeCount,
+    noVolumeTrees,
+    deerFenceUnknownStops,
+    totalsAreFloors: unresolved.length > 0 || unreadStops > 0 || noVolumeTrees.length > 0,
+    valuesUsed: {
+      installMixContainerVolumesPerTree: settings.ops.installMixContainerVolumesPerTree,
+      ropeFeetPerTPost: settings.ops.ropeFeetPerTPost,
+      bubblersPerTree: settings.ops.bubblersPerTree,
+      deerFenceTPostsPerTree: settings.ops.deerFenceTPostsPerTree,
+      gallonsPerCubicYard: settings.ops.trueGallonsPerCubicYard,
+      rungs: [...seen.values()],
+    },
     otherGoods:   allItems.filter(i => i.kind === 'other_goods'),
     noSizeStated: allItems.filter(i => i.kind === 'no_size_stated'),
     unresolved,
@@ -466,35 +511,40 @@ export function buildLoadList(date: string, input: LoadStopInput[]): LoadListMod
   };
 }
 
-/** Every sentence the printed page can say, in ONE place (STD-011). None of them is a blank. */
+/** Every sentence the printed page can say, in ONE place (STD-011). None of them is a blank. The
+ *  rules that carry a NUMBER are functions of the figures used, so the sentence can never state a
+ *  figure the arithmetic did not use. */
 export const LOAD_LIST_COPY = {
   mixFirst: 'Loads FIRST — trees on top.',
-  mixRule: 'One container volume of mix per tree — a 45 gallon tree takes 45 gallons. Fill to the top: it settles on the drive and compacts when watered.',
-  tPostRule: 'T-posts are the stake kit — 2 per tree up to and including 65 gallon, 4 per tree at 95 gallon and anything larger.',
-  ropeRule: 'About 4 ft of rope per T-post.',
-  bubblerRule: 'One bubbler per tree.',
+  mixRule: (ratio: number) =>
+    `${ratio} gallons of mix per gallon of container — a 30 gallon tree takes ${30 * ratio} gallons. Container volumes are the ones set for each size.`,
+  tPostRule: 'T-posts per tree are set for each container size — the figure is listed against each tree.',
+  ropeRule: (feet: number) => `About ${feet} ft of rope per T-post.`,
+  bubblerRule: (n: number) => `${n} bubbler${n === 1 ? '' : 's'} per tree.`,
   noMulch: 'No mulch. Only the ingredients in the special mix.',
   /** The ring rule, in the yard person's words. The NUMBER is printed per tree row beside it. */
   ringRule: 'Ring diameter grows with the square root of container gallons — 5 ft at 15 gallon, 12 ft at 95 gallon, and a figure for every size above and between.',
   /** 🔴 The deer-fence gap, printed rather than hidden. Measured 2026-09-12: nothing in the data
-   *  marks a stop as needing fence — zero order lines and zero stop notes across the tenant.
-   *  ✏️ WHAT CHANGED 2026-09-14 ([[R-156]]): the page used to print the RULE and stop. It now
-   *  prints the FEET, per tree size, because the ring function is total — so the hand-add is a
-   *  number to read off rather than an arithmetic problem on a trailer. */
+   *  marks a stop as needing fence — zero order lines and zero stop notes across the tenant. */
   deerFenceGap:
-    'DEER FENCE — nothing recorded. Nothing in the system marks which stops need deer fence, so none is counted above. '
-    + 'Add by hand: a fenced tree needs 4 T-posts in total, so a tree that already has 2 needs 2 MORE. '
+    'DEER FENCE — nothing recorded. Nothing in the system marks which stops need deer fence, so no fence posts are counted above. '
+    + 'Add by hand: a fenced tree carries the T-posts shown below IN TOTAL — count the stake posts it already has toward that. '
     + 'Fence material is by the roll, measured as the circumference of the ring — the feet per tree are listed against each size below.',
-  deerFence95Open:
-    'At 95 gallon and above a tree already has 4 T-posts — whether deer fence needs 4 more or reuses them is not settled. Ask before loading.',
+  deerFenceTotal: (n: number) => `A fenced tree carries ${n} T-posts in total.`,
   floorsNote:
-    'Something on this day could not be read, so every total above is a FLOOR. Every tree whose container size WAS read is fully counted — mix, posts, rope and bubbler, at any size. What is listed below is what we could not read at all; if any of it is a tree, the numbers above are short.',
+    'Something on this day could not be worked out, so every total above is a FLOOR. What is listed below is what we could not count; if any of it is a tree, the numbers above are short.',
+  offLadderNote: (n: number) =>
+    `${n} tree${n === 1 ? '' : 's'} on this day ${n === 1 ? 'is' : 'are'} a size this nursery has not set up — counted as trees and given bubblers, but NO mix or posts. They are listed below.`,
+  noVolumeNote: 'These sizes have no container volume set, so their mix is NOT counted. Set the volume in Settings → Container sizes.',
   unresolvedHeading: 'COULD NOT WORK OUT — check these before you load',
   unresolvedWhy:
-    'These lines are printed because a blank cannot be told apart from a zero. Nothing here has been counted in the totals above.',
+    'These lines are printed because a blank cannot be told apart from a zero. Nothing here has been counted in the mix or post totals above.',
   noSizeHeading: 'Also on these orders — no container size, so not counted as trees',
   noSizeWhy:
     'Nothing stored says whether a line is a good or a fee, so every line is shown and none is filtered away.',
   otherGoodsHeading: 'Other goods — sold by weight, volume or length',
+  valuesHeading: 'Figures used for this list',
+  sizesFailed: 'Could not read this nursery’s container sizes — no tree can be staked or mixed until they load. Reload before you load the trailer.',
+  sizesNone: 'No container sizes are set up for this nursery, so no tree can be staked or mixed. Set them up in Settings → Container sizes.',
   emptyDay: 'No stops are scheduled for this day.',
-} as const;
+};

@@ -4,12 +4,10 @@
 
 export const DEMO_BUSINESS_ID = 'a1b2c3d4-0000-0000-0000-000000000001';
 
-export const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
-
-export const CONTAINER_SIZES = [
-  '4 in', '1 gal', '3 gal', '5 gal', '10 gal',
-  '15 gal', '30 gal', '45 gal', '60 gal', '100 gal',
-];
+// 🔴 NO SIZE LIST LIVES HERE (ledger #343). `LARGE_CONTAINERS` and `CONTAINER_SIZES` were deleted
+// 2026-09-16: both had ZERO importers, and both named sizes LAWNS does not sell (60, 100) while
+// missing ones it does (65, 200). David, 2026-09-16: *"No second list of sizes."* The nursery's
+// sizes are its container ladder — `container_ladder`, read by `lib/containerLadderRead.ts`.
 
 export const TRANSPORT_OPTIONS = {
   SELF:     'self',

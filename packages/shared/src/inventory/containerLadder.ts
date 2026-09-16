@@ -52,17 +52,22 @@
 //   setup stays per RUN, handling becomes per RUNG. A rung with no handling figure returns null and
 //   the caller falls back to the global, so R-89's own 3-minute figure still reproduces §B exactly.
 //
-// DEPENDENCIES: ./unitOfMeasure (a zero-dep leaf) · ../production/basis (a zero-dep leaf). Nothing
+// DEPENDENCIES: ./unitOfMeasure · ../production/basis · ../utils/sizeLabel (all zero-dep leaves). Nothing
 //               else, deliberately — a client picker, a node seed script and the verify cap all
 //               import this, and none of them may drag a transitive dep in.
 // OUTPUTS:      Rung · Ladder · RungResolution · LadderConflict · foldLabel · numericKeysOf ·
-//               resolveRung · rungsAbove · nextRung · validateLadder · handlingFor.
-// NOT THIS MODULE: reading the ladder from the database (a caller does that and passes it in) ·
+//               resolveRung · rungsAbove · nextRung · validateLadder · handlingFor ·
+//               sameSizeOnLadder · largestRung · activeRungs · LADDER_FIELDS · LADDER_SELECT ·
+//               LadderRow · rungFromRow · ladderCoverage · LadderCoverage.
+// NOT THIS MODULE: reading the ladder from the database (a caller does that and passes it in —
+//               but the FIELD LIST and the row→Rung mapping live here, so the app's reader and the
+//               server's import preview cannot map one row two ways; ledger #343) ·
 //               writing a rung · the four-way split · the mix arithmetic · anything with a clock.
 // AC-1:         generic. A "rung" is a container size; no vertical noun appears in any identifier.
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
-import { parseUnitOfMeasure } from './unitOfMeasure';
+import { parseUnitOfMeasure, type UnitKind } from './unitOfMeasure';
+import { normalizeSize, sameSizeLabel } from '../utils/sizeLabel';
 import { type Estimate, suggestion } from '../production/basis';
 
 /** One rung. `label` is what a person sees and what a grower typed; everything else describes it. */
@@ -83,6 +88,13 @@ export interface Rung {
   handlingMinutes: number | null;
   /** Why that minute figure is what it is. Required by the type — an unlabelled number cannot exist. */
   handlingBecause: string;
+  /**
+   * T-posts to stake ONE tree of this size at install (ledger #343). The load list reads it; there
+   * is no size threshold anywhere any more — David, 2026-09-16: *"no size thresholds."* 0 = none.
+   */
+  installTPostsPerTree: number;
+  /** Where that post count came from. Required for the same reason `handlingBecause` is. */
+  installTPostsBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -127,9 +139,20 @@ export function numericKeysOf(rung: Rung): number[] {
   return [...keys].sort((a, b) => a - b);
 }
 
+/**
+ * Every answer the resolver gives. ✏️ WIDENED 2026-09-16 (ledger #343): the refusal used to be
+ * `blank | off_ladder`, which made a 50 lb bag and an unreadable scribble both read "off the ladder".
+ * The load list has to tell them apart — a bag LOADS as goods, an off-ladder gallon size is a tree
+ * nobody can stake — and David's ruling is that no consumer parses a size itself (*"no size parsed
+ * outside the resolver"*). So the resolver says which of the four it was, and consumers only read.
+ *   · `not_container` — it reads as a real unit that is not a container (`kind`/`unit` say which).
+ *   · `off_ladder`    — it reads as a container size, and no rung claims it.
+ *   · `unreadable`    — the parser declined it and no label or alias matched.
+ */
 export type RungResolution =
   | { ok: true; rung: Rung; how: 'label' | 'alias' | 'number' }
-  | { ok: false; reason: 'blank' | 'off_ladder'; detail: string };
+  | { ok: false; reason: 'blank' | 'off_ladder' | 'unreadable'; detail: string }
+  | { ok: false; reason: 'not_container'; detail: string; kind: UnitKind; unit: string };
 
 /**
  * WHICH RUNG is this size on?
@@ -158,7 +181,23 @@ export function resolveRung(ladder: Ladder, size: string | null | undefined): Ru
   }
 
   const p = parseUnitOfMeasure(size);
-  if (p && p.kind === 'container' && p.value != null) {
+  if (!p) {
+    return {
+      ok: false,
+      reason: 'unreadable',
+      detail: `We could not read "${String(size).trim()}" as a size, and it is not one of this nursery's container sizes.`,
+    };
+  }
+  if (p.kind !== 'container') {
+    return {
+      ok: false,
+      reason: 'not_container',
+      kind: p.kind,
+      unit: p.unit,
+      detail: `"${String(size).trim()}" is sold by ${p.unit}, not by container.`,
+    };
+  }
+  if (p.value != null) {
     // A single value matches a rung claiming it. A RANGE matches only a rung claiming BOTH ends —
     // otherwise "10/15 gallon" would silently collapse onto the 15 rung, which is the laundering
     // `unitOfMeasure`'s own header refuses to reproduce (tech-debt #125).
@@ -253,5 +292,131 @@ export function validateLadder(ladder: Ladder): LadderConflict[] {
     if (labels.length > 1) out.push({ kind: 'duplicate_sort', detail: `${labels.join(' and ')} share sort position ${s}, so "next rung up" is undefined between them.` });
   }
 
+  return out;
+}
+
+/**
+ * Do two stored sizes mean the same container? (ledger #343)
+ *
+ * 🔴 WITH A LADDER, THE LADDER DECIDES. "#3", "5 gal" and "3/5 Gallon" are ONE rung at LAWNS, and a
+ * text fold can never know that — `normalizeSize` would call them three sizes and the count screen
+ * would mint three rows for one bucket. So when BOTH sizes land on a rung, the answer is whether it
+ * is the SAME rung.
+ * ⚠️ OTHERWISE THE TEXT FOLD STANDS, AND THAT IS DELIBERATE, NOT A SECOND SIZE LIST. A tenant with no
+ * ladder (Test Dave's today), a blank size, or an off-ladder size nobody has added yet still needs a
+ * same-or-different answer, and the text fold is the one the platform already shares
+ * (`sameSizeLabel`, STD-011). It compares two strings; it holds no sizes.
+ */
+export function sameSizeOnLadder(
+  ladder: Ladder | null,
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (ladder && ladder.length > 0) {
+    const ra = resolveRung(ladder, a);
+    const rb = resolveRung(ladder, b);
+    if (ra.ok && rb.ok) return ra.rung.label === rb.rung.label;
+    if (ra.ok !== rb.ok) return false;
+  }
+  return sameSizeLabel(a, b);
+}
+
+/** The rungs a picker OFFERS, in ladder order. Retired rungs never appear here (R-133). */
+export function activeRungs(ladder: Ladder): Rung[] {
+  return ladder.filter((r) => r.active).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * The top ACTIVE rung — the one a NEW rung copies its install posts from (David, 2026-09-16: *"a new
+ * rung's T-posts pre-fill from the largest existing rung"*). "Largest" is LADDER ORDER, never volume:
+ * the ladder's own order is the only one it has (a slip and a 4" pot have no comparable volume).
+ */
+export function largestRung(ladder: Ladder): Rung | null {
+  const offered = activeRungs(ladder);
+  return offered.length ? offered[offered.length - 1] : null;
+}
+
+/**
+ * Every column a reader needs from `container_ladder` — THE one list (ledger #343).
+ * It was born in `cultivar-os/src/lib/containerLadderFields.ts` and moved here when the server's
+ * import preview became a second reader: two lists for one table is the copy that drifts (#179).
+ * That file re-exports this one, and its test replays the migrations against it.
+ * 🔴 `install_t_posts_*` are asked for BEFORE `20260916_container_ladder_install_t_posts.sql` is
+ * applied on a database that lacks it, every ladder read FAILS — which is why the branch carrying
+ * this list must not merge before that migration runs.
+ */
+export const LADDER_FIELDS = [
+  'id', 'label', 'aliases', 'sort_order', 'volume_gallons',
+  'handling_minutes', 'handling_because',
+  'install_t_posts_per_tree', 'install_t_posts_because',
+  'active',
+] as const;
+
+/** DERIVED, never typed twice. */
+export const LADDER_SELECT = LADDER_FIELDS.join(', ');
+
+/** One row as PostgREST returns it — numerics may arrive as strings. */
+export interface LadderRow {
+  id: string; label: string; aliases: string[] | null; sort_order: number;
+  volume_gallons: number | string | null; handling_minutes: number | string | null;
+  handling_because: string | null;
+  install_t_posts_per_tree: number | string | null; install_t_posts_because: string | null;
+  active: boolean;
+}
+
+const numOrNull = (v: number | string | null): number | null =>
+  v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+
+/** The ONE row→Rung mapping. */
+export function rungFromRow(r: LadderRow): Rung {
+  return {
+    label: r.label,
+    aliases: r.aliases ?? [],
+    sortOrder: r.sort_order,
+    volumeGallons: numOrNull(r.volume_gallons),
+    handlingMinutes: numOrNull(r.handling_minutes),
+    handlingBecause: r.handling_because ?? 'not timed',
+    // NOT NULL DEFAULT 0 in the database — a null here means the row came back without it, and 0 is
+    // what the database itself says for a rung nobody set. The reason says which.
+    installTPostsPerTree: numOrNull(r.install_t_posts_per_tree) ?? 0,
+    installTPostsBecause: r.install_t_posts_because ?? 'not set',
+    active: r.active,
+  };
+}
+
+/** How a list of sizes lands on a ladder — every size counted in exactly one bucket. */
+export interface LadderCoverage {
+  onLadder: number;
+  notContainer: number;
+  noSize: number;
+  unreadable: number;
+  /** Container sizes no rung claims — NAMED, with how many items carry each, most first. */
+  offLadder: Array<{ size: string; count: number }>;
+}
+
+/**
+ * Place every size in a list on the ladder (ledger #343 — the import preview's question: *"which of
+ * these products are sizes this nursery grows?"*). Nothing is dropped: the five buckets sum to the
+ * input length, and the off-ladder sizes are named rather than counted into an anonymous total.
+ */
+export function ladderCoverage(sizes: ReadonlyArray<string | null | undefined>, ladder: Ladder): LadderCoverage {
+  const out: LadderCoverage = { onLadder: 0, notContainer: 0, noSize: 0, unreadable: 0, offLadder: [] };
+  const off = new Map<string, { size: string; count: number }>();
+  for (const size of sizes) {
+    const r = resolveRung(ladder, size);
+    if (r.ok) { out.onLadder++; continue; }
+    if (r.reason === 'blank') out.noSize++;
+    else if (r.reason === 'not_container') out.notContainer++;
+    else if (r.reason === 'unreadable') out.unreadable++;
+    else {
+      // Two spellings of one off-ladder size ("7 gal", "7 gallon") are ONE finding — grouped by the
+      // shared text fold, the same one `sameSizeOnLadder` falls back to.
+      const k = normalizeSize(size).toLowerCase();
+      const e = off.get(k) ?? { size: String(size).trim(), count: 0 };
+      e.count++;
+      off.set(k, e);
+    }
+  }
+  out.offLadder = [...off.values()].sort((a, b) => b.count - a.count || a.size.localeCompare(b.size));
   return out;
 }

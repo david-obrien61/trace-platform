@@ -23,8 +23,9 @@ export type { UnitKind, UnitParse, UnitColumns, MultiUnitGroup, MultiUnitCandida
 // The container ladder — a container size is a rung, not a number (ledger #326).
 export {
   foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
+  sameSizeOnLadder, largestRung, activeRungs, LADDER_FIELDS, LADDER_SELECT, rungFromRow, ladderCoverage,
 } from './containerLadder';
-export type { Rung, Ladder, RungResolution, LadderConflict } from './containerLadder';
+export type { Rung, Ladder, RungResolution, LadderConflict, LadderRow, LadderCoverage } from './containerLadder';
 export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retiredFilter';
 export type { LiveFilterable } from './retiredFilter';
 export { shapeCollisionKey, findShapeCollisions, collisionReason, moneyAtStake } from './shapeCollision';

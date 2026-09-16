@@ -12,6 +12,12 @@ import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/i
 import { orderKindForMode, mayWriteStockRecord } from '../../../shared/src/business-logic/testMode';
 import { TEST_ORDER_KIND } from '../../../shared/src/business-logic/orderKind';
 
+// ⚠️ THE LAST HARDCODED SIZE LIST, LEFT ON PURPOSE AND FILED — tech-debt #310 (ledger #343).
+// David ruled 2026-09-16: *"No second list of sizes, no size thresholds."* This list breaks that AND
+// is wrong on LAWNS's own ladder — it has no 65 or 200 gal, names a 60 nobody sells, and matches
+// EXACT strings, so a lot sized "45 Gallon" never counts as large. It drives only the leakage flag.
+// Replacing it needs a decision the ladder has no column for yet — which rungs are "large" — and
+// that is David's to make, not a default to pick inside a checkout handler.
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
 // The permission that gates order EDIT / DELETE / STATUS. Mirrors cultivar roles.ts
