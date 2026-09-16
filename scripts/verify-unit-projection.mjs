@@ -121,6 +121,12 @@ const ALLOWED = new Map([
    'READS: asserts the derive RAN on an imported row (unit_kind=container, unit_value=30) and that '
    + 'an unreadable size lands unit_parsed_from NULL rather than a guess. Checking that the ONE '
    + 'derive was used is the opposite of forking it.'],
+
+  // ── THE TEST-MODE LEDGER GUARD HARNESS, added 2026-09-16 (ledger #344) ───────────────────────
+  // It creates a PGlite copy of `business_inventory` whose columns must match the live table, because
+  // the LIVE projection trigger it installs reads `unit_parsed_from`. It derives nothing, writes no
+  // unit, and renders nothing — the same #190 shape as the entries above.
+  ['scripts/sql-harness/test-mode-ledger-guard-344.pglite.mjs', 'DECLARES the live table shape for a SQL harness; derives and writes no unit'],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
