@@ -32,12 +32,19 @@
 > ✏️ **CHANGED 2026-09-16 — TECH-DEBT #306 IS FIXED ON THIS BRANCH** (the writer reads what each
 > customer holds and adds only what is new; a seeded billing row that disagrees with QuickBooks is
 > retired and replaced). **It was the writer's defect, and the writer's tests now prove the fix.**
-> 🔴 **BUT CARDS 7, 8, 9 AND 12 STILL CANNOT BE RUN — NO SCREEN CALLS THE CONTACT WRITER.** Measured
-> 2026-09-16: `writeContactRecord` has no caller outside its own tests, so "run a QuickBooks customer
-> import" today does not reach this code at all. Those cards wait on the import being wired to it.
+> ✏️ **CHANGED AGAIN 2026-09-16 (David's Step-4 rulings) — EVERY WRITER NOW GOES THROUGH THE CONTACT
+> WRITER, AND THE DATABASE REFUSES ONE THAT DOES NOT.** The QuickBooks customer import, OCR capture,
+> checkout, delivery ingest, the customer editor and the ship-to picker all write the lists; a direct
+> write to `customers.phone` / `email` / `billing_*` is refused with a sentence (② §5e). **Cards 7, 8, 9
+> and 12 are runnable once this branch is merged and deployed.**
+> 🔴 **THE SEED NOW CLASSIFIES (② §5b):** a phone typed into a street goes to the PHONE list (words
+> beside it kept as its note), never the address list; an email field holding several addresses
+> becomes one row each. Measured on the LAWNS snapshot: **465** street fields were only a phone, **10**
+> were a phone with words, **15** held a phone different from the phone field (4 of those customers
+> had no phone at all), **1** email field held three addresses.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
-> **David can run these now, Supabase SQL editor, no phone:** CARDS 1, 2, 3, 3b, 4, 5, 6, 13.
+> **David can run these now, Supabase SQL editor, no phone:** CARDS 1, 2, 3, 3b, 4, 4b, 4c, 5a, 5, 6, 13.
 > **David's own login, Test Dave's — these WRITE:** CARD 10 · and **7, 8, 9, 12 only once the import calls the contact writer** (see above).
 > 🔴 **Never on LAWNS** until CARD 14: a checkout there pushes a real invoice.
 > **David's own login, LAWNS, LOOKING ONLY:** CARD 11, CARD 14.
@@ -120,33 +127,36 @@ so the absent policy is fail-closed by design, not an omission.
 
 ---
 
-### CARD 3b — 🔴 THE SEED LANDED: every flat value has a list row behind it
+### CARD 3b — 🔴 THE SEED LANDED, CLASSIFIED: every value has a list row, and no street is a phone
 STATUS: owed
 LAST-PROVEN: —
 DEVICE: desktop
 COVERS: ledger #335
 
-**Run it straight after CARD 2** — before any import. Without this seed, the trigger derives every
-customer's address, phone and email from three EMPTY tables, and the first list write blanks all three.
+✏️ **REWRITTEN 2026-09-16** for the classifying seed. **Run it straight after CARD 2.** The apply itself
+printed a line starting `SEEDED:` — these numbers should match it.
 
 ```sql
 SELECT
-  (SELECT count(*) FROM public.customers
-    WHERE COALESCE(btrim(billing_line1),'') <> '' OR COALESCE(btrim(billing_city),'') <> ''
-       OR COALESCE(btrim(billing_state),'') <> '' OR COALESCE(btrim(billing_zip),'')  <> '') AS customers_with_address,
-  (SELECT count(*) FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*')  AS seeded_addresses,
-  (SELECT count(*) FROM public.customers WHERE COALESCE(btrim(phone),'') <> '')                  AS customers_with_phone,
-  (SELECT count(*) FROM public.customer_phones WHERE source = 'migrated:customers.phone')        AS seeded_phones,
-  (SELECT count(*) FROM public.customers WHERE COALESCE(btrim(email),'') <> '')                  AS customers_with_email,
-  (SELECT count(*) FROM public.customer_emails WHERE source = 'migrated:customers.email')        AS seeded_emails,
+  (SELECT count(*) FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*') AS seeded_addresses,
+  (SELECT count(*) FROM public.customer_phones WHERE source = 'migrated:customers.phone')        AS phones_from_phone_field,
   (SELECT count(*) FROM public.customer_phones
-    WHERE source = 'migrated:customers.phone' AND value_norm IS NULL)                            AS phones_with_no_digits;
+    WHERE source IN ('migrated:customers.billing_line1','migrated:customers.billing_line2','migrated:customers.address_line1')) AS phones_from_a_street,
+  (SELECT count(*) FROM public.customer_phones WHERE source LIKE 'migrated:%' AND note IS NOT NULL) AS phones_with_a_note,
+  (SELECT count(*) FROM public.customer_emails WHERE source = 'migrated:customers.email')        AS seeded_emails,
+  (SELECT count(*) FROM public.customer_addresses
+    WHERE line1 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$')          AS addresses_whose_street_is_a_phone,
+  (SELECT count(*) FROM public.customers
+    WHERE billing_line1 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$')    AS customers_showing_a_phone_as_street;
 ```
 
-**PASS:** `customers_with_address = seeded_addresses` · `customers_with_phone = seeded_phones` ·
-`customers_with_email = seeded_emails`.
-⚠️ `phones_with_no_digits` should be 0. A non-zero count is a phone column holding text with no digits
-(`n/a`, `call office`) — it was seeded as written and it is not a defect, but read those rows.
+**PASS on LAWNS** (measured on the 2026-09-16 snapshot — the live numbers add the few customers of
+other tenants and any LAWNS customer added since): `seeded_addresses` about **1,456** ·
+`phones_from_phone_field` about **1,497** · `phones_from_a_street` about **16** · `phones_with_a_note`
+about **5** · `seeded_emails` about **1,722** · 🔴 **`addresses_whose_street_is_a_phone` = 0** ·
+🔴 **`customers_showing_a_phone_as_street` = 0.**
+If either of the last two is not 0, **stop and report it** — the migration's own check should have
+refused.
 
 Then Paul, the one real address the backfill rescued:
 
@@ -203,13 +213,77 @@ recomputed the address from an empty list. Stop and report it.
 
 ---
 
+### CARD 4b — 🔴 A DIRECT WRITE IS REFUSED (the guard)
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+Run it whole. **It rolls itself back.**
+
+```sql
+BEGIN;
+  UPDATE public.customers SET phone = '(512) 555-0199'
+   WHERE id = (SELECT id FROM public.customers ORDER BY created_at LIMIT 1);
+ROLLBACK;
+```
+
+**PASS:** it stops with **`Not saved: a customer's phone, email and billing address are kept in their
+contact lists, not on the customer row. Nothing was changed.`**
+🔴 **If it says `UPDATE 1` instead, the guard is not installed** — an old writer could then set a phone
+that the next list write silently throws away. Stop and report it.
+
+---
+
+### CARD 4c — 🔴 THE PHONES THAT WERE IN STREETS ARE PHONES NOW
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+```sql
+SELECT c.id, c.phone, c.billing_line1, c.billing_city,
+       (SELECT string_agg(p.value || CASE WHEN p.is_primary THEN ' (primary)' ELSE '' END
+                          || coalesce(' — ' || p.note, ''), ' · ' ORDER BY p.is_primary DESC)
+          FROM public.customer_phones p WHERE p.customer_id = c.id AND p.active) AS phones
+  FROM public.customers c
+ WHERE EXISTS (SELECT 1 FROM public.customer_phones p
+                WHERE p.customer_id = c.id AND p.source LIKE 'migrated:customers.%line%')
+ ORDER BY c.phone NULLS FIRST
+ LIMIT 25;
+```
+
+**PASS:** every row lists **two** phones (the phone field as primary, the street's number beside it)
+**or one** primary phone for the few customers who had none — and `billing_line1` is a real street or
+empty, **never a phone**. Rows with a note show it after a dash (`— cell`).
+
+---
+
+### CARD 5a — 🔴 NOTHING FROM THE SNAPSHOT WAS LOST (run before CARD 5)
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+Open **`~/Desktop/trace-platform/supabase/local-data/2026-09-16_lawns_snapshot_proof.sql`** (it holds
+customer data — it lives only on this Mac and is never committed), paste the whole file into the SQL
+editor, run it. Thunder can also run it read-only and paste you the result.
+
+**PASS:** one row — `misses` = **0** (about 10,800 expectations). Any miss is listed as
+`<customer id> <kind>`; **do not run CARD 5** until it is 0.
+
+---
+
 ### CARD 5 — apply `20260915b_drop_legacy_customer_address.sql`
 STATUS: owed
 LAST-PROVEN: —
 DEVICE: desktop
 COVERS: ledger #335
 
-🔴 **CARD 1 must be zero rows and CARD 2 must be done first.** This one is destructive.
+🔴 **CARD 5a must be 0 misses, CARD 2 and `20260916d` must be done, and this branch must be merged and
+deployed first.** This one is destructive and it is LAST.
+✏️ 2026-09-16: its pre-flight now counts a legacy street that moved to the PHONE list as safe — the
+465 legacy "streets" that are phone numbers are in `customer_phones`, and the check reads them there.
 
 **PASS:** completes with no error.
 **PASS, equally:** it REFUSES with `REFUSED: N customer row(s) hold a legacy address value that
@@ -369,6 +443,51 @@ SELECT c.id, c.billing_line1 AS flat, a.line1 AS list
 
 ---
 
+### CARD 15 — Test Dave's, checkout: a second phone is KEPT, the first stays shown
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #335
+
+1. Start a checkout for an existing Test Dave's customer who has a phone.
+2. On the customer step, type a **different** phone number. Finish the order.
+3. Open that customer on /customers.
+
+**PASS:** the customer still shows the **original** phone; the new number is on file as a second
+phone. The order went through with no error.
+
+---
+
+### CARD 16 — Test Dave's, customer editor: changing the phone REPLACES it, and a ship-to save keeps it
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+1. /customers → open a Test Dave's customer → change **Phone**, **Email** and **Street** → Save.
+2. Reload. The three new values show.
+3. Start a checkout for that customer and **save a new ship-to site** ("Job site", any street + city).
+4. Reload the customer.
+
+**PASS:** after step 4 the customer still shows the phone, email and street from step 1 — **nothing
+blanked, nothing reverted.** (This is the exact failure the Step-4 report reproduced.)
+
+---
+
+### CARD 17 — Test Dave's, OCR capture: a new customer keeps everything after a ship-to save
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #335
+
+1. Capture an invoice that creates a **new** customer with a phone, email and street.
+2. Save a ship-to site for that customer (as in CARD 16 step 3).
+3. Open the customer.
+
+**PASS:** phone, email and street are all still there.
+
+---
+
 ### CARD 14 — 🔴 LAWNS, AND ONLY AFTER EVERY CARD ABOVE IS GREEN
 STATUS: needs-test
 LAST-PROVEN: —
@@ -383,6 +502,6 @@ nobody has designed yet**, which is the thing OP-14's `needs-test` state exists 
 
 ---
 
-> **COVERAGE: 0 of 15.** Thunder may never mark a card `covered` — only David's live run flips one,
-> with a date. **Cards 1–6 (with 3b) and 12–13 are SQL and need no deploy; cards 7–11 need the build in front
-> of you, and GATE 0 is what settles which build that is.**
+> **COVERAGE: 0 of 21.** Thunder may never mark a card `covered` — only David's live run flips one,
+> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–17 need the
+> build in front of you, and GATE 0 is what settles which build that is.**

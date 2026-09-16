@@ -72,6 +72,8 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
     customers:  [...(seed.customers ?? [])],
     deliveries: [...(seed.deliveries ?? [])],
     people:     [],
+    // #335: `findOrCreateCustomer` writes the phone to the contact list, not to `customers`.
+    customer_phones: [], customer_emails: [], customer_addresses: [],
   };
   const hasColumn = seed.hasColumn !== false;
   const touched: { table: string; verb: string }[] = [];
@@ -89,15 +91,17 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
       },
       eq(col: string, val: any) { q._filters.push([col, val]); return q; },
       neq(col: string, val: any) { q._filters.push(['__neq:' + col, val]); return q; },
+      in(col: string, vals: any[]) { q._filters.push(['__in:' + col, vals]); return q; },
+      order() { return q; },
       not() { q._filters.push(['__notnull', true]); return q; },
       limit() { return q._resolve(); },
       maybeSingle() { const r = q._resolve(); return Promise.resolve({ data: r.data?.[0] ?? null, error: r.error }); },
       single() { const r = q._resolve(); return Promise.resolve({ data: r.data?.[0] ?? null, error: r.error }); },
       insert(row: any) {
         touched.push({ table, verb: 'insert' });
-        const withId = { id: `${table}-${nextId++}`, ...row };
-        store[table].push(withId);
-        q._inserted = withId; return q;
+        const rows = (Array.isArray(row) ? row : [row]).map((x: any) => ({ id: `${table}-${nextId++}`, active: true, ...x }));
+        store[table].push(...rows);
+        q._inserted = rows.length === 1 ? rows[0] : rows; return q;
       },
       upsert(row: any, opts: any) {
         touched.push({ table, verb: 'upsert' });
@@ -131,10 +135,11 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
         let rows = store[table].filter(r => q._filters.every(([c, v]: [string, any]) => {
           if (c === '__notnull') return r.qb_invoice_id != null;
           if (c.startsWith('__neq:')) return r[c.slice(6)] !== v;
+          if (c.startsWith('__in:')) return (v as any[]).includes(r[c.slice(5)]);
           return r[c] === v;
         }));
         if (q._patch) { rows.forEach(r => Object.assign(r, q._patch)); }
-        if (q._inserted !== undefined) rows = q._inserted ? [q._inserted] : [];
+        if (q._inserted !== undefined) rows = q._inserted ? (Array.isArray(q._inserted) ? q._inserted : [q._inserted]) : [];
         return { data: rows, error: null };
       },
       then(res: any, rej: any) { return Promise.resolve(q._resolve()).then(res, rej); },
@@ -218,8 +223,11 @@ async function main() {
      '🔴 NO business_inventory_id — committed stock is DERIVED from open orders, so a future-dated row pointing at a lot would silently reduce what LAWNS can sell (the D-52 landmine)');
   ok(!('service_type' in row),
      '🔴 NO service_type — an invoice does not say whether a stop is a planting or a drop-off, and a guessed crew is worse than an unset field (D-9)');
-  ok(store.customers[0].phone === '(512) 555-0100',
+  // ✏️ #335: the phone is a CONTACT-LIST row now (the database derives customers.phone from it).
+  ok(store.customer_phones.some((p: any) => p.customer_id === store.customers[0].id && p.value === '(512) 555-0100'),
      '🔴 THE PHONE IS CARRIED ONTO THE CUSTOMER — it is the call-ahead number and it came free with the address');
+  ok(!('phone' in store.customers[0]),
+     '🔴 …and it is NOT written onto the customer row, which the database would refuse (#335 guard)');
   ok(store.customers[0].qb_customer_id === 'QB1', 'and the QuickBooks customer id is stored, so the next run links instead of guessing');
   ok(!('address_line1' in store.customers[0]) || store.customers[0].address_line1 === undefined,
      '⚠️ the SHIP-TO is NOT written onto the customer — that column is the BILLING address, and a ship-to varies per job site');
@@ -242,8 +250,11 @@ async function main() {
   const written = [...new Set(touched.filter(t => t.verb !== 'select').map(t => t.table))].sort();
   const read    = [...new Set(touched.map(t => t.table))].sort();
 
-  ok(JSON.stringify(written) === JSON.stringify(['customers', 'deliveries']),
-     `🔴 EXACTLY TWO TABLES ARE WRITTEN — customers and deliveries. Got: ${written.join(', ')}`);
+  // ✏️ #335: the customer's phone is written to its contact list (`customer_phones`), through
+  // `findOrCreateCustomer` → `writeContactEdit`. Still no address list, no email list — the ingest
+  // supplies a phone and nothing else about the customer.
+  ok(JSON.stringify(written) === JSON.stringify(['customer_phones', 'customers', 'deliveries']),
+     `🔴 EXACTLY THREE TABLES ARE WRITTEN — customers, their phone list, and deliveries. Got: ${written.join(', ')}`);
 
   const FORBIDDEN = ['orders', 'order_items', 'order_addons', 'order_service_selections',
                      'business_inventory', 'inventory_counts', 'inventory_ledger', 'plants',

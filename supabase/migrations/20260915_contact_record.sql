@@ -64,6 +64,18 @@
 --     every customer's address, phone and email on the first list write.
 --   · It MINTS NO PERMISSION STRING. See §3.
 --   · It adds NO column to `deliveries`.
+--
+-- ── ADDED 2026-09-16 (David's Step-4 rulings) ───────────────────────────────────────────────
+--   · §5b CLASSIFIES as it seeds: a phone sitting in a street field goes to the phone list (with
+--     any words beside it as a `note`), never to the address list; a split email field becomes one
+--     row per address. §5c refuses unless every existing value is in a list afterwards.
+--   · §5d recomputes every customer's flat fields once, so they say what the lists say.
+--   · §5e GUARD: a direct INSERT/UPDATE of `customers.phone`, `email` or `billing_*` is REFUSED.
+--     Every writer goes through the lists (`contactWriter`); a missed one fails loudly instead of
+--     having its value silently overwritten by the next list write.
+--   · The derivation is SECURITY DEFINER, and checks the list row's business owns the customer.
+--   · 🔴 APPLY ONLY TOGETHER WITH THE CODE THAT WRITES THROUGH THE LISTS (feat/contact-record).
+--     Code still writing `customers.phone` directly will have those writes refused.
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -87,6 +99,9 @@ CREATE TABLE IF NOT EXISTS public.customer_phones (
   -- normalised form, and normalising at READ time cannot be indexed. Written by §5's trigger,
   -- never by hand — a normalisation maintained in two places is the defect this build is fixing.
   value_norm   text,
+  -- Words that sat beside the number in the same field ("cell", "gate 1234"). The seed and the
+  -- import keep them here rather than dropping them (David, 2026-09-16: *"never lost"*).
+  note         text,
   is_primary   boolean NOT NULL DEFAULT false,
   -- WHERE IT CAME FROM, kept distinct from `label`. `label` is what kind of number it is;
   -- `source` is how it reached us — 'quickbooks:PrimaryPhone', 'quickbooks:BillAddr.Line1',
@@ -297,72 +312,266 @@ CREATE TRIGGER trg_customer_emails_normalize
 -- It is not `ON CONFLICT`: the unique indexes here are PARTIAL, so inference needs their predicate
 -- restated, and a guard that reads in English is worth more than one that reads in index syntax.
 
+-- ── §5b.1 🔴 THE SEED CLASSIFIES — DAVID'S RULING, 2026-09-16 ────────────────────────────────
+-- On LAWNS 465 billing "streets" are phone numbers and 10 more are a phone with words beside it
+-- (measured on the 2026-09-16 snapshot with the #331 classifier). Copying them into the address
+-- list as streets would give 475 customers an address that cannot go on a truck. So:
+--   · a billing street that is PHONE-BEARING is seeded into the PHONE list — non-primary when the
+--     customer already has a primary — and NOT into the address list. Words beside the number
+--     are kept as that phone's `note`, never lost. Duplicates of a number already held collapse.
+--   · the first remaining street is line 1, the next line 2. The legacy `address_line1` is used
+--     only when no billing street survives (the snapshot holds no other real street: the 15
+--     "streets" in `city` are town names like "Cedar Park", which the classifier reads as a street
+--     because of the word "park" — they are NOT used).
+--   · city/state/ZIP are seeded even when the street moved away, so no customer loses their town.
+--   · an email field holding several addresses becomes one row each.
+-- 🔴 THE RULE IS `contactRecordFromFlat` IN `contactRecord.ts`, MIRRORED HERE. The functions below
+-- are `classifyValueShape` / `phonesInText` / `splitEmails` in SQL, and the contact-seed harness
+-- runs this file on the LAWNS snapshot and asserts the rows equal the TypeScript rule's rows for
+-- every customer. They live in `pg_temp`, so they vanish with the session and leave no second copy
+-- of the rule in the schema (STD-011).
+
+CREATE OR REPLACE FUNCTION pg_temp.clean_text(raw text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $f$
+  SELECT NULLIF(regexp_replace(raw, '^\s+|\s+$', '', 'g'), '')
+$f$;
+
+-- `classifyValueShape` (importFieldAudit.ts), line for line.
+CREATE OR REPLACE FUNCTION pg_temp.contact_shape(raw text) RETURNS text
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE v text; at_pos int; has_letter boolean; digits text;
+BEGIN
+  v := pg_temp.clean_text(raw);
+  IF v IS NULL THEN RETURN 'other'; END IF;
+  at_pos := position('@' in v);
+  IF at_pos > 1 AND at_pos < length(v) AND v !~ '\s' AND position('.' in substr(v, at_pos + 1)) > 0 THEN
+    RETURN 'email';
+  END IF;
+  has_letter := v ~ '[A-Za-z]';
+  digits := regexp_replace(v, '\D', '', 'g');
+  IF NOT has_letter AND (length(digits) = 10 OR (length(digits) = 11 AND left(digits, 1) = '1')) THEN
+    RETURN 'phone';
+  END IF;
+  IF NOT has_letter AND (v ~ '^\d{5}$' OR v ~ '^\d{5}-\d{4}$') THEN RETURN 'postcode'; END IF;
+  IF has_letter THEN
+    IF v ~ '^\d+[A-Za-z]?\s+\S*[A-Za-z]' THEN RETURN 'street'; END IF;
+    IF v ~* '\y(st|street|rd|road|dr|drive|ln|lane|ave|avenue|blvd|boulevard|hwy|highway|ct|court|cir|circle|way|trl|trail|pkwy|parkway|ste|suite|apt|unit|box|loop|cove|cv|pass|path|bend|ridge|creek|park|plaza|terrace|ter|place|pl|county|cr|fm|rr)\y' THEN
+      RETURN 'street';
+    END IF;
+    IF v !~ '\d' THEN RETURN 'wordlike'; END IF;
+  END IF;
+  RETURN 'other';
+END
+$f$;
+
+-- `phonesInText` (contactRecord.ts). No rows = not phone-bearing.
+CREATE OR REPLACE FUNCTION pg_temp.phones_in_text(raw text)
+RETURNS TABLE (ord int, phone text, note text)
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE v text; shape text; rest text; m text; i int := 0;
+  pat constant text := '(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}';
+BEGIN
+  v := pg_temp.clean_text(raw);
+  IF v IS NULL THEN RETURN; END IF;
+  shape := pg_temp.contact_shape(v);
+  IF shape = 'phone' THEN ord := 1; phone := v; note := NULL; RETURN NEXT; RETURN; END IF;
+  IF shape = 'street' THEN RETURN; END IF;
+  rest := regexp_replace(v, pat, ' ', 'g');
+  rest := regexp_replace(rest, '\s+', ' ', 'g');
+  rest := NULLIF(regexp_replace(rest, '^[\s–—/,;:()-]+|[\s–—/,;:()-]+$', '', 'g'), '');
+  FOR m IN SELECT x[1] FROM regexp_matches(v, '(' || pat || ')', 'g') AS x LOOP
+    IF pg_temp.contact_shape(m) = 'phone' THEN
+      i := i + 1; ord := i; phone := m; note := rest; RETURN NEXT;
+    END IF;
+  END LOOP;
+END
+$f$;
+
+-- `splitEmails` (contactRecord.ts).
+CREATE OR REPLACE FUNCTION pg_temp.split_emails(raw text)
+RETURNS TABLE (ord int, email text)
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE v text; parts text[]; seen text[] := '{}'; p text; i int := 0;
+BEGIN
+  v := pg_temp.clean_text(raw);
+  IF v IS NULL THEN RETURN; END IF;
+  SELECT coalesce(array_agg(t ORDER BY n), '{}') INTO parts
+    FROM regexp_split_to_table(v, '[;,]|\s+') WITH ORDINALITY AS x(t, n) WHERE t <> '';
+  IF NOT (cardinality(parts) >= 2 AND NOT EXISTS (SELECT 1 FROM unnest(parts) q WHERE position('@' in q) = 0)) THEN
+    parts := ARRAY[v];
+  END IF;
+  FOREACH p IN ARRAY parts LOOP
+    IF lower(p) = ANY (seen) THEN CONTINUE; END IF;
+    seen := seen || lower(p);
+    i := i + 1; ord := i; email := p; RETURN NEXT;
+  END LOOP;
+END
+$f$;
+
+-- `contactRecordFromFlat`, phone half.
+CREATE OR REPLACE FUNCTION pg_temp.seed_phones(p_phone text, l1 text, l2 text, legacy text)
+RETURNS TABLE (ord int, label text, value text, note text, source text)
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE seen text[] := '{}'; n int := 0; d text; r record; q record;
+BEGIN
+  IF pg_temp.clean_text(p_phone) IS NOT NULL THEN
+    n := 1; seen := seen || regexp_replace(pg_temp.clean_text(p_phone), '\D', '', 'g');
+    ord := 1; label := 'main'; value := pg_temp.clean_text(p_phone); note := NULL;
+    source := 'migrated:customers.phone'; RETURN NEXT;
+  END IF;
+  FOR r IN SELECT * FROM (VALUES (1, 'billing_line1', l1), (2, 'billing_line2', l2), (3, 'address_line1', legacy)) t(k, col, val) ORDER BY k LOOP
+    FOR q IN SELECT * FROM pg_temp.phones_in_text(r.val) ORDER BY 1 LOOP
+      d := regexp_replace(q.phone, '\D', '', 'g');
+      IF d = ANY (seen) THEN CONTINUE; END IF;
+      seen := seen || d; n := n + 1;
+      ord := n; label := 'other'; value := q.phone; note := q.note;
+      source := 'migrated:customers.' || r.col; RETURN NEXT;
+    END LOOP;
+  END LOOP;
+END
+$f$;
+
+-- `contactRecordFromFlat`, address half. No row when there is nothing to hold.
+CREATE OR REPLACE FUNCTION pg_temp.seed_address(l1 text, l2 text, legacy text, p_city text, p_state text, p_zip text)
+RETURNS TABLE (line1 text, line2 text, city text, state text, zip text)
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE streets text[] := '{}'; c text;
+BEGIN
+  FOREACH c IN ARRAY ARRAY[pg_temp.clean_text(l1), pg_temp.clean_text(l2)] LOOP
+    IF c IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_temp.phones_in_text(c))
+       AND NOT (lower(c) = ANY (SELECT lower(x) FROM unnest(streets) x)) THEN
+      streets := streets || c;
+    END IF;
+  END LOOP;
+  IF cardinality(streets) = 0 THEN
+    c := pg_temp.clean_text(legacy);
+    IF c IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_temp.phones_in_text(c)) THEN streets := ARRAY[c]; END IF;
+  END IF;
+  line1 := streets[1]; line2 := streets[2];
+  city := pg_temp.clean_text(p_city); state := pg_temp.clean_text(p_state); zip := pg_temp.clean_text(p_zip);
+  IF line1 IS NULL AND line2 IS NULL AND city IS NULL AND state IS NULL AND zip IS NULL THEN RETURN; END IF;
+  RETURN NEXT;
+END
+$f$;
+
+-- ── §5b.2 THE THREE SEEDS — each reads FROM public.customers and nothing else ────────────────
+-- 🔴 ON A RE-RUN THE DERIVATION TRIGGERS ALREADY EXIST (created further down, on the first run), and
+-- each seeded row would recompute its customer MID-SEED — blanking the phone and email the next seed
+-- statement still has to read. Measured: a restore followed by a re-run seeded 800 phones of 1,513.
+-- So they are switched off for the seed; the DROP/CREATE below re-creates them, enabled.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_customer_phones_sync') THEN
+    ALTER TABLE public.customer_phones DISABLE TRIGGER trg_customer_phones_sync;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_customer_emails_sync') THEN
+    ALTER TABLE public.customer_emails DISABLE TRIGGER trg_customer_emails_sync;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_customer_addresses_sync') THEN
+    ALTER TABLE public.customer_addresses DISABLE TRIGGER trg_customer_addresses_sync;
+  END IF;
+END $$;
+
 -- The BILLING address: one row, kind 'billing', flagged default — which is exactly what
 -- `sync_customer_flat_contact` reads back (`kind IN ('billing','both') ORDER BY is_default DESC`).
 INSERT INTO public.customer_addresses
-  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)
-SELECT c.business_id, c.id, 'Billing', 'billing',
-       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),
-       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),
+  (business_id, customer_id, label, kind, line1, line2, city, state, zip, is_default, source, active)
+SELECT c.business_id, c.id, 'Billing', 'billing', s.line1, s.line2, s.city, s.state, s.zip,
        true, 'migrated:customers.billing_*', true
   FROM public.customers c
- WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR COALESCE(btrim(c.billing_city),  '') <> ''
-     OR COALESCE(btrim(c.billing_state), '') <> '' OR COALESCE(btrim(c.billing_zip),   '') <> '')
-   AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+ CROSS JOIN LATERAL pg_temp.seed_address(c.billing_line1, c.billing_line2, c.address_line1,
+                                         c.billing_city, c.billing_state, c.billing_zip) s
+ WHERE NOT EXISTS (SELECT 1 FROM public.customer_addresses a
                     WHERE a.customer_id = c.id AND a.active);
 
--- The phone. `value` is the number AS WRITTEN (§1) — trimmed, never reformatted.
+-- The phones: the phone field as written (primary), then every number from a street field.
 INSERT INTO public.customer_phones
-  (business_id, customer_id, label, value, is_primary, source, active)
-SELECT c.business_id, c.id, 'main', btrim(c.phone), true, 'migrated:customers.phone', true
+  (business_id, customer_id, label, value, note, is_primary, source, active)
+SELECT c.business_id, c.id, s.label, s.value, s.note, s.ord = 1, s.source, true
   FROM public.customers c
- WHERE COALESCE(btrim(c.phone), '') <> ''
-   AND NOT EXISTS (SELECT 1 FROM public.customer_phones p
+ CROSS JOIN LATERAL pg_temp.seed_phones(c.phone, c.billing_line1, c.billing_line2, c.address_line1) s
+ WHERE NOT EXISTS (SELECT 1 FROM public.customer_phones p
                     WHERE p.customer_id = c.id AND p.active);
 
--- The email. Still a dedup match key for `customerUpsert`, so it must survive the move intact.
+-- The emails, one row per address. Still a dedup match key for `customerUpsert`.
 INSERT INTO public.customer_emails
   (business_id, customer_id, label, value, is_primary, source, active)
-SELECT c.business_id, c.id, 'main', btrim(c.email), true, 'migrated:customers.email', true
+SELECT c.business_id, c.id, 'main', e.email, e.ord = 1, 'migrated:customers.email', true
   FROM public.customers c
- WHERE COALESCE(btrim(c.email), '') <> ''
-   AND NOT EXISTS (SELECT 1 FROM public.customer_emails e
-                    WHERE e.customer_id = c.id AND e.active);
+ CROSS JOIN LATERAL pg_temp.split_emails(c.email) e
+ WHERE NOT EXISTS (SELECT 1 FROM public.customer_emails m
+                    WHERE m.customer_id = c.id AND m.active);
 
 -- ── §5c PROVE THE MOVE, IN THE SAME TRANSACTION ─────────────────────────────────────────────
--- 🔴 THIS CAN FAIL, WHICH IS THE POINT (§6 r19). It asserts the property the sync trigger is about
--- to depend on: every customer holding a flat value has an active list row to derive it from. If
--- that is false for even one row, the trigger will blank that value the first time anything touches
--- that customer — so the transaction refuses rather than installing a trigger that loses data.
+-- 🔴 THIS CAN FAIL, WHICH IS THE POINT (§6 r19). Every value a customer holds today must be in a
+-- list afterwards, on the same customer — or the transaction refuses and nothing changes:
+--   · every phone field, and every number found in a street field (by digits);
+--   · every email address in the email field;
+--   · every street that is not phone-bearing (as line 1 or line 2 of a billing row);
+--   · every billing city / state / ZIP;
+--   · and NO seeded address row whose street is phone-bearing.
 DO $$
 DECLARE
-  n_addr integer; n_phone integer; n_email integer; n_seeded_addr integer;
+  n_phone int; n_email int; n_street int; n_place int; n_addr_phone int;
+  n_addr int; n_street_phones int; n_split int; n_notes int;
 BEGIN
-  SELECT count(*) INTO n_addr FROM public.customers c
-   WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR COALESCE(btrim(c.billing_city),  '') <> ''
-       OR COALESCE(btrim(c.billing_state), '') <> '' OR COALESCE(btrim(c.billing_zip),   '') <> '')
-     AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
-                      WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both'));
-
-  SELECT count(*) INTO n_phone FROM public.customers c
-   WHERE COALESCE(btrim(c.phone), '') <> ''
-     AND NOT EXISTS (SELECT 1 FROM public.customer_phones p WHERE p.customer_id = c.id AND p.active);
+  SELECT count(*) INTO n_phone FROM (
+    SELECT c.id, pg_temp.clean_text(c.phone) AS v FROM public.customers c
+     WHERE pg_temp.clean_text(c.phone) IS NOT NULL
+    UNION ALL
+    SELECT c.id, q.phone FROM public.customers c
+     CROSS JOIN LATERAL (VALUES (c.billing_line1), (c.billing_line2), (c.address_line1)) l(v)
+     CROSS JOIN LATERAL pg_temp.phones_in_text(l.v) q
+  ) x
+   WHERE NOT EXISTS (SELECT 1 FROM public.customer_phones p
+                      WHERE p.customer_id = x.id AND p.active
+                        AND (p.value = x.v OR p.value_norm = NULLIF(regexp_replace(x.v, '\D', '', 'g'), '')));
 
   SELECT count(*) INTO n_email FROM public.customers c
-   WHERE COALESCE(btrim(c.email), '') <> ''
-     AND NOT EXISTS (SELECT 1 FROM public.customer_emails e WHERE e.customer_id = c.id AND e.active);
+   CROSS JOIN LATERAL pg_temp.split_emails(c.email) e
+   WHERE NOT EXISTS (SELECT 1 FROM public.customer_emails m
+                      WHERE m.customer_id = c.id AND m.active AND m.value_norm = lower(e.email));
 
-  IF n_addr > 0 OR n_phone > 0 OR n_email > 0 THEN
+  SELECT count(*) INTO n_street FROM public.customers c
+   CROSS JOIN LATERAL (VALUES (c.billing_line1), (c.billing_line2)) l(v)
+   WHERE pg_temp.clean_text(l.v) IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM pg_temp.phones_in_text(l.v))
+     AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                      WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both')
+                        AND lower(pg_temp.clean_text(l.v)) IN (lower(a.line1), lower(a.line2)));
+
+  SELECT count(*) INTO n_place FROM public.customers c
+   WHERE (pg_temp.clean_text(c.billing_city) IS NOT NULL OR pg_temp.clean_text(c.billing_state) IS NOT NULL
+          OR pg_temp.clean_text(c.billing_zip) IS NOT NULL)
+     AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                      WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both')
+                        AND a.city  IS NOT DISTINCT FROM pg_temp.clean_text(c.billing_city)
+                        AND a.state IS NOT DISTINCT FROM pg_temp.clean_text(c.billing_state)
+                        AND a.zip   IS NOT DISTINCT FROM pg_temp.clean_text(c.billing_zip));
+
+  SELECT count(*) INTO n_addr_phone FROM public.customer_addresses a
+   WHERE a.source = 'migrated:customers.billing_*'
+     AND (EXISTS (SELECT 1 FROM pg_temp.phones_in_text(a.line1))
+       OR EXISTS (SELECT 1 FROM pg_temp.phones_in_text(a.line2)));
+
+  IF n_phone > 0 OR n_email > 0 OR n_street > 0 OR n_place > 0 OR n_addr_phone > 0 THEN
     RAISE EXCEPTION
-      'REFUSED: % customer(s) hold a billing address, % a phone and % an email with NO list row to '
-      'derive it from. Installing the sync trigger now would blank those values on the first write '
-      'against each record. Nothing has been changed.', n_addr, n_phone, n_email;
+      'REFUSED: % customer(s) hold a billing address value (% street, % city/state/ZIP), % a phone '
+      'and % an email with NO list row to derive it from, and % seeded address row(s) still hold a '
+      'phone as their street. Nothing has been changed.',
+      n_street + n_place, n_street, n_place, n_phone, n_email, n_addr_phone;
   END IF;
 
-  SELECT count(*) INTO n_seeded_addr FROM public.customer_addresses
-   WHERE source = 'migrated:customers.billing_*';
-  RAISE NOTICE 'SEEDED: % billing address row(s). Every flat value now has a list row behind it.',
-    n_seeded_addr;
+  SELECT count(*) INTO n_addr FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*';
+  SELECT count(*) INTO n_street_phones FROM public.customer_phones
+   WHERE source IN ('migrated:customers.billing_line1', 'migrated:customers.billing_line2', 'migrated:customers.address_line1');
+  SELECT count(*) INTO n_notes FROM public.customer_phones WHERE source LIKE 'migrated:%' AND note IS NOT NULL;
+  SELECT count(*) INTO n_split FROM (
+    SELECT customer_id FROM public.customer_emails WHERE source = 'migrated:customers.email'
+     GROUP BY customer_id HAVING count(*) > 1) z;
+  RAISE NOTICE 'SEEDED: % address row(s) · % phone(s) taken out of street fields (% with a note) · '
+    '% customer(s) whose email field was split · 0 address rows with a phone as the street.',
+    n_addr, n_street_phones, n_notes, n_split;
 END $$;
 
 -- 🔴 THE FLAT COLUMNS, RECOMPUTED FROM THE LIST ON EVERY CHANGE.
@@ -374,11 +583,19 @@ END $$;
 -- ABSENT for a record that is present, which is D-9 inverted and exactly the class of defect this
 -- build exists to remove. `ORDER BY is_primary DESC, created_at ASC` is total: a list with any
 -- active row always derives a value, and it is deterministic.
-CREATE OR REPLACE FUNCTION public.sync_customer_flat_contact(p_customer_id uuid) RETURNS void
-LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.sync_customer_flat_contact(p_customer_id uuid) RETURNS boolean
+LANGUAGE plpgsql
+-- 🔴 SECURITY DEFINER (2026-09-16): a derivation must not depend on who triggered it. As INVOKER the
+-- UPDATE below ran under the caller's RLS, so a member allowed to add a phone but not to update
+-- `customers` would write the list row while the flat column silently stayed stale. The trigger
+-- that calls this checks the row's business matches the customer's first (see below).
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 DECLARE
   v_phone text; v_email text;
-  v_line1 text; v_city text; v_state text; v_zip text;
+  v_line1 text; v_line2 text; v_city text; v_state text; v_zip text;
+  n int;
 BEGIN
   SELECT value INTO v_phone FROM public.customer_phones
    WHERE customer_id = p_customer_id AND active
@@ -390,25 +607,50 @@ BEGIN
 
   -- The BILLING address only. A shipping-only site must never become the customer's billing
   -- address — that is the D-41 redline arriving through a new door, and `kind` is what holds it.
-  SELECT line1, city, state, zip INTO v_line1, v_city, v_state, v_zip
+  SELECT line1, line2, city, state, zip INTO v_line1, v_line2, v_city, v_state, v_zip
     FROM public.customer_addresses
    WHERE customer_id = p_customer_id AND active AND kind IN ('billing', 'both')
    ORDER BY is_default DESC, created_at ASC, id ASC LIMIT 1;
 
+  -- The flag tells the guard trigger on `customers` that THIS write is the derivation. It is
+  -- transaction-local and switched off again straight after, so nothing else inherits it.
+  PERFORM pg_catalog.set_config('trace.contact_sync', 'on', true);
   UPDATE public.customers
      SET phone         = v_phone,
          email         = v_email,
          billing_line1 = v_line1,
+         billing_line2 = v_line2,
          billing_city  = v_city,
          billing_state = v_state,
          billing_zip   = v_zip
-   WHERE id = p_customer_id;
+   WHERE id = p_customer_id
+     -- Only when something changed, so `updated_at` moves only for a real change.
+     AND (phone IS DISTINCT FROM v_phone OR email IS DISTINCT FROM v_email
+          OR billing_line1 IS DISTINCT FROM v_line1 OR billing_line2 IS DISTINCT FROM v_line2
+          OR billing_city IS DISTINCT FROM v_city OR billing_state IS DISTINCT FROM v_state
+          OR billing_zip IS DISTINCT FROM v_zip);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM pg_catalog.set_config('trace.contact_sync', 'off', true);
+  RETURN n > 0;
 END;
 $$;
 
+-- Nobody calls the derivation directly; only the trigger below does (it runs as the owner).
+REVOKE ALL ON FUNCTION public.sync_customer_flat_contact(uuid) FROM public, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.trg_sync_customer_flat_contact() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 BEGIN
+  -- 🔴 TENANT CHECK (AC-3). The list tables' RLS checks `business_id` only, so a member could write
+  -- a row carrying their OWN business_id and ANOTHER business's customer_id — and this function
+  -- runs as the owner. Refuse unless the row's business owns the customer.
+  IF TG_OP <> 'DELETE' AND NOT EXISTS (
+       SELECT 1 FROM public.customers c WHERE c.id = NEW.customer_id AND c.business_id = NEW.business_id) THEN
+    RAISE EXCEPTION 'REFUSED: this contact detail names a customer that does not belong to its business. Nothing was saved.';
+  END IF;
   -- On UPDATE the customer_id could in principle move; sync both sides rather than assume it did not.
   IF TG_OP = 'DELETE' THEN
     PERFORM public.sync_customer_flat_contact(OLD.customer_id);
@@ -441,6 +683,57 @@ CREATE TRIGGER trg_customer_addresses_sync
 
 -- ⚠️ NO RECURSION: these triggers write `customers`, and no trigger on `customers` writes back to
 -- any list. `customers`' own `set_updated_at_generic` fires and stops there.
+
+-- ── §5d THE FLAT COLUMNS NOW SAY WHAT THE LISTS SAY ─────────────────────────────────────────
+-- The seed changed what some customers' flat values should be: 465 billing "streets" that were a
+-- phone are now empty (or the real street), 4 customers with no phone gain the one from their
+-- street field, and the split email field shows its first address. Recompute every customer once.
+-- A customer whose values already agree is not touched, so `updated_at` moves only where it should.
+DO $$
+DECLARE r record; n int := 0;
+BEGIN
+  FOR r IN SELECT id FROM public.customers LOOP
+    IF public.sync_customer_flat_contact(r.id) THEN n := n + 1; END IF;
+  END LOOP;
+  RAISE NOTICE 'DERIVED: % customer row(s) now show the value their lists hold.', n;
+END $$;
+
+-- ── §5e 🔴 THE GUARD — A DIRECT WRITE TO A DERIVED FIELD FAILS LOUDLY ───────────────────────
+-- David, 2026-09-16: every writer goes through the contact lists, and *"a missed writer fails
+-- loudly"*. Without this, an old writer that sets `customers.phone` succeeds — and the next list
+-- write for that customer recomputes the column from the list and silently throws the value away
+-- (proved on PGlite: an OCR-style insert, then a ship-to save, blanked phone, email and address).
+-- With it, that write is REFUSED at the moment it happens, with a sentence a person can act on.
+-- The derivation above is the one permitted writer: it raises `trace.contact_sync` around its own
+-- UPDATE. A PostgREST client cannot set that flag — it has no SQL, and `set_config` is not exposed.
+-- ⚠️ Writing NULL on INSERT is allowed (a new customer arrives with no contact fields and the lists
+-- fill them); an empty string '' is a value and is refused, so writers must OMIT absent fields.
+CREATE OR REPLACE FUNCTION public.guard_customer_derived_contact() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_setting('trace.contact_sync', true) = 'on' THEN
+    RETURN NEW;
+  END IF;
+  IF (TG_OP = 'INSERT' AND (NEW.phone IS NOT NULL OR NEW.email IS NOT NULL
+        OR NEW.billing_line1 IS NOT NULL OR NEW.billing_line2 IS NOT NULL OR NEW.billing_city IS NOT NULL
+        OR NEW.billing_state IS NOT NULL OR NEW.billing_zip IS NOT NULL))
+  OR (TG_OP = 'UPDATE' AND (NEW.phone IS DISTINCT FROM OLD.phone OR NEW.email IS DISTINCT FROM OLD.email
+        OR NEW.billing_line1 IS DISTINCT FROM OLD.billing_line1 OR NEW.billing_line2 IS DISTINCT FROM OLD.billing_line2
+        OR NEW.billing_city IS DISTINCT FROM OLD.billing_city OR NEW.billing_state IS DISTINCT FROM OLD.billing_state
+        OR NEW.billing_zip IS DISTINCT FROM OLD.billing_zip)) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'Not saved: a customer''s phone, email and billing address are kept in their contact lists, not on the customer row. Nothing was changed.',
+      HINT    = 'Write customer_phones / customer_emails / customer_addresses (contactWriter). Ledger #335.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_customers_derived_contact_guard ON public.customers;
+CREATE TRIGGER trg_customers_derived_contact_guard
+  BEFORE INSERT OR UPDATE ON public.customers
+  FOR EACH ROW EXECUTE FUNCTION public.guard_customer_derived_contact();
 
 -- ── §6 🔴 NO BACKFILL FROM DELIVERY HISTORY — `20260911b` §4 STANDS, RE-SCOPED RATHER THAN LIFTED
 -- `20260911b` §4 refused to seed `customer_addresses` because *"AGAVE LD LLC's four spellings of
@@ -506,17 +799,40 @@ COMMIT;
 --  WHERE schemaname='public' AND tablename IN ('customer_phones','customer_emails')
 --  ORDER BY tablename, indexname;
 
--- V5 · BOTH LISTS ARE EMPTY and the address book still is. §6's claim, checkable.
--- SELECT 'phones' AS list, count(*) FROM public.customer_phones
---  UNION ALL SELECT 'emails', count(*) FROM public.customer_emails
---  UNION ALL SELECT 'addresses', count(*) FROM public.customer_addresses;
+-- V5 · WHAT THE SEED WROTE. Compare with the SEEDED notice the apply printed.
+-- SELECT 'addresses' AS what, count(*) FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*'
+--  UNION ALL SELECT 'phones (phone field)', count(*) FROM public.customer_phones WHERE source = 'migrated:customers.phone'
+--  UNION ALL SELECT 'phones (from a street field)', count(*) FROM public.customer_phones
+--             WHERE source IN ('migrated:customers.billing_line1','migrated:customers.billing_line2','migrated:customers.address_line1')
+--  UNION ALL SELECT 'phones with a note', count(*) FROM public.customer_phones WHERE note IS NOT NULL
+--  UNION ALL SELECT 'emails', count(*) FROM public.customer_emails WHERE source = 'migrated:customers.email'
+--  UNION ALL SELECT 'customers with a split email', count(*) FROM (SELECT customer_id FROM public.customer_emails
+--             WHERE source = 'migrated:customers.email' GROUP BY customer_id HAVING count(*) > 1) z;
+-- MEASURED on the LAWNS 2026-09-16 snapshot (PGlite, the real file): addresses 1,456 · phone field
+-- 1,497 · from a street 16 · with a note 5 · emails 1,722 · split 1. The live numbers are those plus
+-- whatever the other tenants hold (17 customers outside LAWNS on 2026-09-16), and plus any LAWNS
+-- customer added after the snapshot.
+
+-- V5b · 🔴 ZERO address rows whose street is a phone number. Expect 0.
+-- SELECT count(*) FROM public.customer_addresses
+--  WHERE active AND (line1 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$'
+--                 OR line2 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$');
+
+-- V5c · the guard REFUSES a direct write. Run it whole; it rolls itself back.
+-- BEGIN;
+--   UPDATE public.customers SET phone = '(512) 555-0199'
+--    WHERE id = (SELECT id FROM public.customers ORDER BY created_at LIMIT 1);
+-- ROLLBACK;
+-- EXPECT: ERROR  Not saved: a customer's phone, email and billing address are kept in their contact lists …
 
 -- V6 · 🔴 THE TRIGGER ACTUALLY DERIVES — the one V that proves the mechanism rather than its
 -- presence. Run it whole; it rolls itself back and writes nothing.
 -- BEGIN;
 --   INSERT INTO public.customer_phones (business_id, customer_id, label, value, is_primary, source)
---   SELECT business_id, id, 'mobile', '(512) 555-0142', true, 'v-block'
---     FROM public.customers ORDER BY created_at LIMIT 1;
+--   SELECT c.business_id, c.id, 'mobile', '(512) 555-0142', true, 'v-block'
+--     FROM public.customers c
+--    WHERE NOT EXISTS (SELECT 1 FROM public.customer_phones p WHERE p.customer_id = c.id AND p.active)
+--    ORDER BY c.created_at LIMIT 1;   -- a customer with no phone yet, so the new one is the primary
 --   SELECT c.id, c.phone AS derived_flat_column, p.value AS list_value, p.value_norm
 --     FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id
 --    WHERE p.source = 'v-block';

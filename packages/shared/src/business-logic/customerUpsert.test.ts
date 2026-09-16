@@ -33,6 +33,7 @@
  */
 
 import { findOrCreateCustomer } from './customerUpsert';
+import { contactRecordFromFlat } from './contactRecord';
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -50,23 +51,65 @@ type UpdateMode = 'ok' | 'zero_rows' | 'two_rows';
 
 interface Row { [k: string]: unknown }
 
+// ✏️ LEDGER #335 — THE FAKE NOW BEHAVES LIKE THE MIGRATED DATABASE (§6 r19: a double must refuse
+// what the real thing refuses). It holds the three contact lists; it SEEDS them from each seeded
+// customer with the migration's own rule (`contactRecordFromFlat`); after every list write it
+// DERIVES `customers.phone` / `email` / `billing_*` exactly as `sync_customer_flat_contact` does;
+// and it REFUSES a customers insert/update carrying one of those fields, as the guard trigger does.
+// So every probe below still reads the stored row — and the row is what the lists say.
+const FLAT_KEYS = ['phone', 'email', 'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_zip'];
+const LISTS = ['customer_phones', 'customer_emails', 'customer_addresses'];
+
 function fakeDb(seed: { people?: Row[]; customers?: Row[] } = {}, updateMode: UpdateMode = 'ok') {
   const rows: Record<string, Row[]> = {
     people:    (seed.people    ?? []).map(r => ({ ...r })),
     customers: (seed.customers ?? []).map(r => ({ ...r })),
+    customer_phones: [], customer_emails: [], customer_addresses: [],
   };
   let nextId = 100;
-  const counts = { updates: 0, inserts: 0 };
+  let seq = 0;
+  const counts = { updates: 0, inserts: 0, guardRefusals: 0 };
+  const norm = (table: string, r: Row) => {
+    if (table === 'customer_phones') r.value_norm = String(r.value ?? '').replace(/\D/g, '') || null;
+    if (table === 'customer_emails') r.value_norm = String(r.value ?? '').trim().toLowerCase() || null;
+  };
+  const addListRow = (table: string, r: Row) => {
+    const row: Row = { id: `${table}-${nextId++}`, active: true, is_primary: false, is_default: false, kind: 'shipping', ...r, _seq: seq++ };
+    norm(table, row);
+    rows[table].push(row);
+    return row;
+  };
+  const derive = (customerId: unknown) => {
+    const c = rows.customers.find(x => x.id === customerId);
+    if (!c) return;
+    const pick = (list: Row[], flag: string) => list.filter(x => x.customer_id === customerId && x.active)
+      .sort((a, b) => (Number(b[flag] === true) - Number(a[flag] === true)) || (Number(a._seq) - Number(b._seq)))[0];
+    c.phone = pick(rows.customer_phones, 'is_primary')?.value ?? null;
+    c.email = pick(rows.customer_emails, 'is_primary')?.value ?? null;
+    const a = pick(rows.customer_addresses.filter(x => x.kind === 'billing' || x.kind === 'both'), 'is_default');
+    c.billing_line1 = a?.line1 ?? null; c.billing_line2 = a?.line2 ?? null;
+    c.billing_city = a?.city ?? null; c.billing_state = a?.state ?? null; c.billing_zip = a?.zip ?? null;
+  };
+  // THE MIGRATION'S SEED, on the seeded customers.
+  for (const c of rows.customers) {
+    const rec = contactRecordFromFlat({ ...(c as never), legacy_street: (c as { address_line1?: string }).address_line1 ?? null });
+    for (const p of rec.phones) addListRow('customer_phones', { business_id: c.business_id, customer_id: c.id, label: p.label, value: p.value, note: p.note, is_primary: p.is_primary, source: p.source });
+    for (const e of rec.emails) addListRow('customer_emails', { business_id: c.business_id, customer_id: c.id, label: e.label, value: e.value, is_primary: e.is_primary, source: e.source });
+    for (const a of rec.addresses) addListRow('customer_addresses', { business_id: c.business_id, customer_id: c.id, ...a });
+    derive(c.id);
+  }
 
   function builder(table: string) {
     let op: 'select' | 'insert' | 'update' = 'select';
-    let payload: Row = {};
+    let payload: any = {};
     let cols = '*';
     let lim: number | null = null;
-    const filters: Array<{ kind: 'eq' | 'is'; col: string; val: unknown }> = [];
+    const filters: Array<{ kind: 'eq' | 'is' | 'in'; col: string; val: unknown }> = [];
 
     const match = (r: Row) => filters.every(f =>
-      f.kind === 'is' ? (r[f.col] ?? null) === f.val : r[f.col] === f.val);
+      f.kind === 'is' ? (r[f.col] ?? null) === f.val
+        : f.kind === 'in' ? (f.val as unknown[]).includes(r[f.col])
+        : r[f.col] === f.val);
 
     const project = (r: Row): Row => {
       if (cols === '*' || cols.includes('*')) return { ...r };
@@ -78,7 +121,16 @@ function fakeDb(seed: { people?: Row[]; customers?: Row[] } = {}, updateMode: Up
 
     function run(shape: 'many' | 'single' | 'maybeSingle') {
       let hits: Row[];
-      if (op === 'insert') {
+      // THE GUARD (20260915 §5e): a customers write carrying a derived field is refused.
+      if (table === 'customers' && (op === 'insert' || op === 'update')) {
+        const carried = (Array.isArray(payload) ? payload : [payload]).some((p: Row) => FLAT_KEYS.some(k => k in p && (op === 'update' || p[k] !== null && p[k] !== undefined)));
+        if (carried) { counts.guardRefusals++; return Promise.resolve({ data: null, error: { code: 'P0001', message: 'Not saved: a customer\'s phone, email and billing address are kept in their contact lists' } }); }
+      }
+      if (op === 'insert' && LISTS.includes(table)) {
+        counts.inserts++;
+        hits = (Array.isArray(payload) ? payload : [payload]).map((p: Row) => addListRow(table, p));
+        for (const h of hits) derive(h.customer_id);
+      } else if (op === 'insert') {
         counts.inserts++;
         const stored: Row = { id: `c-${nextId++}`, ...payload };
         (rows[table] ||= []).push(stored);
@@ -87,10 +139,11 @@ function fakeDb(seed: { people?: Row[]; customers?: Row[] } = {}, updateMode: Up
         counts.updates++;
         // 🔴 The two shapes the count check exists for, injected BEFORE any row is touched — a
         // refused write must not also mutate the store, or the probe would prove nothing.
-        if (updateMode === 'zero_rows') return Promise.resolve({ data: [], error: null });
-        if (updateMode === 'two_rows')  return Promise.resolve({ data: [{ id: 'x' }, { id: 'y' }], error: null });
+        if (table === 'customers' && updateMode === 'zero_rows') return Promise.resolve({ data: [], error: null });
+        if (table === 'customers' && updateMode === 'two_rows')  return Promise.resolve({ data: [{ id: 'x' }, { id: 'y' }], error: null });
         hits = (rows[table] ?? []).filter(match);
-        for (const r of hits) Object.assign(r, payload);
+        for (const r of hits) { Object.assign(r, payload); norm(table, r); }
+        if (LISTS.includes(table)) for (const h of hits) derive(h.customer_id);
       } else {
         hits = (rows[table] ?? []).filter(match);
         if (lim !== null) hits = hits.slice(0, lim);
@@ -107,9 +160,12 @@ function fakeDb(seed: { people?: Row[]; customers?: Row[] } = {}, updateMode: Up
 
     const api: any = {
       select(c: string) { if (op === 'select') cols = c; else cols = c; return api; },
-      insert(p: Row) { op = 'insert'; payload = { ...p }; return api; },
+      insert(p: Row | Row[]) { op = 'insert'; payload = Array.isArray(p) ? p.map(x => ({ ...x })) : { ...p }; return api; },
       update(p: Row) { op = 'update'; payload = { ...p }; return api; },
       eq(col: string, val: unknown) { filters.push({ kind: 'eq', col, val }); return api; },
+      in(col: string, val: unknown[]) { filters.push({ kind: 'in', col, val }); return api; },
+      // Rows are held in insertion order, which is the order `writeContactEdit` asks for.
+      order() { return api; },
       is(col: string, val: unknown) { filters.push({ kind: 'is', col, val }); return api; },
       limit(n: number) { lim = n; return api; },
       single() { return run('single'); },
@@ -207,7 +263,10 @@ async function main() {
     } catch (e) { threw = e instanceof Error ? e.message : String(e); }
     ok(threw === null, `A4 no email stored and none supplied does not throw (${threw ?? 'clean'})`);
     ok(id === 'cust-1', 'A4b the order still resolves to the existing customer');
-    ok(cust(db).email === '', `A4c the empty email is left exactly as found — read back: ${JSON.stringify(cust(db).email)}`);
+    // ✏️ #335: an empty email has no list row, so the derived column reads NULL rather than ''.
+    // What this case guards is unchanged — nothing is written when nothing was typed.
+    ok(!cust(db).email && db.rows.customer_emails.length === 0,
+      `A4c the empty email stays empty and no email row is written — read back: ${JSON.stringify(cust(db).email)}`);
     ok(db.rows.customers.length === 1, 'A4d no duplicate minted for the email-less repeat');
   }
 
@@ -232,6 +291,53 @@ async function main() {
     const db = fakeDb({ people: [], customers: [] });
     await findOrCreateCustomer(db as any, BIZ, { first_name: 'Ana', last_name: 'Ruiz', phone: '5125558888' }, 'qr-scan');
     ok(!cust(db).email, `B2 an email-less new customer stores no email — read back: ${JSON.stringify(cust(db).email)}`);
+  }
+
+  // ── LEDGER #335 — THE CONTACT LISTS: nothing typed at a counter is ever LOST ────────────────
+  {
+    // A different phone at checkout: the curated one stays shown, the new one is KEPT (was dropped).
+    const db = fakeDb(seedRepeatCustomer());
+    // resolvedCustomerId: the new number matches no person, so without it the spine would mint a
+    // second customer — this case is about what happens to the SAME customer's phone list.
+    await findOrCreateCustomer(db as any, BIZ, { first_name: 'Diane', last_name: 'Foster', phone: '5125550000' }, 'qr-scan', { resolvedCustomerId: 'cust-1' });
+    const phones = db.rows.customer_phones.filter(p => p.customer_id === 'cust-1' && p.active);
+    ok(cust(db).phone === PHONE && phones.length === 2 && phones.some(p => p.value === '5125550000' && p.is_primary === false),
+      'K1 🔴 a second phone at checkout is ADDED as non-primary; the curated phone is still the one shown');
+    ok(db.counts.guardRefusals === 0, 'K2 🔴 no customers write carried a derived field (the guard would have refused it)');
+  }
+  {
+    // Supplied-wins email: the typed one is shown, the old one is still on file.
+    const db = fakeDb(seedRepeatCustomer({ email: 'old@example.com' }));
+    await findOrCreateCustomer(db as any, BIZ, { first_name: 'Diane', last_name: 'Foster', email: 'new@example.com', phone: PHONE }, 'qr-scan');
+    const emails = db.rows.customer_emails.filter(e => e.customer_id === 'cust-1' && e.active);
+    ok(cust(db).email === 'new@example.com' && emails.some(e => e.value === 'old@example.com' && e.is_primary === false),
+      'K3 the typed email becomes primary; the old one is DEMOTED, not overwritten');
+  }
+  {
+    // OCR puts a phone number where the street goes: it lands in the phone list, never the address.
+    const db = fakeDb({ people: [], customers: [] });
+    await findOrCreateCustomer(db as any, BIZ, {
+      first_name: 'Ocr', last_name: 'Case', billing_line1: '(512) 555-7777 - cell', billing_city: 'Leander',
+    }, 'ocr-invoice');
+    const c = cust(db);
+    ok(c.phone === '(512) 555-7777' && c.billing_line1 === null && c.billing_city === 'Leander',
+      `K4 🔴 a phone in the street field becomes the phone; the address keeps its city and no phone street (${JSON.stringify([c.phone, c.billing_line1, c.billing_city])})`);
+    ok(db.rows.customer_phones.some(p => p.note === 'cell'), 'K5 …and the words beside it are the phone\'s note');
+  }
+  {
+    // 🔴 THE REPRO FROM THE STEP-4 REPORT, AS A TEST: save, then a ship-to save — nothing lost.
+    for (const [label, seedCustomers, input] of [
+      ['new customer (OCR / checkout)', [], { first_name: 'New', last_name: 'One', email: 'n@example.com', phone: '5125551111', billing_line1: '1 New St', billing_city: 'Leander' }],
+      ['existing customer (fill)', seedRepeatCustomer().customers, { first_name: 'Diane', last_name: 'Foster', email: 'd@example.com', phone: PHONE }],
+    ] as const) {
+      const db = fakeDb({ people: seedCustomers.length ? seedRepeatCustomer().people : [], customers: seedCustomers as Row[] });
+      const r = await findOrCreateCustomer(db as any, BIZ, input as any, 'qr-scan');
+      const before = { ...cust(db) };
+      await (db.from('customer_addresses').insert({ business_id: BIZ, customer_id: r.customerId, label: 'Job site', kind: 'shipping', line1: '9 Site Rd', city: 'Austin' }) as any).then((x: any) => x);
+      const after = cust(db);
+      ok(before.phone && before.email && after.phone === before.phone && after.email === before.email && after.billing_line1 === before.billing_line1,
+        `K6 🔴 ${label}: a ship-to save afterwards loses NOTHING (phone ${JSON.stringify(after.phone)}, email ${JSON.stringify(after.email)}, street ${JSON.stringify(after.billing_line1)})`);
+    }
   }
 
   // ── PHONE IS NOT THE SAME DEFECT, AND THIS IS THE PROOF ──────────────────────────────────────

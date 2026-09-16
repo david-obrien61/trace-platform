@@ -258,8 +258,12 @@ const SRC = {
   // — SUPPLIED_WINS and the explicit `!== undefined` line. Read them too, so this asserts REACHES
   // THE PAYLOAD rather than the narrower "appears in one particular list".
   const namedBranches = new Set<string>();
-  if (/SUPPLIED_WINS = \['email'\]/.test(up)) namedBranches.add('email');
   if (/customer\.marketing_opt_in !== undefined/.test(up)) namedBranches.add('marketing_opt_in');
+  // ✏️ LEDGER #335 (2026-09-16): phone, email and the billing address no longer ride offer() — they
+  // are gathered into `contactEdit` and written to the contact lists by `writeContactEdit`. They still
+  // REACH THE DATABASE, which is what this section asserts; read them where they now go.
+  for (const m of up.matchAll(/contactEdit\.(phone|email)\s*=/g)) namedBranches.add(m[1]);
+  for (const m of up.matchAll(/billing\.(line1|city|state|zip)\s*=/g)) namedBranches.add(`billing_${m[1]}`);
 
   const writable = ['first_name', 'last_name', 'email', 'phone',
                     'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in'];
@@ -268,10 +272,12 @@ const SRC = {
      `E1 🔴 every field the ORDER PATH can supply reaches customerUpsert's payload. Dropped: ${dropped.join(', ') || '(none)'} — `
      + `a field the form collects and the upsert never offers is typed, sent, and silently discarded (defect 1, 0840b30).`);
 
-  ok(offered.has('first_name') && offered.size >= 8,
-     `E2 the offer() list was actually parsed — ${offered.size} fields found (a regex that matched nothing would make E1 vacuously true)`);
-  ok(namedBranches.has('email'),
-     'E3 🔴 `email` is SUPPLIED-WINS by name — the fix from 0840b30 is still there, asserted rather than assumed');
+  ok(offered.has('first_name') && offered.size + namedBranches.size >= 8,
+     `E2 the offer() list and the contact edit were actually parsed — ${offered.size} + ${namedBranches.size} fields found (a regex that matched nothing would make E1 vacuously true)`);
+  // Email's SUPPLIED-WINS is now the contact edit's 'primary' policy — the typed address becomes the
+  // one shown, and the old one is kept, demoted (customerUpsert.test K3 proves it by act).
+  ok(/email:\s*'primary'/.test(up),
+     'E3 🔴 `email` is SUPPLIED-WINS by name — now the contact edit\'s `primary` policy — the fix from 0840b30 is still there, asserted rather than assumed');
 
   // ✏️ E4 ASSERTED THE MIRROR'S PRESENCE UNTIL 2026-09-15 AND NOW ASSERTS ITS ABSENCE (#335).
   // It required `CANONICAL = { address_line1: 'billing_line1', … }` in `customerUpsert` — the map

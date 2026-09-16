@@ -179,8 +179,8 @@ export async function withThrowawayCustomer({ businessId, fields = {} }, fn) {
         business_id: businessId,
         first_name: 'Harness',
         last_name: `Throwaway ${stamp}`,
-        phone: '(512) 555-0100',
-        email: `harness-cust-${stamp}@example.com`,
+        // No phone/email (ledger #335): those are contact-list rows and a direct write is refused.
+        notes: `harness throwaway ${stamp}`,
         ...fields,
       })
       .select('*').single();

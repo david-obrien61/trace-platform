@@ -65,6 +65,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { normEmail, normPhone } from './customerList';
 import { auditImportFields, classifyValueShape, type ImportFieldAudit } from './importFieldAudit';
+import { buildContactRecord, type ContactRecord } from '../business-logic/contactRecord';
 
 /** Written to `customers.source` on every row this import creates. */
 export const CUSTOMER_IMPORT_SOURCE = 'quickbooks-customers';
@@ -97,6 +98,13 @@ export interface AdaptedCustomer {
   /** The raw `ResaleNum`, verbatim, whether it reads as a word or a permit number. */
   tax_exempt_cert_ref: string | null;
   notes: string | null;
+  /**
+   * 🔴 THE CONTACT LISTS THIS RECORD BECOMES (ledger #335). The flat phone/email/billing fields above
+   * are what the PREVIEW and the duplicate flags read; what the import WRITES is this — every phone,
+   * email and address as a list row, through `contactWriter`, tagged with the run. The flat fields
+   * are never written to `customers` (the database derives them, and refuses a direct write).
+   */
+  contact: ContactRecord;
 }
 
 export interface DuplicateFlag {
@@ -468,6 +476,7 @@ export function adaptCustomerWithAddress(raw: Record<string, unknown>): { custom
     billing_zip: billing.billing_zip,
     ...exemptionOf(raw),
     notes: str(raw.Notes),
+    contact: buildContactRecord(raw),
    },
    branch: billing.branch,
    phoneRescued: billing.phone_from_line1 !== null,

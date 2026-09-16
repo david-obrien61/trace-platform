@@ -72,12 +72,23 @@ DO $$
 DECLARE
   n_at_risk integer;
 BEGIN
+  -- ✏️ 2026-09-16: `20260915_contact_record` now moves a phone typed into a street field to the
+  -- PHONE list, so `billing_line1` is (correctly) empty for those customers while the legacy
+  -- `address_line1` still holds the number. A legacy street is therefore at risk only when its
+  -- value is in NEITHER list: not an active address line, and — by digits — not an active phone.
   SELECT count(*) INTO n_at_risk
-    FROM public.customers
-   WHERE (COALESCE(btrim(address_line1), '') <> '' AND COALESCE(btrim(billing_line1), '') = '')
-      OR (COALESCE(btrim(city),          '') <> '' AND COALESCE(btrim(billing_city),  '') = '')
-      OR (COALESCE(btrim(state),         '') <> '' AND COALESCE(btrim(billing_state), '') = '')
-      OR (COALESCE(btrim(zip),           '') <> '' AND COALESCE(btrim(billing_zip),   '') = '');
+    FROM public.customers c
+   WHERE (COALESCE(btrim(c.address_line1), '') <> '' AND COALESCE(btrim(c.billing_line1), '') = ''
+          AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                           WHERE a.customer_id = c.id AND a.active
+                             AND lower(btrim(c.address_line1)) IN (lower(a.line1), lower(a.line2)))
+          AND NOT (length(regexp_replace(c.address_line1, '\D', '', 'g')) >= 10
+                   AND EXISTS (SELECT 1 FROM public.customer_phones p
+                                WHERE p.customer_id = c.id AND p.active
+                                  AND position(p.value_norm IN regexp_replace(c.address_line1, '\D', '', 'g')) > 0)))
+      OR (COALESCE(btrim(c.city),  '') <> '' AND COALESCE(btrim(c.billing_city),  '') = '')
+      OR (COALESCE(btrim(c.state), '') <> '' AND COALESCE(btrim(c.billing_state), '') = '')
+      OR (COALESCE(btrim(c.zip),   '') <> '' AND COALESCE(btrim(c.billing_zip),   '') = '');
 
   IF n_at_risk > 0 THEN
     RAISE EXCEPTION

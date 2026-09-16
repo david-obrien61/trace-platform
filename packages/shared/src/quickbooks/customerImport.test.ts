@@ -309,6 +309,9 @@ function makeDb(opts: {
       not(c: string, op: string, v: any) { filters.push([c, `not.${op}`, v]); return b; },
       in(c: string, v: any[]) { filters.push([c, 'in', v]); return b; },
       is(c: string, v: any) { filters.push([c, 'is', v]); return b; },
+      // PostgREST `or=(a.is.null,a.neq.X)` — the only shape the contact undo sends.
+      or(expr: string) { filters.push(['', 'or', expr]); return b; },
+      order() { return b; },
       range() { return b; },
       maybeSingle() {
         const r = result();
@@ -324,6 +327,16 @@ function makeDb(opts: {
         if (op === 'eq' && String(row[c]) !== String(v)) return false;
         if (op === 'not.is' && v === null && row[c] == null) return false;
         if (op === 'is' && v === null && row[c] != null) return false;
+        if (op === 'or') {
+          const any = String(v).split(',').some(part => {
+            const [col, o, ...rest] = part.split('.');
+            const val = rest.join('.');
+            if (o === 'is' && val === 'null') return row[col] == null;
+            if (o === 'neq') return row[col] != null && String(row[col]) !== val;
+            return false;
+          });
+          if (!any) return false;
+        }
       }
       return true;
     }
@@ -340,6 +353,15 @@ function makeDb(opts: {
           other.orders.push({ id: '__late', customer_id: opts.lateOrderFor });
         }
         return headMode ? { data: null, error: null, count: hits.length } : { data: hits, error: null, count: hits.length };
+      }
+      // 🔴 THE GUARD (20260915 §5e), MODELLED: a customers write carrying a derived contact field is
+      // refused by the database. A double that accepted it would bless the defect #335 removes.
+      if (table === 'customers' && (verb === 'insert' || verb === 'update')) {
+        const incoming = Array.isArray(payload) ? payload : [payload];
+        const FLAT = ['phone', 'email', 'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_zip'];
+        if (incoming.some((p: any) => FLAT.some(k => k in p && (verb === 'update' || p[k] != null)))) {
+          return { data: null, error: { code: 'P0001', message: 'Not saved: contact fields are kept in the contact lists' }, count: null };
+        }
       }
       if (verb === 'insert') {
         const incoming = Array.isArray(payload) ? payload : [payload];
@@ -371,6 +393,19 @@ function makeDb(opts: {
         // Postgres does. A per-row double would quietly turn "nothing was deleted" into "most of
         // them were", which is the exact difference the per-row fallback exists to handle.
         if (table === 'customers') {
+          // 🔴 `customer_addresses.customer_id` is RESTRICT too (20260911b:78) — modelled the same way.
+          const addrBlocked = hits.find((h: any) => (other.customer_addresses ?? []).some((a: any) => String(a.customer_id) === String(h.id)));
+          if (addrBlocked) {
+            return { data: null, count: null, error: {
+              code: '23503',
+              message: 'update or delete on table "customers" violates foreign key constraint '
+                + '"customer_addresses_customer_id_fkey" on table "customer_addresses"',
+            } };
+          }
+          // Phones and emails CASCADE.
+          for (const t of ['customer_phones', 'customer_emails']) {
+            other[t] = (other[t] ?? []).filter((x: any) => !hits.some((h: any) => String(h.id) === String(x.customer_id)));
+          }
           const blocked = hits.find((h: any) => other.orders.some(o => String(o.customer_id) === String(h.id)));
           if (blocked) {
             return { data: null, count: null, error: {
@@ -480,15 +515,20 @@ async function main() {
   await commitCustomerImport(db as any, BIZ, a, RUN);
 
   const written = calls.filter(c => c.verb !== 'select');
-  ok(written.every(c => c.table === 'customers'),
-    '🔴 EVERY write goes to `customers`. Not `people`, not `orders`, not `business_inventory`, not the ledger — asserted over the recorded calls');
+  // ✏️ #335: the contact lists are the fourth, fifth and sixth tables — and nothing else is.
+  const ALLOWED = ['customers', 'customer_phones', 'customer_emails', 'customer_addresses'];
+  ok(written.every(c => ALLOWED.includes(c.table)),
+    '🔴 EVERY write goes to `customers` or its three contact lists. Not `people`, not `orders`, not `business_inventory`, not the ledger — asserted over the recorded calls');
+  const listWrites = written.filter(c => c.table !== 'customers');
+  ok(listWrites.length > 0 && listWrites.every(c => (Array.isArray(c.payload) ? c.payload : [c.payload]).every((p: any) => p.import_run_id === RUN)),
+    '🔴 #335: every contact row the import writes carries THIS run id — so the undo can take it with its customer');
   ok(!calls.some(c => c.table === 'people'),
     '🔴 NOT ONE `people` ROW. `people` has no import_run_id (probed live: 9 columns, no run provenance), so a person row created here could never be undone — R-93\'s argument on a different table');
   ok(!written.some(c => c.verb === 'delete'),
     'a commit never deletes — the undo is the only path that does');
   ok(written.every(c => c.verb === 'insert' || c.verb === 'update'), 'insert and update are the only verbs a commit issues');
 
-  const ins = calls.find(c => c.verb === 'insert')!;
+  const ins = calls.find(c => c.verb === 'insert' && c.table === 'customers')!;
   ok(Object.keys(ins.payload[0]).sort().join(',') === [...CUSTOMER_INSERT_COLUMNS].sort().join(','),
     'the INSERT payload matches the declared column list exactly — a wider write would be a visible edit, not a silent one');
   const row = rowForCustomer(BIZ, RUN, a.customers[0]);
@@ -496,8 +536,10 @@ async function main() {
   // mirror (D-41): billing_* and the legacy four are written TOGETHER, or the invoice prints one
   // address and the delivery route shows another."* The legacy four are DROPPED; writing one would
   // now be a 42703 on every insert, so the payload must name only the canonical four.
-  ok(row.billing_line1 === '1 Oak St' && !('address_line1' in row) && !('city' in row),
-    '🔴 the insert payload names the CANONICAL address columns and NOT the dropped legacy four — one source value, one destination');
+  // ✏️ #335 (2026-09-16): and now NO contact column at all — the address travels as a list row.
+  ok(!['address_line1', 'city', 'phone', 'email', 'billing_line1', 'billing_city'].some(k => k in row)
+      && a.customers[0].contact.addresses[0]?.line1 === '1 Oak St',
+    '🔴 the insert payload names NO contact column (the database derives them and refuses a direct write); the address is in the contact record');
   ok(row.business_id === BIZ, 'every row is scoped to the tenant (AC-3)');
 }
 
@@ -601,6 +643,25 @@ async function main() {
     '…and its order count honestly reads 0, because the pre-read never saw it — a fabricated count would be worse than an absent one');
 }
 
+// ══ §J5 #335 — THE UNDO TAKES A RUN'S CONTACT ROWS AND REFUSES A HAND-ADDED ONE ══════════
+{
+  const { db } = makeDb({
+    customers: [
+      { id: 'c1', business_id: BIZ, qb_customer_id: '901', import_run_id: RUN, display_name: 'Tagged' },
+      { id: 'c2', business_id: BIZ, qb_customer_id: '902', import_run_id: RUN, display_name: 'Hand-added phone' },
+    ],
+  });
+  const put = async (table: string, row: any) => { await (db.from(table) as any).insert(row); };
+  await put('customer_addresses', { business_id: BIZ, customer_id: 'c1', label: 'Billing', import_run_id: RUN });
+  await put('customer_phones', { business_id: BIZ, customer_id: 'c1', value: '1', import_run_id: RUN });
+  await put('customer_addresses', { business_id: BIZ, customer_id: 'c2', label: 'Billing', import_run_id: RUN });
+  await put('customer_phones', { business_id: BIZ, customer_id: 'c2', value: '2', import_run_id: null });
+  const u = await undoCustomerImport(db as any, BIZ, RUN, undefined);
+  ok(u.deleted === 1, `§J5a the tagged customer is removed WITH its address (RESTRICT) and phone (deleted ${u.deleted})`);
+  ok(u.blocked.length === 1 && u.blocked[0].customerId === 'c2' && u.blocked[0].handAddedContacts === 1,
+    '🔴 §J5b a customer carrying a HAND-ADDED phone is blocked and named — the undo never takes what a person typed');
+}
+
 // ══ §J4 A NON-FK ERROR IS NOT A BLOCKED CUSTOMER ══════════════════════════════════════
 {
   // 🔴 THE DIFFERENCE BETWEEN "the database protected an order" AND "something went wrong".
@@ -614,7 +675,8 @@ async function main() {
   let threw = '';
   try { await undoCustomerImport(db as any, BIZ, RUN, 'all'); }
   catch (e: unknown) { threw = e instanceof Error ? e.message : ''; }
-  ok(/undo failed: simulated delete failure/.test(threw),
+  // ✏️ #335: the contact-row delete now runs first, so the same failure names that step.
+  ok(/undo failed.*simulated delete failure/.test(threw),
     '🔴 an error that is NOT a foreign-key violation THROWS and names itself — it is never folded into the blocked list as though an order had protected the row');
 }
 

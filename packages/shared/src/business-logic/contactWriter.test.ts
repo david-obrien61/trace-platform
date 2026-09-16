@@ -31,6 +31,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   planContactRows, reconcileContactRows, writeContactRecord,
   CONTACT_PHONE_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS,
+  planContactEdit, contactEditOf, type ContactEditPolicy,
 } from './contactWriter';
 import { buildContactRecord } from './contactRecord';
 
@@ -462,6 +463,58 @@ async function main(): Promise<void> {
     const absent = addrCols.filter(c => !created.has(c));
     ok(created.has('source') && created.has('line1'), 'E4a the address columns were PARSED (source, line1 found)');
     ok(absent.length === 0, `E4 the address read list names only columns the migrations create (absent: ${absent.join(',') || 'none'})`);
+  }
+
+  // ══ K. FLAT EDITS — the policy decides, and nothing typed is lost (#335, 2026-09-16) ═════════
+  {
+    const ids = { businessId: BIZ, customerId: CUST };
+    const P = (id: string, value: string, is_primary: boolean) => ({ id, value, value_norm: value.replace(/\D/g, ''), is_primary });
+    const E = (id: string, value: string, is_primary: boolean) => ({ id, value, value_norm: value.toLowerCase(), is_primary });
+    const A = (o: Record<string, unknown>) => ({ id: 'a1', label: 'Billing', kind: 'billing', line1: null, line2: null, city: null, state: null, zip: null, is_default: true, source: null, ...o }) as never;
+    const pol = (phone: ContactEditPolicy['phone'], email: ContactEditPolicy['email'], billing: ContactEditPolicy['billing']): ContactEditPolicy => ({ phone, email, billing, source: 'test' });
+    const held = { phones: [P('p1', '(512) 111-1111', true)], emails: [E('e1', 'old@x.com', true)], addresses: [A({ line1: '1 Oak St', city: 'Leander' })] };
+
+    let k = planContactEdit(held, { phone: '512-222-2222' }, pol('add', 'add', 'fill'), ids);
+    ok(k.insertPhones.length === 1 && k.insertPhones[0].is_primary === false && k.retirePhones.length === 0 && k.demotePhones.length === 0,
+      'K1 add: a new phone is added NON-primary; the held primary is untouched');
+    k = planContactEdit(held, { phone: '(512)111-1111' }, pol('add', 'add', 'fill'), ids);
+    ok(k.insertPhones.length === 0, 'K2 add: the same number, spelled differently, is already held — nothing written');
+    k = planContactEdit(held, { phone: '512-222-2222' }, pol('replace', 'add', 'fill'), ids);
+    ok(k.retirePhones.join() === 'p1' && k.insertPhones[0]?.is_primary === true, 'K3 replace: the old primary is RETIRED and the new number is primary');
+    k = planContactEdit(held, { phone: null }, pol('replace', 'add', 'fill'), ids);
+    ok(k.retirePhones.join() === 'p1' && k.insertPhones.length === 0, 'K4 replace: a cleared field retires the shown number');
+    k = planContactEdit(held, { phone: null }, pol('add', 'add', 'fill'), ids);
+    ok(k.retirePhones.length === 0, 'K5 add: a cleared field never clobbers');
+    k = planContactEdit({ ...held, phones: [P('p1', '(512) 111-1111', true), P('p2', '(512) 333-3333', false)] }, { phone: '512 333 3333' }, pol('replace', 'add', 'fill'), ids);
+    ok(k.retirePhones.join() === 'p1' && k.promotePhones.join() === 'p2' && k.insertPhones.length === 0,
+      'K6 replace with a number already on file: the old primary is retired and that row PROMOTED — no duplicate');
+    k = planContactEdit(held, { phone: '512.111.1111' }, pol('replace', 'add', 'fill'), ids);
+    ok(k.respellPhone?.value === '512.111.1111' && k.retirePhones.length === 0, 'K7 replace, same number respelled: the row is updated in place');
+
+    k = planContactEdit(held, { email: 'new@x.com' }, pol('add', 'primary', 'fill'), ids);
+    ok(k.demoteEmails.join() === 'e1' && k.retireEmails.length === 0 && k.insertEmails[0]?.is_primary === true,
+      'K8 primary (checkout email): the typed address becomes primary; the old one is DEMOTED, kept');
+    k = planContactEdit(held, { email: 'a@x.com, b@y.com' }, pol('add', 'replace', 'fill'), ids);
+    ok(k.retireEmails.join() === 'e1' && k.insertEmails.length === 2 && k.insertEmails.filter(e => e.is_primary).length === 1,
+      'K9 an email field with two addresses becomes two rows, one primary');
+
+    k = planContactEdit(held, { billing: { line1: '(512) 444-4444 - cell', city: 'Austin' } }, pol('add', 'add', 'fill'), ids);
+    ok(k.insertPhones.some(p => p.value === '(512) 444-4444' && p.note === 'cell') && !k.updateAddress?.patch.line1 && k.updateAddress === null,
+      'K10 fill: a phone typed into the street goes to the PHONE list and never clobbers the stored street; a stored city is not overwritten');
+    k = planContactEdit({ ...held, addresses: [A({ line1: null, city: 'Leander' })] }, { billing: { line1: '9 Elm Rd', city: 'Austin' } }, pol('add', 'add', 'fill'), ids);
+    ok(k.updateAddress?.patch.line1 === '9 Elm Rd' && !('city' in (k.updateAddress?.patch ?? {})), 'K11 fill: only the BLANK street is filled');
+    k = planContactEdit(held, { billing: { city: 'Austin' } }, pol('add', 'add', 'replace'), ids);
+    ok(k.updateAddress?.patch.city === 'Austin' && Object.keys(k.updateAddress?.patch ?? {}).length === 1, 'K12 replace: only the touched field is patched');
+    k = planContactEdit(held, { billing: { line1: '', city: '' } }, pol('add', 'add', 'replace'), ids);
+    ok(k.retireAddress === 'a1', 'K13 replace: an address emptied of everything is RETIRED, not left blank');
+    k = planContactEdit({ ...held, addresses: [A({ id: 's1', label: 'Billing', kind: 'shipping', is_default: true })] }, { billing: { line1: '2 New Rd' } }, pol('add', 'add', 'fill'), ids);
+    ok(k.insertAddress?.label === 'Billing 2' && k.insertAddress?.is_default === false && k.insertAddress?.kind === 'billing',
+      'K14 no billing row: one is added — a free label, and not the default when a ship-to site already is');
+
+    const split = contactEditOf({ phone: 'x', billing_city: null, notes: 'n', price_tier: 'retail' });
+    ok(split.touched && split.edit.phone === 'x' && split.edit.billing?.city === null && Object.keys(split.rest).join() === 'notes,price_tier',
+      'K15 contactEditOf splits a flat patch: contact half to the edit, the rest to the customer row');
+    ok(!contactEditOf({ notes: 'n' }).touched, 'K16 …and a patch without contact fields touches no list');
   }
 
   console.log(`\ncontactWriter: ${passed} passed, ${failed} failed`);

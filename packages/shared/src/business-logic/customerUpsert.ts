@@ -5,8 +5,9 @@
  *              business. Extracted from api/orders/submit.ts (cart checkout) so it can be
  *              called WITHOUT an order — e.g. when an OCR'd invoice surfaces a customer.
  * DEPENDENCIES A supabase client passed in (service-key admin in current callers); the
- *              `customers` table (business_id, first/last_name, email, phone, billing_line1,
- *              city, state, zip, marketing_opt_in, source). No DB client constructed here.
+ *              `customers` table (business_id, first/last_name, marketing_opt_in, source, …) and,
+ *              for phone / email / billing address, `contactWriter.writeContactEdit` — those
+ *              three are list rows now (ledger #335). No DB client constructed here.
  * OUTPUTS      { customerId, created } — created:true = inserted, false = matched by email.
  * CALLERS      api/orders/submit.ts (source='qr-scan'), api/customers/create.ts ('ocr-invoice').
  */
@@ -29,6 +30,7 @@
 // invoice capture), mirroring the existing column convention.
 
 import { findOrCreatePerson } from './personUpsert';
+import { writeContactEdit, type ContactEdit } from './contactWriter';
 
 export interface CustomerInput {
   first_name: string;
@@ -175,12 +177,29 @@ export async function findOrCreateCustomer(
   // EXISTING one never did. Measured: customer 0ee368fe (Diane Foster) — email '' after a checkout
   // that typed one and SENT the invoice to it, `updated_at` stamped the same second as the order,
   // `billing_*` filled correctly. The row was written; this one field was not in the payload.
-  offer('email',      customer.email);
-  offer('phone',      customer.phone);
-  offer('billing_line1', customer.billing_line1);
-  offer('billing_city',  customer.billing_city);
-  offer('billing_state', customer.billing_state);
-  offer('billing_zip',   customer.billing_zip);
+  // 🔴 LEDGER #335 — THE CONTACT FIELDS NO LONGER GO ON THE CUSTOMER ROW. `customers.phone`,
+  // `email` and `billing_*` are DERIVED from the contact lists, and the database refuses a direct
+  // write. They are gathered into `contactEdit` and written through `writeContactEdit` once the
+  // customer id is known — with THIS file's two rules carried over as POLICIES:
+  //   · phone and billing: FILL, NEVER CLOBBER → 'add' / 'fill'. A different phone from a counter
+  //     checkout is now KEPT as a second number rather than dropped; the one on file stays primary.
+  //   · email: SUPPLIED WINS → 'primary'. The typed address becomes the one invoices go to; the
+  //     old one stays on file, demoted, instead of being overwritten.
+  // A blank still never reaches the edit — `given()` is the same gate as before.
+  const contactEdit: ContactEdit = {};
+  if (given(customer.phone)) contactEdit.phone = String(customer.phone).trim();
+  if (given(customer.email)) contactEdit.email = String(customer.email).trim();
+  const billing: NonNullable<ContactEdit['billing']> = {};
+  if (given(customer.billing_line1)) billing.line1 = String(customer.billing_line1).trim();
+  if (given(customer.billing_city))  billing.city  = String(customer.billing_city).trim();
+  if (given(customer.billing_state)) billing.state = String(customer.billing_state).trim();
+  if (given(customer.billing_zip))   billing.zip   = String(customer.billing_zip).trim();
+  if (Object.keys(billing).length > 0) contactEdit.billing = billing;
+  const writeContacts = async (customerId: string) => {
+    const out = await writeContactEdit(db, businessId, customerId, contactEdit,
+      { phone: 'add', email: 'primary', billing: 'fill', source });
+    if (!out.ok) throw new Error(`Customer contact details not saved: ${out.error}`);
+  };
   offer('qb_customer_id', customer.qb_customer_id);
   if (customer.marketing_opt_in !== undefined) supplied.marketing_opt_in = customer.marketing_opt_in;
   if (personId) supplied.person_id = personId;
@@ -264,8 +283,7 @@ export async function findOrCreateCustomer(
   if (existingId) {
     // (b) FILL, NEVER CLOBBER — read the stored row and keep only the fields that are blank there.
     // A customer curated on /customers is never overwritten by a later counter checkout.
-    const FILLABLE = ['first_name', 'last_name', 'phone', 'marketing_opt_in',
-                      'billing_line1', 'billing_city', 'billing_state', 'billing_zip',
+    const FILLABLE = ['first_name', 'last_name', 'marketing_opt_in',
                       // FILL, NEVER CLOBBER applies to the QuickBooks link too: a customer already
                       // bound to a QBO id keeps that binding. Re-pointing an existing customer at a
                       // different QuickBooks record is how invoices start reaching the wrong person.
@@ -282,7 +300,9 @@ export async function findOrCreateCustomer(
     // ⚠️ THE SAFETY THIS DEPENDS ON IS `offer()`, NOT THIS LINE: a blank/whitespace email fails
     // `given()` and never reaches `fields`, so "supplied wins" can only ever be reached by a value
     // someone actually typed. EMPTY INPUT CANNOT BLANK A STORED EMAIL — omission, not a null write.
-    const SUPPLIED_WINS = ['email'];
+    // ✏️ #335: email's supplied-wins now lives in the contact edit's 'primary' policy (above). The
+    // list stays, empty, so the rule has a named home if a customer column ever needs it again.
+    const SUPPLIED_WINS: string[] = [];
     let stored: Record<string, unknown> = {};
     {
       const { data } = await db.from('customers').select(FILLABLE.join(',')).eq('id', existingId).maybeSingle();
@@ -297,6 +317,7 @@ export async function findOrCreateCustomer(
     }
     if (Object.keys(patch).length === 0) {
       console.log('[TRACE:PERSON] link: existing customer already complete — nothing to fill', { customerId: existingId, businessId, source });
+      await writeContacts(existingId);
       return { customerId: existingId, created: false };
     }
     const filled = Object.keys(patch).filter(k => k !== 'customer_type' && k !== 'person_id');
@@ -321,13 +342,15 @@ export async function findOrCreateCustomer(
     if (!updErr && updRows?.length !== 1) {
       throw new Error(`Customer: the fill did not affect exactly one row (${existingId}, matched ${updRows?.length ?? 0}).`);
     }
+    await writeContacts(existingId);
     console.log('[TRACE:PERSON] link: customer resolved to existing row', {
       customerId: existingId, personId, businessId, source, isOrg,
     });
     return { customerId: existingId, created: false };
   }
 
-  const insertRow = { business_id: businessId, email: customer.email ?? null, source, ...insertDefaults, ...fields };
+  // #335: no `email` here any more — the contact lists hold it, written just below.
+  const insertRow = { business_id: businessId, source, ...insertDefaults, ...fields };
   let { data: newCustomer, error: custErr } = await db
     .from('customers').insert(insertRow).select('id').single();
   if (custErr && isMissingCustomerTypeColumn(custErr)) {
@@ -337,6 +360,7 @@ export async function findOrCreateCustomer(
   }
 
   if (custErr) throw new Error(`Customer: ${custErr.message}`);
+  await writeContacts(newCustomer!.id);
   console.log('[TRACE:PERSON] link: new customer created', {
     customerId: newCustomer!.id, personId, businessId, source, isOrg,
   });

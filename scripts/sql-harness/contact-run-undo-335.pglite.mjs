@@ -40,8 +40,9 @@ async function fresh({ with16c = true, d16 = D16 } = {}) {
     CREATE FUNCTION public.has_permission(uuid, text) RETURNS boolean LANGUAGE sql AS 'select true';
     CREATE FUNCTION public.set_updated_at_generic() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $f$;
     CREATE TABLE customers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL REFERENCES businesses(id),
-      import_run_id uuid, first_name text, phone text, email text, billing_line1 text, billing_city text, billing_state text,
-      billing_zip text, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT '2020-01-01');
+      import_run_id uuid, first_name text, phone text, email text, billing_line1 text, billing_line2 text, billing_city text,
+      billing_state text, billing_zip text, address_line1 text,
+      created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT '2020-01-01');
     CREATE TRIGGER customers_updated_at BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
     CREATE TABLE business_inventory (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL,
       name text, import_run_id uuid, retired_at timestamptz, retired_reason text, retired_by_run_id uuid, created_at timestamptz DEFAULT now());

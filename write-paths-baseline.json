@@ -53,7 +53,7 @@
     ],
     "customers": [
       "packages/cultivar-os/api/qbo/invoice/cultivar.ts",
-      "packages/cultivar-os/src/components/customers/customerEdit.ts",
+      "packages/shared/src/business-logic/customerFieldWrite.ts",
       "packages/cultivar-os/src/pages/Customers.tsx",
       "packages/shared/src/business-logic/customerUpsert.ts",
       "packages/shared/src/discovery/populate.ts"

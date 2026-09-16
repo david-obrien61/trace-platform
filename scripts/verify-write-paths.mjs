@@ -176,27 +176,11 @@ const ALLOWED_DIVERGENCE = {
   //    `customer_phones` and `customer_emails` are written only by `contactWriter.ts`, so they are
   //    not a divergence at all. `contactRecord.test.ts` §G asserts that set in both directions and
   //    fails the build on a second writer OR on a declared writer that has stopped writing.
-  'customer_addresses': {
-    reason: 'The ship-to book has two writers with different CONTRACTS. customerAddresses.ts is the '
-          + 'interactive one-site save: planSaveSite refuses a duplicate label in a sentence written '
-          + 'for the owner and the UI renders that refusal. contactWriter.ts is the bulk QuickBooks '
-          + 'import, where a duplicate is the correct outcome of a second run and must be silent '
-          + 'success — it reads what the customer holds and inserts only what is new, with the partial '
-          + 'unique indexes as the backstop (tech-debt #306; the read-then-write race of #54 is accepted '
-          + 'for a single-operator import). Folding '
-          + 'them would give a loop a refusal vocabulary written for a person, and cost a round trip '
-          + 'per row across ~1,900 customers. The rows are distinguishable: the import stamps source '
-          + "LIKE 'quickbooks:%' and the interactive path leaves source NULL, which is what keeps "
-          + 'curated sites tellable apart from imported history (20260911b §4). customer_phones and '
-          + 'customer_emails are NOT declared here — they have exactly one writer each.',
-    // BOTH writers are named rather than baselining one and declaring the other: the table
-    // postdates `write-paths-baseline.json`, and splitting one explanation across two files
-    // is how a reason stops being readable. The pair is the fact; this is where it is stated.
-    paths: [
-      'packages/shared/src/business-logic/customerAddresses.ts',
-      'packages/shared/src/business-logic/contactWriter.ts',
-    ],
-  },
+  // ✏️ 2026-09-16 (David: *"every writer … goes through contactWriter"*): the `customer_addresses`
+  // declaration that stood here is GONE because the divergence is. `customerAddresses.ts` keeps the
+  // interactive PLAN and its sentences for Lauren; its two statements now live in `contactWriter.ts`
+  // (`insertShipToSite` / `retireShipToSite`). All three contact tables have ONE writer file, so none
+  // is declared — and `contactRecord.test.ts` §G asserts that set in both directions.
   'campaigns': {
     reason: 'Edit (dates + focus, R-145) and cancel (R-146) are one-field owner UPDATEs issued from '
           + 'the campaign detail page under the CALLER\'S OWN session, so RLS enforces them: '

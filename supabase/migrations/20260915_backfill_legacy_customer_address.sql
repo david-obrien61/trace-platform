@@ -109,6 +109,18 @@ END $$;
 -- have its other three columns rewritten as a side effect. `btrim` on the way in, because ③'s guard
 -- compares trimmed values and a copied ' TX' would satisfy the guard while storing the untrimmed
 -- string the guard was written to ignore.
+-- ✏️ 2026-09-16: once `20260915_contact_record` is applied its GUARD refuses any direct write to
+-- `billing_*` — and this file is exactly such a write. That only matters on the RECOVERY path (a
+-- restore of the 2026-09-16 snapshot, then this file, then 20260915_contact_record again), so the
+-- guard is switched off for this transaction if it exists, and back on before COMMIT.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.customers'::regclass
+              AND tgname = 'trg_customers_derived_contact_guard') THEN
+    ALTER TABLE public.customers DISABLE TRIGGER trg_customers_derived_contact_guard;
+  END IF;
+END $$;
+
 UPDATE public.customers SET
   billing_line1 = CASE WHEN COALESCE(btrim(address_line1), '') <> ''
                         AND COALESCE(btrim(billing_line1), '') =  ''
@@ -126,6 +138,14 @@ UPDATE public.customers SET
     OR (COALESCE(btrim(city),          '') <> '' AND COALESCE(btrim(billing_city),  '') = '')
     OR (COALESCE(btrim(state),         '') <> '' AND COALESCE(btrim(billing_state), '') = '')
     OR (COALESCE(btrim(zip),           '') <> '' AND COALESCE(btrim(billing_zip),   '') = '');
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.customers'::regclass
+              AND tgname = 'trg_customers_derived_contact_guard') THEN
+    ALTER TABLE public.customers ENABLE TRIGGER trg_customers_derived_contact_guard;
+  END IF;
+END $$;
 
 -- ── §3 PROVE IT, IN THE SAME TRANSACTION ────────────────────────────────────────────────────
 -- 🔴 THIS CAN FAIL, WHICH IS THE POINT (§6 r19). If §2's CASE arms and its WHERE ever disagree —

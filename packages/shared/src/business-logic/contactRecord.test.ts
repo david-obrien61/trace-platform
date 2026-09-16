@@ -112,15 +112,20 @@ const rec = (o: Record<string, unknown>) => ({ Id: '1', DisplayName: 'Test', ...
   ok(resolveStreet(null) === null, 'C10 a missing block is null, not a throw');
 }
 
-// ══ D. 🔴 REPORT, DO NOT PARSE (David, ②) ════════════════════════════════════════════════════
+// ══ D. ✏️ SPLIT, AND REPORT (David, 2026-09-16 — superseding ② "report, do not parse") ════════
+// *"The email field holding three addresses becomes three email rows."* The finding still fires so
+// the owner can fix it at source; the split is safe only when EVERY piece is an address.
 {
   const packed = buildContactRecord(rec({
     PrimaryEmailAddr: { Address: 'invoices@davey.com, michelle.atnip@davey.com, michael.presta@davey.com' },
   }));
-  ok(packed.emails.length === 1,
-    `D1 🔴 a comma-packed email is NOT split — splitting is a guess, and a wrong one mails an invoice to the wrong person (got ${packed.emails.length})`);
-  ok(packed.emails[0].value.includes('michael.presta@davey.com'),
-    'D2 the value is imported WHOLE — nothing is discarded');
+  ok(packed.emails.length === 3 && packed.emails.filter(e => e.is_primary).length === 1 && packed.emails[0].is_primary,
+    `D1 🔴 a comma-packed email becomes one row per address, the first primary (got ${packed.emails.length})`);
+  ok(packed.emails.map(e => e.value).join('|') === 'invoices@davey.com|michelle.atnip@davey.com|michael.presta@davey.com',
+    'D2 every address is kept, in order — nothing is discarded');
+  const labelled = buildContactRecord(rec({ PrimaryEmailAddr: { Address: 'Jane: jane@example.com' } }));
+  ok(labelled.emails.length === 1 && labelled.emails[0].value === 'Jane: jane@example.com',
+    'D2b a field that is NOT all addresses is kept WHOLE — splitting it would drop "Jane:"');
   ok(packed.findings.some(f => f.kind === 'email-holds-several'),
     'D3 🔴 and it is REPORTED so the owner can fix it in QuickBooks');
   // The negative control: an ordinary address must NOT be reported.
@@ -202,9 +207,9 @@ const rec = (o: Record<string, unknown>) => ({ Id: '1', DisplayName: 'Test', ...
   const APP = 'packages/cultivar-os';
   const CONTACT_TABLES = ['customer_phones', 'customer_emails', 'customer_addresses'];
   /** Every file permitted to write a contact table, and WHY. Asserts in both directions. */
+  // ✏️ 2026-09-16: `customerAddresses.ts` left this list — its two statements moved into
+  // `contactWriter` (David: *"every writer … goes through contactWriter"*). One file, three tables.
   const DECLARED_WRITERS: Record<string, string> = {
-    'packages/shared/src/business-logic/customerAddresses.ts':
-      'the ship-to book\'s own write path (ledger #303) — plan/save/retire, one table',
     'packages/shared/src/business-logic/contactWriter.ts':
       'the contact-record writer: the ONE path that turns buildContactRecord output into rows',
   };
@@ -275,6 +280,38 @@ const rec = (o: Record<string, unknown>) => ({ Id: '1', DisplayName: 'Test', ...
     'G8 …and does NOT fire on a literal');
   ok(!/\.from\(\s*[^'"\s)]/.test(stripComments("// db.from(table) is the hazard\nok();")),
     'G9 🔴 …and a comment DESCRIBING the hazard is not the hazard (the #146 case, held)');
+}
+
+// ══ L. 🔴 NO CODE WRITES A CONTACT FIELD ONTO `customers` (David, 2026-09-16) ═════════════════
+// The database guard (20260915 §5e) refuses such a write at run time; this catches the LITERAL
+// form at build time, before anyone meets the refusal at a counter. A payload built in a variable
+// is not visible here — the guard, and the PGlite writer harness, are the backstop for that.
+{
+  const SRC = 'packages/shared/src';
+  const APP = 'packages/cultivar-os';
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const name of readdirSync(dir)) {
+      if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
+      const p = join(dir, name);
+      try { if (readdirSync(p).length >= 0) walk(p, out); }
+      catch { if (/\.(tsx?|mjs|js)$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(p); }
+    }
+    return out;
+  };
+  const FLAT = /\b(phone|email|billing_line1|billing_line2|billing_city|billing_state|billing_zip)\s*:/;
+  const writeRe = /from\(\s*['"]customers['"]\s*\)\s*\.(insert|update|upsert)\(\s*\{([\s\S]{0,600}?)\}\s*\)/g;
+  const found: string[] = [];
+  const files = [...walk(join(process.cwd(), SRC)), ...walk(join(process.cwd(), APP)), ...walk(join(process.cwd(), 'scripts'))];
+  ok(files.length > 50, `L1 the source tree was READ (${files.length} files)`);
+  for (const abs of files) {
+    const body = readFileSync(abs, 'utf8');
+    for (const m of body.matchAll(writeRe)) if (FLAT.test(m[2].replace(/\/\/.*$/gm, ''))) found.push(abs.slice(abs.indexOf('packages/') >= 0 ? abs.indexOf('packages/') : abs.indexOf('scripts/')));
+  }
+  ok(found.length === 0, `L2 🔴 no literal customers insert/update carries phone/email/billing_* (found: ${found.join(', ') || 'none'})`);
+  const planted = "db.from('customers').update({ phone: x, notes: y })";
+  ok([...planted.matchAll(writeRe)].some(m => FLAT.test(m[2])), 'L3 the probe can SEE a real direct write (negative control)');
+  const allowed = "db.from('customers').update({ notes: y, tax_exempt: true })";
+  ok(![...allowed.matchAll(writeRe)].some(m => FLAT.test(m[2])), 'L4 …and does not fire on a write of other fields');
 }
 
 // ══ H. THE MIGRATION SAYS WHAT THIS MODULE ASSUMES ══════════════════════════════════════════

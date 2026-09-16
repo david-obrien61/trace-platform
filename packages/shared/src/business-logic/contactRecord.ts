@@ -57,6 +57,9 @@ export type PhoneLabel = 'main' | 'mobile' | 'other' | 'fax';
 export interface ContactPhone {
   label: PhoneLabel;
   value: string;
+  /** Text that sat beside the number in the same field ("cell", "gate 1234") — kept, never lost.
+   *  `customer_phones.note` (20260915). Null when the field held only the number. */
+  note?: string | null;
   is_primary: boolean;
   /** 'quickbooks:PrimaryPhone' · 'quickbooks:BillAddr.Line1' · … */
   source: string;
@@ -93,7 +96,7 @@ export interface ContactAddress {
 export type ContactFindingKind =
   /** A value sat where a street belongs, and it is not a street or a phone. Left alone. */
   | 'address-line-unreadable'
-  /** One email field appears to hold more than one address. TAKEN WHOLE, never split. */
+  /** One email field held more than one address. SPLIT into one row each (David, 2026-09-16). */
   | 'email-holds-several'
   /** A phone was found in an address line and taken into the phone list from there. */
   | 'phone-recovered-from-address'
@@ -113,7 +116,7 @@ export const CONTACT_FINDING_REASON: Record<ContactFindingKind, string> = {
   'address-line-unreadable':
     'this address line is neither a street nor a phone number, so it was left exactly as it is — correct it in QuickBooks and re-import',
   'email-holds-several':
-    'this email field looks like it holds more than one address; it was imported whole and NOT split — separate them in QuickBooks and re-import',
+    'this email field held more than one address; each was saved as its own email — separate them in QuickBooks too, so the next import reads the same',
   'phone-recovered-from-address':
     'a phone number was typed into an address line; it was kept as a phone and the street was read from the other line',
   'no-street-found':
@@ -159,15 +162,62 @@ export function resolveStreet(block: Record<string, unknown> | null): { street: 
   return null;
 }
 
-/** Every value in an address block that reads as a phone, with the line it came from. */
-function phonesInBlock(block: Record<string, unknown> | null, path: string): { value: string; field: string }[] {
+// ── A PHONE INSIDE OTHER TEXT (David, 2026-09-16) ─────────────────────────────────────────────
+// A field holding "(512) 555-0142 - cell" is not a street and not, to the classifier, a phone —
+// it has letters. The rule: pull out each phone-SHAPED run, let `classifyValueShape` read each run
+// on its own, and keep the leftover words as the phone's NOTE. A value is phone-bearing when it is a
+// phone outright, or when it is NOT a street and at least one run reads as a phone. A street stays a
+// street even with a number in it — the classifier decides, never this file.
+// 🔴 MIRRORED IN SQL by `20260915_contact_record.sql` (`pg_temp.phones_in_text`) for the seed, and
+// the two are asserted to agree on every value of the LAWNS snapshot (contact-seed harness).
+
+/** A phone-shaped run: optional country 1, area code with or without brackets, 3 + 4 digits. */
+export const PHONE_RUN_SOURCE = String.raw`(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}`;
+const NOTE_EDGES = /^[\s–—/,;:()-]+|[\s–—/,;:()-]+$/g;
+
+/** Trim with the classifier's notion of whitespace. */
+function cleanText(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/^\s+|\s+$/g, '');
+  return s === '' ? null : s;
+}
+
+/** The phones in one field and the words beside them — or null when the field is not phone-bearing. */
+export function phonesInText(raw: unknown): { phones: string[]; note: string | null } | null {
+  const v = cleanText(raw);
+  if (v === null) return null;
+  const shape = classifyValueShape(v);
+  if (shape === 'phone') return { phones: [v], note: null };
+  if (shape === 'street') return null;
+  const runs = (v.match(new RegExp(PHONE_RUN_SOURCE, 'g')) ?? []).filter(r => classifyValueShape(r) === 'phone');
+  if (runs.length === 0) return null;
+  const rest = v.replace(new RegExp(PHONE_RUN_SOURCE, 'g'), ' ').replace(/\s+/g, ' ').replace(NOTE_EDGES, '');
+  return { phones: runs, note: rest === '' ? null : rest };
+}
+
+/** Every phone hiding in an address block's lines, with the line it came from. */
+function phonesInBlock(block: Record<string, unknown> | null, path: string): { value: string; note: string | null; field: string }[] {
   if (!block || typeof block !== 'object') return [];
-  const out: { value: string; field: string }[] = [];
+  const out: { value: string; note: string | null; field: string }[] = [];
   for (const line of ADDRESS_LINES) {
-    const v = str(block[line]);
-    if (v !== null && classifyValueShape(v) === 'phone') out.push({ value: v, field: `${path}.${line}` });
+    const found = phonesInText(block[line]);
+    if (found) for (const value of found.phones) out.push({ value, note: found.note, field: `${path}.${line}` });
   }
   return out;
+}
+
+/**
+ * One email field → one address per entry. SPLIT only when EVERY piece is an address — "jane@x.com,
+ * bob@y.com" is two; "Jane: jane@x.com" is kept whole, because splitting it would drop "Jane:".
+ * Duplicates (case-folded) collapse to the first spelling. Mirrored in SQL (`pg_temp.split_emails`).
+ */
+export function splitEmails(raw: unknown): string[] {
+  const v = cleanText(raw);
+  if (v === null) return [];
+  const parts = v.split(/[;,]|\s+/).filter(p => p !== '');
+  const list = parts.length >= 2 && parts.every(p => p.includes('@')) ? parts : [v];
+  const seen = new Set<string>();
+  return list.filter(e => { const k = e.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 /** An address block's non-street, non-phone lines — the ones we could not read. */
@@ -179,7 +229,7 @@ function unreadableLines(block: Record<string, unknown> | null, path: string, st
     const v = str(block[line]);
     if (v === null) continue;
     const shape = classifyValueShape(v);
-    if (shape !== 'street' && shape !== 'phone') out.push(`${path}.${line}`);
+    if (shape !== 'street' && shape !== 'phone' && phonesInText(v) === null) out.push(`${path}.${line}`);
   }
   return out;
 }
@@ -191,10 +241,9 @@ function secondaryLine(block: Record<string, unknown> | null, streetLine: string
     if (line === streetLine) continue;
     const v = str(block[line]);
     if (v === null) continue;
-    const shape = classifyValueShape(v);
     // A phone is NOT a second address line — it has already been taken into the phone list, and
     // carrying it here too would put one value in two places (STD-011) with only one of them true.
-    if (shape === 'phone') continue;
+    if (phonesInText(v) !== null) continue;
     return v;
   }
   return null;
@@ -206,14 +255,12 @@ export function addressKey(a: Pick<ContactAddress, 'line1' | 'city' | 'zip'>): s
 }
 
 /**
- * Does this email field hold more than one address? DETECTION ONLY — the value is never split.
- *
- * ⚠️ Splitting on a comma is a GUESS about intent, and a wrong split silently mails an invoice to
- * the wrong person. One LAWNS record carries three addresses in one field; it is imported whole
- * and reported, which is what lets the owner fix it at source.
+ * Does this email field hold more than one address?
+ * ✏️ WAS detection-only ("never split"). David, 2026-09-16: *"The email field holding three
+ * addresses becomes three email rows."* `splitEmails` does the split; this still drives the finding.
  */
 export function emailHoldsSeveral(value: string): boolean {
-  return value.split(/[;,]|\s+/).filter(p => p.includes('@')).length > 1;
+  return splitEmails(value).length > 1;
 }
 
 /**
@@ -230,13 +277,13 @@ export function buildContactRecord(raw: Record<string, unknown>): ContactRecord 
   // spelling wins — the declared fields outrank a number recovered from a street column.
   const phones: ContactPhone[] = [];
   const seenPhone = new Set<string>();
-  const offerPhone = (value: string, label: PhoneLabel, source: string) => {
+  const offerPhone = (value: string, label: PhoneLabel, source: string, note: string | null = null) => {
     const norm = normalizePhoneValue(value);
     // A "number" with fewer than 7 digits is an extension, a house number or a typo — not a
     // reachable phone. Taking it would put an unusable value on the record wearing the word phone.
     if (norm.length < 7 || seenPhone.has(norm)) return;
     seenPhone.add(norm);
-    phones.push({ label, value, is_primary: phones.length === 0, source });
+    phones.push({ label, value, note, is_primary: phones.length === 0, source });
   };
 
   for (const { path, label } of PHONE_FIELDS) {
@@ -247,12 +294,12 @@ export function buildContactRecord(raw: Record<string, unknown>): ContactRecord 
   const bill = (raw.BillAddr ?? null) as Record<string, unknown> | null;
   const ship = (raw.ShipAddr ?? null) as Record<string, unknown> | null;
 
-  for (const { value, field } of [...phonesInBlock(bill, 'BillAddr'), ...phonesInBlock(ship, 'ShipAddr')]) {
+  for (const { value, note, field } of [...phonesInBlock(bill, 'BillAddr'), ...phonesInBlock(ship, 'ShipAddr')]) {
     const before = phones.length;
     // 🔴 LABELLED `other`, NOT `main`. A number typed into a street line is a number whose KIND we
     // do not know — asserting it is the main line would be inventing a fact. `source` records
     // exactly where it came from, which is the part that is true.
-    offerPhone(value, 'other', `quickbooks:${field}`);
+    offerPhone(value, 'other', `quickbooks:${field}`, note);
     if (phones.length > before) {
       findings.push({
         kind: 'phone-recovered-from-address',
@@ -269,7 +316,8 @@ export function buildContactRecord(raw: Record<string, unknown>): ContactRecord 
   const emails: ContactEmail[] = [];
   const primaryEmail = str((raw.PrimaryEmailAddr as { Address?: unknown } | null)?.Address);
   if (primaryEmail !== null) {
-    emails.push({ label: 'main', value: primaryEmail, is_primary: true, source: 'quickbooks:PrimaryEmailAddr' });
+    splitEmails(primaryEmail).forEach((value, i) =>
+      emails.push({ label: 'main', value, is_primary: i === 0, source: 'quickbooks:PrimaryEmailAddr' }));
     if (emailHoldsSeveral(primaryEmail)) {
       findings.push({
         kind: 'email-holds-several',
@@ -340,6 +388,81 @@ export function buildContactRecord(raw: Record<string, unknown>): ContactRecord 
     addresses[defaultIdx] = { ...addresses[defaultIdx], is_default: true };
   }
 
+  return { phones, emails, addresses, findings };
+}
+
+// ── THE FLAT RULE — one customer's flat values → the three lists (David, 2026-09-16) ───────────
+// The SAME rule serves two callers, so it cannot drift between them:
+//   · the migration's seed (`20260915_contact_record.sql` §5b mirrors it in SQL, and the contact-seed
+//     harness proves the two produce identical rows for every LAWNS customer), and
+//   · every app writer that still thinks in flat fields — OCR capture, checkout, the customer
+//     editor — through `writeContactEdit`.
+// RULES: a phone field is a phone, as written. A street field that is PHONE-BEARING (`phonesInText`)
+// goes to the phone list — non-primary when a primary is already held — and never to the address
+// list. The first remaining street is line 1, the next line 2; the legacy `address_line1` is a
+// candidate (`legacy_street`) only when no billing street survives. City/state/ZIP stay on the address even when
+// the street moved away, so a customer never loses their town. An email field is `splitEmails`.
+
+/** The flat contact fields, as `customers` holds them. `legacy_street` is the value of the legacy
+ *  street column, read ONLY by the migration seed (it is dropped by 20260915b). */
+export interface FlatContact {
+  phone?: string | null;
+  email?: string | null;
+  billing_line1?: string | null;
+  billing_line2?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  billing_zip?: string | null;
+  legacy_street?: string | null;
+}
+
+/** Flat fields → the three lists. PURE. `source` prefixes provenance (`migrated:customers` for the seed). */
+export function contactRecordFromFlat(f: FlatContact, source = 'migrated:customers'): ContactRecord {
+  const findings: ContactFinding[] = [];
+  const phones: ContactPhone[] = [];
+  const seen = new Set<string>();
+  const phone = cleanText(f.phone);
+  if (phone !== null) {
+    seen.add(normalizePhoneValue(phone));
+    phones.push({ label: 'main', value: phone, note: null, is_primary: true, source: `${source}.phone` });
+  }
+  const lines: [string, string | null | undefined][] = [
+    ['billing_line1', f.billing_line1], ['billing_line2', f.billing_line2], ['address_line1', f.legacy_street],
+  ];
+  for (const [col, v] of lines) {
+    const found = phonesInText(v);
+    if (!found) continue;
+    for (const value of found.phones) {
+      const d = normalizePhoneValue(value);
+      if (seen.has(d)) continue;
+      seen.add(d);
+      phones.push({ label: 'other', value, note: found.note, is_primary: phones.length === 0, source: `${source}.${col}` });
+      findings.push({ kind: 'phone-recovered-from-address', field: col, reason: CONTACT_FINDING_REASON['phone-recovered-from-address'] });
+    }
+  }
+
+  const emails: ContactEmail[] = splitEmails(f.email).map((value, i) => ({
+    label: 'main', value, is_primary: i === 0, source: `${source}.email`,
+  }));
+  if (f.email && emailHoldsSeveral(f.email)) {
+    findings.push({ kind: 'email-holds-several', field: 'email', reason: CONTACT_FINDING_REASON['email-holds-several'] });
+  }
+
+  const streets: string[] = [];
+  for (const v of [f.billing_line1, f.billing_line2]) {
+    const c = cleanText(v);
+    if (c !== null && phonesInText(c) === null && !streets.some(x => x.toLowerCase() === c.toLowerCase())) streets.push(c);
+  }
+  if (streets.length === 0) {
+    const legacy = cleanText(f.legacy_street);
+    if (legacy !== null && phonesInText(legacy) === null) streets.push(legacy);
+  }
+  const place = { city: cleanText(f.billing_city), state: cleanText(f.billing_state), zip: cleanText(f.billing_zip) };
+  const addresses: ContactAddress[] = [];
+  const line1 = streets[0] ?? null, line2 = streets[1] ?? null;
+  if (line1 !== null || line2 !== null || place.city !== null || place.state !== null || place.zip !== null) {
+    addresses.push({ kind: 'billing', label: 'Billing', line1, line2, ...place, is_default: true, source: `${source}.billing_*` });
+  }
   return { phones, emails, addresses, findings };
 }
 

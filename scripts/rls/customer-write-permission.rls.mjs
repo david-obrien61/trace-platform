@@ -26,26 +26,30 @@ import { withMemberSession, withThrowawayCustomer, requireBusinessId, makeHarnes
 
 const { ok, done } = makeHarness();
 const businessId = await requireBusinessId(process.env.RLS_BUSINESS_ID);
-const NEW_PHONE = '(512) 555-0199';
+// ✏️ 2026-09-16 (ledger #335): the probe field was `phone`. Phone is now a contact-list row and the
+// database refuses a direct write to `customers.phone` for EVERY caller, which would make the
+// permitted write fail for a reason unrelated to this card. `notes` is a plain customer column, so
+// the only thing gating it is `customers:update` — which is exactly what this card proves.
+const NEW_NOTE = 'harness: permitted write';
 
 console.log(`\n── CARD 7 · customer write permission · tenant ${businessId.slice(0, 8)} ──\n`);
 
 await withThrowawayCustomer({ businessId }, async (customer) => {
-  const originalPhone = customer.phone;
-  console.log(`Throwaway customer ${customer.id.slice(0, 8)} · phone "${originalPhone}"\n`);
+  const originalNote = customer.notes;
+  console.log(`Throwaway customer ${customer.id.slice(0, 8)} · notes "${originalNote}"\n`);
 
   // ════ 1. THE NEGATIVE — read but not update. This is the defect, head-on. ════
   console.log('=== STAFF: customers:read, NOT customers:update — the write must NOT land ===');
   await withMemberSession(
     { businessId, role: 'STAFF', permissions: ['customers:read'], label: 'Harness STAFF (no update)' },
     async ({ client, setPermissions }) => {
-      const readBack = await client.from('customers').select('id,phone').eq('id', customer.id);
+      const readBack = await client.from('customers').select('id,notes').eq('id', customer.id);
       ok(!readBack.error && (readBack.data ?? []).length === 1,
         'the STAFF member CAN read the customer (customers:read is held — positive control)',
         `rows=${(readBack.data ?? []).length}`);
 
       const res = await client.from('customers')
-        .update({ phone: NEW_PHONE }).eq('id', customer.id).select('id,phone');
+        .update({ notes: NEW_NOTE }).eq('id', customer.id).select('id,notes');
 
       ok((res.data ?? []).length === 0,
         '🔴 THE DEFECT: the UPDATE affects ZERO ROWS (customers:update denied by RLS)',
@@ -57,17 +61,17 @@ await withThrowawayCustomer({ businessId }, async (customer) => {
         'zero-rows + no-error together: only an affected-row check (A8) can catch this');
 
       // The value must be untouched when read back by an authority that CAN see it.
-      const after = await client.from('customers').select('phone').eq('id', customer.id).single();
-      ok(after.data?.phone === originalPhone,
-        'RELOAD as the same member: the OLD phone is still there — nothing was written',
-        `phone="${after.data?.phone}"`);
+      const after = await client.from('customers').select('notes').eq('id', customer.id).single();
+      ok(after.data?.notes === originalNote,
+        'RELOAD as the same member: the OLD note is still there — nothing was written',
+        `notes="${after.data?.notes}"`);
 
       // ════ 2. THE POSITIVE — same session, permission granted, RLS re-evaluates live. ════
       console.log('\n=== SAME session, customers:update GRANTED — the write must land ===');
       await setPermissions(['customers:read', 'customers:update']);
 
       const res2 = await client.from('customers')
-        .update({ phone: NEW_PHONE }).eq('id', customer.id).select('id,phone');
+        .update({ notes: NEW_NOTE }).eq('id', customer.id).select('id,notes');
 
       ok((res2.data ?? []).length === 1,
         'the UPDATE now affects EXACTLY ONE ROW',
@@ -79,14 +83,14 @@ await withThrowawayCustomer({ businessId }, async (customer) => {
       // affected-row checks above and below exist — the refusal here is silent, so counting rows
       // is the only recourse (A8). DO NOT COUNT IT AS COVERAGE.
       ok(res2.error == null, 'no error on the permitted write (vacuous — see STD-026)');
-      ok(res2.data?.[0]?.phone === NEW_PHONE,
-        'the returned row carries the NEW phone',
-        `phone="${res2.data?.[0]?.phone}"`);
+      ok(res2.data?.[0]?.notes === NEW_NOTE,
+        'the returned row carries the NEW note',
+        `notes="${res2.data?.[0]?.notes}"`);
 
-      const after2 = await client.from('customers').select('phone').eq('id', customer.id).single();
-      ok(after2.data?.phone === NEW_PHONE,
-        'RELOAD: the new phone PERSISTED — the write is real, not optimistic UI',
-        `phone="${after2.data?.phone}"`);
+      const after2 = await client.from('customers').select('notes').eq('id', customer.id).single();
+      ok(after2.data?.notes === NEW_NOTE,
+        'RELOAD: the new note PERSISTED — the write is real, not optimistic UI',
+        `notes="${after2.data?.notes}"`);
 
       // ════ 3. THE GATE IS THE PERMISSION, NOT MEMBERSHIP. ════
       // Revoking update while KEEPING read must close the write again on the same session.
@@ -95,14 +99,14 @@ await withThrowawayCustomer({ businessId }, async (customer) => {
       console.log('\n=== REVOKED again — the gate is the PERMISSION, not membership ===');
       await setPermissions(['customers:read']);
       const res3 = await client.from('customers')
-        .update({ phone: '(512) 555-0000' }).eq('id', customer.id).select('id');
+        .update({ notes: 'harness: refused write' }).eq('id', customer.id).select('id');
       ok((res3.data ?? []).length === 0 && res3.error == null,
         'revoking customers:update closes the write again on the SAME session (permission-keyed)',
         `affected=${(res3.data ?? []).length}`);
-      const after3 = await client.from('customers').select('phone').eq('id', customer.id).single();
-      ok(after3.data?.phone === NEW_PHONE,
+      const after3 = await client.from('customers').select('notes').eq('id', customer.id).single();
+      ok(after3.data?.notes === NEW_NOTE,
         'and the value from the permitted write is still intact',
-        `phone="${after3.data?.phone}"`);
+        `notes="${after3.data?.notes}"`);
     },
   );
 });

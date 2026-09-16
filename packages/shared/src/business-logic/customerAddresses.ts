@@ -35,6 +35,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // The field list is IMPORTED, never restated here — see `customerAddressFields.ts` for why that
 // distinction is load-bearing rather than stylistic (A4 · #179 · verify-field-lists).
 import { CUSTOMER_ADDRESS_COLUMNS } from './customerAddressFields';
+// 🔴 LEDGER #335: the two STATEMENTS live in `contactWriter`, the one home for every write to a
+// customer's contact lists. This module keeps the PLAN and the sentences.
+import { insertShipToSite, retireShipToSite } from './contactWriter';
 
 export { CUSTOMER_ADDRESS_COLUMNS };
 
@@ -209,7 +212,7 @@ export function planSaveSite(x: {
   };
 }
 
-// ── IO — THE ONE WRITE PATH TO `customer_addresses` ─────────────────────────────────────────
+// ── IO — THE SHIP-TO WRITE PATH (statements in `contactWriter`) ─────────────────────────────
 
 export type SaveOutcome =
   | { kind: 'refused'; reason: string }
@@ -264,8 +267,7 @@ export async function saveCustomerAddress(db: SupabaseClient, x: {
   const plan = planSaveSite(x);
   if (plan.kind !== 'insert') return plan;
 
-  const { data, error } = await db
-    .from('customer_addresses').insert(plan.row).select(CUSTOMER_ADDRESS_COLUMNS);
+  const { rows, error } = await insertShipToSite(db, plan.row, CUSTOMER_ADDRESS_COLUMNS);
 
   if (error) {
     if (TRACE_SITES) console.log('[TRACE:SITES] save FAILED', { customerId: x.customerId, label: plan.row.label, message: error.message });
@@ -275,7 +277,6 @@ export async function saveCustomerAddress(db: SupabaseClient, x: {
       return { kind: 'refused', reason: `This customer already has a site called "${plan.row.label}". Pick another name.` };
     return { kind: 'failed', error: error.message };
   }
-  const rows = (data ?? []) as unknown as CustomerAddress[];
   if (rows.length !== 1) {
     if (TRACE_SITES) console.log('[TRACE:SITES] save landed on', rows.length, 'rows, not 1', { customerId: x.customerId });
     return { kind: 'failed', error: 'That site was not saved — you may not have permission to add addresses for this customer.' };
@@ -294,17 +295,14 @@ export async function saveCustomerAddress(db: SupabaseClient, x: {
 export async function retireCustomerAddress(
   db: SupabaseClient, businessId: string, siteId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data, error } = await db
-    .from('customer_addresses')
-    .update({ active: false, is_default: false })
-    .eq('id', siteId).eq('business_id', businessId).select('id');
+  const { count, error } = await retireShipToSite(db, businessId, siteId);
 
   if (error) {
     if (TRACE_SITES) console.log('[TRACE:SITES] retire FAILED', { siteId, message: error.message });
     return { ok: false, error: error.message };
   }
-  if ((data ?? []).length !== 1) {
-    if (TRACE_SITES) console.log('[TRACE:SITES] retire landed on', (data ?? []).length, 'rows, not 1', { siteId });
+  if (count !== 1) {
+    if (TRACE_SITES) console.log('[TRACE:SITES] retire landed on', count, 'rows, not 1', { siteId });
     return { ok: false, error: 'That site was not retired — you may not have permission, or it was already removed.' };
   }
   // `is_default` is cleared alongside `active` deliberately: the one-default partial unique index
