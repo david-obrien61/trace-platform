@@ -79,6 +79,17 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 NEXT GO-LIVE ITEM (after the #342 / #335 / #344 merges) — THE PRODUCT IMPORT UPDATES, IT DOES NOT DUPLICATE · NOT STARTED
+
+- Filed 2026-09-16 by David. **The QuickBooks product import matches existing rows on
+  `(business_id, qb_item_id)` and UPDATES them instead of inserting; inactive QuickBooks items are not
+  imported (already true since #341 — `qboItemAdapter.ts:282`); a row a person DELETED during test mode
+  is REPORTED, never silently revived.** Why now: Lauren is retiring duplicate items in QuickBooks
+  (item 75 duplicates 753; 76 and 756 look the same) and deleted Lacey Oak 30 (item 75) on the desk.
+- **Size: about one day** — partition by held `qb_item_id` (the customer import's shape: an existing row
+  gets a narrow UPDATE that never carries the run id), a deleted-row report in the preview, tests with
+  mutants, board cards.
+
 ### 🟡 PUSHED, NOT MERGED — #342 (`fix/rehearsal-never-writes-the-record`, 2026-09-16) — **DURING TESTING NOTHING WRITES THE RECORD**
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — qb-test-mode CARDS 26–28 · qb-catalogue-import CARDS 38–41 · opening-stock-seed CARDS 15–16.

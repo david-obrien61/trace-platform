@@ -3915,3 +3915,37 @@ lot — it will name every one of these rows.
 
 **Blocks:** switch-on for any tenant that seeded in test mode (LAWNS: 554 seeded rows, per the prompt of
 2026-09-16). **Owner:** David — the shape of the switch-on moment.
+
+## #311 — 🟡 NOTHING TELLS THE OWNER THAT QUICKBOOKS WRITES ARE STILL OFF — AND SIX CHECKOUT/PLANT SCREENS SHOW NO TEST-MODE BANNER (NEW 2026-09-16, ledger #335)
+
+**What.** Risk check asked by David (his 2026-09-04 ask): *is there anything that alerts the owner that
+writes are still off?* **No.** The only signal is the amber `TestModeBanner`, mounted once in
+`AppLayout.tsx:62`. Nothing reminds, nags, emails or counts days in test mode.
+
+**And the banner is not on every screen that changes stock.** Routes outside `AppLayout`
+(`router.tsx:99–105`) render no banner: `/plant/:tagId`, `/plant/:tagId/addons`, `/checkout/addons`,
+`/checkout/customer`, `/checkout/review`, `/checkout/confirm`. Checkout decrements stock
+(`api/orders/submit.ts`); the confirmation screen carries its own test-mode sentence
+(`Confirmation.tsx`), the steps before it do not.
+
+**Also, stated:** the banner says *"your tree counts do not change"*. Under ledger #344 the COUNT on a
+desk edit, count or delete DOES change (only the permanent history line is not written), so the
+sentence is now inaccurate for those. Not reworded here.
+
+**Fix (not built, on instruction):** a reminder for the owner while writes are off (wording and
+cadence are David's), the banner on the checkout routes, and a corrected banner sentence.
+**Owner:** David.
+
+## #312 — 🟡 A MEMBER WHO CAN UPDATE CUSTOMERS BUT NOT CREATE THEM CANNOT ADD A PHONE, EMAIL OR ADDRESS (NEW 2026-09-16, ledger #335)
+
+**What.** The contact lists' INSERT policies require `customers:create`
+(`20260915_contact_record.sql` §3, and `20260911b` for addresses). Changing a customer's phone in the
+editor is an UPDATE of the customer, but it becomes an INSERT into `customer_phones`. A role holding
+`customers:update` without `customers:create` is refused — loudly; nothing is lost.
+
+**Measured 2026-09-16:** no LAWNS member is in that position (MANAGER and both OWNERs hold both).
+
+**Fix:** the list INSERT policies accept `customers:create OR customers:update`, or the editor's contact
+writes go through a SECURITY DEFINER path gated on `customers:update`. A permission-model decision —
+David's. **Not a go-live item** (David, 2026-09-16).
+

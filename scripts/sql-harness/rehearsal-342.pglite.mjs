@@ -1,7 +1,7 @@
 /**
  * -- rehearsal-342.pglite -- the ledger #342 SQL, EXECUTED rather than shape-checked --------------
  *
- * PURPOSE:      `undo_import_run` (20260916c) and `20260916_rehearsal_cleanup_lawns.sql` run against a
+ * PURPOSE:      `undo_import_run` (20260916c) runs against a
  *               real Postgres (PGlite, WASM) on a minimal schema carrying the REAL append-only trigger
  *               lifted from 20260720. The unit suites only prove the SQL's SHAPE (itemImportWriter
  *               §L10); this proves it RUNS and does what the shape claims: U1–U7 (clean undo with a
@@ -165,68 +165,11 @@ async function seedRun(db) {
   ok(r.refused === false && await n(db, 'business_inventory', `import_run_id = '${OLD}'`) === 1, 'U7 another run survives');
 }
 
-// ── CLEANUP ──────────────────────────────────────────────────────────────────────────────────────
-const cleanup = readFileSync(WT + 'supabase/migrations/20260916_rehearsal_cleanup_lawns.sql', 'utf8');
-async function seedLedger(db, reversalAt = '2026-09-16 15:00:00-05') {
-  await seedRun(db);
-  await db.exec(`
-    INSERT INTO business_inventory (id, business_id, name, import_run_id) VALUES ('a0000000-0000-0000-0000-000000000003', '${LAWNS}', 'Fee row', '${RUN}');
-    INSERT INTO business_inventory (id, business_id, name) VALUES ('a0000000-0000-0000-0000-000000000004', '${LAWNS}', 'hand-made');
-    INSERT INTO business_inventory (id, business_id, name, import_run_id) VALUES ('a0000000-0000-0000-0000-000000000005', '${OTHER}', 'other tenant', '${RUN}');
-    -- seeds (x3 LAWNS import lots), one on a hand-made lot, one on the other tenant
-    INSERT INTO business_inventory_ledger (business_id, inventory_id, delta, kind, source_type, created_at) VALUES
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000001', 10, 'opening_stock_seed', 'manual', '2026-09-15 12:00-05'),
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000002', 10, 'opening_stock_seed', 'manual', '2026-09-15 12:00-05'),
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000003', 10, 'opening_stock_seed', 'manual', '2026-09-15 12:00-05'),
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000004', 10, 'opening_stock_seed', 'manual', '2026-09-15 12:00-05'),
-      ('${OTHER}', 'a0000000-0000-0000-0000-000000000005', 10, 'opening_stock_seed', 'manual', '2026-09-15 12:00-05'),
-    -- today's reversal on the fee row
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000003', -10, 'adjust', 'manual', '${reversalAt}'),
-    -- a desk edit of -10 on a DIFFERENT day (must survive), a count, and the 6a60a0ca-shaped order rows
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000002', -10, 'adjust', 'manual', '2026-09-14 09:00-05'),
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000001', 3, 'count_reconcile', 'inventory_count', '2026-09-16 10:00-05'),
-      ('${LAWNS}', 'a0000000-0000-0000-0000-000000000001', -2, 'sale', 'order', '2026-09-09 15:26-05'),
-      ('${LAWNS}', NULL, 0, 'order_created', 'order', '2026-09-09 15:26-05'),
-      ('${LAWNS}', NULL, 0, 'order_committed', 'order', '2026-09-09 15:26-05'),
-      ('${LAWNS}', NULL, 0, 'order_fulfilled', 'order', '2026-09-09 15:26-05');
-  `);
-}
-{
-  const db = await fresh(); await seedLedger(db);
-  const before = await n(db, 'business_inventory_ledger');
-  const res = await db.exec(cleanup);
-  const report = res[res.length - 1].rows;
-  const after = await n(db, 'business_inventory_ledger');
-  ok(before - after === 4, `C1 removed exactly 3 seeds + 1 reversal (removed ${before - after})`);
-  ok(await n(db, 'business_inventory_ledger', `kind = 'opening_stock_seed' AND business_id = '${LAWNS}' AND inventory_id <> 'a0000000-0000-0000-0000-000000000004'`) === 0, 'C2 no import-lot seed left');
-  ok(await n(db, 'business_inventory_ledger', `inventory_id = 'a0000000-0000-0000-0000-000000000004'`) === 1, 'C3 hand-made lot seed untouched');
-  ok(await n(db, 'business_inventory_ledger', `business_id = '${OTHER}'`) === 1, 'C4 other tenant untouched');
-  ok(await n(db, 'business_inventory_ledger', `source_type = 'order'`) === 4, 'C5 order rows untouched');
-  ok(await n(db, 'business_inventory_ledger', `kind = 'adjust' AND created_at < '2026-09-15'`) === 1, 'C6 a -10 desk edit on another day survives');
-  ok(await n(db, 'business_inventory_ledger', `kind = 'count_reconcile'`) === 1, 'C7 the count survives');
-  ok((await q1(db, `SELECT tgenabled FROM pg_trigger WHERE tgname = 'trg_inventory_ledger_immutable'`)).tgenabled === 'O', 'C8 trigger re-enabled');
-  let refused = false;
-  try { await db.exec(`DELETE FROM business_inventory_ledger WHERE true`); } catch { refused = true; }
-  ok(refused, 'C9 the guard still refuses a DELETE');
-  const ev = await q1(db, `SELECT detail FROM audit_log WHERE action = 'ledger.rehearsal_cleanup'`);
-  ok(ev?.detail?.deleted === 4 && ev.detail.seed_rows === 3 && ev.detail.reversal_rows === 1, `C10 evidence row (${JSON.stringify(ev?.detail)})`);
-  const manual = report.find(r => r.source_type === 'manual');
-  ok(manual && Number(manual.before_rows) === 6 && Number(manual.after_rows) === 2 && Number(manual.removed) === 4,
-     `C11 report by source_type (${JSON.stringify(report)})`);
-  ok(report.find(r => r.source_type === 'order')?.removed == 0, 'C12 report shows order rows unchanged');
-  // rerun: zero removed, still consistent
-  await db.exec(cleanup);
-  ok(await n(db, 'business_inventory_ledger') === after, 'C13 a second run removes nothing');
-}
-{
-  const db = await fresh(); await seedLedger(db);
-  await db.exec(`UPDATE businesses SET qbo_writes_enabled = true WHERE id = '${LAWNS}'`);
-  const before = await n(db, 'business_inventory_ledger');
-  let threw = false; try { await db.exec(cleanup); } catch (e) { threw = /not in test mode/.test(e.message); }
-  ok(threw, 'C14 refuses when LAWNS is live');
-  await db.exec('ROLLBACK').catch(() => {});
-  ok(await n(db, 'business_inventory_ledger') === before, 'C15 and nothing changed');
-  ok((await q1(db, `SELECT tgenabled FROM pg_trigger WHERE tgname = 'trg_inventory_ledger_immutable'`)).tgenabled === 'O', 'C16 trigger still on');
-}
+// ── CLEANUP — REMOVED 2026-09-16 (David) ──────────────────────────────────────────────────────────
+// `20260916_rehearsal_cleanup_lawns.sql` was NOT applied: discovery 2026-09-16 (7c) found ZERO seed
+// rows on LAWNS, so it would have deleted nothing. It is replaced by the targeted
+// `20260916e_remove_lawns_test_mode_ledger_rows.sql`, tested in
+// `lawns-test-mode-removal-335.pglite.mjs`. Its checks C1–C16 went with it.
+
 console.log(`\nPGlite: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

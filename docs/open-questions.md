@@ -86,7 +86,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#342 — during testing nothing writes the record; practice orders go with their import (build + migrations written, none applied)**
-- 🔴 **OPEN — RUN THE DISCOVERY FILE AND PASTE IT BACK**, then snapshot → `20260916_rehearsal_cleanup_lawns.sql` → `20260916c` → V-blocks. Owner: CLAUDE.md §3 #342 (a) · `supabase/discovery/2026-09-16_rehearsal_state.sql`.
+- ✅ **ANSWERED 2026-09-16 — THE DISCOVERY FILE WAS RUN** (read-only, by Thunder). 7c found zero seed rows, so `20260916_rehearsal_cleanup_lawns.sql` is **not applied** and removed; the targeted `20260916e` replaces it. Owner: ledger #342 row.
 - 🔴 **OPEN — ORDER `6a60a0ca` IS HELD.** What removes it, and its four ledger rows, waits on discovery 2a–2c and 7. Owner: ledger #342 Blocker.
 - 🟡 **OPEN — RULING ③: SNAPSHOT-AND-REATTACH OR KEEP-AND-REUSE?** The draft is `20260916b` (raises on apply). Owner: that file's header.
 - 🟡 **OPEN — WHO WRITES THE OPENING LINE AT SWITCH-ON?** Nothing does. Owner: tech-debt **#308**.

@@ -2,8 +2,9 @@
 -- 20260916c — PRACTICE ORDERS CARRY THEIR RUN · THE IMPORT UNDO RUNS AS ONE UNIT · ledger #342
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WRITTEN, NOT APPLIED. David applies it, as `postgres`, in the SQL EDITOR (§6 r17).
---    Order: AFTER 20260916_rehearsal_cleanup_lawns.sql. It does not depend on the cleanup, but the
---    cleanup's before/after counts are cleaner read before anything else changes.
+--    ✏️ 2026-09-16: the cleanup this file used to follow was NOT applied (discovery 7c found zero seed
+--    rows). Order now: 20260916a (the standalone test-mode ledger guard, ledger #344) → THIS FILE →
+--    20260916e (the targeted LAWNS removal of test-mode ledger rows).
 --
 -- ── WHAT THIS DOES ──────────────────────────────────────────────────────────────────────────
 -- §1  orders.import_run_id — nullable uuid, no default, no FK (there is no runs table; a run is
