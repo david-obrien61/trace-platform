@@ -1676,11 +1676,11 @@ async function handleDelete(req: any, res: any) {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     // select('*'), not a named list: `order_kind` is a GATED column and a named select of a missing
     // column errors, where '*' does not (the handleUpdate precedent).
-    const stockGate = await readStockRecordGate(db, businessId, (order as any).order_kind);
 
     const { data: itemsRaw } = await db
       .from('order_items').select('id, quantity, business_inventory_id').eq('order_id', orderId);
     const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
+    const stockGate = await readStockRecordGate(db, businessId, (order as any).order_kind);
 
     // RESTORE on-hand — but ONLY for an order that actually took stock off the property.
     // D-52: that is exactly a FULFILLED order (movesOnHand). Deleting a pending/invoiced order

@@ -144,6 +144,15 @@ async function main(): Promise<void> {
     ok(r.ok === false && r.written === 0, 'S2m and none of it is reported as success');
   }
   {
+    // A PARTIAL chunk: one row writes, one has gained stock. Not zero, so the chunk does not stop —
+    // the END-OF-RUN shortfall check is the only thing that can refuse this.
+    const { db } = fakeDb([lot('p1'), lot('p2', { qty: 4 })]);
+    const r = await seedQtyWithoutLedger(db as any, BIZ, ['p1', 'p2'].map(id => (
+      { lotId: id, name: id, newQty: 5, kind: 'opening_stock_seed' as const, reason: 'x', writesLedger: false })));
+    ok(r.ok === false && r.written === 1 && /Set 1 of 2/.test(r.error ?? ''),
+      `S2t 🔴 a PARTIAL chunk (1 of 2) is a failure with both numbers, not a success (got ${JSON.stringify(r)})`);
+  }
+  {
     const { db } = fakeDb([lot('a')], { refuse: true });
     const r = await seedQtyWithoutLedger(db as any, BIZ, [{ lotId: 'a', name: 'a', newQty: 5, kind: 'opening_stock_seed', reason: 'x', writesLedger: false }]);
     ok(r.ok === false && r.written === 0, 'S2n 🔴 an RLS refusal (no error, zero rows) is a failure');

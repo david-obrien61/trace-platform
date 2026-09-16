@@ -2,7 +2,7 @@
 
 > **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-09-16 — **#341** the preview read asks QuickBooks for inactive records and five transaction types — see ⚡ ACTIVE STATUS.
+> **Last updated:** 2026-09-16 — **#342** during testing nothing writes the record; practice orders go with their import — see ⚡ ACTIVE STATUS.
 - 🟡 **ROUTE HANDOFF — WHAT THE DRIVER RECEIVES IS WHAT THE MANAGER SAW, ledger #286, R-116** · 🔴 **the optimised order never reached the link: `routeUrl` was frozen in `buildRoute()` eight lines before the optimised answer was cleared, and the source array was `created_at DESC` — the newest sale rung up was the first stop driven** · **the split fell along the line between who could SEE it and who GOT it** (pins ✅ · on-card list ✅ · link/SMS/clipboard 🔴), which is why it lived 14 months · ✅ **Google was innocent — no `optimize` parameter exists; it rendered our list faithfully** · **FIX: `routeUrl` is no longer state** — one derivation from `displayStops` (`packages/cultivar-os/src/lib/routeHandoff.ts`) feeds all four consumers, David's option B over A · the SMS count read `selectedOrders.length` and said *"(5 stops)"* above a 3-stop link · **44 probes · 20 mutants, 20 caught** incl. S1 (the defect restored) and S8 (reach, not subject) · ✏️ **the story gate found the CAUSE: the archived route story is OWNER-PROVEN and claims *"the pins, the on-card list, and the route all agree"* — all three on her screen** · ⚠️ **waypoint cap REPORTED not built (R-117, #223): 41% of LAWNS's days exceed Google's documented mobile cap of 3 and our form's real cap is UNKNOWN** · **board 0 of 8 — CARD 2 (text it, TAP it on a phone) has never been run in this feature's history** · **BUILDER-COMPLETE, owner-proof owed**
 - 🟢 **SELECT-POLICY CAP — `npm run verify:select-policies`, CHAINED into `npm run verify`** · every live table needs RLS **and** a policy that can actually SELECT, **or a declared reason** in `select-policy-declarations.json` · tables DERIVED from the migration corpus, never a hardcoded list · **the declaration list itself fails the build when it goes stale** (#73's lesson) · 17 probes both directions · RED-FIRST on the real corpus (exit 1, 2 undeclared, both then verified deliberate) · **closes Open Architecture Decision #11, whose own trigger fired 3× with nothing behind it** · ledger #178
 - 🟢 **DECISION REGISTER RECONCILED** · **D-55** (tier math = percent-off-baseline) numbered at last — it had three docs and no address · **D-37/D-38/D-39 rows added** after `DECISIONS.md` jumped D-36 → D-40 for three weeks · six CLAUDE.md open-decision rows CLOSED (5 principle names settled-by-usage · #10 data-values · #11 by build) · **`RULINGS.md` +4 rows, +2 OWED** (geofence radius/accuracy · the US-C hand-off mechanism) · ledger #178
@@ -78,6 +78,15 @@
 ---
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
+
+### 🟡 PUSHED, NOT MERGED — #342 (`fix/rehearsal-never-writes-the-record`, 2026-09-16) — **DURING TESTING NOTHING WRITES THE RECORD**
+
+- 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — qb-test-mode CARDS 26–28 · qb-catalogue-import CARDS 38–41 · opening-stock-seed CARDS 15–16.
+  No order of any origin moves qty or writes the ledger in test mode; a test order never does. The test-mode seed
+  sets qty on imported rows only. The import undo is one transaction and removes practice orders with its run.
+  api/ 12/12 · 68 + 215 + 42 assertions · mutants 29/29 and 20/20 · PGlite 30/30.
+- 🔴 **NOTHING APPLIED.** David runs `supabase/discovery/2026-09-16_rehearsal_state.sql` first, then the cleanup and
+  `20260916c`. `20260916b` is a draft. Ruling: [[R-158]] (PARTIAL). Debt: #308.
 
 ### 🟡 PUSHED, NOT MERGED — #341 (`fix/preview-query-completeness`, 2026-09-16) — **THE PREVIEW READ SEES WHAT LAUREN RETIRED**
 
