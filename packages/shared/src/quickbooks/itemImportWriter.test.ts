@@ -14,6 +14,7 @@
  * §F  🔴 the undo REFUSES while QuickBooks writes are on
  * §G  🔴 the undo un-retires by RUN ID, never by timestamp
  * §H  🔴 receipts and deliveries are asserted before AND after
+ * §K  🔴 THE UNDO REFUSES BEFORE DELETING ANYTHING when a lot has stock history (tech-debt #304)
  *
  * Run:
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/itemImportWriter.test.ts \
@@ -21,7 +22,8 @@
  */
 import {
   rowForItem, previewItemImport, commitItemImport, undoItemImport,
-  RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS,
+  RETIRE_REASON, ITEM_IMPORT_INSERT_COLUMNS, ledgerRefusalSentence,
+  liveReferenceSentence, UNDO_FUNCTION_ABSENT,
 } from './itemImportWriter';
 import { adaptQboItems } from './qboItemAdapter';
 import type { QboItemRow } from './itemList';
@@ -78,6 +80,21 @@ function recorder(opts: {
   writesEnabled?: boolean | undefined;
   /** Simulates the businesses read FAILING, so the "we could not check" refusal is reachable. */
   businessReadFails?: boolean;
+  /** 🔴 LEDGER ROWS, KEYED BY `inventory_id` — the append-only history that makes a lot
+   *  UNDELETABLE. Without this the double could not produce the one state GATE 2 exists to
+   *  detect, and every §I assertion would be decoration (§6 r19a / tech-debt #138). */
+  ledger?: { inventory_id: string }[];
+  /** Simulates the GATE 2 pre-flight read FAILING, so its "we could not check" refusal — the
+   *  `-1` branch — is reachable rather than merely written. */
+  ledgerReadFails?: boolean;
+  /** 🔴 LEDGER #342 — the live records `undo_import_run` refuses on, and the practice orders it
+   *  removes. `orders` rows carry { id, customer_id, order_kind, import_run_id }; `orderItems`
+   *  { id, order_id, business_inventory_id }; `deliveryRows` { id, customer_id, order_id }. */
+  orders?: any[]; orderItems?: any[]; deliveryRows?: any[];
+  /** Every OTHER FK the function derives from pg_constraint, as `table.column → count`. */
+  otherRefs?: Record<string, number>;
+  /** How the one-unit function answers: modelled (default), not installed, or failing inside. */
+  undoRpc?: 'modelled' | 'absent' | 'error';
 } = {}) {
   const calls: { table: string; verb: string; filters: [string, string, any][]; payload?: any }[] = [];
   const inventory: any[] = (opts.inventory ?? []).map(r => ({ ...r }));
@@ -90,7 +107,11 @@ function recorder(opts: {
   const businesses: any[] = opts.businessReadFails ? [] : [{
     id: BIZ, qbo_writes_enabled: opts.writesEnabled === undefined ? false : opts.writesEnabled,
   }];
+  const ledger: any[] = (opts.ledger ?? []).map(r => ({ ...r }));
   const store = (t: string) => (t === 'customers' ? customers : t === 'businesses' ? businesses : inventory);
+  const orders: any[] = (opts.orders ?? []).map(r => ({ ...r }));
+  const orderItems: any[] = (opts.orderItems ?? []).map(r => ({ ...r }));
+  const deliveryRows: any[] = (opts.deliveryRows ?? []).map(r => ({ ...r }));
   const counts: Record<string, number> = { receipts: opts.receipts ?? 0, deliveries: opts.deliveries ?? 0 };
   const reads: Record<string, number> = { receipts: 0, deliveries: 0 };
 
@@ -99,15 +120,29 @@ function recorder(opts: {
     const rec = { table, verb, filters, payload };
     calls.push(rec);
     let headMode = false;
+    let innerLedger = false;
+    let exactCount = false;
+    let limitN: number | null = null;
     const b: any = {
-      select(_c?: string, o?: any) { if (o?.head) headMode = true; return b; },
+      select(c?: string, o?: any) {
+        if (o?.head) headMode = true;
+        if (o?.count === 'exact') exactCount = true;
+        // 🔴 THE `!inner` EMBED, MODELLED RATHER THAN IGNORED. `business_inventory` rows are
+        // filtered to those having at least one `business_inventory_ledger` child — an INNER
+        // join, so a lot with no history drops out. A double that silently ignored `!inner`
+        // would return every row and GATE 2 would refuse every undo, which is a failure the
+        // probes would catch; the dangerous direction is the opposite, and it is why `matches`
+        // below applies the join rather than the select string being merely recorded.
+        if (/business_inventory_ledger!inner/.test(String(c ?? ''))) innerLedger = true;
+        return b;
+      },
       eq(c: string, v: any)  { filters.push([c, 'eq', v]);  return b; },
       neq(c: string, v: any) { filters.push([c, 'neq', v]); return b; },
       is(c: string, v: any)  { filters.push([c, 'is', v]);  return b; },
       gt(c: string, v: any)  { filters.push([c, 'gt', v]);  return b; },
       or(s: string)          { filters.push(['__or', 'or', s]); return b; },
       order() { return b; },
-      limit() { return b; },
+      limit(n?: number) { if (typeof n === 'number') limitN = n; return b; },
       // 🔴 ADDED 2026-09-06 AND IT WENT RED FIRST. The gate now reads `businesses.qbo_writes_enabled`
       // via `.maybeSingle()`, which this double did not implement, so the whole suite THREW. That is
       // the double being NARROWER than the client — the harmless direction. The dangerous one is a
@@ -147,8 +182,24 @@ function recorder(opts: {
       }
       const rows_ = store(table);
       if (verb === 'select') {
-        const hits = rows_.filter(matches);
-        return headMode ? { data: null, error: null, count: hits.length } : { data: hits, error: null, count: hits.length };
+        let hits = rows_.filter(matches);
+        if (innerLedger) {
+          // The pre-flight's read. A failed read is its own branch because "we could not check"
+          // and "there is nothing to check" must not be the same answer (#182).
+          if (opts.ledgerReadFails) {
+            return { data: null, error: { message: 'simulated ledger read failure' }, count: null };
+          }
+          const withHistory = new Set(ledger.map(l => String(l.inventory_id)));
+          hits = hits.filter(r => withHistory.has(String(r.id)));
+        }
+        // 🔴 `count` IS THE FULL FILTERED SET AND `data` IS THE LIMITED PAGE — PostgREST's own
+        // behaviour, and modelling it is what makes the "names are a sample, count is the total"
+        // distinction reachable. A double that limited BOTH would let `rows.length` pass as the
+        // total and mutant L4 would survive.
+        const total = hits.length;
+        const page = limitN === null ? hits : hits.slice(0, limitN);
+        if (headMode) return { data: null, error: null, count: total };
+        return { data: page, error: null, count: exactCount ? total : page.length };
       }
       if (verb === 'insert') {
         const rows = Array.isArray(payload) ? payload : [payload];
@@ -176,6 +227,55 @@ function recorder(opts: {
     return b;
   }
 
+  /**
+   * 🔴 THE ONE-UNIT UNDO, MODELLED — `undo_import_run` (20260916c). It mirrors the SQL clause for
+   * clause: every pre-flight count is taken before any write, ANY non-zero refuses with NO write,
+   * and the writes are practice orders → products → customers → un-retire. §L10 reads the
+   * migration text and asserts the SQL has the same shape, so the model and the function cannot
+   * silently drift apart. It refuses what the real function refuses (§6 r19a).
+   */
+  function undoImportRun(args: Record<string, unknown>) {
+    if (opts.undoRpc === 'absent') return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.undo_import_run' } };
+    if (opts.undoRpc === 'error')  return { data: null, error: { code: 'P0001', message: 'simulated failure inside the transaction' } };
+    const biz = String(args.p_business_id), run = String(args.p_run_id);
+    const runLots = new Set(inventory.filter(r => String(r.business_id) === biz && String(r.import_run_id) === run).map(r => String(r.id)));
+    const runCust = new Set(customers.filter(r => String(r.business_id) === biz && String(r.import_run_id) === run).map(r => String(r.id)));
+    const isPractice = (o: any) => o && o.order_kind === 'test' && String(o.import_run_id) === run;
+    const practice = new Set(orders.filter(isPractice).map(o => String(o.id)));
+    const held = new Set(ledger.filter(l => runLots.has(String(l.inventory_id))).map(l => String(l.inventory_id))).size;
+    const liveOrders = orders.filter(o => runCust.has(String(o.customer_id)) && !isPractice(o)).length;
+    const liveLines = orderItems.filter(i => runLots.has(String(i.business_inventory_id)) && !practice.has(String(i.order_id))).length;
+    const liveStops = deliveryRows.filter(d => runCust.has(String(d.customer_id)) && !practice.has(String(d.order_id))).length;
+    const other = { ...(opts.otherRefs ?? {}) };
+    const otherTotal = Object.values(other).reduce((a, b) => a + b, 0);
+    if (held + liveOrders + liveLines + liveStops + otherTotal > 0) {
+      return { data: { refused: true, held_lots: held, live_orders: liveOrders, live_order_lines: liveLines,
+        live_deliveries: liveStops, other_references: other }, error: null };
+    }
+    // A function that returns having written nothing — the shape §I needs to prove the re-read.
+    if (opts.refuseWrites) {
+      return { data: { refused: false, practice_orders_deleted: 0, practice_lines_deleted: 0, practice_deliveries_deleted: 0,
+        inventory_deleted: 0, customers_deleted: 0, unretired: 0 }, error: null };
+    }
+    const drop = (arr: any[], pred: (r: any) => boolean) => {
+      const hits = arr.filter(pred); for (const h of hits) arr.splice(arr.indexOf(h), 1); return hits.length;
+    };
+    const pLines = drop(orderItems, i => practice.has(String(i.order_id)));
+    const pStops = drop(deliveryRows, d => practice.has(String(d.order_id)));
+    counts.deliveries = (counts.deliveries ?? 0) - pStops;
+    const pOrders = drop(orders, o => practice.has(String(o.id)));
+    const inv = drop(inventory, r => String(r.business_id) === biz && String(r.import_run_id) === run);
+    const cus = drop(customers, r => String(r.business_id) === biz && String(r.import_run_id) === run);
+    let un = 0;
+    for (const r of inventory) {
+      if (String(r.business_id) === biz && String(r.retired_by_run_id) === run) {
+        r.retired_at = null; r.retired_reason = null; r.retired_by_run_id = null; un++;
+      }
+    }
+    return { data: { refused: false, practice_orders_deleted: pOrders, practice_lines_deleted: pLines,
+      practice_deliveries_deleted: pStops, inventory_deleted: inv, customers_deleted: cus, unretired: un }, error: null };
+  }
+
   const db = {
     from(table: string) {
       return {
@@ -185,8 +285,15 @@ function recorder(opts: {
         delete: () => builder(table, 'delete'),
       };
     },
+    // 🔴 ONE function, and ONLY that one: any other RPC name throws, so an import that reached for a
+    // D-50 ledger RPC (R-93) fails loudly here rather than being quietly answered.
+    rpc(fn: string, args: Record<string, unknown>) {
+      calls.push({ table: fn, verb: 'rpc', filters: [], payload: args });
+      if (fn !== 'undo_import_run') throw new Error(`the recording double models only undo_import_run, not ${fn}`);
+      return Promise.resolve(undoImportRun(args));
+    },
   };
-  return { db, calls, inventory, customers, businesses };
+  return { db, calls, inventory, customers, businesses, ledger, orders, orderItems, deliveryRows };
 }
 
 const HELD = 'all';        // QBO_PUSH_HOLD=all → the OPERATOR's hold covers every business.
@@ -356,7 +463,10 @@ async function sectionB() {
   const tables = new Set(calls.map(c => c.table));
   ok(!tables.has('business_inventory_ledger'),
      '§B 🔴 NOT ONE WRITE TO business_inventory_ledger — reuse of importWrites would have landed 647 IMMUTABLE rows and the undo could never be complete (R-93)');
-  ok(!(db as any).rpc, '§B the double exposes no `rpc`, so a D-50 RPC call could not even compile here');
+  // ✏️ LEDGER #342: the double now exposes `rpc` — for the UNDO's one-unit function and nothing
+  // else (any other name throws). So the assertion moved from "no rpc exists" to "the import
+  // issued none", which is the claim R-93 actually makes.
+  ok(calls.filter(c => c.verb === 'rpc').length === 0, '§B the import issued ZERO rpc calls — not the undo function, not a D-50 ledger RPC');
   ok(calls.every(c => c.verb !== 'rpc'), '§B no RPC verb was issued');
 }
 
@@ -584,10 +694,15 @@ async function sectionG() {
   ok(inventory.find(r => r.id === 'thisRun')?.retired_by_run_id === null, '§G and the stamp is cleared with it');
   ok(inventory.find(r => r.id === 'earlier')?.retired_at === '2026-09-06T09:59:00Z',
      '§G 🔴 A ROW RETIRED ONE MINUTE EARLIER BY A DIFFERENT RUN IS UNTOUCHED — a timestamp window would have silently restored a catalogue the owner had already replaced');
-  const un = calls.find(c => c.verb === 'update')!;
-  ok(un.filters.some(([c, o, v]) => c === 'retired_by_run_id' && o === 'eq' && v === RUN),
-     '§G the un-retire filter is retired_by_run_id, read off the issued call');
-  ok(!un.filters.some(([c]) => c === 'retired_at'), '§G and it does not filter on retired_at at all');
+  // ✏️ LEDGER #342: the un-retire is now a statement inside `undo_import_run`, so its filter is read
+  // off the MIGRATION rather than off an issued PostgREST call.
+  const unit = calls.find(c => c.verb === 'rpc' && c.table === 'undo_import_run');
+  ok(!!unit && unit.payload.p_run_id === RUN && unit.payload.p_business_id === BIZ, '§G the one-unit function is called with THIS run and THIS tenant');
+  const sql = readFileSync(join(ROOT_DIR, 'supabase/migrations/20260916c_practice_orders_and_one_unit_undo.sql'), 'utf8');
+  const unStmt = (sql.match(/UPDATE public\.business_inventory\s+SET retired_at = NULL[\s\S]*?RETURNING 1/) ?? [''])[0];
+  ok(/WHERE business_id = p_business_id AND retired_by_run_id = p_run_id/.test(unStmt),
+     '§G the un-retire filter is retired_by_run_id, read off the SQL that runs');
+  ok(unStmt !== '' && !/WHERE[^;]*retired_at/.test(unStmt), '§G and it does not filter on retired_at at all');
 }
 
 // ── §H receipts and deliveries, before AND after ────────────────────────────
@@ -603,12 +718,14 @@ async function sectionH() {
   const touched = calls.filter(c => (c.table === 'receipts' || c.table === 'deliveries') && c.verb !== 'select');
   ok(touched.length === 0, '§H 🔴 NEITHER TABLE IS WRITTEN TO — asserted against the issued calls, not against the paragraph that claims it');
 
-  // The customer delete runs, matches nothing today, and SAYS so rather than being skipped.
-  ok(rep.customersDeleted === 0, '§H the customer delete matches zero rows today — the merge is not built — and reports 0 rather than being absent');
-  ok(calls.some(c => c.table === 'customers' && c.verb === 'delete'), '§H but the statement IS issued, so the undo is complete the day the merge lands');
-  const cd = calls.find(c => c.table === 'customers' && c.verb === 'delete')!;
-  ok(cd.filters.some(([c, , v]) => c === 'import_run_id' && v === RUN), '§H and it is scoped to this run');
-  ok(cd.filters.some(([c, , v]) => c === 'business_id' && v === BIZ), '§H and to this tenant (AC-3)');
+  // The customer delete runs, matches nothing here, and SAYS so rather than being absent.
+  ok(rep.customersDeleted === 0, '§H the customer delete matches zero rows in this fixture and reports 0 rather than being absent');
+  const unitH = calls.find(c => c.verb === 'rpc' && c.table === 'undo_import_run');
+  ok(!!unitH, '§H the one-unit function is called, so the customer half is part of the same transaction');
+  ok(unitH?.payload.p_run_id === RUN, '§H and it is scoped to this run');
+  ok(unitH?.payload.p_business_id === BIZ, '§H and to this tenant (AC-3)');
+  ok(!calls.some(c => c.verb === 'delete' || c.verb === 'update'),
+     '§H 🔴 NO PostgREST delete or update is issued any more — every write is inside the one transaction');
 
   // 🔴 THE NEGATIVE CONTROL FOR THE ZERO. `customersDeleted === 0` above proves nothing on its
   // own — a customer delete that could never match anything would report 0 identically. So: give
@@ -716,6 +833,287 @@ async function sectionJ() {
   ok((rep.error ?? '').includes('refused'), '§J and calls it a refusal rather than an empty result');
 }
 
+
+// ── §K 🔴 STOCK HISTORY REFUSES THE WHOLE UNDO, BEFORE ANY WRITE (tech-debt #304) ────────────
+//
+// 🔴 THE DEFECT THIS SECTION EXISTS FOR IS NOT HYPOTHETICAL AND IT DID NOT NEED THE SEED.
+// `business_inventory_ledger.inventory_id` is `ON DELETE SET NULL`; SET NULL is an UPDATE; the
+// ledger's `BEFORE UPDATE OR DELETE` trigger refuses it with no exemption. So a lot with history
+// is UNDELETABLE — and before GATE 2 the undo deleted the CUSTOMERS first, then threw on the
+// inventory, leaving the tenant half-wiped and reporting `customersDeleted: 0` for rows that were
+// already gone.
+//
+// ⚠️ ONE TEST ORDER AGAINST ONE IMPORTED LOT WAS ENOUGH. The opening-stock seed would do it 647
+// times, but the seed is not what made this live.
+async function sectionK() {
+  const runRows = () => ([
+    { id: 'lot-1', business_id: BIZ, import_run_id: RUN, name: 'Natchez Crape Myrtle', size: '30 gallon', qty: 0, retired_at: null },
+    { id: 'lot-2', business_id: BIZ, import_run_id: RUN, name: 'Live Oak',             size: '15 gallon', qty: 0, retired_at: null },
+    { id: 'lot-3', business_id: BIZ, import_run_id: RUN, name: 'Cedar Elm',            size: null,        qty: 0, retired_at: null },
+  ]);
+
+  // ── K1 the clean case still proceeds — a gate that refuses everything proves nothing ──
+  {
+    const clean = recorder({ inventory: runRows(), customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }] });
+    const r = await undoItemImport(clean.db as any, BIZ, RUN, HELD);
+    ok(r.refused === false, '§K1 🔴 NO ledger rows → the undo PROCEEDS. The negative control: a gate that cannot pass is not a gate');
+    ok(r.ledgerHeld === 0, '§K1 and reports zero held');
+    ok(r.inventoryDeleted === 3 && r.customersDeleted === 1, '§K1 and it actually did the work');
+  }
+
+  // ── K2 one lot with history refuses the WHOLE run ──
+  {
+    const held = recorder({
+      inventory: runRows(),
+      customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }],
+      ledger: [{ inventory_id: 'lot-2' }],
+    });
+    const r = await undoItemImport(held.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true, '§K2 🔴 ONE lot with history REFUSES the run');
+    ok(r.ledgerHeld === 1, '§K2 and says how many — one');
+    ok((r.error ?? '').includes('Live Oak'), '§K2 🔴 and NAMES it, so the refusal is actionable rather than a category');
+
+    // 🔴 THE ASSERTION THAT IS THE WHOLE POINT OF THE BUILD.
+    ok(held.customers.length === 1,
+       '§K2 🔴 THE CUSTOMER IS STILL THERE. Before GATE 2 this row was deleted and the throw came after — a half-wiped tenant');
+    ok(held.inventory.length === 3, '§K2 🔴 and every product row is still there');
+    ok(held.calls.every(c => c.verb === 'select'),
+       '§K2 🔴 A REFUSED UNDO ISSUES ONLY READS — not one delete, not one update, on ANY table');
+    ok(r.inventoryDeleted === 0 && r.customersDeleted === 0 && r.unretired === 0,
+       '§K2 and every count it reports is zero, because zero is what happened');
+  }
+
+  // ── K3 the count is the TOTAL, the names are a sample ──
+  {
+    const many = Array.from({ length: 12 }, (_, i) => (
+      { id: `L${i}`, business_id: BIZ, import_run_id: RUN, name: `Tree ${i}`, size: '15 gallon', qty: 0, retired_at: null }));
+    const rec = recorder({ inventory: many, ledger: many.map(m => ({ inventory_id: m.id })) });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.ledgerHeld === 12,
+       `§K3 🔴 THE COUNT IS THE FULL SET (12), NOT THE PAGE — got ${r.ledgerHeld}. Reporting the page would understate a seeded catalogue by two orders of magnitude`);
+    ok((r.error ?? '').includes('and 7 more'), '§K3 and the sentence accounts for the ones it did not name');
+    ok((r.error ?? '').includes('12 products'), '§K3 and leads with the total');
+  }
+
+  // ── K4 a RETIRED row this run made still counts ──
+  {
+    const rec = recorder({
+      inventory: [{ id: 'lot-1', business_id: BIZ, import_run_id: RUN, name: 'Retired Oak', size: '15 gallon', qty: 0,
+                    retired_at: '2026-09-15T00:00:00Z', retired_reason: RETIRE_REASON }],
+      ledger: [{ inventory_id: 'lot-1' }],
+    });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.ledgerHeld === 1,
+       '§K4 🔴 A RETIRED ROW THIS RUN CREATED STILL BLOCKS — the undo deletes by run id regardless of retired_at, so a gate filtering to live rows would wave through the exact rows that refuse');
+  }
+
+  // ── K5 a failed pre-flight read REFUSES, and says it could not check ──
+  {
+    const rec = recorder({ inventory: runRows(), customers: [{ id: 'c1', business_id: BIZ, import_run_id: RUN }], ledgerReadFails: true });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true, '§K5 🔴 a pre-flight we could not READ refuses — deleting rows we could not check is the unrecoverable direction');
+    ok(r.ledgerHeld === -1, '§K5 and -1 distinguishes "could not check" from "nothing to check"');
+    ok(/could not check/i.test(r.error ?? ''), '§K5 🔴 and the sentence says so rather than blaming the catalogue (#182: a failed read must not wear the face of a clean one)');
+    ok(rec.customers.length === 1 && rec.inventory.length === 3, '§K5 and nothing was touched');
+  }
+
+  // ── K6 the gate is SECOND, not first — writes-on still wins and says the other thing ──
+  {
+    const rec = recorder({ inventory: runRows(), ledger: [{ inventory_id: 'lot-1' }], writesEnabled: true });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, '');
+    ok(r.refused === true, '§K6 writes-on still refuses');
+    ok(/QuickBooks writes are switched on/.test(r.error ?? ''),
+       '§K6 🔴 …and with ITS OWN sentence, not the ledger one. Two refusals that say the same thing are one refusal wearing two names');
+  }
+
+  // ── K7 a run that made nothing is not "held" ──
+  {
+    const rec = recorder({ inventory: runRows(), ledger: [{ inventory_id: 'lot-1' }] });
+    const r = await undoItemImport(rec.db as any, BIZ, 'a-run-that-made-nothing', HELD);
+    ok(r.refused === false && r.ledgerHeld === 0,
+       '§K7 🔴 the gate is scoped to THIS RUN — another run\'s history does not refuse this undo');
+  }
+
+  // ── K8 the sentence, driven directly, both shapes ──
+  {
+    const one = ledgerRefusalSentence(1, ['Live Oak (15 gallon)']);
+    ok(one.includes('1 product from this import has'), '§K8 singular reads as English, not "1 products have"');
+    ok(!one.includes('and 0 more'), '§K8 and does not tack on an empty remainder');
+    const none = ledgerRefusalSentence(3, []);
+    ok(!none.includes(' — ,') && none.includes('3 products'), '§K8 a count with no names still reads');
+    ok(/NOTHING WAS DELETED AND NOTHING WAS CHANGED/.test(one),
+       '§K8 🔴 and the one fact the owner most needs is stated in the sentence, not implied by the absence of numbers');
+  }
+}
+
+// ── §L 🔴 LEDGER #342 — LIVE RECORDS REFUSE THE UNDO; PRACTICE ORDERS GO WITH THE RUN ─────────
+// David's ruling ④ (2026-09-16): removability is decided by ORIGIN. Captured orders, receipts,
+// deliveries and assets are live and never removed; checkout orders created in test mode are
+// practice and are removed with their run. And the whole undo is ONE unit that cannot half-run.
+async function sectionL() {
+  const runLots = () => ([
+    { id: 'lot-1', business_id: BIZ, import_run_id: RUN, name: 'Desert Willow', size: '30 gallon', qty: 0, retired_at: null },
+    { id: 'lot-2', business_id: BIZ, import_run_id: RUN, name: 'Live Oak',      size: '15 gallon', qty: 0, retired_at: null },
+    { id: 'hid',   business_id: BIZ, import_run_id: null, retired_at: '2026-09-06T10:00:00Z', retired_by_run_id: RUN },
+  ]);
+  const runCust = () => ([
+    { id: 'c-run', business_id: BIZ, import_run_id: RUN },
+    { id: 'c-own', business_id: BIZ, import_run_id: null },
+  ]);
+  const snapshot = (r: ReturnType<typeof recorder>) => JSON.stringify([r.inventory, r.customers, r.orders, r.orderItems, r.deliveryRows]);
+
+  // L1 — a clean run undoes FULLY, practice order + its lines + its stop included.
+  {
+    const rec = recorder({
+      inventory: runLots(), customers: runCust(), receipts: 111, deliveries: 31,
+      orders: [
+        { id: 'p1', customer_id: 'c-run', order_kind: 'test', import_run_id: RUN },
+        { id: 'cap', customer_id: 'c-own', order_kind: 'history', import_run_id: null },
+      ],
+      orderItems: [{ id: 'pi1', order_id: 'p1', business_inventory_id: 'lot-1' }],
+      deliveryRows: [
+        { id: 'ps1', customer_id: 'c-run', order_id: 'p1' },
+        { id: 'cs1', customer_id: 'c-own', order_id: 'cap' },
+      ],
+    });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.ok === true && r.refused === false, `§L1 🔴 a clean run with a practice order undoes FULLY (error: ${r.error})`);
+    ok(r.practiceOrdersDeleted === 1 && r.practiceDeliveriesDeleted === 1, '§L1 the practice order and the stop checkout scheduled for it are removed WITH the run');
+    ok(r.inventoryDeleted === 2 && r.customersDeleted === 1 && r.unretired === 1, '§L1 and the products, the customer and the un-retire all landed');
+    ok(rec.orders.map(o => o.id).join(',') === 'cap', '§L1 🔴 the CAPTURED order is untouched — ruling ④');
+    ok(rec.deliveryRows.map(d => d.id).join(',') === 'cs1', '§L1 🔴 and so is its delivery stop');
+    ok(rec.orderItems.length === 0, '§L1 the practice order\'s line went with it');
+    ok(r.deliveriesAfter === 30 && r.deliveriesBefore === 31, '§L1 the delivery count dropped by exactly the practice stop');
+    ok(r.customersRemaining === 0, '§L1 the re-read says no customer still carries the run');
+  }
+
+  // L2 — a CAPTURED order on an imported customer refuses the whole undo, and changes nothing.
+  {
+    const rec = recorder({
+      inventory: runLots(), customers: runCust(), receipts: 111, deliveries: 31,
+      orders: [{ id: 'cap', customer_id: 'c-run', order_kind: 'history', import_run_id: null }],
+    });
+    const before = snapshot(rec);
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.ok === false, '§L2 🔴 a captured order on an imported customer REFUSES the undo');
+    ok(r.liveReferences?.liveOrders === 1, '§L2 and the refusal counts it');
+    ok(/1 order that is not practice/.test(r.error ?? '') && /NOTHING WAS DELETED AND NOTHING WAS CHANGED/.test(r.error ?? ''),
+       '§L2 🔴 in one plain sentence that says nothing changed');
+    ok(snapshot(rec) === before, '§L2 🔴 COUNTS UNCHANGED — every product, customer, order and stop is still there');
+    ok(!rec.calls.some(c => c.verb === 'delete' || c.verb === 'update'), '§L2 and no PostgREST write was issued either');
+  }
+
+  // L3 — a test order WITHOUT this run's id (the pre-#342 6a60a0ca shape) is NOT practice for this run.
+  {
+    const rec = recorder({
+      inventory: runLots(), customers: runCust(),
+      orders: [{ id: 'old-test', customer_id: 'c-run', order_kind: 'test', import_run_id: null }],
+    });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.liveReferences?.liveOrders === 1,
+       '§L3 🔴 an UNTAGGED test order refuses — only an order carrying THIS run id is removable with it');
+    const other = recorder({
+      inventory: runLots(), customers: runCust(),
+      orders: [{ id: 'other-run', customer_id: 'c-run', order_kind: 'test', import_run_id: OLD_RUN }],
+    });
+    ok((await undoItemImport(other.db as any, BIZ, RUN, HELD)).refused === true, '§L3 and a test order tagged to ANOTHER run refuses too');
+  }
+
+  // L4 — a live checkout line anchored to an imported product refuses (SET NULL would strip it).
+  {
+    const rec = recorder({
+      inventory: runLots(), customers: [{ id: 'c-own', business_id: BIZ, import_run_id: null }],
+      orders: [{ id: 'live', customer_id: 'c-own', order_kind: null, import_run_id: null }],
+      orderItems: [{ id: 'li', order_id: 'live', business_inventory_id: 'lot-2' }],
+    });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.liveReferences?.liveOrderLines === 1, '§L4 🔴 a live line on an imported product refuses');
+    ok(rec.inventory.length === 3, '§L4 and the product is still there');
+  }
+
+  // L5 — a live delivery stop on an imported customer refuses (SET NULL would blank Lauren's stop).
+  {
+    const rec = recorder({ inventory: runLots(), customers: runCust(),
+      deliveryRows: [{ id: 'stop', customer_id: 'c-run', order_id: null }] });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.liveReferences?.liveDeliveries === 1, '§L5 🔴 a live stop on an imported customer refuses');
+    ok(/1 delivery stop/.test(r.error ?? ''), '§L5 and the sentence names it');
+  }
+
+  // L6 — any OTHER foreign key (a saved address) refuses, named by table.
+  {
+    const rec = recorder({ inventory: runLots(), customers: runCust(),
+      otherRefs: { 'public.customer_addresses.customer_id': 2 } });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true, '§L6 🔴 a saved ship-to on an imported customer refuses');
+    ok(/2 records in customer_addresses\.customer_id/.test(r.error ?? ''), `§L6 and names where (got: ${r.error})`);
+  }
+
+  // L7 — the function not installed: refuse, say why, change nothing.
+  {
+    const rec = recorder({ inventory: runLots(), customers: runCust(), undoRpc: 'absent' });
+    const before = snapshot(rec);
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.refused === true && r.error === UNDO_FUNCTION_ABSENT, '§L7 🔴 without 20260916c the undo REFUSES rather than falling back to the half-running version');
+    ok(snapshot(rec) === before, '§L7 and nothing changed');
+  }
+
+  // L8 — a failure INSIDE the transaction: not ok, and it says nothing changed (true now).
+  {
+    const rec = recorder({ inventory: runLots(), customers: runCust(), undoRpc: 'error' });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.ok === false && r.refused === false, '§L8 a failure inside the function is a failure, not a refusal');
+    ok(/NOTHING was changed/.test(r.error ?? '') && /simulated failure/.test(r.error ?? ''),
+       '§L8 🔴 and it says nothing changed — which the one-transaction function makes true — and quotes the database');
+    ok(r.inventoryDeleted === 0 && r.customersDeleted === 0, '§L8 and its zeroes are real');
+  }
+
+  // L9 — a captured order on a customer NOT in the run does not refuse, and is not touched.
+  {
+    const rec = recorder({ inventory: runLots(), customers: runCust(),
+      orders: [{ id: 'cap', customer_id: 'c-own', order_kind: 'history', import_run_id: null }] });
+    const r = await undoItemImport(rec.db as any, BIZ, RUN, HELD);
+    ok(r.ok === true, '§L9 a live record that does not point at the run does not block it (negative control)');
+    ok(rec.orders.length === 1, '§L9 and it is still there');
+  }
+
+  // L10 — the SQL has the shape the model claims. The model and the function cannot drift silently.
+  {
+    const sql = readFileSync(join(ROOT_DIR, 'supabase/migrations/20260916c_practice_orders_and_one_unit_undo.sql'), 'utf8');
+    const body = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public.undo_import_run'), sql.indexOf('REVOKE ALL ON FUNCTION public.undo_import_run'));
+    const refuseAt = body.indexOf("'refused', true");
+    const firstDelete = body.indexOf('DELETE FROM');
+    ok(refuseAt > 0 && firstDelete > refuseAt, '§L10 🔴 the refusal RETURN comes before the first DELETE');
+    ok(/FROM pg_catalog\.pg_constraint/.test(body), '§L10 🔴 the "other references" are DERIVED from pg_constraint, not listed');
+    ok(/IF v_held \+ v_live_orders \+ v_live_lines \+ v_live_stops \+ v_other_total > 0 THEN/.test(body),
+       '§L10 🔴 ANY one live reference refuses — all five counts, summed, against zero');
+    ok(!/cultivar/i.test(body), '§L10 no vertical table name in the platform function (AC-1)');
+    for (const t of ['receipts', 'cost_objects', 'service_offerings', 'business_pricing_config', 'business_inventory_ledger']) {
+      ok(!new RegExp(`(DELETE FROM|UPDATE)\\s+public\\.${t}\\b`).test(body), `§L10 🔴 the function never writes ${t}`);
+    }
+    const orderDeletes = body.match(/DELETE FROM public\.orders[\s\S]*?RETURNING 1/g) ?? [];
+    ok(orderDeletes.length === 1 && /order_kind = 'test' AND import_run_id = p_run_id/.test(orderDeletes[0]),
+       '§L10 🔴 the ONLY orders it deletes are test orders carrying this run id');
+    const practiceExclusions = body.match(/AND NOT \(o\.order_kind IS NOT DISTINCT FROM 'test' AND o\.import_run_id IS NOT DISTINCT FROM p_run_id\);/g) ?? [];
+    ok(practiceExclusions.length === 2,
+       `§L10 🔴 BOTH the live-order and the live-line counts exclude exactly the practice set, NULL-safely (found ${practiceExclusions.length} of 2)`);
+    ok(/WHERE c\.contype = 'f'\s+AND array_length\(c\.conkey, 1\) = 1\s+AND c\.confrelid IN \('public\.business_inventory'::regclass, 'public\.customers'::regclass\)\s+AND c\.conrelid NOT IN \(/.test(body),
+       '§L10 🔴 the catalog read selects every single-column FK into the two parents, with nothing else in its WHERE');
+    ok(/GRANT EXECUTE ON FUNCTION public\.undo_import_run\(uuid, uuid\) TO service_role;/.test(sql)
+       && /REVOKE ALL ON FUNCTION public\.undo_import_run\(uuid, uuid\) FROM public, anon, authenticated;/.test(sql),
+       '§L10 🔴 service_role only — a signed-in member cannot pass another tenant\'s id (AC-3)');
+    ok(/SECURITY DEFINER/.test(body) && /SET search_path = ''/.test(body), '§L10 definer with an empty search_path');
+  }
+
+  // L11 — the sentence, driven directly.
+  {
+    const t = liveReferenceSentence({ heldLots: 1, liveOrders: 2, liveOrderLines: 0, liveDeliveries: 1, other: {} });
+    ok(t.includes('1 product with stock history') && t.includes('2 orders that are not practice') && t.includes('1 delivery stop'),
+       '§L11 every non-zero count is named, singular and plural read as English');
+    ok(!t.includes('0 lines'), '§L11 a zero count is not named');
+  }
+}
+
 // ── preview writes nothing ───────────────────────────────────────────────────
 async function sectionPreview() {
   const { db, calls } = recorder({ inventory: [
@@ -736,7 +1134,7 @@ async function sectionPreview() {
 // Sequential, not Promise.all: each section builds its own recorder, and a shared failure order
 // is what makes a red run readable.
 (async () => {
-  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionPreview]) {
+  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionK, sectionL, sectionPreview]) {
     await section();
   }
   console.log(`\nitemImportWriter — ${passed} passed, ${failed} failed`);

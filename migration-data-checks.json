@@ -1,5 +1,5 @@
 {
-  "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) \u00b7 invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) \u00b7 superseded (a later migration rewrote the same rows) \u00b7 unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
+  "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) · invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) · superseded (a later migration rewrote the same rows) · unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
   "checks": {
     "20260608_advert_channels_config.sql": {
       "kind": "evidence",
@@ -13,12 +13,12 @@
     },
     "20260614_cost_to_produce_trace_seed.sql": {
       "kind": "unverifiable",
-      "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists \u2014 its effect, if it ran, went with it",
+      "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists — its effect, if it ran, went with it",
       "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
     },
     "20260614_cost_to_produce_restore_truncated_lines.sql": {
       "kind": "unverifiable",
-      "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists \u2014 its effect, if it ran, went with it",
+      "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists — its effect, if it ran, went with it",
       "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
     },
     "20260727_align_floor_to_bundles.sql": {
@@ -69,6 +69,11 @@
       "kind": "evidence",
       "means": "Paul (58e9e0f9\u2026) \u2014 the one real address whose state and ZIP were legacy-only \u2014 carries TX and a ZIP in billing_*. Reads billing_* only, so it survives 20260915b dropping the legacy four",
       "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX' AND COALESCE(btrim(billing_zip), '') <> '')"
+    },
+    "20260916_rehearsal_cleanup_lawns.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists (ledger #342)",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'ledger.rehearsal_cleanup')"
     }
   }
 }

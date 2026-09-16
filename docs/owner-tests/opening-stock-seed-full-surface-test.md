@@ -14,7 +14,7 @@
 **Capability:** 5.1 inventory (the seed) · 3.5 QuickBooks (the rule and its storage).
 **Story:** `user_stories.md` → *The imported catalogue can be sold from* (ARC: `cost-to-produce`).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 14 covered** (13 `owed` · 1 `needs-test`).
+**Board: 0 of 16 covered** (15 `owed` · 1 `needs-test`; CARDS 15–16 added by #342).
 **DEVICE:** mostly `desktop` — this is a setup surface and setup is a desk job. CARD 11 is
 `DEVICE: phone`, because the picker is where the original defect was visible and it must be
 provable **without a console**.
@@ -35,7 +35,13 @@ provable **without a console**.
 > constraint**, deliberately — its own migration says *"the value set grows without a migration"*
 > (`20260720_inventory_movement_ledger.sql:159`). **No schema, no policy, no permission string.**
 
-> 🔴 **ORDER MATTERS AND IT IS NOT REVERSIBLE. DO THE CATALOGUE IMPORT FIRST, THE SEED LAST.**
+> ✏️ **LEDGER #342 (2026-09-16) — IN TEST MODE THE SEED WRITES NO LEDGER ROW.** David: *"we must never
+> allow them to write to the actual record during testing."* In test mode the seed sets qty on
+> **imported rows only** and writes nothing permanent, so the import **can still be undone** — the
+> paragraph below, and CARDS 8 and 13, describe **LIVE mode** only. CARDS 15–16 are the test-mode half.
+> ⚠️ The opening line owed after the switch is **not written by anything yet** (tech-debt #308).
+
+> 🔴 **(LIVE MODE) ORDER MATTERS AND IT IS NOT REVERSIBLE. DO THE CATALOGUE IMPORT FIRST, THE SEED LAST.**
 > The import writes `qty 0` and no ledger rows, so it can be wiped and reloaded freely (R-93). The
 > **seed writes a permanent ledger row against every product it touches** — and a lot with ledger
 > history **cannot be deleted**: `business_inventory_ledger.inventory_id` is `ON DELETE SET NULL`,
@@ -306,3 +312,35 @@ Sign in as a **manager** (not the owner) and open **Settings → Accounting**.
 **PASS:** the refusal is an explanation, not a greyed control.
 **FAIL:** a manager sees the button, or the panel vanishes with no word (a missing panel reads as a
 broken feature, not as a permission).
+
+---
+
+## CARD 15 — 🔴 TEST MODE: THE PANEL SAYS SO, AND THE STOCK RECORD STAYS EMPTY (ledger #342)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+On **Test Dave's** (test mode), after a fresh import, open **Settings → Accounting → Starting numbers**.
+
+1. The first line reads **You are in test mode.** and says nothing is written to your stock record, and that
+   you can still undo the import.
+2. Set **5**. The **Done** box repeats the test-mode sentence in amber.
+3. In the SQL editor — the count must be **0**:
+
+```sql
+SELECT count(*) FROM public.business_inventory_ledger
+ WHERE business_id::text LIKE 'f7ec5d67%' AND kind = 'opening_stock_seed'
+   AND created_at > now() - interval '1 hour';
+```
+
+4. Press **Undo this import** (CARD 39's panel). It **succeeds**.
+
+**PASS:** the products read 5, the query returns 0, and the undo goes through.
+🔴 **FAIL:** any seed row appears — the record was written during testing.
+
+---
+
+## CARD 16 — test mode leaves a hand-made product alone
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+On **Test Dave's**, add one product **by hand** (not from QuickBooks) with **0** in stock, then run CARD 15's seed.
+
+**PASS:** the hand-made product still reads **0**, and the Done box counts it under *not created by your
+QuickBooks import*. **FAIL:** it reads 5.
+

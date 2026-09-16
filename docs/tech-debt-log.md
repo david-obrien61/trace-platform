@@ -3677,6 +3677,15 @@ whose owner needs to name their own unit.**
 
 ## #304 — 🟡 **PARTIAL 2026-09-15 (ledger #337): THE HALF-WIPE IS FIXED, THE MEANING IS STILL DAVID'S — AND THE PREMISE WAS WRONG IN THE DIRECTION THAT MATTERS.**
 
+✏️ **CORRECTED 2026-09-16 (ledger #342) — "FIXED" WAS TRUE ON A BRANCH, NOT ON `main`.** Ledger #337's GATE 2
+(`a9968e8`) sat on `origin/fix/undo-refuses-before-deleting` and **was never merged**; this entry reached `main`
+through #333's docs (`2a96bc4`), so `main` carried *"the half-wipe is fixed"* over code that still half-ran.
+[[R-26]]'s shape, one more time. **#342 carries #337's GATE 2 code verbatim (`f67d30d`) and replaces the write
+half with ONE plpgsql transaction** (`undo_import_run`, `20260916c`, NOT APPLIED) that refuses on any live record
+and removes the run's practice orders with it — so the half-run is closed **once 20260916c is applied**, and
+until then the undo refuses outright rather than falling back. **#337's DOCS (owner-role CARD 17, catalogue CARD
+12b) are still only on its branch.**
+
 🔴 **IT DID NOT NEED THE SEED. IT WAS ALREADY LIVE ON LAWNS, AND THIS ROW SAID THE OPPOSITE.**
 The row below reads *"WHY IT HAS NOT BITTEN YET — the imported rows have no ledger history at all
 … The seed is the first thing that gives them any."* **Measured 2026-09-15: order
@@ -3881,3 +3890,28 @@ reproduce both measured errors (F8, F9). **Red-first: 28 failures on the old wri
 64/64 after. 7 mutants, 7 caught.**
 ⚠️ **NOT PROVEN LIVE, AND IT CANNOT BE YET: `writeContactRecord` HAS NO CALLER** — no import screen
 reaches it (measured 2026-09-16). CARDS 7, 8, 9, 12 wait on that wiring, not on this fix.
+
+## #308 — 🟡 A TEST-MODE STARTING NUMBER HAS NO OPENING LEDGER LINE, AND NOTHING WRITES ONE AFTER THE SWITCH (NEW 2026-09-16, ledger #342)
+
+**What.** David's ruling ② (2026-09-16): in test mode the opening-stock seed sets qty **only** on rows the
+QuickBooks import created and writes **no** ledger row — *"the opening ledger entry is written once, after the
+switch."* #342 built the first half (`openingStockTestWrite.ts`). **The second half does not exist.** After
+QuickBooks writes are switched on, a test-seeded lot holds `qty = N` with `SUM(delta) = 0`, and the LIVE seed
+skips it as *"already holds stock"*.
+
+**Why it is not a one-liner.** No RPC can write it. `adjust_inventory_manual` takes an ABSOLUTE qty and writes
+the difference — `N → N` is a no-op that writes nothing, and `N → 0 → N` writes two rows summing to zero, which
+leaves the book and the ledger exactly as far apart as before. The row that is owed is a single
+`+N opening_stock_seed` with **no qty change**, and only `emit_inventory_movement` (service_role only) can write
+that. So the fix is a new SECURITY DEFINER function — *write an opening line for a lot that holds stock and has
+no ledger history* — called once, at switch-on, by `QboWriteSwitch` or the switch's own server path. **A
+migration, and a switch-on flow — neither is this build's.**
+
+**Blast radius, stated rather than guessed.** Until it is built, the reconcile screen reads a test-seeded lot in
+`baseline` mode (no prior count, no seed row — `reconcileMath.ts`), so the book is treated as correct and the
+first count stamps the whole difference as one `count_reconcile`. Visible and correctable, not silent. And
+`scripts/rls/inventory-ledger-replay.rls.mjs` (NOT in `npm run verify`) asserts `SUM(delta) = qty` for every
+lot — it will name every one of these rows.
+
+**Blocks:** switch-on for any tenant that seeded in test mode (LAWNS: 554 seeded rows, per the prompt of
+2026-09-16). **Owner:** David — the shape of the switch-on moment.
