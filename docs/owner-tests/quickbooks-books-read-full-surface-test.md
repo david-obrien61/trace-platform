@@ -52,8 +52,8 @@ withdrawn on 2026-09-03 for being two findings wearing one sentence.
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: #268 · `ui-control-standards.md` §7 W1 · W2
-SIGNAL: the sequencer emits three walks in order; the panel appears on the FIRST click, before any network response.
+COVERS: #268 · #341 · `ui-control-standards.md` §7 W1 · W2
+SIGNAL: the sequencer emits EIGHT walks in order (three until #341); the panel appears on the FIRST click, before any network response.
 
 **As the OWNER**, open **Settings → Accounting** with QuickBooks connected and press
 **"Read my QuickBooks data"**. Watch the top of the panel **in the first second**.
@@ -73,14 +73,20 @@ have lied; if we say a few minutes and take forty seconds we are simply faster t
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: #268 · §7 W3 · R-24 clause (a)
-SIGNAL: `[TRACE:QBO] items — read COMPLETE { expected, retrieved }` — one per walk, three in all.
+COVERS: #268 · #341 · §7 W3 · R-24 clause (a)
+SIGNAL: `[TRACE:QBO] items — read COMPLETE { expected, retrieved }` — one per walk; the five transaction walks emit `[TRACE:QBO] transactions — read COMPLETE`.
 
 Keep watching through the whole read.
 
-- **PASS:** three lines appear one after another, each naming a **real number** and saying it is
-  all of them — e.g. **"Read 685 products & services — that is all of them."** The counts should be
-  roughly **685 products · 1,936 customers · 1,469 invoices** for LAWNS.
+- **PASS:** **eight** lines appear one after another — products & services, customers, invoices,
+  estimates, payments received, sales receipts, credit memos, refunds — each naming a **real number**
+  and saying it is all of them. The last line reads **"All 8 reads finished."**
+- 🔴 **PASS (#341):** the products line and the customers line say **"including N you have made
+  inactive"** when there are any — e.g. *"Read 690 products & services, including 17 you have made
+  inactive — that is all of them."* ✏️ **The counts are now LARGER than earlier reads** (673 products on
+  2026-09-10) because inactive records are included. That growth is the fix, not new records.
+- **FAIL:** the products count equals the old active-only figure with no "inactive" clause, while
+  Lauren has made items inactive in QuickBooks. That is the pre-#341 query still running.
 - **FAIL:** a count that is a round number, a placeholder, or absent; or a walk that finishes with
   no line at all.
 
@@ -221,7 +227,7 @@ the page."* The rest of this card's #257 criteria are unchanged and still requir
   date, and no second one.
 - **PASS:** it states *"This report reflects no corrections"* rather than staying silent — an absent
   line reads as *"none were needed"*.
-- **PASS:** each of the three reads is named, including any that was **not run**.
+- **PASS:** each of the eight reads is named (three until #341), including any that was **not run**.
 - **PASS:** it asks for nothing. No Accept, no Ingest, no next step.
 - **FAIL:** a pop-up blocker stops it and the screen says nothing. It must name the blocker.
 - **FAIL:** any read that was not run is simply missing from the document.
@@ -636,3 +642,48 @@ are on the OAuth path — and every read payload carries `stored: false`. That i
 code, not a measurement of the database, and this card is the difference.
 
 ---
+
+### CARD 19 — 🔴 THE READ SEES WHAT LAUREN MADE INACTIVE, AND DOES NOT PUT IT BACK
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #341
+SIGNAL: `[TRACE:QBO] items — read COMPLETE { …, inactive: N }` with N > 0.
+
+**Why:** until #341 the query never asked QuickBooks for inactive records, so every item Lauren retired
+in response to our report **vanished from the read** — 9 items behind $25,022.50 of invoice lines on
+2026-09-10. Her clean-up made our picture of her books thinner.
+
+1. **As the OWNER**, press **"Read my QuickBooks data"** and let all eight reads finish.
+2. Read the products line, then the findings.
+
+- 🔴 **PASS:** the products line says **"including N you have made inactive"**, with N **at least 12**
+  (the 12 measured between 2026-09-04 and 2026-09-10: Lacey Oak 45G and 30G, NZCM30, CP95-1, JBP,
+  BuJ45, HSKWRD5, NFYH45, both Buckeye items, Texas Lacey Oak 45g, Military Discount 5).
+- 🔴 **PASS:** the **duplicate / colliding products** finding does **not** list the pairs she fixed.
+  Lacey Oak 45 Gallon must **not** show $375 against $1,250 again.
+- **PASS:** **"never sold"** does not grow by the items she retired.
+- **FAIL:** the collision count goes **up** after this build. That is retired items back in the comparison.
+
+⚠️ **The catalogue import is covered by the qb-catalogue-import board, not here.** The same filter keeps
+retired items out of it. Its preview's *"to create"* count should **not** grow by the retired items.
+
+---
+
+### CARD 20 — ⚠️ AN OLD SAVED FILE SAYS IT ONLY HOLDS ACTIVE RECORDS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #341
+🔧 NEEDS SETUP — the dev surface (`?debug=1`), for the file loader.
+
+1. Load **`qbo-items-9341455222430707-2026-09-10T15-18-19-698Z.json`** from Downloads.
+
+- 🔴 **PASS:** the green note says the file loaded **and** says it *"was saved before the read asked
+  QuickBooks for inactive products & services, so anything made inactive before it was saved is not
+  in it."*
+- **PASS:** the file still loads. Every capture saved before #341 has the old count query, and
+  refusing them would lose every before-picture we have.
+- **PASS:** a file saved **after** this build shows **no** such sentence.
+- **FAIL:** "Loaded 673 products & services" with nothing else. That reads as the whole list, and it is not.
+
