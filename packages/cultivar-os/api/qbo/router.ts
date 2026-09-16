@@ -1321,13 +1321,14 @@ async function handleBooksIngest(req: any, res: any) {
   });
 }
 
-// 🔴 BOTH UNDOS, ONE RUN ID, ITEMS FIRST. Each half's own undo runs against the shared id, so
-// `customerImportWriter`'s row-by-row FK retry is USED rather than reimplemented — a chunk refused
-// on a foreign key is retried per row there, so one undeletable customer does not take 1,925 others
-// down with it. That retry is #278's code and it stays #278's code.
-// ITEMS FIRST is the reverse of the import order: an order line points at inventory with ON DELETE
-// SET NULL and survives, while a customer with an order is the one that can genuinely refuse — so
-// the half that can refuse goes last, after everything that cannot has already gone.
+// 🔴 ONE UNDO, ONE RUN ID, ONE TRANSACTION (ledger #342). `undoItemImport` calls
+// `undo_import_run` (20260916c), which removes the run's PRACTICE orders, products and customers
+// and un-retires what it hid — all or nothing, after a pre-flight that refuses on any live record
+// (captured orders, live orders, delivery stops, saved addresses, stock history, any other FK).
+// ✏️ WAS: two undos in sequence, the customer half a PARTIAL undo (#278's per-row FK retry) that
+// ran even when the items half had thrown — the split state tech-debt #304 describes. David's
+// ruling is all-or-nothing for a run, so the customer half is no longer called from here; the
+// customers-only route (`customers-undo`) still uses it, unchanged.
 async function handleBooksUndo(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   const runId = (req.query.run_id as string) || '';
@@ -1345,12 +1346,18 @@ async function handleBooksUndo(req: any, res: any) {
     // A refusal on the first half stops the second — undoing customers while the catalogue stayed
     // would be the split state this whole design exists to prevent.
     if (items.refused) return res.status(409).json({ ok: false, refused: true, runId, items, customers: null, error: items.error });
-    const customers = await undoCustomerImport(supabase(), businessId, runId, hold);
-    const ok = items.ok && customers.ok !== false;
-    console.log('[TRACE:QBBOOKS] undo', { businessId, runId, ok, inventory: items.inventoryDeleted, customers: customers.deleted });
+    // The panel's customer envelope, from the SAME transaction's counts and the post-write re-read.
+    // `blocked` is empty and `deliveriesUnlinked` is 0 BY CONSTRUCTION, not by default: the
+    // pre-flight refuses the whole run before any customer with an order or a stop could be touched.
+    const customers = {
+      ok: items.ok, runId, deleted: items.customersDeleted, blocked: [], deliveriesUnlinked: 0,
+      refusedBecause: null, remainingWithThisRun: items.customersRemaining,
+    };
+    const ok = items.ok;
+    console.log('[TRACE:QBBOOKS] undo', { businessId, runId, ok, inventory: items.inventoryDeleted, customers: items.customersDeleted, practiceOrders: items.practiceOrdersDeleted });
     return res.status(ok ? 200 : 409).json({
       ok, refused: false, runId, items, customers,
-      error: ok ? null : (items.error ?? customers.refusedBecause ?? 'The undo did not finish.'),
+      error: ok ? null : (items.error ?? 'The undo did not finish.'),
     });
   } catch (e: any) {
     console.log('[TRACE:QBBOOKS] undo failed', { businessId, runId, message: e?.message });

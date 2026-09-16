@@ -166,6 +166,9 @@ export const RETIRE_REASON = 'Replaced by your QuickBooks product list. Hidden, 
  *  ingests take, so a recording double can stand in for all three. */
 export interface DbLike {
   from(table: string): any;
+  /** Present on the real client. The UNDO needs it (`undo_import_run`, one transaction); the
+   *  IMPORT never calls it (R-93 — §B asserts that against a recording double). */
+  rpc?(fn: string, args: Record<string, unknown>): any;
 }
 
 export interface ImportPlanReport {
@@ -224,7 +227,26 @@ export interface UndoReport {
    *  reason a refusal is a refusal rather than a failure. `0` on every undo that proceeds.
    *  `-1` means the pre-flight could not be READ, which also refuses: see `ledgerHeldRows`. */
   ledgerHeld: number;
+  /** 🔴 LEDGER #342 — the PRACTICE (test-mode checkout) orders this run owned, removed with it,
+   *  and the delivery stops checkout had scheduled for them. Zero on a refusal. */
+  practiceOrdersDeleted: number;
+  practiceDeliveriesDeleted: number;
+  /** 🔴 LIVE RECORDS that point at this run's rows — the reason a refusal is a refusal. Every key is
+   *  a count; `other` is keyed `table.column`, read from the catalog at run time. Null when the
+   *  database pre-flight did not run (an earlier gate refused first). */
+  liveReferences: LiveReferences | null;
+  /** The post-write RE-READ of customers still carrying this run — what the panel shows as proof. */
+  customersRemaining: number | null;
   error: string | null;
+}
+
+/** What `undo_import_run`'s pre-flight counts, when it refuses. */
+export interface LiveReferences {
+  heldLots: number;
+  liveOrders: number;
+  liveOrderLines: number;
+  liveDeliveries: number;
+  other: Record<string, number>;
 }
 
 /** The columns a created catalogue row carries, DECLARED so the insert and the probes read one
@@ -425,6 +447,33 @@ export function ledgerRefusalSentence(held: number, names: string[]): string {
     + 'separate decision, and it needs the movements dealt with first.';
 }
 
+/**
+ * The sentence for a refusal the DATABASE pre-flight made (`undo_import_run`, 20260916c).
+ *
+ * 🔴 DAVID'S RULING ④ (2026-09-16): captured orders, receipts, deliveries and assets are LIVE and
+ * are never removed. An undo that would delete a customer a captured invoice hangs off — or blank
+ * the customer on a delivery Lauren is routing — is refused whole, and this says why in plain words.
+ */
+export function liveReferenceSentence(r: LiveReferences): string {
+  const parts: string[] = [];
+  const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  if (r.heldLots > 0) parts.push(n(r.heldLots, 'product with stock history', 'products with stock history'));
+  if (r.liveOrders > 0) parts.push(n(r.liveOrders, 'order that is not practice (a captured invoice, or a real or older test sale)', 'orders that are not practice (captured invoices, or real or older test sales)'));
+  if (r.liveOrderLines > 0) parts.push(n(r.liveOrderLines, 'line on those orders', 'lines on those orders'));
+  if (r.liveDeliveries > 0) parts.push(n(r.liveDeliveries, 'delivery stop', 'delivery stops'));
+  const other = Object.entries(r.other ?? {});
+  for (const [where, k] of other) parts.push(`${k} record${k === 1 ? '' : 's'} in ${where.replace(/^public\./, '')}`);
+  const list = parts.length ? parts.join(', ') : 'records we could not name';
+  return `This import cannot be undone: ${list} still point at customers or products it created. `
+    + 'Those are live records — undoing would delete what they point at or leave them pointing at nothing. '
+    + '🔴 NOTHING WAS DELETED AND NOTHING WAS CHANGED. The whole undo stopped here, deliberately.';
+}
+
+/** Why the one-unit undo could not run at all — the migration is not applied yet. */
+export const UNDO_FUNCTION_ABSENT =
+  'The undo now runs as one single step, so it can never stop half-way — and that step is not '
+  + 'installed in the database yet (migration 20260916c). Nothing was deleted and nothing was changed.';
+
 async function countReceipts(db: DbLike, businessId: string): Promise<number> {
   const { count, error } = await db.from('receipts')
     .select('id', { count: 'exact', head: true }).eq('business_id', businessId);
@@ -564,7 +613,9 @@ export async function undoItemImport(
   const empty: UndoReport = {
     ok: false, runId, inventoryDeleted: 0, customersDeleted: 0, unretired: 0,
     receiptsBefore: 0, receiptsAfter: 0, deliveriesBefore: 0, deliveriesAfter: 0,
-    leftovers: [], refused: false, ledgerHeld: 0, error: null,
+    leftovers: [], refused: false, ledgerHeld: 0,
+    practiceOrdersDeleted: 0, practiceDeliveriesDeleted: 0, liveReferences: null, customersRemaining: null,
+    error: null,
   };
 
   const gate = await undoIsOpen(db, businessId, pushHoldRaw);
@@ -580,12 +631,12 @@ export async function undoItemImport(
   }
 
   // ── GATE 2 — STOCK HISTORY. READ BEFORE ANY WRITE, AND REFUSE THE WHOLE RUN. ────────────────
-  // 🔴 THIS RUNS BEFORE THE CUSTOMER DELETE, AND THAT ORDERING IS THE ENTIRE FIX.
-  // The customer delete is issued FIRST below and is its own transaction; the inventory delete
-  // that follows is the one a lot with ledger history refuses. So before this gate existed the
-  // undo DELETED THE CUSTOMERS, THEN THREW — a half-wiped tenant, reported with
-  // `customersDeleted: 0` because the catch returns `{ ...empty }` and `empty` zeroes the counts
-  // that had already landed. The error was honest and the numbers beside it were not.
+  // 🔴 THIS RUNS BEFORE ANY WRITE. When it was written (ledger #337) the customer delete was
+  // issued first, as its own transaction, and the inventory delete after it was the one a lot with
+  // ledger history refuses — so the undo DELETED THE CUSTOMERS, THEN THREW, and reported
+  // `customersDeleted: 0` for rows already gone. ✏️ Since ledger #342 the writes are ONE database
+  // transaction (`undo_import_run`, below), which re-checks this inside itself; this read stays
+  // because it is the one that can NAME the held products, and it costs nothing when it passes.
   //
   // ⚠️ AND IT IS ALL-OR-NOTHING, WHICH IS A DELIBERATE DIVERGENCE FROM ITS SIBLING (§6 r8/r10).
   // `undoCustomerImport` does a PARTIAL undo — it removes what it can and names what it could not,
@@ -606,42 +657,57 @@ export async function undoItemImport(
   }
 
   try {
-    // Asserted BEFORE — see the header. These two tables carry no run id and cannot be reached by
-    // any statement below; the counts prove it rather than the sentence claiming it.
+    // Asserted BEFORE — see the header. Receipts are never reachable by the undo; deliveries are,
+    // but ONLY the stops checkout scheduled for this run's PRACTICE orders (ledger #342), and the
+    // after-count is checked against exactly that number.
     const receiptsBefore   = await countReceipts(db, businessId);
     const deliveriesBefore = await countDeliveries(db, businessId);
 
-    // ✏️ FK ORDER — AND THE PARAGRAPH THAT STOOD HERE FOR 48 DAYS WAS WRONG ABOUT THE ONE FK
-    // THAT MATTERS. It read: *"Every FK pointing at `business_inventory` … is `ON DELETE SET NULL`
-    // (cultivar_plants.inventory_id, order_items.business_inventory_id, inventory_counts.inventory_id,
-    // business_inventory_ledger.inventory_id) — so those rows survive with a null anchor and
-    // nothing cascades."* **True of the first three. False of the fourth**, and
-    // `20260720_inventory_movement_ledger.sql:136-151` had recorded the correction — with a live
-    // observation — before this was written. SET NULL is an UPDATE, and the ledger's append-only
-    // trigger refuses it. See `ledgerHeldRows`, which is GATE 2 above and exists because of this.
-    // 🔴 The three that ARE `SET NULL` still are, so those rows do survive with a null anchor.
-    // ⚠️ `20260905_production_planning.sql`'s `ON DELETE RESTRICT` is a separate refusal and is
-    // NOT caught by GATE 2 — a plan line holding an imported lot refuses at the DELETE, which is
-    // the correct answer surfaced rather than swallowed, but it lands in the catch below and so it
-    // lands AFTER the customer delete. The migration is applied as of 2026-09-15; that hole is
-    // named in the close-out rather than quietly widened into this gate.
-    // Customers are deleted FIRST because a future customer import will hang orders off them; the
-    // order is fixed now so it does not have to be discovered later.
-    const cust = await db.from('customers').delete().eq('business_id', businessId).eq('import_run_id', runId).select('id');
-    if (cust.error) throw new Error(`customers: ${cust.error.message}`);
-    const customersDeleted = (cust.data ?? []).length;
-
-    const inv = await db.from('business_inventory').delete().eq('business_id', businessId).eq('import_run_id', runId).select('id');
-    if (inv.error) throw new Error(`business_inventory: ${inv.error.message}`);
-    const inventoryDeleted = (inv.data ?? []).length;
-
-    // 🔴 SCOPED ON `retired_by_run_id`, NEVER ON `retired_at`. A timestamp window would un-retire
-    // rows an EARLIER run hid, silently restoring a catalogue the owner had already replaced.
-    const un = await db.from('business_inventory')
-      .update({ retired_at: null, retired_reason: null, retired_by_run_id: null })
-      .eq('business_id', businessId).eq('retired_by_run_id', runId).select('id');
-    if (un.error) throw new Error(`un-retire: ${un.error.message}`);
-    const unretired = (un.data ?? []).length;
+    // ── ONE UNIT (ledger #342) ─────────────────────────────────────────────────────────────────
+    // 🔴 THE WRITES ARE ONE plpgsql TRANSACTION, `undo_import_run` (20260916c). The version this
+    // replaces issued four PostgREST statements, each its own transaction, customers FIRST — so a
+    // refusal on the second left the tenant half-wiped (tech-debt #304). GATE 2 above fixed the
+    // ORDER for the one refusal it can see; the function fixes the UNIT for every refusal,
+    // including one nobody predicted: it re-checks everything live INSIDE the transaction
+    // (stock history, captured and live orders, delivery stops, and every other FK into the two
+    // tables, read from the catalog), and a failure anywhere rolls every write back.
+    // It removes the run's PRACTICE orders first (David's ruling ④: removability is decided by
+    // origin), then products, then customers, then un-retires. Never captured orders, receipts,
+    // cost_objects, services or pricing.
+    if (typeof db.rpc !== 'function') {
+      return { ...empty, refused: true, error: UNDO_FUNCTION_ABSENT };
+    }
+    const { data: unit, error: unitErr } = await db.rpc('undo_import_run', {
+      p_business_id: businessId, p_run_id: runId,
+    });
+    if (unitErr) {
+      const code = (unitErr as { code?: string }).code;
+      if (code === 'PGRST202' || code === '42883') {
+        console.log('[TRACE:QBITEMS] undo REFUSED — undo_import_run absent (20260916c pending)', { businessId, runId, code });
+        return { ...empty, refused: true, error: UNDO_FUNCTION_ABSENT };
+      }
+      // 🔴 THE ZEROES ARE TRUE NOW. The function is one transaction; an error rolled back every
+      // write it had made. `{ ...empty }` used to hide landed deletes — here it reports what happened.
+      console.log('[TRACE:QBITEMS] undo FAILED inside the one-unit function — rolled back whole', { businessId, runId, message: unitErr.message });
+      return { ...empty, error: `The undo stopped and NOTHING was changed — it runs as one step, so a failure part-way undoes itself. The database said: ${unitErr.message}` };
+    }
+    const u = (unit ?? {}) as Record<string, any>;
+    if (u.refused === true) {
+      const refs: LiveReferences = {
+        heldLots: Number(u.held_lots ?? 0), liveOrders: Number(u.live_orders ?? 0),
+        liveOrderLines: Number(u.live_order_lines ?? 0), liveDeliveries: Number(u.live_deliveries ?? 0),
+        other: (u.other_references ?? {}) as Record<string, number>,
+      };
+      console.log('[TRACE:QBITEMS] undo REFUSED — live references (database pre-flight)', { businessId, runId, ...refs });
+      return { ...empty, refused: true, ledgerHeld: refs.heldLots, liveReferences: refs,
+        error: liveReferenceSentence(refs) };
+    }
+    const inventoryDeleted          = Number(u.inventory_deleted ?? 0);
+    const customersDeleted          = Number(u.customers_deleted ?? 0);
+    const unretired                 = Number(u.unretired ?? 0);
+    const practiceOrdersDeleted     = Number(u.practice_orders_deleted ?? 0);
+    const practiceDeliveriesDeleted = Number(u.practice_deliveries_deleted ?? 0);
+    const liveReferences: LiveReferences = { heldLots: 0, liveOrders: 0, liveOrderLines: 0, liveDeliveries: 0, other: {} };
 
     // 🔴 THE EVIDENCE THE WRITES LANDED, AND IT IS A RE-READ RATHER THAN A ROW COUNT (A8 / R-12).
     // A delete that matches zero rows returns NO ERROR, and under RLS that is EXACTLY what a
@@ -675,11 +741,13 @@ export async function undoItemImport(
     const receiptsAfter   = await countReceipts(db, businessId);
     const deliveriesAfter = await countDeliveries(db, businessId);
 
-    const untouched = receiptsBefore === receiptsAfter && deliveriesBefore === deliveriesAfter;
-    console.log('[TRACE:QBITEMS] undo', { businessId, runId, inventoryDeleted, customersDeleted, unretired, untouched });
+    // 🔴 DELIVERIES MAY DROP BY EXACTLY THE PRACTICE STOPS REMOVED, AND BY NOTHING ELSE.
+    const untouched = receiptsBefore === receiptsAfter
+      && deliveriesAfter === deliveriesBefore - practiceDeliveriesDeleted;
+    console.log('[TRACE:QBITEMS] undo', { businessId, runId, inventoryDeleted, customersDeleted, unretired, practiceOrdersDeleted, practiceDeliveriesDeleted, untouched });
 
     const changed = !untouched
-      ? `Undo finished, but the number of receipts or deliveries changed (receipts ${receiptsBefore}→${receiptsAfter}, deliveries ${deliveriesBefore}→${deliveriesAfter}). Nothing in the undo touches either. Check before running anything else.`
+      ? `Undo finished, but the number of receipts or deliveries changed by more than this run explains (receipts ${receiptsBefore}→${receiptsAfter}, deliveries ${deliveriesBefore}→${deliveriesAfter}, of which ${practiceDeliveriesDeleted} were practice-order stops this run owned). Nothing else in the undo touches either. Check before running anything else.`
       : null;
     const incomplete = leftovers.length > 0
       ? `The undo did not finish: ${leftovers.join('; ')}. This is what a refused write looks like — the statements reported no error and changed nothing. Nothing else was run.`
@@ -692,6 +760,8 @@ export async function undoItemImport(
       // 🔴 ZERO, AND IT IS AN ASSERTION RATHER THAN A DEFAULT: reaching this line means GATE 2 read
       // the ledger and found nothing holding this run. `0` here is a measurement.
       ledgerHeld: 0,
+      practiceOrdersDeleted, practiceDeliveriesDeleted, liveReferences,
+      customersRemaining: custLeft ?? 0,
       leftovers,
       // 🔴 BOTH FAILURES ARE NAMED, AND A CHANGED COUNT IS AN ERROR EVEN THOUGH NOTHING HERE COULD
       // HAVE CAUSED ONE. If the impossible happened, the owner is told, not reassured.

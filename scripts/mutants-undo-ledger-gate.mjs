@@ -5,7 +5,11 @@
  *               GATE 2 stops the catalogue-import undo when a lot carries stock history. This
  *               breaks one guarantee at a time and requires the suite to go RED. A mutant that
  *               SURVIVES is a guarantee nobody is holding.
- * DEPENDENCIES: node_modules/.bin/esbuild; itemImportWriter.ts and its probe suite.
+ *               ✏️ LEDGER #342 extended it to the one-unit undo (`undo_import_run`, 20260916c) and
+ *               ruling ④ — removability by origin — mutating the migration's SQL as well as the TS.
+ *               ⚠️ The SQL mutants are caught by SHAPE probes (§L10): no test executes the function.
+ *               Its behaviour is proven by the migration's V3 block, run by David.
+ * DEPENDENCIES: node_modules/.bin/esbuild; itemImportWriter.ts, its probe suite, and 20260916c.
  * OUTPUTS:      CAUGHT / SURVIVED / NO-BUILD per mutant + a summary. Exit 1 if any mutant
  *               survives, or if the CONTROL is not green.
  *
@@ -27,8 +31,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const MODULE = 'packages/shared/src/quickbooks/itemImportWriter.ts';
 const SUITE  = 'packages/shared/src/quickbooks/itemImportWriter.test.ts';
+// ✏️ LEDGER #342 — the undo's writes moved into one plpgsql function; its SQL is mutated too.
+const UNIT   = 'supabase/migrations/20260916c_practice_orders_and_one_unit_undo.sql';
 
-const ORIGINAL = { [MODULE]: readFileSync(MODULE, 'utf8'), [SUITE]: readFileSync(SUITE, 'utf8') };
+const ORIGINAL = {
+  [MODULE]: readFileSync(MODULE, 'utf8'), [SUITE]: readFileSync(SUITE, 'utf8'), [UNIT]: readFileSync(UNIT, 'utf8'),
+};
 
 /**
  * Build, then run. Returns 'GREEN' | 'RED' | 'NO-BUILD'.
@@ -105,6 +113,37 @@ const MUTANTS = [
    "  const { data, error, count } = await db.from('business_inventory')",
    "  const { data, error, count } = await db.from('business_inventory').is('retired_at', null)",
    'the gate looks only at LIVE rows -- a retired row this run made still has history and still refuses, so the gate waves through the exact rows that will fail'],
+
+  // ── ledger #342: the one-unit undo, and ruling ④ (removability by origin) ──────────────────
+  [MODULE, '    if (u.refused === true) {', '    if (false) {',
+   '#342 the DATABASE pre-flight refusal is ignored -- a captured order on an imported customer no longer stops the undo'],
+  [MODULE, '      && deliveriesAfter === deliveriesBefore - practiceDeliveriesDeleted;',
+           '      && deliveriesAfter === deliveriesBefore;',
+   '#342 the after-count forgets the practice stops it removed -- every clean undo with a practice delivery reports failure'],
+  [MODULE, "        return { ...empty, refused: true, error: UNDO_FUNCTION_ABSENT };",
+           "        return { ...empty, refused: false, ok: true, error: null };",
+   '#342 a MISSING one-unit function reads as a successful undo -- the owner is told it worked and nothing happened'],
+  [MODULE, "    const practiceDeliveriesDeleted = Number(u.practice_deliveries_deleted ?? 0);",
+           "    const practiceDeliveriesDeleted = 0;",
+   '#342 the practice-stop count is dropped from the report'],
+  [UNIT, "              WHERE business_id = p_business_id AND order_kind = 'test' AND import_run_id = p_run_id\n             RETURNING 1)\n    SELECT count(*) INTO v_p_orders FROM d;",
+         "              WHERE business_id = p_business_id AND order_kind = 'test'\n             RETURNING 1)\n    SELECT count(*) INTO v_p_orders FROM d;",
+   '#342 SQL: the order delete forgets the run id -- EVERY test order is removed by any run\'s undo'],
+  [UNIT, "  IF v_held + v_live_orders + v_live_lines + v_live_stops + v_other_total > 0 THEN",
+         "  IF v_held + v_live_orders + v_live_lines + v_live_stops > 0 THEN",
+   '#342 SQL: a saved address / count / plan line (any other FK) no longer refuses'],
+  [UNIT, "     AND NOT (o.order_kind IS NOT DISTINCT FROM 'test' AND o.import_run_id IS NOT DISTINCT FROM p_run_id);\n\n  SELECT count(*) INTO v_live_lines",
+         "     ;\n\n  SELECT count(*) INTO v_live_lines",
+   '#342 SQL: the live-order count stops excluding practice orders -- every run with a practice order refuses'],
+  [UNIT, "  -- ② products, ③ customers",
+         "  DELETE FROM public.receipts WHERE business_id = p_business_id;\n  -- ② products, ③ customers",
+   '#342 SQL: the undo deletes receipts -- Lauren\'s daily capture, the one thing ruling ④ names first'],
+  [UNIT, "GRANT EXECUTE ON FUNCTION public.undo_import_run(uuid, uuid) TO service_role;",
+         "GRANT EXECUTE ON FUNCTION public.undo_import_run(uuid, uuid) TO service_role, authenticated;",
+   '#342 SQL: any signed-in member can run another tenant\'s undo (AC-3)'],
+  [UNIT, "       AND c.conrelid NOT IN ('public.business_inventory_ledger'::regclass",
+         "       AND false AND c.conrelid NOT IN ('public.business_inventory_ledger'::regclass",
+   '#342 SQL: the derived FK read is switched off -- the model says refused, the SQL would not (a SQL-shape probe must see it)'],
 ];
 
 let caught = 0;
