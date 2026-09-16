@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-15** (ledger #333 — the opening stock seed, the last of five close-outs merged to `main` in ascending id order: #326 · #327 · #328 · #331 · #333. ✏️ **THIS LINE NAMED `#336` WHILE TWO MERGED CLOSE-OUTS HAD NO BLOCK IN THIS FILE AT ALL** — `#331` and `#333` were dropped by the conflict resolution during their rebases and are RESTORED above, verbatim from their own branches. That is the failure §3b exists to prevent, arriving in the register itself: a close-out with FLAGGED FOR DAVID items whose line never reached the one surface that survives the N=3 rotation. Ledger #338.)
+**Last updated: 2026-09-15** (ledger #338 — the archive duplicate check now compares HEADINGS; and the blocks `#331` and `#333` lost in their rebases are restored above, verbatim. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#338 — the archive duplicate check compares headings, not whole text (tooling)**
+- 🔴 **OPEN — SHALL I BUILD THE GUARD FOR §3b's OWN CLAUSE?** *"A close-out that adds a `FLAGGED FOR DAVID` item adds a line to `docs/open-questions.md` too"* is **asserted by nothing**, and that is exactly how `#331` and `#333` lost their blocks silently tonight. Shape: every ledger row whose §3 entry carries `FLAGGED FOR DAVID` owes a register block, with a declaration file for exceptions. **NOT BUILT — it is a new cap, and `#325`'s hook header forbids growing the hook.** Same family as `#280` ②.
+- 🟡 **OPEN — DECLARATION OR HARDCODED SKIP FOR THE 2026-06-09 IGNITION PAIR?** I declared it (a JSON file that **rots loudly** if the pair stops being duplicated). A hardcoded skip is one line and teaches nobody. Your call to overrule.
+- 🟡 **OPEN — NOTHING CHECKS §3 ITSELF FOR A DUPLICATE HEADING**, only the archive. Narrow (§3 is capped at 3, and check 2 covers §3-vs-archive) but real and unasserted.
+- ✏️ **NOT A QUESTION, A CORRECTION TO CARRY: MY 2026-09-15 MERGE REPORT WAS WRONG TWICE.** It said the checker missed **three** duplicates — it missed **two** (`#333`'s was byte-identical and `check 3` caught it) — and it named **trailing whitespace** as the cause, which `norm()` already collapses. The real cause is a **TRUNCATED** copy whose body is a strict prefix of the original's.
+- ✏️ **DISCLOSED — ONLY ONE OF THE THREE "STALE POINTERS" WAS STALE.** `CLAUDE.md` line 3 and `built-inventory.md` already named `#333`.
 
 **#336 — main goes green: the missing `#332` close-out row, filed not withdrawn (docs only)**
 - ✅ **NOT A QUESTION — THE DECISION IS MADE AND RECORDED SO IT IS NOT RE-LITIGATED: `#332` IS FILED, NOT WITHDRAWN.** The work is real and is on `main` (`889b740` + `ecfb376`); a withdrawal under [[R-148]] clause (3) would have recorded that nothing happened in front of two commits where it did. **Overrule it and the row deletes cleanly** — nothing depends on it but the cap.
