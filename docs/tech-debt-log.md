@@ -4065,3 +4065,7 @@ Found in the #345 Part C census; the delivery-stops domain is second in the writ
 ## #309 — ⏳ RESERVED 2026-09-16 (ledger #343, branch `feat/ladder-one-source`)
 
 Reserved before content is written (R-149). Body lands with the build.
+
+## #310 — ⏳ RESERVED 2026-09-16 (ledger #343, branch `feat/ladder-one-source`)
+
+Reserved before content is written (R-149). Body lands with the build.
