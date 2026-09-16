@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-15** (ledger #338 — the archive duplicate check now compares HEADINGS; and the blocks `#331` and `#333` lost in their rebases are restored above, verbatim. All blocks below, newest first.)
+**Last updated: 2026-09-16** (ledger #339 — §3b's own clause is now asserted by `verify-register-blocks`; every flagged close-out owes a block here. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#339 — the register-block cap: §3b's clause is now a check (tooling)**
+- 🔴 **OPEN — TRANSCRIBE `#306` AND `#318`, OR LEAVE THEM?** Both were filed after this register existed and **no block was ever written for either**. Their FLAGGED FOR DAVID items survive only in their archived §3 entries, which are not loaded at session open. They are declared so the cap can ship, and **the cap prints them on every run**.
+- 🟡 **OPEN — BUILD A STRUCTURAL CHECK FOR A TRUNCATED §3 ENTRY?** `#336`'s entry lost its Type line and FLAGGED section to a body swap in my #326 merge, and **no cap we own could see it**. "Every entry carries exactly one `**Type:**` line" would have caught it; the archive's older entries need measuring first.
+- 🟡 **OPEN — BACK-FILL THE 41 PRE-REGISTER ROWS?** Declared as history: the register was seeded from RULINGS OWED plus 11 §3 items, never per row.
+- ✏️ **DISCLOSED — THE LOSS WAS FOUR DAYS AFTER THE REGISTER, NOT THREE** (`ece2d1a` 2026-09-11 → 2026-09-15).
 
 **#338 — the archive duplicate check compares headings, not whole text (tooling)**
 - 🔴 **OPEN — SHALL I BUILD THE GUARD FOR §3b's OWN CLAUSE?** *"A close-out that adds a `FLAGGED FOR DAVID` item adds a line to `docs/open-questions.md` too"* is **asserted by nothing**, and that is exactly how `#331` and `#333` lost their blocks silently tonight. Shape: every ledger row whose §3 entry carries `FLAGGED FOR DAVID` owes a register block, with a declaration file for exceptions. **NOT BUILT — it is a new cap, and `#325`'s hook header forbids growing the hook.** Same family as `#280` ②.
