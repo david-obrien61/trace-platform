@@ -4062,10 +4062,56 @@ never called. So a truck run completed in the app leaves every order open.
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
 
-## #309 — ⏳ RESERVED 2026-09-16 (ledger #343, branch `feat/ladder-one-source`)
+## #309 — 🟡 A STAFF LOGIN PRINTS THE LOAD LIST WITH THE STANDARD FIGURES, NOT THE NURSERY'S — BECAUSE IT CANNOT READ THEM (NEW 2026-09-16, ledger #343)
 
-Reserved before content is written (R-149). Body lands with the build.
+🔴 **THE FOUR PLANTING FIGURES LIVE IN `business_operations_config`, AND THAT TABLE IS GATED `settings:read`.**
+Ledger #343 moved the load list's per-tree figures — mix per gallon of container (2.0), rope per
+T-post, bubblers per tree, deer-fence posts — out of a code constant and into Operations config,
+which is what David ruled (*"it must be available as configuration"*). The table's read policy is
+`settings:read` (`20260905_production_planning.sql`), and **STAFF hold no `settings:*` string at
+all** (tech-debt #188). The yard person who carries the load list to the trailer is exactly the
+person who cannot read the numbers it multiplies by.
 
-## #310 — ⏳ RESERVED 2026-09-16 (ledger #343, branch `feat/ladder-one-source`)
+**Under RLS a refused read returns NO ROW — the same answer as "nothing saved".** Left alone, the page
+would silently print the platform defaults for staff while the owner's stored figures say something
+else. **What #343 does about it, and it is a mitigation, not a fix:** the page asks the permission
+rather than inferring from an empty row (`readLoadListSettings(businessId, can('settings:read'))`),
+and a viewer without it gets the defaults AND a printed flag: *"These are the standard figures — this
+login cannot read the nursery's own settings. Ask the owner to confirm them."* Every figure used is
+printed on the page, so a wrong one is at least visible.
 
-Reserved before content is written (R-149). Body lands with the build.
+**Measured blast radius today: zero wrong figures** (read-only, 2026-09-16): `business_operations_config`
+holds ONE row — Test Dave's, saved 2026-09-15 — and it carries none of the four keys; **LAWNS has no
+row at all.** So the defaults ARE the figures for everyone right now. It becomes live the first time
+an owner saves one.
+
+**The decision is David's and it is a policy question, which is why it is not taken inside a print
+view:** (a) a SECOND read policy on `business_operations_config` for `deliveries:read` holders —
+the table holds no money (R-85 put money in `business_pricing_config`), so widening the READ leaks
+no wage; (b) move the four keys somewhere staff already read; (c) accept the flag. **(a) is the
+smallest and is one migration.**
+
+## #310 — 🟡 THE LAST HARDCODED SIZE LIST: `LARGE_CONTAINERS` IN CHECKOUT, AND IT IS WRONG FOR LAWNS (NEW 2026-09-16, ledger #343)
+
+🔴 **`packages/cultivar-os/api/orders/submit.ts:13` — `['15 gal', '30 gal', '45 gal', '60 gal', '100 gal']`.**
+David ruled 2026-09-16: *"No second list of sizes, no size thresholds."* Ledger #343 removed every
+other list (two dead copies in `lib/constants.ts`, the load list's threshold) and left this one,
+because it is the one live list and replacing it needs a decision that is not the builder's.
+
+**It is wrong on LAWNS's own ladder, three ways, measured against the live ladder 2026-09-16:**
+- it has **no `65 gal` and no `200 gal`** — both LAWNS rungs — so an order of only those sizes never
+  counts as "large";
+- it names **`60 gal`**, a size LAWNS does not sell;
+- it matches **exact strings** (`LARGE_CONTAINERS.includes(container)`), so a lot sized
+  `45 Gallon` or `30` never matches `45 gal`/`30 gal` — and those spellings are live.
+
+**What it drives: only the leakage flag** (`leakageFlag = anyLargeContainer && (nettingTotal +
+otherTotal) === 0` at the submit path, and the same test on the edit path). **Nothing is charged
+from it.** It is a dashboard alert that under-fires.
+
+**Why it is not fixed in #343:** the ladder has no column that says "large". The obvious proxy —
+*a rung with install T-posts is a tree that gets planted* (15–200 at LAWNS) — is an INFERENCE, and
+choosing it inside a checkout handler would answer a question David has not been asked. Options:
+(a) that proxy (`installTPostsPerTree > 0`); (b) a boolean column on the rung; (c) a threshold
+volume in Operations config — which the 2026-09-16 ruling forbids. **The server path would also
+need its own ladder read, and a failed read must never block an order (§6 r6).**

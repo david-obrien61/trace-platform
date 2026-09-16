@@ -1,4 +1,6 @@
-# Last updated: 2026-09-17 (**#346 — NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED.** `20260917a` copies five phone notes; `20260915b` §1b refuses while words beside a phone are unkept; `notes-before-drop-346.pglite.mjs` in verify. Nothing applied.)
+# Last updated: 2026-09-17 (**#343 — THE CONTAINER LADDER IS THE ONE SOURCE FOR SIZES.** T-posts are a column on each size (`install_t_posts_per_tree`, migration WRITTEN, NOT APPLIED — apply before merging); mix 2.0, rope, bubblers and deer-fence posts are Operations config; the load list, uppot plan, count screen and import preview place every size on the ladder; Settings → Container sizes edits it. `20260914_container_ladder.sql` corrected to APPLIED. Branch `feat/ladder-one-source`, NOT merged.)
+# (prior line, preserved: 2026-09-17 (**#346 — NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED.** `20260917a` copies five phone notes; `20260915b` §1b refuses while words beside a phone are unkept; `notes-before-drop-346.pglite.mjs` in verify. Nothing applied.))
+
 # (prior line, preserved: 2026-09-17 (**#345 — THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED.** `writer-registry.json` + `verify:writer-registry` + PGlite path tests on the live schema; checkout saves a picked customer's typed contact; per-value results; change log; Phones/Emails/Addresses on the customer page; reload prompt. See the body.))
 # (prior line, preserved: 2026-09-16 (**#342 — DURING TESTING NOTHING WRITES THE RECORD; PRACTICE ORDERS GO WITH THEIR IMPORT.** The order stock gate, the test-mode seed, the one-unit undo; migrations written, none applied. See the body.))
 # (prior line, preserved: **#335 second pass — tech-debt #306 FIXED: the contact writer reads what each customer holds and INSERTs only what is new (the old upsert raised 23505 on a re-import; `onConflict` on a partial index is refused, 42P10 — both measured). Rebased onto `main`; #331's street rule now writes `billing_*`.**)
@@ -3270,7 +3272,17 @@ row · sales-a-month from history (stage ④) · a UI cancel for a committed pla
 
 ### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-157)
 
-**Last updated:** 2026-09-14 · **Status:** BUILDER-COMPLETE · **migration WRITTEN, NOT APPLIED.**
+**Last updated:** 2026-09-16 · **Status:** BUILDER-COMPLETE · ✏️ **migration APPLIED 2026-09-16 by David (V1–V4 run; catalog check APPLIED)** — was recorded as NOT APPLIED after it had run.
+
+> 🔴 **2026-09-16 — LEDGER #343 (branch `feat/ladder-one-source`, NOT merged): THE LADDER IS NOW THE ONE SOURCE FOR SIZES.**
+> - `supabase/migrations/20260916_container_ladder_install_t_posts.sql` (**WRITTEN, NOT APPLIED — apply BEFORE merging**) — `install_t_posts_per_tree integer NOT NULL DEFAULT 0` + `install_t_posts_because`, LAWNS backfilled by size.
+> - `containerLadder.ts` — `resolveRung` now names the refusal (`not_container` · `off_ladder` · `unreadable` · `blank`); new `sameSizeOnLadder` · `activeRungs` · `largestRung` · `ladderCoverage`; **the field list (`LADDER_FIELDS`) and the row→rung mapping (`rungFromRow`) live here now**, shared by the app reader and the server import preview. `lib/containerLadderFields.ts` re-exports the list.
+> - `cultivar-os/src/lib/containerLadderDraft.ts` (pure form state + refusals) · `containerLadderWrite.ts` (add · edit · move · retire; **no delete**; every write counts what landed) · `components/settings/ContainerSizesSettings.tsx` — **Settings → Container sizes** at `/settings/container-sizes`, Admin nav node `nav_container_sizes`. A new size's T-posts copy from the largest active size and read *copied — confirm* until saved.
+> - `productionMath.ts` `startingGallons` — **the uppot plan starts from the RUNG's volume** (a 3/5 lot reads 4) and costs its mix from it.
+> - `countPromote.ts` `resolveCountTarget({…, ladder})` + `InventoryCount.tsx` — sizes compared by rung; the nursery's sizes offered as chips; an off-ladder size warned, never blocked.
+> - `itemImportWriter.ts` `previewItemImport` → `sizes: { ladder, coverage }`, rendered in `QboCatalogueImport.tsx`; rows still write sizes as QuickBooks states them.
+> - `lib/constants.ts` — `LARGE_CONTAINERS` / `CONTAINER_SIZES` DELETED (zero importers). ⚠️ `api/orders/submit.ts` `LARGE_CONTAINERS` REMAINS — tech-debt #310.
+> - **PROOF:** `containerLadder.test.ts` 82 · `countPromote.test.ts` 58 · `productionPlan.test.ts` 176 · `containerSizesSettings.test.ts` 63 · `itemImportWriter.test.ts` 151 · `containerLadderFields.test.ts` 25 (now replays EVERY migration that touches the table) · ladder mutants **33/33**.
 
 A grower's container sizes are a short, ordered, **per-tenant** list of real trade rungs — at LAWNS
 *slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200*. **Adding a rung is adding a ROW**, and the
@@ -3423,7 +3435,15 @@ A board count that does not say which tree it came from cannot be compared to an
 intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes the race.**
 
 
-## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315) · **corrected by two rulings 2026-09-14 (#329)**
+## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315) · **corrected by two rulings 2026-09-14 (#329)** · **re-built on the ladder 2026-09-16 (#343)**
+
+> 🔴 **2026-09-16 — LEDGER #343 (branch `feat/ladder-one-source`, NOT merged). WHAT BELOW IS NOW HISTORY:** `BOM_RULES` and `tPostsFor` are **GONE**; the ratio is **2.0**, not 1.0 ([[R-155]] amended — David: *"the earlier 1.0 was Lightning's figure"*).
+> - **Every size is placed on the nursery's container ladder** (`resolveRung`); the file calls no unit parser and no size fold of its own.
+> - **Mix** = rung volume × `installMixContainerVolumesPerTree` (Operations config, default 2) · **T-posts** = the rung's `install_t_posts_per_tree` · **rope** = posts × `ropeFeetPerTPost` · **bubblers** = trees × `bubblersPerTree` · **deer fence** brings a tree to `deerFenceTPostsPerTree` IN TOTAL where a stop says so; the data cannot tell, so every stop with trees prints on the UNRESOLVED list.
+> - An **off-ladder size** is UNRESOLVED, named, and COUNTED (tree count and bubblers include it). A **rung with no volume** is counted, named, and its mix not invented.
+> - The page reads both through `lib/loadListSettingsRead.ts`, has its own **could not read sizes** / **no sizes set up** states, prints **Figures used**, and a staff login is told the figures are the standard ones (tech-debt #309).
+> - **Saturday 2026-08-29:** 5 yd of mix (was 2.5) · 24 posts · 96 ft rope · 11 bubblers.
+> - **PROOF:** `loadList.test.ts` 137 · `loadListPage.test.ts` 50 · load-list mutants **51/52** (P1 is the reach control, caught by the page suite).
 
 **What it is.** `/load-list?date=YYYY-MM-DD` — a printable sheet for the person loading the trailer.
 **Consolidated is the headline, per-stop breakdown underneath** (David's ruling): the yard person
