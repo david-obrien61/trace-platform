@@ -54,11 +54,16 @@ export interface ContactRowPlan {
 /**
  * The rows a contact record becomes, for one customer. PURE — so the whole shape of a write is
  * assertable without a client, and the test can see exactly what would land.
+ *
+ * `importRunId` — pass it when writing FOR an import run, and every row carries it, so the run's
+ * undo removes the rows with their customer (`20260916d`). Omit it for anything a person does: an
+ * untagged row on an imported customer is live, and the undo refuses rather than take it.
  */
 export function planContactRows(
-  businessId: string, customerId: string, record: ContactRecord,
+  businessId: string, customerId: string, record: ContactRecord, importRunId?: string | null,
 ): ContactRowPlan {
-  const base = { business_id: businessId, customer_id: customerId };
+  const base: Record<string, unknown> = { business_id: businessId, customer_id: customerId };
+  if (importRunId) base.import_run_id = importRunId;
   return {
     // ⚠️ `value_norm` is absent from every payload BY DESIGN — see the header.
     phones: record.phones.map(p => ({
@@ -209,8 +214,9 @@ export interface ContactCounts { phones: number; emails: number; addresses: numb
  */
 export async function writeContactRecord(
   db: SupabaseClient, businessId: string, customerId: string, record: ContactRecord,
+  importRunId?: string | null,
 ): Promise<ContactWriteOutcome> {
-  const plan = planContactRows(businessId, customerId, record);
+  const plan = planContactRows(businessId, customerId, record, importRunId);
   const planned: ContactCounts = {
     phones: plan.phones.length, emails: plan.emails.length, addresses: plan.addresses.length,
   };

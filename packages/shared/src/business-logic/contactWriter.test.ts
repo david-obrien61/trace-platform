@@ -198,6 +198,15 @@ async function main(): Promise<void> {
     const empty = planContactRows(BIZ, CUST, buildContactRecord({ Id: '2', DisplayName: 'Nobody' }));
     ok(empty.phones.length === 0 && empty.emails.length === 0 && empty.addresses.length === 0,
       'A6 a record with no contact details plans NO rows (absent ≠ empty — A9)');
+    // #335 / 20260916d: a run's rows carry the run, so its undo removes them with the customer.
+    const RUN = '11111111-1111-1111-1111-111111111111';
+    const tagged = planContactRows(BIZ, CUST, FULL, RUN);
+    const taggedAll = [...tagged.phones, ...tagged.emails, ...tagged.addresses];
+    ok(taggedAll.length === 4 && taggedAll.every(r => r.import_run_id === RUN),
+      'A7 🔴 with a run id, EVERY planned row carries it — an untagged imported row would make the undo refuse');
+    const untagged = [...plan.phones, ...plan.emails, ...plan.addresses];
+    ok(untagged.every(r => !('import_run_id' in r)),
+      'A8 without one, no row carries the key — a person\'s row is never attributed to a run');
   }
 
   // ══ B. 🔴 `value_norm` IS NEVER SENT ════════════════════════════════════════════════════════
@@ -229,6 +238,12 @@ async function main(): Promise<void> {
       'C5 🔴 #306: NO upsert. Every unique key here is PARTIAL, so no conflict target PostgREST can name will arbitrate it');
     ok(calls.filter(c => c.op !== 'select').every(c => c.op === 'insert' || (c.op === 'update' && c.table === 'customer_addresses')),
       'C6 writes are INSERTs, plus the one address retirement — nothing else');
+    // By ACT: the run id passed to the writer reaches the rows the client receives.
+    const run = fakeDb();
+    await writeContactRecord(run.db, BIZ, CUST, FULL, '11111111-1111-1111-1111-111111111111');
+    const inserted = run.calls.filter(c => c.op === 'insert').flatMap(c => c.rows);
+    ok(inserted.length === 4 && inserted.every(r => r.import_run_id === '11111111-1111-1111-1111-111111111111'),
+      `C7 🔴 writeContactRecord passes the run id to every INSERT (${inserted.length} rows)`);
   }
 
   // ══ D. REFUSALS ARE VALUES ══════════════════════════════════════════════════════════════════
@@ -411,14 +426,20 @@ async function main(): Promise<void> {
   // to tsc, eslint, knip and every probe. So the list is asserted against the CREATE TABLE.
   {
     const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20260915_contact_record.sql'), 'utf8');
+    // `20260916d` ADDS `import_run_id` to both lists — a column added later is still a column (#179).
+    const addSql = readFileSync(join(process.cwd(), 'supabase/migrations/20260916d_contact_rows_leave_with_their_run.sql'), 'utf8');
     const columnsOf = (table: string): string[] => {
       const start = sql.indexOf(`CREATE TABLE IF NOT EXISTS public.${table}`);
       const block = sql.slice(sql.indexOf('(', start) + 1, sql.indexOf('\n);', start));
-      return block.split('\n')
+      const created = block.split('\n')
         .map(l => l.replace(/--.*$/, '').trim())
         .filter(l => l && !/^(PRIMARY|UNIQUE|CHECK|CONSTRAINT|FOREIGN)/i.test(l))
         .map(l => l.split(/\s+/)[0]).filter(Boolean);
+      const added = [...addSql.matchAll(new RegExp(`ALTER TABLE public\\.${table}\\s+ADD COLUMN IF NOT EXISTS (\\w+)`, 'g'))].map(m => m[1]);
+      return [...created, ...added];
     };
+    ok(columnsOf('customer_phones').includes('import_run_id') && columnsOf('customer_emails').includes('import_run_id'),
+      'E0 the ADD COLUMN in 20260916d was PARSED for both lists — the probe reached its target');
     for (const [table, list] of [['customer_phones', CONTACT_PHONE_COLUMNS], ['customer_emails', CONTACT_EMAIL_COLUMNS]] as const) {
       const declared = columnsOf(table);
       ok(declared.length > 5, `E1-${table} the migration was PARSED (${declared.length} columns) — the probe reached its target`);
@@ -431,7 +452,7 @@ async function main(): Promise<void> {
     }
     // The address READ list is deliberately narrow (what the already-held check needs), so only
     // one direction applies: every column it names must exist in a migration that shapes the table.
-    const addrSql = ['20260911b_customer_addresses.sql', '20260915_contact_record.sql']
+    const addrSql = ['20260911b_customer_addresses.sql', '20260915_contact_record.sql', '20260916d_contact_rows_leave_with_their_run.sql']
       .map(fn => readFileSync(join(process.cwd(), 'supabase/migrations', fn), 'utf8')).join('\n');
     const created = new Set([
       ...[...addrSql.matchAll(/^\s{2}(\w+)\s+(?:uuid|text|boolean|timestamptz)\b/gm)].map(m => m[1]),

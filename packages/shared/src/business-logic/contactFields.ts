@@ -12,12 +12,13 @@
 // OUTPUTS:      CONTACT_PHONE_COLUMNS · CONTACT_EMAIL_COLUMNS · CONTACT_ADDRESS_READ_COLUMNS
 // ============================================================
 
-/** Every column `20260915_contact_record.sql` creates on `customer_phones`, bar the timestamps.
- *  🔴 `contactWriter.test.ts` §E parses the migration and fails in BOTH directions (#179). */
-export const CONTACT_PHONE_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active';
+/** Every column `20260915_contact_record.sql` creates on `customer_phones` (bar the timestamps), plus
+ *  `import_run_id`, which `20260916d` adds. 🔴 `contactWriter.test.ts` §E parses both migrations and
+ *  fails in BOTH directions (#179). */
+export const CONTACT_PHONE_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active,import_run_id';
 
 /** The same, for `customer_emails`. Asserted the same way. */
-export const CONTACT_EMAIL_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active';
+export const CONTACT_EMAIL_COLUMNS = 'id,business_id,customer_id,label,value,value_norm,is_primary,source,active,import_run_id';
 
 /** What the import's already-held check reads from `customer_addresses`. NARROW on purpose — not
  *  `CUSTOMER_ADDRESS_COLUMNS`, which predates `source` and `kind` (both added by `20260915`), and
