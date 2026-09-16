@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-16** (ledger #339 — §3b's own clause is now asserted by `verify-register-blocks`; every flagged close-out owes a block here. All blocks below, newest first.)
+**Last updated: 2026-09-16** (ledger #340 — `business_inventory` cannot tell a plant from a material; tech-debt #307 filed, a 92-row seed reversal written and not run. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#340 — `business_inventory` cannot tell a plant from a material (recon + filing)** — owner: `docs/tech-debt-log.md` #307 · `docs/recon/2026-09-16-plant-versus-material.md`
+- 🔴 **OPEN — RUN THE 92-ROW SEED REVERSAL?** The 2026-09-09 seed put qty 10 on 92 non-plant rows (fees, services, materials, three empty pots). Preflighted read-only: 0 ledger rows, 0 order lines, 0 counts, 0 plan lines. SQL in the recon, **not run**.
+- 🔴 **OPEN — WHAT AXIS, AND WHAT VOCABULARY?** Plant vs material is not [[R-118]]'s origin axis (a bought tree is a plant; a made bubbler is not).
+- 🟡 **OPEN — DO FEES BELONG IN `business_inventory` AT ALL?** `Trip Charge`, `Hours`, `Military Discount 5%` ([[R-144]] · #139).
+- 🟡 **OPEN — TWO ROWS NOT CALLED:** `Arizona Cypress Blue Ice Replacement`; the `Muskogee … + Installation & Warranty` bundle.
 
 **#339 — the register-block cap: §3b's clause is now a check (tooling)**
 - 🔴 **OPEN — TRANSCRIBE `#306` AND `#318`, OR LEAVE THEM?** Both were filed after this register existed and **no block was ever written for either**. Their FLAGGED FOR DAVID items survive only in their archived §3 entries, which are not loaded at session open. They are declared so the cap can ship, and **the cap prints them on every run**.
