@@ -22,14 +22,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const SUBMIT = 'packages/cultivar-os/api/orders/submit.ts';
 const MODE   = 'packages/shared/src/business-logic/testMode.ts';
 const SUITE  = 'packages/cultivar-os/api/orders/stockRecordGate.test.ts';
+// The test-mode seed (ruling ② for the seed) — its own suite.
+const PLAN   = 'packages/shared/src/quickbooks/openingStock.ts';
+const WRITE  = 'packages/shared/src/quickbooks/openingStockTestWrite.ts';
+const SCREEN = 'packages/shared/src/components/OpeningStockSeed.tsx';
+const SEED_SUITE = 'packages/shared/src/quickbooks/openingStockTestWrite.test.ts';
 
-const ORIGINAL = { [SUBMIT]: readFileSync(SUBMIT, 'utf8'), [MODE]: readFileSync(MODE, 'utf8') };
+const ORIGINAL = Object.fromEntries([SUBMIT, MODE, PLAN, WRITE, SCREEN].map(f => [f, readFileSync(f, 'utf8')]));
 
-function runSuite() {
+function runSuite(suite = SUITE) {
   let bundle;
   try {
     bundle = execFileSync('node_modules/.bin/esbuild',
-      [SUITE, '--bundle', '--platform=node', '--format=cjs', '--external:@supabase/supabase-js'],
+      [suite, '--bundle', '--platform=node', '--format=cjs', '--external:@supabase/supabase-js'],
       { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (e) {
     return { verdict: 'NO-BUILD', why: (e.stderr?.toString() ?? '').trim().split('\n').slice(0, 3).join(' | ') };
@@ -100,6 +105,30 @@ const MUTANTS = [
   [SUBMIT, "    // Captured (history) orders arrive here too",
            "    await db.rpc('record_order_event', { p_order_id: orderId });\n    // Captured (history) orders arrive here too",
    'a SECOND, ungated ledger call is added beside the chokepoint'],
+
+  // ── the test-mode seed ──────────────────────────────────────────────────────────────────────
+  [PLAN, "    if (mode === 'test' && c.imported !== true) { notImported++; continue; }", "",
+   'SEED: test mode seeds hand-made rows too', SEED_SUITE],
+  [PLAN, "      writesLedger: mode === 'live',", "      writesLedger: true,",
+   'SEED: a test-mode step is marked as writing the ledger', SEED_SUITE],
+  [PLAN, "  return qboWritesEnabled === true ? 'live' : 'test';", "  return qboWritesEnabled === false ? 'test' : 'live';",
+   'SEED: an UNREAD switch seeds through the ledger', SEED_SUITE],
+  [PLAN, "  const refusal = seedRefusal(qty);\n  if (refusal !== null) return { ok: false, error: refusal };\n\n  let withStock = 0, withHistory = 0, notImported = 0;",
+         "  const refusal = mode === 'live' ? seedRefusal(qty) : null;\n  if (refusal !== null) return { ok: false, error: refusal };\n\n  let withStock = 0, withHistory = 0, notImported = 0;",
+   'SEED: SEED_CAP is skipped in test mode', SEED_SUITE],
+  [WRITE, "      .not('import_run_id', 'is', null)\n", "",
+   'SEED: the writer can set qty on a row with import_run_id NULL', SEED_SUITE],
+  [WRITE, "      .eq('qty', 0)\n", "",
+   'SEED: the writer overwrites a row that gained stock since the plan', SEED_SUITE],
+  [WRITE, "      .eq('business_id', businessId)\n      .in('id', ids)", "      .in('id', ids)",
+   'SEED: the writer is not tenant-scoped (AC-3)', SEED_SUITE],
+  [WRITE, "  if (written !== planned) {", "  if (written < 0) {",
+   'SEED: a shortfall is reported as success', SEED_SUITE],
+  [SCREEN, "      setPhase({ k: 'done', seeded: r.written, qty, skipped: plan.skipped });\n      return;\n",
+           "      setPhase({ k: 'done', seeded: r.written, qty, skipped: plan.skipped });\n",
+   'SEED: the test branch falls through to the ledger RPC loop', SEED_SUITE],
+  [SCREEN, "  const mode = seedModeFor(business?.qbo_writes_enabled);", "  const mode = seedModeFor(true);",
+   'SEED: the screen ignores the stored switch', SEED_SUITE],
 ];
 
 let caught = 0;
@@ -108,14 +137,15 @@ const noBuild = [];
 try {
   process.stdout.write('\n-- CONTROL (unmutated) ... ');
   const control = runSuite();
-  console.log(control.verdict);
-  if (control.verdict !== 'GREEN') {
+  const seedControl = runSuite(SEED_SUITE);
+  console.log(`${control.verdict} / seed suite ${seedControl.verdict}`);
+  if (control.verdict !== 'GREEN' || seedControl.verdict !== 'GREEN') {
     console.error(`\nCONTROL IS ${control.verdict}. Every "CAUGHT" below would be meaningless.`);
     if (control.why) console.error(control.why);
     process.exit(1);
   }
   console.log(`\n-- ${MUTANTS.length} MUTANTS --\n`);
-  for (const [file, find, replace, meaning] of MUTANTS) {
+  for (const [file, find, replace, meaning, suite] of MUTANTS) {
     const src = ORIGINAL[file];
     if (!src.includes(find)) {
       survivors.push(`NOT APPLIED (anchor text not found in ${file}): ${meaning}`);
@@ -123,7 +153,7 @@ try {
       continue;
     }
     writeFileSync(file, src.replace(find, replace));
-    const r = runSuite();
+    const r = runSuite(suite ?? SUITE);
     writeFileSync(file, src);
     if (r.verdict === 'GREEN')         { survivors.push(meaning); console.log(`  !!  SURVIVED    ${meaning}`); }
     else if (r.verdict === 'NO-BUILD') { noBuild.push(meaning);  console.log(`  --  NO-BUILD    ${meaning}\n        ${r.why}`); }

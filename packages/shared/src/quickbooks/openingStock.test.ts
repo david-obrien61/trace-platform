@@ -143,7 +143,7 @@ ok(seedRefusal(0) !== null, 'C3  zero is refused — it is the state they are al
 ok(seedRefusal(-4) !== null, 'C4  a negative is refused');
 ok(seedRefusal(2.5) !== null, 'C5  a fraction is refused — units are whole things');
 ok(seedRefusal(SEED_MIN) === null, `C6  ${SEED_MIN} is allowed`);
-ok(planOpeningStockSeed([{ id: 'l1', name: 'Oak', qty: 0, hasHistory: false }], 999).ok === false,
+ok(planOpeningStockSeed([{ id: 'l1', name: 'Oak', qty: 0, hasHistory: false }], 999, 'live').ok === false,
    'C7  🔴 THE PLAN REFUSES TOO, not only the input box. A cap enforced in one place is a cap enforced nowhere');
 
 // The suggestion is LOW by construction, and never above the cap however busy the business.
@@ -164,7 +164,7 @@ console.log('── §D  THE SEED NEVER OVERWRITES A REAL NUMBER ─────
     { id: 'stocked', name: 'Cedar Elm 30',   qty: 12, hasHistory: false },
     { id: 'soldout', name: 'Vitex 15',       qty: 0,  hasHistory: true  },
   ];
-  const plan = planOpeningStockSeed(cands, 5);
+  const plan = planOpeningStockSeed(cands, 5, 'live');
   ok(plan.ok === true, 'D1  a mixed catalogue produces a plan');
   if (plan.ok) {
     ok(plan.steps.length === 1 && plan.steps[0].lotId === 'empty',
@@ -185,7 +185,7 @@ console.log('── §D  THE SEED NEVER OVERWRITES A REAL NUMBER ─────
 }
 
 {
-  const none = planOpeningStockSeed([{ id: 'x', name: 'X', qty: 3, hasHistory: false }], 5);
+  const none = planOpeningStockSeed([{ id: 'x', name: 'X', qty: 3, hasHistory: false }], 5, 'live');
   ok(none.ok === false, 'D9  nothing to seed is a refusal with a sentence, not an empty success');
 }
 
@@ -195,7 +195,7 @@ console.log('── §D  THE SEED NEVER OVERWRITES A REAL NUMBER ─────
   const all = planOpeningStockSeed([
     { id: 'a', name: 'A', qty: 0, hasHistory: false },
     { id: 'b', name: 'B', qty: 0, hasHistory: false },
-  ], 5);
+  ], 5, 'live');
   ok(all.ok === true && all.steps.length === 2,
      'D10 NEGATIVE CONTROL — two genuinely empty lots produce TWO steps, so §D2 measured a filter and not an empty planner');
 }

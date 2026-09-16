@@ -29,8 +29,9 @@ somebody remembered**, and it stays excluded after go-live.
 **(3)** Nobody can be in test mode without knowing it — because the expensive failure is not fake
 data reaching real books, it is somebody working in test mode for a week believing they are live.
 
-**Board: 0 of 25.** Every card is `STATUS: owed` except **13**, **23** and **25**, which are
-`needs-test` with their reasons stated. **Card 15 is R-63's** — it was added after David ruled the
+**Board: 0 of 29.** Every card is `STATUS: owed` except **13**, **23**, **25** and **29**, which are
+`needs-test` with their reasons stated. **Cards 26–28 are #342's** — the stock sentence on the banner,
+made true in code (rulings ① and ②, 2026-09-16). **Card 15 is R-63's** — it was added after David ruled the
 stock sentence, and it is the one that closes the question this build raised and could not decide.
 Thunder never sets `covered` (OP-14).
 
@@ -737,3 +738,65 @@ shows **`failed`** — a different badge, with different copy, saying QuickBooks
 🔴 **WRITING THIS DOWN IS THE POINT.** CARD 24 will go green and the board will read as though the
 503 copy is proven. **Half of it is.** An unrecorded hole under a green neighbour is indistinguishable
 from coverage (OP-14 clause 2).
+
+---
+
+## CARD 26 — 🔴 A TEST SALE DOES NOT CHANGE THE TREE COUNT (ruling ①, ledger #342)
+**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** — · **COVERS:** #342
+> R-63 put *"your tree counts do not change"* on this banner on 2026-09-02, and until #342 **nothing
+> enforced it** — order `6a60a0ca` (LAWNS, 2026-09-09, a test walk-in) took 2 off *Desert Willow 30
+> Gallon*. This card is the sentence being made true.
+
+On **Test Dave's** (test mode — the banner is showing), pick a product that shows a number, e.g. **7**.
+
+1. Ring it up for **1**, customer takes it with them (walk-in), and finish the order.
+2. Open the product again. It still reads **7**.
+
+**PASS:** the number did not move, and the order exists.
+🔴 **FAIL:** it reads **6**. That is the 6a60a0ca defect, still live.
+
+---
+
+## CARD 27 — 🔴 THE FULFILLED TAP ON A TEST DELIVERY ORDER MOVES THE STATUS, NOT THE STOCK
+**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** — · **COVERS:** #342
+On **Test Dave's**, ring up **1** of the same product **for delivery**, then from the order screen move it
+to **fulfilled**.
+
+1. The order reads **fulfilled** — routing and the stop behave as they always have.
+2. The product still reads what it read before the order.
+3. Move it **back** out of fulfilled. The product number is **still unchanged** (nothing was taken, so
+   nothing is put back).
+
+**PASS:** status moved both ways; stock never did.
+**FAIL:** the number drops on fulfil, or rises on un-fulfil.
+
+---
+
+## CARD 28 — 🔴 A CAPTURED INVOICE'S STATUS TAP WRITES NOTHING TO THE STOCK RECORD (ruling ②)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+On **LAWNS** (test mode), open a **captured** invoice order (it says *Captured invoice*) and change its
+status once — e.g. **invoiced → fulfilled** — then back.
+
+Then, in the **SQL editor**:
+
+```sql
+SELECT count(*) AS ledger_rows_for_this_order
+  FROM public.business_inventory_ledger
+ WHERE source_type = 'order'
+   AND source_id = '<paste the order id from the address bar>'
+   AND created_at > now() - interval '1 hour';
+```
+
+**PASS:** **0**. Before #342 each tap wrote one row (an `order_fulfilled` event) into a table that can
+never be edited.
+**FAIL:** any number above 0.
+
+---
+
+## CARD 29 — out of test mode, a live sale still moves stock exactly as before
+**STATUS:** needs-test · **DEVICE:** phone · **LAST-PROVEN:** —
+**REASON IT IS `needs-test`:** every tenant is in test mode today, and switching one live to prove this
+would push real invoices. It is recorded so the other half of the rule is not assumed.
+When a tenant is live: ring up **1** walk-in and confirm the product drops by **1**, and that an order
+rung up **while it was still in test mode** can be moved in and out of fulfilled **without** changing
+the number (a test order never changes stock — forever, ruling ①).
