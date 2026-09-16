@@ -58,6 +58,10 @@
 --   · It DROPS NOTHING. The legacy four (`address_line1`/`city`/`state`/`zip`) fall in the
 --     REPOINT migration, after every reader moves. This one is purely additive.
 --   · It BACKFILLS NOTHING FROM DELIVERY HISTORY. See §6 — `20260911b` §4 stands, re-scoped.
+--     ⚠️ It DOES seed the three contact lists from `customers`' own flat columns (§5b) — one
+--     existing value per customer, column to row. That is the MOVE this migration is named for,
+--     not a backfill: without it the derivation it installs has nothing to derive from and blanks
+--     every customer's address, phone and email on the first list write.
 --   · It MINTS NO PERMISSION STRING. See §3.
 --   · It adds NO column to `deliveries`.
 -- ════════════════════════════════════════════════════════════════════════════════════════════
@@ -253,6 +257,114 @@ CREATE TRIGGER trg_customer_emails_normalize
   BEFORE INSERT OR UPDATE ON public.customer_emails
   FOR EACH ROW EXECUTE FUNCTION public.normalize_contact_value();
 
+-- ── §5b 🔴 THE MOVE ITSELF — THE FLAT VALUES ARE SEEDED INTO THE LISTS THEY DERIVE FROM ──────
+-- 🔴 WITHOUT THIS BLOCK THE MIGRATION DELETES EVERY CUSTOMER'S CONTACT DETAILS ON THE FIRST LIST
+-- WRITE, AND DOES IT SILENTLY. `sync_customer_flat_contact` below recomputes ALL SIX flat fields
+-- from the three lists. `customer_addresses` holds ZERO rows (catalog-verified 2026-09-12, §2's own
+-- comment says so) and the two list tables are created EMPTY in this transaction — so for every
+-- customer the derivation resolves to NULL. The first phone the import writes therefore does not
+-- "fill in a phone": it fires the sync, which blanks that customer's address AND email in the same
+-- statement. The import writes phones and emails for every record it touches. The blast radius is
+-- not the 20 rows CARD 1 lists, it is EVERY CUSTOMER ROW.
+--
+-- 🔴 AND THIS IS NOT `20260911b` §4's REFUSAL BEING LIFTED. §4 refused to backfill from DELIVERY
+-- HISTORY, because AGAVE LD LLC's four spellings of one yard across eighteen invoices would become
+-- four curated sites and the drift would be made permanent. §6 below already draws the distinction
+-- and already states the conclusion — *"the failure mode §4 names cannot occur through the
+-- customer-import door … seeding from delivery history stays forbidden"* — it simply never applied
+-- it to this migration. What moves here is ONE EXISTING VALUE PER CUSTOMER, already the
+-- authoritative one, already chosen, travelling from a COLUMN to a ROW. There is no second
+-- spelling to choose between, no invoice to read, and no judgement being made. **A migration that
+-- moves an address into a list must move the address into the list.**
+--
+-- ⚠️ SCOPE BEYOND THE ADDRESS, AND IT IS DELIBERATE: phones and emails carry the IDENTICAL hole —
+-- `customers.phone` and `customers.email` are derived by the same function from two tables created
+-- empty one screen above. Seeding only the address would leave the sync blanking phone and email
+-- instead, which is the same defect with a different column name. The three INSERTs are written
+-- separately so any one can be struck on its own.
+--
+-- ⚠️ PLACEMENT IS LOAD-BEARING — AFTER the normalize triggers, BEFORE the sync trigger:
+--   · AFTER normalize, so `value_norm` is written by its one owner (§5) rather than by this block.
+--     Seeded above it, every row would carry a NULL `value_norm`, and the partial unique index that
+--     makes the import idempotent (`WHERE value_norm IS NOT NULL`) would not cover a single row.
+--   · BEFORE sync, so no seeded row fires a recompute. Seeded after it, the first INSERT of the
+--     three would blank the two fields the other two INSERTs had not reached yet — correct by the
+--     end of the transaction, but only by accident of ordering, and unreadable to the next person.
+-- When the trigger is created below, the lists and the flat columns ALREADY agree, so nothing has
+-- to run to make them agree.
+--
+-- ⚠️ IDEMPOTENT by the `NOT EXISTS` guard, matching CARD 2's promise that a second run is a no-op.
+-- It is not `ON CONFLICT`: the unique indexes here are PARTIAL, so inference needs their predicate
+-- restated, and a guard that reads in English is worth more than one that reads in index syntax.
+
+-- The BILLING address: one row, kind 'billing', flagged default — which is exactly what
+-- `sync_customer_flat_contact` reads back (`kind IN ('billing','both') ORDER BY is_default DESC`).
+INSERT INTO public.customer_addresses
+  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)
+SELECT c.business_id, c.id, 'Billing', 'billing',
+       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),
+       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),
+       true, 'migrated:customers.billing_*', true
+  FROM public.customers c
+ WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR COALESCE(btrim(c.billing_city),  '') <> ''
+     OR COALESCE(btrim(c.billing_state), '') <> '' OR COALESCE(btrim(c.billing_zip),   '') <> '')
+   AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                    WHERE a.customer_id = c.id AND a.active);
+
+-- The phone. `value` is the number AS WRITTEN (§1) — trimmed, never reformatted.
+INSERT INTO public.customer_phones
+  (business_id, customer_id, label, value, is_primary, source, active)
+SELECT c.business_id, c.id, 'main', btrim(c.phone), true, 'migrated:customers.phone', true
+  FROM public.customers c
+ WHERE COALESCE(btrim(c.phone), '') <> ''
+   AND NOT EXISTS (SELECT 1 FROM public.customer_phones p
+                    WHERE p.customer_id = c.id AND p.active);
+
+-- The email. Still a dedup match key for `customerUpsert`, so it must survive the move intact.
+INSERT INTO public.customer_emails
+  (business_id, customer_id, label, value, is_primary, source, active)
+SELECT c.business_id, c.id, 'main', btrim(c.email), true, 'migrated:customers.email', true
+  FROM public.customers c
+ WHERE COALESCE(btrim(c.email), '') <> ''
+   AND NOT EXISTS (SELECT 1 FROM public.customer_emails e
+                    WHERE e.customer_id = c.id AND e.active);
+
+-- ── §5c PROVE THE MOVE, IN THE SAME TRANSACTION ─────────────────────────────────────────────
+-- 🔴 THIS CAN FAIL, WHICH IS THE POINT (§6 r19). It asserts the property the sync trigger is about
+-- to depend on: every customer holding a flat value has an active list row to derive it from. If
+-- that is false for even one row, the trigger will blank that value the first time anything touches
+-- that customer — so the transaction refuses rather than installing a trigger that loses data.
+DO $$
+DECLARE
+  n_addr integer; n_phone integer; n_email integer; n_seeded_addr integer;
+BEGIN
+  SELECT count(*) INTO n_addr FROM public.customers c
+   WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR COALESCE(btrim(c.billing_city),  '') <> ''
+       OR COALESCE(btrim(c.billing_state), '') <> '' OR COALESCE(btrim(c.billing_zip),   '') <> '')
+     AND NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                      WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both'));
+
+  SELECT count(*) INTO n_phone FROM public.customers c
+   WHERE COALESCE(btrim(c.phone), '') <> ''
+     AND NOT EXISTS (SELECT 1 FROM public.customer_phones p WHERE p.customer_id = c.id AND p.active);
+
+  SELECT count(*) INTO n_email FROM public.customers c
+   WHERE COALESCE(btrim(c.email), '') <> ''
+     AND NOT EXISTS (SELECT 1 FROM public.customer_emails e WHERE e.customer_id = c.id AND e.active);
+
+  IF n_addr > 0 OR n_phone > 0 OR n_email > 0 THEN
+    RAISE EXCEPTION
+      'REFUSED: % customer(s) hold a billing address, % a phone and % an email with NO list row to '
+      'derive it from. Installing the sync trigger now would blank those values on the first write '
+      'against each record. Nothing has been changed.', n_addr, n_phone, n_email;
+  END IF;
+
+  SELECT count(*) INTO n_seeded_addr FROM public.customer_addresses
+   WHERE source = 'migrated:customers.billing_*';
+  RAISE NOTICE 'SEEDED: % billing address row(s). Every flat value now has a list row behind it.',
+    n_seeded_addr;
+END $$;
+
 -- 🔴 THE FLAT COLUMNS, RECOMPUTED FROM THE LIST ON EVERY CHANGE.
 --
 -- ⚠️ THE RESOLUTION IS `primary, ELSE OLDEST ACTIVE` AND THE FALLBACK IS THE HALF THAT MATTERS.
@@ -333,8 +445,16 @@ CREATE TRIGGER trg_customer_addresses_sync
 -- ── §6 🔴 NO BACKFILL FROM DELIVERY HISTORY — `20260911b` §4 STANDS, RE-SCOPED RATHER THAN LIFTED
 -- `20260911b` §4 refused to seed `customer_addresses` because *"AGAVE LD LLC's four spellings of
 -- one yard would become four curated sites and the drift would be made permanent."* That reasoning
--- is CORRECT and this migration does not touch it: nothing here seeds any table, and
--- `customerAddresses.test.ts` §F still fails the build the day a migration does.
+-- is CORRECT and this migration does not touch it: §5b seeds the contact lists from
+-- `customers`' OWN FLAT COLUMNS and from nothing else — no invoice, no delivery, no history.
+--
+-- ✏️ CORRECTED 2026-09-15 (David). THIS PARAGRAPH READ *"nothing here seeds any table"* AND THE
+-- MIGRATION HAD NO SEED, WHICH WAS THE DEFECT — not a scope choice. The flat columns were made
+-- DERIVED while the tables they derive from were left EMPTY, so the sync trigger's first firing
+-- blanked every customer's address, phone and email. See §5b. The refusal §4 actually made is
+-- unchanged and is now CHECKABLE rather than absolute: `customerAddresses.test.ts` §F declares the
+-- one file permitted to seed and fails the build BOTH ways — an undeclared seeder, a declaration
+-- that no longer seeds, or a seed whose source names delivery history.
 --
 -- 🔴 WHAT CHANGED IS THE SCOPE OF THE OBJECTION, MEASURED AGAINST THE CAPTURE RATHER THAN ASSUMED.
 -- AGAVE's four spellings came from EIGHTEEN INVOICES. In the customer capture AGAVE LD LLC is ONE
