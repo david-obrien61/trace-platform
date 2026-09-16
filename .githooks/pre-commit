@@ -2,7 +2,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PURPOSE: refuse a commit whose CLAUDE.md §3 / handoff-archive state is broken.
 #   ONE check — `scripts/verify-handoff-retention.mjs`. Nothing else. Ever.
-# DEPENDENCIES: node, and that one script. No npm install, no dependency, no husky.
+# DEPENDENCIES: node, that one script, and the parsing it imports (scripts/lib/handoffEntries.mjs,
+#               shared with verify-register-blocks since ledger #339 — a FILE, not a check). No npm
+#               install, no dependency, no husky.
 # OUTPUTS: exit 0 (commit proceeds) or exit 1 with the checker's own message.
 #
 # ═════════════════════════════════════════════════════════════════════════════

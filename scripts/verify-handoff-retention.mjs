@@ -60,46 +60,14 @@
 // ============================================================================
 
 import { readFileSync } from 'node:fs';
+import { section3, entries, ledgerCloseOutIds, claimedIds } from './lib/handoffEntries.mjs';
 
 const CLAUDE = 'CLAUDE.md';
 const ARCHIVE = 'docs/handoff-archive.md';
 const MAX_SECTION3 = 3;
 const SELF_TEST = process.argv.includes('--self-test');
 
-/** §3 runs from the HANDOFF heading to the next top-level `## ` heading. */
-function section3(md) {
-  const start = md.search(/^## 3\. HANDOFF/m);
-  if (start === -1) return null;
-  const rest = md.slice(start + 1);
-  const nextTop = rest.search(/^## \d+\./m);
-  return nextTop === -1 ? rest : rest.slice(0, nextTop);
-}
 
-/**
- * Entries as {heading, body}. An entry is moved VERBATIM, so a merge artefact is a
- * byte-identical COPY — heading AND body.
- *
- * 🔴 COMPARE THE WHOLE ENTRY, NOT THE HEADING. The first version of this check
- * compared headings alone and immediately reported a false positive it could not
- * have distinguished: two DIFFERENT 2026-06-09 sessions share the title
- * "THUNDER: Ignition OS Reality Audit → STD-010 + built-inventory update" —
- * 161 lines and 97 lines, different work, legitimately both in the archive.
- * A same-day second session reusing a title is ordinary; a byte-identical copy is
- * the defect. Keying on the heading would have made this check cry wolf on real
- * history, and a check that cries wolf gets deleted — which is how the thing it
- * guards starts failing again.
- */
-function entries(block) {
-  const out = [];
-  const re = /^### (.+)$/gm;
-  const marks = [...block.matchAll(re)];
-  for (let i = 0; i < marks.length; i++) {
-    const start = marks[i].index;
-    const end = i + 1 < marks.length ? marks[i + 1].index : block.length;
-    out.push({ heading: marks[i][1].trim(), text: block.slice(start, end) });
-  }
-  return out;
-}
 /**
  * Normalise an entry for comparison.
  *
@@ -275,16 +243,7 @@ const DECLARATIONS = 'handoff-entry-declarations.json';
 const DUP_DECLARATIONS = 'archive-duplicate-heading-declarations.json';
 
 /** Close-out rows only. A `⏳ RESERVED` row is a claim, not a close-out, and owes no entry. */
-function ledgerCloseOutIds(md) {
-  return [...md.matchAll(/^\| \*\*#(\d+)\*\* \|/gm)].map(m => m[1]);
-}
 
-/** Ledger ids an entry CLAIMS — from its headline's first bold run, TECH-DEBT excluded. */
-function claimedIds(heading) {
-  const bold = heading.match(/\*\*([\s\S]*?)\*\*/);
-  if (!bold) return [];
-  return [...bold[1].matchAll(/(TECH-DEBT\s+)?#(\d+)\b/gi)].filter(m => !m[1]).map(m => m[2]);
-}
 
 function checkEveryRowHasAnEntry(ledgerMd, declarationsRaw, allEntries) {
   const found = [];
