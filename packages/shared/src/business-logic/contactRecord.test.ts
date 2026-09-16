@@ -27,6 +27,7 @@ import {
   normalizePhoneValue, normalizeEmailValue,
   emptyContactTally, tallyContactRecord,
   CONTACT_FINDING_REASON, type ContactFindingKind,
+  contactSeedStatements, historySourceViolation, CONTACT_LIST_TABLES,
 } from './contactRecord';
 
 let passed = 0, failed = 0;
@@ -189,10 +190,13 @@ const rec = (o: Record<string, unknown>) => ({ Id: '1', DisplayName: 'Test', ...
 }
 
 // ══ G. 🔴 THE WRITER SET IS ENUMERATED — widening customerAddresses.test.ts §F ═══════════════
-// §F asserts no MIGRATION seeds `customer_addresses`, and that stays true and still matters. But
-// §F reads `.sql` files, and the importer writes through the client — so §F would have gone on
-// asserting "nothing seeds this table" while something populated it on every run. TRUE, and
-// MISLEADING, which is worse than red. The writers are named here instead.
+// §F governs which MIGRATIONS may seed `customer_addresses` — since 2026-09-16, only a declared
+// one, and never from history. But §F reads `.sql` files, and the importer writes through the
+// client — so a corpus probe alone would say nothing about the writer that populates the table on
+// every import run. The client writers are named here instead.
+// ✏️ CORRECTED 2026-09-16: this comment said §F's *"no migration seeds"* rule *"stays true"*. It
+// stopped being true when `20260915` §5b began seeding all three lists, and the rule itself was
+// wrong — §4 forbade HISTORY as the source, not a seed (ledger #335).
 {
   const SRC = 'packages/shared/src';
   const APP = 'packages/cultivar-os';
@@ -283,15 +287,32 @@ const rec = (o: Record<string, unknown>) => ({ Id: '1', DisplayName: 'Test', ...
   ok(/customer_addresses_kind_check/.test(body),
     'H4 🔴 the kind vocabulary is a NAMED constraint — an inline CHECK is auto-named and ungreppable (tech-debt #91)');
   ok(!/shipping_/.test(body), 'H5 🔴 no `shipping_*` column anywhere — D-41\'s surviving redline');
-  ok(!/(insert\s+into|copy)\s+(public\.)?customer_(phones|emails|addresses)/i.test(body),
-    'H6 🔴 this migration SEEDS NOTHING — 20260911b §4 stands');
+  // 🔴 H6 WAS "this migration SEEDS NOTHING". Inverted 2026-09-16 (ledger #335): the derivation this
+  // migration installs recomputes all six flat fields from the three lists, and all three start
+  // EMPTY — so without a seed the first list write blanks every customer's address, phone and email.
+  const seeds = contactSeedStatements(sql);
+  const seeded = [...new Set(seeds.map(st => (st.match(/customer_(phones|emails|addresses)/i) ?? [''])[0].toLowerCase()))].sort();
+  ok(seeded.join(',') === [...CONTACT_LIST_TABLES].sort().join(','),
+    `H6 🔴 the MOVE seeds ALL THREE lists — seeding only one leaves the sync blanking the other two (seeded: ${seeded.join(', ') || 'none'})`);
+  const bad = seeds.map(st => historySourceViolation(st)).filter(v => v !== null);
+  ok(seeds.length > 0 && bad.length === 0,
+    `H6b 🔴 20260911b §4 FORBIDS HISTORY AS THE SOURCE, NOT A SEED — every seed here reads FROM public.customers and names no delivery, order or invoice table (${bad.join(' | ') || 'none'})`);
+  const iNorm = body.indexOf('CREATE TRIGGER trg_customer_emails_normalize');
+  const iSeed = body.search(/insert\s+into\s+public\.customer_/i);
+  const iSync = body.indexOf('CREATE TRIGGER trg_customer_phones_sync');
+  ok(iNorm > -1 && iSeed > iNorm && iSync > iSeed,
+    `H6c 🔴 the seed sits AFTER normalize (or value_norm is NULL and the idempotence index covers nothing) and BEFORE sync (or one seed blanks what the next has not reached) — at ${iNorm} < ${iSeed} < ${iSync}`);
+  ok(/REFUSED: % customer\(s\) hold a billing address/.test(body),
+    'H6d the migration REFUSES rather than install the sync over a flat value with no list row behind it');
   ok(/is_primary DESC, created_at ASC/.test(body),
     'H7 🔴 the derivation falls back past the primary — retiring it must not blank a live column');
   ok(/DROP COLUMN/.test(body) === false,
     'H8 this migration drops NOTHING — the legacy four fall in the repoint, not here');
   // The negative control for H6, so a stripped-comment predicate is proven able to see a real seed.
-  ok(/(insert\s+into)\s+(public\.)?customer_phones/i.test("INSERT INTO public.customer_phones (value) VALUES ('x');"),
+  ok(contactSeedStatements("INSERT INTO public.customer_phones (value) VALUES ('x');").length === 1,
     'H9 the seed probe can detect a real seed');
+  ok(historySourceViolation("INSERT INTO public.customer_emails (customer_id, value) SELECT customer_id, email FROM public.orders") !== null,
+    'H10 🔴 and H6b can disagree — an email list seeded FROM orders is refused');
 }
 
 console.log(`\ncontactRecord: ${passed} passed, ${failed} failed`);

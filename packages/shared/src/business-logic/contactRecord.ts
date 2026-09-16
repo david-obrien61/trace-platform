@@ -23,7 +23,9 @@
 //               the same one the import preview panel uses, so the panel and the writer cannot
 //               disagree). No IO, no clock, no client: every rule below is provable at a desk.
 // OUTPUTS:      `buildContactRecord` → the three lists + `findings`, the report of what was seen
-//               and NOT taken.
+//               and NOT taken. · THE SEED RULE (foot of file): `DECLARED_CONTACT_SEEDERS`,
+//               `HISTORY_TABLES`, `contactSeedStatements`, `historySourceViolation` — `20260911b`
+//               §4 as code, read by `customerAddresses.test.ts` §F and `contactRecord.test.ts` §H.
 // ============================================================
 
 import { classifyValueShape } from '../quickbooks/importFieldAudit';
@@ -382,4 +384,52 @@ export function tallyContactRecord(t: ContactRecordTally, r: ContactRecord): Con
   if (r.addresses.length > 1) next.recordsWithSeveralAddresses++;
   for (const f of r.findings) next.findings[f.kind]++;
   return next;
+}
+
+// ── THE SEED RULE — `20260911b` §4, AS CODE RATHER THAN AS A COMMENT (ledger #335, 2026-09-16) ──
+// 🔴 §4 FORBADE HISTORY AS THE SOURCE, NOT A SEED. Its reason was AGAVE LD LLC: four spellings of
+// one yard across eighteen invoices would become four curated sites. That hazard lives in the
+// SOURCE — delivery and order rows — and a seed that reads one existing value per customer out of
+// `customers` cannot produce it. Until 2026-09-16 the tests enforced "nothing seeds", which was
+// both stricter than the rule and blind to its reason, and it is what let `20260915` install a
+// derivation over three empty tables. Both corpus tests now read the rule from HERE, so the
+// sentence exists once (STD-011) and a third reader cannot drift from the first two.
+
+/** The migrations permitted to seed a contact list, each with its reason. A DECLARATION, asserted
+ *  both directions by `customerAddresses.test.ts` §F: an undeclared seeder fails, and so does a
+ *  declared one that no longer seeds (tech-debt #73 — a list nobody re-derives rots). */
+export const DECLARED_CONTACT_SEEDERS: Readonly<Record<string, string>> = {
+  '20260915_contact_record.sql':
+    'the contact-record MOVE — one existing flat value per customer, column to row (ledger #335)',
+};
+
+/** The three lists. */
+export const CONTACT_LIST_TABLES = ['customer_addresses', 'customer_emails', 'customer_phones'] as const;
+
+/** Tables that are HISTORY — what happened on an order — and so may never be a contact seed's
+ *  source. Named rather than inferred: a table that belongs here is a decision, not a pattern. */
+export const HISTORY_TABLES = ['deliveries', 'orders', 'order_items', 'order_service_selections', 'invoices'] as const;
+
+/** Drop `--` comment lines — the same stripping every corpus probe here uses, so a migration that
+ *  DISCUSSES a seed at length is not reported as one that performs it. */
+export function stripSqlComments(sql: string): string {
+  return sql.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+}
+
+/** Every statement in `sql` that seeds one of `tables`. Split on `;` — sufficient for this corpus,
+ *  whose seeds carry no semicolon inside a literal; a seed that did would be read as two halves. */
+export function contactSeedStatements(sql: string, tables: readonly string[] = CONTACT_LIST_TABLES): string[] {
+  const seed = new RegExp(`\\b(insert\\s+into|copy)\\s+(public\\.)?(${tables.join('|')})\\b`, 'i');
+  return stripSqlComments(sql).split(';').map(s => s.trim()).filter(s => seed.test(s));
+}
+
+/** Why a seed statement breaks `20260911b` §4, in words — or null when it does not. Two halves,
+ *  and both are needed: a statement reading `FROM public.deliveries` fails the first, and one
+ *  reading `FROM public.customers c JOIN public.deliveries d` passes the first and fails the
+ *  second. */
+export function historySourceViolation(stmt: string): string | null {
+  if (!/\bfrom\s+(public\.)?customers\b/i.test(stmt)) return 'does not read FROM public.customers';
+  const named = HISTORY_TABLES.filter(t => new RegExp(`\\b(public\\.)?${t}\\b`, 'i').test(stmt));
+  if (named.length > 0) return `names history: ${named.join(', ')}`;
+  return null;
 }
