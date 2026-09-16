@@ -79,6 +79,45 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED, NOT MERGED, HELD FOR CARD 4 — #335 (`feat/contact-record`, 2026-09-15 · amended + rebased 2026-09-16)
+
+- 🔴 **THE CONTACT RECORD — THE CUSTOMER REBUILT AS ONE IDENTITY WITH REPEATING TYPED PROPERTIES.**
+  BUILDER-COMPLETE, **NOTHING APPLIED, NOTHING OWNER-PROVEN** (`customer-contact-record`
+  **board 0 of 15**). **THREE migrations WRITTEN and NOT APPLIED · no permission string · api/ 12/12.**
+  🔴 **2026-09-16: `20260915` now SEEDS all three lists** (unseeded, the first list write blanked every
+  customer's address, phone and email) · ✅ **tech-debt #306 FIXED on the branch** (the import reads what each customer
+  holds and inserts only what is new) · 🔴 **no screen calls the contact writer yet** — the import cards cannot run · #305 filed.
+  Phones, emails and addresses become typed lists; `customers.phone`/`.email`/`.billing_*` become a
+  **DERIVED view of the primary**, maintained by a database trigger. **The legacy four
+  (`address_line1`/`city`/`state`/`zip`) are DROPPED.**
+  🔴 **THE CASE IS NOT VOLUME AND THE BUILD CORRECTED ITS OWN PREMISE** — measured on the complete
+  1,959-record capture: *"704 unmapped Mobile numbers"* is really **15** (651 are byte-equal to
+  `PrimaryPhone`); *"478 ShipAddr.Line2 streets"* is really **11** as a second address (725 of 736
+  are identical to the billing one); **ZERO records hold two email FIELDS.** **The case is that the
+  old shape FORCES A LOSS** — #331's `phone-would-be-lost` branch existed for 5 records where
+  recovering a street meant discarding a phone held nowhere else. Under a list, nothing is chosen.
+  🔴 **THE CAP IS THE REVIEWER: proven RED at 109 sites / 14 files, green after.** The compiler
+  catches **13 of ~140** — measured by deleting the fields and running tsc.
+  ✅ **Fixed a live defect the second copy was already costing:** `CartReview` read the legacy four
+  with no billing fallback, so a customer whose address was in `billing_*` showed **no address** on
+  the review screen while three other surfaces resolved it correctly.
+  - 🔴 **APPLY ORDER MATTERS — ① `20260915_backfill_legacy_customer_address` → ② `20260915` → ③
+    `20260915b`.** ② seeds from `billing_*` only, so a legacy-only value must be copied by ① first or ③
+    destroys it. ③ **refuses rather than destroys** (pre-flight raise, no `CASCADE`). **The board's
+    CARD 1 → 3b is the runbook.** Then re-run `scripts/snapshot-customers-columns.mjs`.
+  - ✅ **RESOLVED 2026-09-15 — the `#332` clause is FIXED on `fix/332-ledger-row` (ledger #336).**
+    WAS: *"`npm run verify` exits 1 on a clause that is NOT this branch's — `#332` claimed in
+    `origin/main`'s commit subject with no ledger row (`ecfb376`)."* **This branch's diagnosis was
+    correct in every particular, including that a session cannot write another session's close-out.**
+    The row is **FILED, not withdrawn** ([[R-148]] clause 3 — the work is real and on `main`).
+    ⚠️ **`main` itself stays red until #336 merges**; this branch is unaffected either way.
+  - ✅ **SETTLED 2026-09-15 BY DAVID — THE `#332` → `#335` RENUMBER STANDS. NOTHING TO OVERRULE.**
+    WAS: *"David's to overrule — this branch held the EARLIER claim by 49 minutes, but theirs merged
+    first and `verify-id-sweep` refuses to rule on that case."* **David ruled the move correct, citing
+    [[R-148]] clause (4).** 🔴 **Recorded here so no later session re-opens it: `#335` is this
+    branch's id, the reversal is NOT pending, and `#332` now belongs to `ecfb376`'s work.**
+
+
 ### 🟡 PUSHED, NOT MERGED — #341 (`fix/preview-query-completeness`, 2026-09-16) — **THE PREVIEW READ SEES WHAT LAUREN RETIRED**
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — books-read board CARDS 19 · 20 (plus 1 · 2 · 7 reworded).
