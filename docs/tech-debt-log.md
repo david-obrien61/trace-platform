@@ -3785,3 +3785,6 @@ nothing in the repository settles which one it is, because the path has never be
 starting number is the scope creep that makes a diff unreviewable — and every option above is a
 decision about what the undo MEANS, which is David's.
 
+## #308 — ⏳ RESERVED 2026-09-16 (ledger #342, branch `fix/rehearsal-never-writes-the-record`)
+
+Reserved before content is written (R-149). Body lands with the build.
