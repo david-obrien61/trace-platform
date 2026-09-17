@@ -25,11 +25,10 @@ reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGE
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
 
-> ⛔ **MIGRATION GATE (ledger #343) — `supabase/migrations/20260916_container_ladder_install_t_posts.sql`
-> MUST BE APPLIED BEFORE THE `feat/ladder-one-source` CODE IS MERGED, AND BEFORE ANY CARD BELOW.**
-> The ladder read asks for `install_t_posts_per_tree`; on a database without it, every ladder read
-> fails and this page shows **"Could not read container sizes"** with every tree unresolved (CARD 14).
-> Apply it as `postgres` in the **SQL editor**, then run its V1–V4 block.
+> ✅ **MIGRATION GATE (ledger #343) — `20260916_container_ladder_install_t_posts.sql` IS APPLIED**
+> (David, 2026-09-16–17; V1–V4 all pass), and the code is **merged `56107ee`**. Every card below can run.
+> ⚠️ CARD 14's "could not read sizes" state is no longer reachable on LAWNS — it is kept for the day a
+> read genuinely fails.
 
 **Why this exists.** The route goes to the driver digitally; the LOAD goes on paper, and nothing
 produced it. The arithmetic is Lauren's, done by hand, every delivery morning.
@@ -222,8 +221,7 @@ DEVICE: desktop
 COVERS: ledger #343 — the go-live target for Saturday 2026-09-19
 SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYards: 7, tPosts: 54}`
 
-**Before you start:** the stamp at the foot of the screen must end **`· prod`** and show the SHA I give you
-after the merge.
+**Before you start:** the stamp at the foot of the screen must read **`56107ee`** (or newer) and end **`· prod`**.
 
 1. Open **Delivery → Load list** and pick **Saturday, September 19, 2026** (or go to
    `/load-list?date=2026-09-19`).

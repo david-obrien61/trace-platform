@@ -3280,7 +3280,7 @@ row · sales-a-month from history (stage ④) · a UI cancel for a committed pla
 
 **Last updated:** 2026-09-16 · **Status:** BUILDER-COMPLETE · ✏️ **migration APPLIED 2026-09-16 by David (V1–V4 run; catalog check APPLIED)** — was recorded as NOT APPLIED after it had run.
 
-> 🔴 **2026-09-16 — LEDGER #343 (branch `feat/ladder-one-source`, NOT merged): THE LADDER IS NOW THE ONE SOURCE FOR SIZES.**
+> 🔴 **LEDGER #343 — MERGED `56107ee` 2026-09-17; `20260916_container_ladder_install_t_posts.sql` APPLIED (V1–V4 pass): THE LADDER IS NOW THE ONE SOURCE FOR SIZES.**
 > - `supabase/migrations/20260916_container_ladder_install_t_posts.sql` (**WRITTEN, NOT APPLIED — apply BEFORE merging**) — `install_t_posts_per_tree integer NOT NULL DEFAULT 0` + `install_t_posts_because`, LAWNS backfilled by size.
 > - `containerLadder.ts` — `resolveRung` now names the refusal (`not_container` · `off_ladder` · `unreadable` · `blank`); new `sameSizeOnLadder` · `activeRungs` · `largestRung` · `ladderCoverage`; **the field list (`LADDER_FIELDS`) and the row→rung mapping (`rungFromRow`) live here now**, shared by the app reader and the server import preview. `lib/containerLadderFields.ts` re-exports the list.
 > - `cultivar-os/src/lib/containerLadderDraft.ts` (pure form state + refusals) · `containerLadderWrite.ts` (add · edit · move · retire; **no delete**; every write counts what landed) · `components/settings/ContainerSizesSettings.tsx` — **Settings → Container sizes** at `/settings/container-sizes`, Admin nav node `nav_container_sizes`. A new size's T-posts copy from the largest active size and read *copied — confirm* until saved.
@@ -3443,7 +3443,7 @@ intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes
 
 ## 3.6b · DELIVERY DAY LOAD LIST — the yard person's copy of the day, on paper — added 2026-09-12 (#315) · **corrected by two rulings 2026-09-14 (#329)** · **re-built on the ladder 2026-09-16 (#343)**
 
-> 🔴 **2026-09-16 — LEDGER #343 (branch `feat/ladder-one-source`, NOT merged). WHAT BELOW IS NOW HISTORY:** `BOM_RULES` and `tPostsFor` are **GONE**; the ratio is **2.0**, not 1.0 ([[R-155]] amended — David: *"the earlier 1.0 was Lightning's figure"*).
+> 🔴 **LEDGER #343 — MERGED `56107ee` 2026-09-17. WHAT BELOW IS NOW HISTORY:** `BOM_RULES` and `tPostsFor` are **GONE**; the ratio is **2.0**, not 1.0 ([[R-155]] amended — David: *"the earlier 1.0 was Lightning's figure"*).
 > - **Every size is placed on the nursery's container ladder** (`resolveRung`); the file calls no unit parser and no size fold of its own.
 > - **Mix** = rung volume × `installMixContainerVolumesPerTree` (Operations config, default 2) · **T-posts** = the rung's `install_t_posts_per_tree` · **rope** = posts × `ropeFeetPerTPost` · **bubblers** = trees × `bubblersPerTree` · **deer fence** brings a tree to `deerFenceTPostsPerTree` IN TOTAL where a stop says so; the data cannot tell, so every stop with trees prints on the UNRESOLVED list.
 > - An **off-ladder size** is UNRESOLVED, named, and COUNTED (tree count and bubblers include it). A **rung with no volume** is counted, named, and its mix not invented.

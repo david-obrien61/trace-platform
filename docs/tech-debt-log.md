@@ -4062,7 +4062,7 @@ never called. So a truck run completed in the app leaves every order open.
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
 
-## #309 — ✅ RESOLVED 2026-09-17 IN CODE (ledger #343 — live once `20260916_container_ladder_install_t_posts.sql` is applied and the branch merged) — WAS: 🟡 A STAFF LOGIN PRINTS THE LOAD LIST WITH THE STANDARD FIGURES, NOT THE NURSERY'S — BECAUSE IT CANNOT READ THEM (NEW 2026-09-16, ledger #343)
+## #309 — ✅ RESOLVED 2026-09-17, LIVE (ledger #343 — migration applied, merged `56107ee`) — WAS: 🟡 A STAFF LOGIN PRINTS THE LOAD LIST WITH THE STANDARD FIGURES, NOT THE NURSERY'S — BECAUSE IT CANNOT READ THEM (NEW 2026-09-16, ledger #343)
 
 ✅ **RULED AND BUILT 2026-09-17.** David: *"staff may READ the four planting figures (read-only)."* Option (a)'s intent, in a narrower form than a second table policy: a READ-ONLY function `get_planting_materials(business_id)` (§3 of the migration) returns ONLY the planting keys — plus the gallons-per-cubic-yard figure the same page converts with — to any ACTIVE member, NULL to anyone else, and nothing else from the row. anon cannot execute it. The load list reads it for every login; a refusal (NULL) and "nothing saved" ({}) print different sentences. **Executed on PGlite** (`scripts/sql-harness/ladder-install-posts-343.pglite.mjs` P7–P10, mutant M1 caught).
 

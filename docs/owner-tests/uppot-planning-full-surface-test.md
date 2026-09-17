@@ -633,9 +633,8 @@ two things that collide both get flagged).
 
 # LEDGER #343 — THE LADDER IS THE ONE SOURCE (2026-09-16)
 
-> ⛔ **APPLY `supabase/migrations/20260916_container_ladder_install_t_posts.sql` FIRST** (SQL editor, as
-> `postgres`), run its V1–V4, and only then merge `feat/ladder-one-source`. The ladder read asks for the
-> new column; without it every ladder read fails.
+> ✅ **`20260916_container_ladder_install_t_posts.sql` IS APPLIED** (David, 2026-09-16–17; V1–V4 all pass)
+> and the code is **merged `56107ee`**. CARDS 28–30 can run.
 
 ## CARD 28 — 🔴 SETTINGS → CONTAINER SIZES: ADD, EDIT, MOVE, RETIRE — AND NEVER DELETE
 **STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —

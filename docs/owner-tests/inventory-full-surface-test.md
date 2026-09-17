@@ -314,7 +314,7 @@ DEVICE: phone
 COVERS: ledger #343 — the count screen resolves sizes through the ladder
 LAST-PROVEN: never
 SIGNAL: `[TRACE:COUNT] ladder {phase: 'loaded', rungs: 9}`
-- ⛔ **Only after `20260916_container_ladder_install_t_posts.sql` is applied and `feat/ladder-one-source` is merged.**
+- ✅ Applied and merged (`56107ee`) — this card can run.
 - **Do (LAWNS, a phone, no console):** scan a variety tag. Under **Which size?** look below the variety's own size chips.
 - **PASS:** a second row of chips offers the nursery's sizes the variety does not have yet — **+ 15 gal**, **+ 30 gal** …
   — and tapping one fills the size box with that exact name.
