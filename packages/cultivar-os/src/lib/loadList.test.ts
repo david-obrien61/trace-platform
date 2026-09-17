@@ -445,8 +445,11 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(d.noSizeStated.filter(i => i.sku === 'TC').length === 5, 'D13: all five Trip Charge lines are listed, never filtered');
   ok(d.unresolved.length === 1 && d.unresolved[0].unreadText === '5%',
     '🔴 D14: the Military Discount 5% line is the day’s ONE unresolved LINE');
-  ok(d.deerFenceUnknownStops === 6,
-    `🔴 D14b: all six stops carry trees and none records deer fence — six stops print as UNRESOLVED for fence (got ${d.deerFenceUnknownStops})`);
+  // ✏️ D14b CHANGED 2026-09-17 (David): the fence question is a RULE printed once at the top, not an
+  // UNRESOLVED line per stop. The model still counts the stops (for the trace) and adds nothing to the
+  // unresolved lines.
+  ok(d.deerFenceUnknownStops === 6 && d.unresolved.length === 1,
+    `🔴 D14b: six stops with trees record no fence — counted, and NOT added to the unresolved lines (got ${d.deerFenceUnknownStops}/${d.unresolved.length})`);
 
   const accounted = d.stops.reduce((n, s) => n + s.items.length, 0);
   ok(accounted === 15, `🔴 D15: all FIFTEEN real order_items rows are on the page (got ${accounted})`);
@@ -488,8 +491,8 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(noFence.deerFencePosts === 0 && noFence.deerFenceUnknownStops === 0, 'E5: a stop that says NO fence adds nothing and is not unknown');
 
   const unknown = build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 45 gallon', 'X')])]);
-  ok(unknown.deerFencePosts === 0 && unknown.deerFenceUnknownStops === 1 && unknown.tPosts === 2,
-    '🔴 E6: where the data cannot tell, NO fence post is invented — and the stop is counted as UNRESOLVED for fence');
+  ok(unknown.deerFencePosts === 0 && unknown.deerFenceUnknownStops === 1 && unknown.tPosts === 2 && unknown.unresolved.length === 0,
+    '🔴 E6: where the data cannot tell, NO fence post is invented, the stop is counted, and nothing is added to the unresolved lines');
   ok(unknown.stops[0].deerFence === 'unknown', 'E6b: the stop itself says its fence is unknown');
   const noTrees = build('2026-09-01', [stop('s1', 'A', [line(1, 'Trip Charge', 'TC')])]);
   ok(noTrees.deerFenceUnknownStops === 0, 'E7 (negative): a stop with no trees is not a fence question');

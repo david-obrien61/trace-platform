@@ -13,14 +13,14 @@
 //              at Settings → Container sizes.
 //   `loaded` — the ladder, retired rungs included (they still resolve, R-133).
 //
-// 🔴 THE FIGURES CAN BE WITHHELD, AND A WITHHELD READ LOOKS LIKE AN EMPTY ONE.
-//   `business_operations_config` is gated `settings:read` (20260905_production_planning.sql), and
-//   STAFF hold no `settings:*` string (tech-debt #188). Under RLS their read returns NO ROW — the same
-//   answer as "nothing stored" — so the page would silently print the platform defaults for the
-//   yard person while the owner's stored ratio is different. So the permission, not the row, decides:
-//   a viewer without `settings:read` gets the defaults AND `figures: 'defaults_withheld'`, and the
-//   page says so. Filed as tech-debt #309 (whether staff should read these four figures is a policy
-//   question, and a policy is not changed inside a print view).
+// 🔴 THE FIGURES ARE READ THROUGH `get_planting_materials`, SO STAFF SEE THE NURSERY'S OWN NUMBERS.
+//   `business_operations_config` is gated `settings:read`, and STAFF hold no `settings:*` string
+//   (tech-debt #188) — so a direct table read gave the yard person NO ROW, the same answer as
+//   "nothing saved", and the page printed the standard figures. David, 2026-09-17: staff may READ the
+//   four planting figures. The function (20260916_container_ladder_install_t_posts.sql §3) returns
+//   exactly those to any ACTIVE member and nothing else from the row (tech-debt #309, resolved):
+//     NULL → refused (not a member) · {} → nothing saved · keys → the saved figures.
+//   Each answer prints a different sentence, and a refusal is never read as "nothing saved".
 //
 // DEPENDENCIES: ./supabase · ./containerLadderRead · @trace/shared/production.
 // OUTPUTS:      LoadListSettingsRead · readLoadListSettings.
@@ -42,12 +42,10 @@ export interface LoadListSettingsRead {
   figures: FiguresState;
 }
 
-export async function readLoadListSettings(businessId: string, canReadSettings: boolean): Promise<LoadListSettingsRead> {
+export async function readLoadListSettings(businessId: string): Promise<LoadListSettingsRead> {
   const [ladderRead, opsRes] = await Promise.all([
     loadContainerLadder(businessId),
-    canReadSettings
-      ? supabase.from('business_operations_config').select('config').eq('business_id', businessId).maybeSingle()
-      : Promise.resolve(null),
+    supabase.rpc('get_planting_materials', { p_business_id: businessId }),
   ]);
 
   let ladder: Ladder = [];
@@ -58,14 +56,15 @@ export async function readLoadListSettings(businessId: string, canReadSettings: 
 
   let figures: FiguresState;
   let stored: Partial<OperationsConfig> | null = null;
-  if (!opsRes) figures = 'defaults_withheld';
-  else if (opsRes.error) figures = 'defaults_read_failed';
-  else if (!opsRes.data) figures = 'defaults_nothing_stored';
-  else { figures = 'stored'; stored = (opsRes.data.config ?? null) as Partial<OperationsConfig> | null; }
+  const got = opsRes.data as Record<string, unknown> | null;
+  if (opsRes.error) figures = 'defaults_read_failed';
+  else if (got === null) figures = 'defaults_withheld';
+  else if (Object.keys(got).length === 0) figures = 'defaults_nothing_stored';
+  else { figures = 'stored'; stored = got as Partial<OperationsConfig>; }
 
   const ops = resolveConfig(stored, null, false).ops;
   console.log('[TRACE:LOADLIST] settings read', {
-    businessId, sizes, rungs: ladder.length, figures,
+    businessId, sizes, rungs: ladder.length, figures, figuresError: opsRes.error?.message ?? null,
     mixRatio: ops.installMixContainerVolumesPerTree, ropeFeetPerTPost: ops.ropeFeetPerTPost,
     bubblersPerTree: ops.bubblersPerTree, deerFenceTPostsPerTree: ops.deerFenceTPostsPerTree,
   });

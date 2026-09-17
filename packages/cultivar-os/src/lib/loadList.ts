@@ -257,13 +257,15 @@ export interface LoadListModel {
   offLadderTreeCount: number;
   /** Tree rows whose rung has no volume set: counted and staked, their mix unknown. */
   noVolumeTrees: TreeTally[];
-  /** Stops carrying trees where nothing stored says whether deer fence is needed. */
+  /** Stops carrying trees where nothing stored says whether deer fence is needed. A COUNT for the
+   *  trace only: ✏️ David, 2026-09-17 — the page prints the fence RULE once at the top, and does not
+   *  list these stops as unresolved. */
   deerFenceUnknownStops: number;
   /**
    * True when something on this day could not be worked out, so every total is a FLOOR: a line or
    * stop we could not read, a container size not on the ladder, or a rung with no volume.
    * ⚠️ DEER FENCE IS NOT IN THIS FLAG — it is unknown on every day LAWNS has, so a flag that included
-   * it would fire always and mean nothing. It has its own count and its own printed line.
+   * it would fire always and mean nothing. The page prints the fence rule once, at the top.
    */
   totalsAreFloors: boolean;
 

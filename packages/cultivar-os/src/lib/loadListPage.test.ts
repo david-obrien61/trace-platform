@@ -55,8 +55,9 @@ function ok(cond: boolean, msg: string): void {
     ok(src.includes(`${bucket}.map(`),
       `🔴 A: the page RENDERS ${bucket} — a bucket the model fills and the page ignores is the same omission, one layer out`);
   }
-  // ✏️ A6's pattern widened 2026-09-16 (ledger #343): the block now also opens for unknown fence stops.
-  ok(/model\.unresolved\.length > 0 \|\| model\.deerFenceUnknownStops > 0 \?/.test(src),
+  // ✏️ A6: widened 2026-09-16 for unknown fence stops, NARROWED BACK 2026-09-17 (David: the fence rule
+  // prints once at the top, not as an unresolved line per stop).
+  ok(/model\.unresolved\.length > 0 \?/.test(src) && !/model\.unresolved\.length > 0 \|\|/.test(src),
     'A6: the unresolved block is rendered when there is anything in it (P1 mutates exactly this)');
   ok(/model\.unreadStops > 0 \?/.test(src),
     '🔴 A7: a day containing a withheld or unreadable stop warns at the TOP that the list may be short');
@@ -69,8 +70,14 @@ function ok(cond: boolean, msg: string): void {
   ok(/deerFenceGap/.test(src) && /deerFenceTotal\(/.test(src),
     '🔴 A9: the deer-fence gap AND the in-total fence figure are both on the page');
   ok(!/deerFence95Open/.test(code), 'A9b (negative): the settled 95 gallon question is no longer printed as open');
-  ok(/model\.deerFenceUnknownStops > 0/.test(src),
-    '🔴 A10: stops whose fence is unknown are printed on the UNRESOLVED block, counted');
+  // ✏️ A10 CHANGED 2026-09-17 (David): the deer-fence rule prints ONCE, AT THE TOP — above section 1 —
+  // and the unresolved block no longer lists stops for fence.
+  ok(code.indexOf('Deer fence — add by hand') > 0 && code.indexOf('Deer fence — add by hand') < code.indexOf('1 · Special mix'),
+    '🔴 A10: the deer-fence rule is printed once, ABOVE the special mix');
+  ok(!/model\.deerFenceUnknownStops > 0/.test(code) && !/deer fence not recorded/.test(code),
+    '🔴 A10b (negative): no per-stop fence line and no fence entry in the unresolved block');
+  ok(code.indexOf('LOAD_LIST_COPY.valuesHeading') > 0 && code.indexOf('LOAD_LIST_COPY.valuesHeading') < code.indexOf('1 · Special mix'),
+    '🔴 A10c: the figures used are printed at the TOP, above the special mix');
   ok(/model\.offLadderTreeCount > 0 \?/.test(src) && /model\.noVolumeTrees\.length > 0 \?/.test(src),
     '🔴 A11: off-ladder trees and sizes with no volume are both printed — counted, never silently dropped');
 }
@@ -88,8 +95,16 @@ function ok(cond: boolean, msg: string): void {
     ok(src.includes(`model.valuesUsed.${k}`), `S5: the printed figures include ${k}`);
   }
   ok(/defaults_withheld/.test(src),
-    '🔴 S6: a login that cannot read the settings is TOLD the figures are the standard ones (tech-debt #309)');
-  ok(/can\('settings:read'\)/.test(src), 'S7: whether the figures can be read is asked, not inferred from an empty row');
+    '🔴 S6: a login the figures were REFUSED to is told the figures are the standard ones');
+  // ✏️ S7 CHANGED 2026-09-17 (ledger #343, tech-debt #309 resolved): the page no longer asks
+  // `can('settings:read')` — David ruled staff may READ the planting figures, so everyone reads them
+  // through `get_planting_materials`, and the reader tells a refusal (NULL) from "nothing saved" ({}).
+  const reader = readFileSync(join(process.cwd(), 'packages/cultivar-os/src/lib/loadListSettingsRead.ts'), 'utf8');
+  ok(/rpc\('get_planting_materials'/.test(reader) && !/from\('business_operations_config'\)/.test(reader),
+    '🔴 S7: the figures are read through the read-only function, not the settings table staff cannot read');
+  ok(/got === null\) figures = 'defaults_withheld'/.test(reader) && /length === 0\) figures = 'defaults_nothing_stored'/.test(reader),
+    '🔴 S7b: a refusal (NULL) and "nothing saved" ({}) are different states');
+  ok(!/can\('settings:read'\)/.test(code), 'S7c (negative): the page no longer gates the figures on settings:read');
 }
 
 // ══ §B THE PER-STOP BREAKDOWN CARRIES THE PROBLEM SENTENCE ════════════════════════

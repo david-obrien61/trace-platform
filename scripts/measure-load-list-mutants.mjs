@@ -257,8 +257,12 @@ const MUTANTS = [
   // ══ ⚠️ §P REACH — do the probes see the PAGE, or only the model? ══════════════════════
   { id: 'P1', target: PAGE,
     why: '⚠️ REACH, NOT SUBJECT — the page stops rendering the unresolved block. EXPECTED TO SURVIVE the model suite; caught by loadListPage.test.ts.',
-    from: '              {model.unresolved.length > 0 || model.deerFenceUnknownStops > 0 ? (',
+    from: '              {model.unresolved.length > 0 ? (',
     to:   '              {false ? (' },
+  { id: 'P5', target: PAGE, suite: PAGE_SUITE,
+    why: '🔴 the deer-fence rule goes back to being a line per stop in the unresolved block (David, 2026-09-17: a rule, printed once at the top)',
+    from: "              {model.unresolved.length > 0 ? (",
+    to:   "              {model.deerFenceUnknownStops > 0 ? <div>Deer fence — stops</div> : null}\n              {model.unresolved.length > 0 ? (" },
   { id: 'P2', target: PAGE, suite: PAGE_SUITE,
     why: '🔴 the page loses its "could not read sizes" state — a failed ladder read prints as an ordinary day with every tree unresolved and no reason at the top',
     from: "        {settingsRead?.sizes === 'failed' ? (",

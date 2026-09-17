@@ -52,7 +52,7 @@ for (const f of files) {
 }
 
 ok(createdIn === '20260914_container_ladder.sql', `§A the replay found the migration that CREATES the table (found ${createdIn})`);
-ok(created.has('install_t_posts_per_tree') && created.has('install_t_posts_because'),
+ok(created.has('install_t_posts_per_tree') && created.has('install_t_posts_because') && created.has('is_large'),
   '🔴 §A the replay sees the columns a LATER migration adds — the one-file read could not (ledger #343)');
 ok(created.size >= 14, `§A the migration parse found the columns (found ${created.size}) — a parse that finds nothing would make every check below vacuously true`);
 ok(created.has('label') && created.has('aliases') && created.has('sort_order'),
@@ -71,6 +71,10 @@ const NOT_READ: Record<string, string> = {
   retired_at:  'not read yet — `active` is the flag the UI uses; this is the timestamp for the audit trail',
   created_at:  'not shown on any ladder surface',
   updated_at:  'not shown on any ladder surface',
+  // ledger #343 — PREPARED, not read: the leakage flag keeps submit.ts LARGE_CONTAINERS until David
+  // confirms the switch (tech-debt #310). Reading it before then would imply a use it does not have.
+  is_large:         'prepared for the leakage flag; not read until David confirms it (tech-debt #310)',
+  is_large_because: 'the source of is_large; not read for the same reason',
 };
 for (const c of created) {
   if ((LADDER_FIELDS as readonly string[]).includes(c)) continue;
