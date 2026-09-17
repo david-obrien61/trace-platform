@@ -4040,6 +4040,17 @@ can be ADDED (kept as additional) without touching the main one, as checkout now
 confirm "existing rows keep their contact details as they are", or change it to "add what QuickBooks has
 that we don't".
 
+**PROVENANCE, CORRECTED BY LIGHTNING (2026-09-17):** the fill-never-clobber rule IS a ruling — it was given in
+a Lightning prompt (*"MACHINE WRITERS NEVER OVERWRITE CURATED FIELDS … fill-if-blank, never clobber"*) and
+lives in chat history, **not in `docs/RULINGS.md`**.
+
+**LIGHTNING'S LEAN (recorded — David confirms):** under the contact-card model (2026-09-15), keep the rule
+for the **MAIN** value only: the QuickBooks import never replaces a customer's main phone, email or billing
+address. A new or different value from QuickBooks is **ADDED** as an additional list entry through
+`contactWriter`, like checkout (CARD 15). Nothing overwritten, nothing dropped.
+**On David's confirmation:** file it in `RULINGS.md` with its date, and build it as a registered path in
+`writer-registry.json` with its end-to-end test.
+
 ## #319 — 🔴 GO-LIVE: FINISHING A DELIVERY STOP DOES NOT FULFIL ITS ORDER (NEW 2026-09-17, ledger #345 Part C)
 
 **What.** `useStopActions.tsx:130` sets the stop to fulfilled and nothing else: the order's status stays

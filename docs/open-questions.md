@@ -90,7 +90,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK MAKES A DUPLICATE.** Lean: match on phone or street + ZIP, then ask; never email alone. Owner: tech-debt #314.
 - 🟡 **OPEN — THE ROUTE PLANNER'S ADDRESS BOX IS NEVER SAVED.** Lean: save as a ship-to through contactWriter; at minimum label it "not saved". Owner: tech-debt #316.
 - 🟡 **OPEN — STAFF AT CHECKOUT.** Lean: staff may ADD a phone/email; only `customers:update` may Make main or Remove. Owner: tech-debt #317.
-- 🟡 **OPEN — THE QUICKBOOKS IMPORT KEEPS AN EXISTING CUSTOMER'S CONTACT DETAILS AS THEY ARE.** A #278 build decision, not a ruling — confirm or change. Owner: tech-debt #318.
+- 🟡 **OPEN — THE QUICKBOOKS IMPORT KEEPS AN EXISTING CUSTOMER'S CONTACT DETAILS AS THEY ARE.** Lean: keep the MAIN value; ADD a different QuickBooks value as additional through contactWriter. Confirm → RULINGS + registered path. Owner: tech-debt #318.
 - 🔴 **GO-LIVE — FINISHING A STOP DOES NOT FULFIL ITS ORDER** (automatic SPM consumption depends on it). Owner: tech-debt #319.
 - 🟡 **OPEN — WHICH DOMAIN IS REGISTERED NEXT.** Proposed: orders → delivery stops → stock movements. Owner: `writer-registry.json` → `proposed`.
 
