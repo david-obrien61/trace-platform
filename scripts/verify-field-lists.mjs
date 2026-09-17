@@ -106,6 +106,26 @@ const ALLOWED_DIVERGENCE = {
           + 'for a question that needs three. A projection is not a restatement (tech-debt #120).',
     paths: ['packages/shared/src/components/OpeningStockSeed.tsx'],
   },
+  // ⚠️ DECLARED 2026-09-17 (ledger #347) — PENDING DAVID'S RATIFICATION, same standing as the
+  // entries around it. Both tables were created by THIS build and each has exactly ONE reader, so
+  // the ratchet is flagging a first list, not a divergence — and neither list is a record shape:
+  //   · crew_day_links — the schedule's panel needs the link's METADATA and must NOT select
+  //     `token_hash`. Selecting the record shape here would pull the hash to a browser for no
+  //     reason; the narrow list is the point, not a convenience.
+  //   · delivery_stop_events — four columns answering "who tapped what, when" for a set of stops.
+  // A registry is owed if a SECOND reader appears; `cost_objects` and `receipts` still outrank both
+  // (tech-debt #120), and minting one inside a pilot build is the drift these caps exist to catch.
+  crew_day_links: {
+    reason: 'Created by this build; ONE reader (the schedule\'s crew-link panel). A deliberately '
+          + 'narrow metadata projection that must NOT include token_hash — the hash never goes to a '
+          + 'browser. Not a record shape, so there is nothing to derive from yet.',
+    paths: ['packages/cultivar-os/src/lib/crewDayLink.ts'],
+  },
+  delivery_stop_events: {
+    reason: 'Created by this build; ONE reader (the schedule\'s "From the crew link" block). Four '
+          + 'columns answering who tapped what and when — a projection, not a restated record.',
+    paths: ['packages/cultivar-os/src/lib/crewDayLink.ts'],
+  },
   vendor_preferences: {
     reason: 'Table created by this build; ONE reader (the standing vendor answer on /receipts/:id). '
           + 'No restated record shape exists to derive from yet. A registry is owed when a SECOND '
