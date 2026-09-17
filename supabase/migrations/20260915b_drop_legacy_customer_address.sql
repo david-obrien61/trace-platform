@@ -3,6 +3,9 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WRITTEN, NOT APPLIED. David applies it, in the SQL EDITOR — never the table editor (§6 r17).
 --
+-- ⚠️ APPLY `20260917a_keep_phone_notes_before_street_drop.sql` BEFORE THIS (ledger #346): five phone
+-- notes live only in `address_line1` until it runs, and §1b below refuses while they do.
+--
 -- ⚠️ APPLY `20260915_contact_record.sql` FIRST. This migration removes the columns that file's
 -- trigger REPLACES; applying them out of order leaves `customers` with no address at all between
 -- the two. They are two files rather than one because the first is additive and reversible and
@@ -98,6 +101,89 @@ BEGIN
   END IF;
 END $$;
 
+-- ── §1b PRE-FLIGHT — REFUSE IF WORDS BESIDE A PHONE WOULD BE LOST (ledger #346, 2026-09-17) ───
+-- §1 accepts a legacy street that is a phone held in the list — by its DIGITS. It did not look at
+-- the WORDS beside the number ("(512) 555-0100 - cell"), and for five LAWNS customers those words
+-- were held nowhere else: this file would have dropped them. Measured live, proven red on a copy.
+-- A phone-with-words is safe only when an active phone row of the same customer holds the words
+-- as its note (or holds the whole text as its value). Read with the seed's own reader, verbatim.
+CREATE OR REPLACE FUNCTION pg_temp.clean_text(raw text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $f$
+  SELECT NULLIF(regexp_replace(raw, '^\s+|\s+$', '', 'g'), '')
+$f$;
+
+-- `classifyValueShape` (importFieldAudit.ts), line for line.
+CREATE OR REPLACE FUNCTION pg_temp.contact_shape(raw text) RETURNS text
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE v text; at_pos int; has_letter boolean; digits text;
+BEGIN
+  v := pg_temp.clean_text(raw);
+  IF v IS NULL THEN RETURN 'other'; END IF;
+  at_pos := position('@' in v);
+  IF at_pos > 1 AND at_pos < length(v) AND v !~ '\s' AND position('.' in substr(v, at_pos + 1)) > 0 THEN
+    RETURN 'email';
+  END IF;
+  has_letter := v ~ '[A-Za-z]';
+  digits := regexp_replace(v, '\D', '', 'g');
+  IF NOT has_letter AND (length(digits) = 10 OR (length(digits) = 11 AND left(digits, 1) = '1')) THEN
+    RETURN 'phone';
+  END IF;
+  IF NOT has_letter AND (v ~ '^\d{5}$' OR v ~ '^\d{5}-\d{4}$') THEN RETURN 'postcode'; END IF;
+  IF has_letter THEN
+    IF v ~ '^\d+[A-Za-z]?\s+\S*[A-Za-z]' THEN RETURN 'street'; END IF;
+    IF v ~* '\y(st|street|rd|road|dr|drive|ln|lane|ave|avenue|blvd|boulevard|hwy|highway|ct|court|cir|circle|way|trl|trail|pkwy|parkway|ste|suite|apt|unit|box|loop|cove|cv|pass|path|bend|ridge|creek|park|plaza|terrace|ter|place|pl|county|cr|fm|rr)\y' THEN
+      RETURN 'street';
+    END IF;
+    IF v !~ '\d' THEN RETURN 'wordlike'; END IF;
+  END IF;
+  RETURN 'other';
+END
+$f$;
+
+-- `phonesInText` (contactRecord.ts). No rows = not phone-bearing.
+CREATE OR REPLACE FUNCTION pg_temp.phones_in_text(raw text)
+RETURNS TABLE (ord int, phone text, note text)
+LANGUAGE plpgsql IMMUTABLE AS $f$
+DECLARE v text; shape text; rest text; m text; i int := 0;
+  pat constant text := '(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}';
+BEGIN
+  v := pg_temp.clean_text(raw);
+  IF v IS NULL THEN RETURN; END IF;
+  shape := pg_temp.contact_shape(v);
+  IF shape = 'phone' THEN ord := 1; phone := v; note := NULL; RETURN NEXT; RETURN; END IF;
+  IF shape = 'street' THEN RETURN; END IF;
+  rest := regexp_replace(v, pat, ' ', 'g');
+  rest := regexp_replace(rest, '\s+', ' ', 'g');
+  rest := NULLIF(regexp_replace(rest, '^[\s–—/,;:()-]+|[\s–—/,;:()-]+$', '', 'g'), '');
+  FOR m IN SELECT x[1] FROM regexp_matches(v, '(' || pat || ')', 'g') AS x LOOP
+    IF pg_temp.contact_shape(m) = 'phone' THEN
+      i := i + 1; ord := i; phone := m; note := rest; RETURN NEXT;
+    END IF;
+  END LOOP;
+END
+$f$;
+
+DO $$
+DECLARE
+  n_lost integer;
+  ids text;
+BEGIN
+  SELECT count(DISTINCT c.id), string_agg(DISTINCT left(c.id::text, 8), ', ')
+    INTO n_lost, ids
+    FROM public.customers c
+   CROSS JOIN LATERAL pg_temp.phones_in_text(c.address_line1) q
+   WHERE q.note IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.customer_phones p
+                      WHERE p.customer_id = c.id AND p.active
+                        AND (btrim(p.note) = btrim(q.note) OR lower(btrim(p.value)) = lower(btrim(c.address_line1))));
+
+  IF n_lost > 0 THEN
+    RAISE EXCEPTION
+      'REFUSED: % customer(s) hold words beside a phone in the old street column that no phone row '
+      'keeps (%). Dropping the column would lose them. Apply 20260917a first. Nothing changed.', n_lost, ids;
+  END IF;
+END $$;
+
 -- ── §2 THE DROP ─────────────────────────────────────────────────────────────────────────────
 -- 🔴 NO `CASCADE`, DELIBERATELY. If a view, index or constraint still depends on one of these
 -- columns, this must FAIL and name it rather than silently taking the dependent object with it.
@@ -122,6 +208,16 @@ COMMIT;
 --     OR (COALESCE(btrim(city),         '') <> '' AND COALESCE(btrim(billing_city), '') = '')
 --     OR (COALESCE(btrim(state),        '') <> '' AND COALESCE(btrim(billing_state),'') = '')
 --     OR (COALESCE(btrim(zip),          '') <> '' AND COALESCE(btrim(billing_zip),  '') = '');
+
+-- V0b · 🔴 ALSO BEFORE APPLYING (ledger #346): customers whose street holds words beside a phone
+-- that no phone row keeps. Expect ZERO rows once 20260917a has run. (§1b's refusal, as a count —
+-- it needs the seed's reader, so it is the migration's own check; this is the same question
+-- asked with the digits only, for a quick look.)
+-- SELECT c.id, p.value, p.note FROM public.customers c
+--   JOIN public.customer_phones p ON p.customer_id = c.id AND p.active
+--  WHERE COALESCE(btrim(c.billing_line1), '') = '' AND COALESCE(btrim(c.address_line1), '') ~ '[A-Za-z]'
+--    AND position(p.value_norm IN regexp_replace(c.address_line1, '\D', '', 'g')) > 0
+--  ORDER BY c.id;
 
 -- V1 · the four are GONE from `customers`. Expect ZERO rows.
 -- SELECT column_name FROM information_schema.columns

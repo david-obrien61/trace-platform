@@ -79,6 +79,11 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED — #346 (`fix/346-notes-before-drop`, 2026-09-17) — **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED**
+
+- 🟡 **BUILDER-COMPLETE, NOTHING APPLIED.** `20260917a` (five notes) + `20260915b` §1b (refuses while words are unkept). Harness synthetic 16/16 in verify, LAWNS copy 15/15, red-first.
+- 🔴 **David applies** `20260917a` → V1/V2 → `20260915b` → CARD 6 (step j).
+
 ### ✅ MERGED 2026-09-17 (`9d9214b`, production 16:27 UTC) — #345 (`fix/contact-card-visible`) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — customer-contact-record CARDS 15 and 18–24 (25 is `needs-test`, reason stated).

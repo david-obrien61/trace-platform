@@ -85,6 +85,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#346 — no phone note is lost when the old street column is dropped (migrations written, NOT APPLIED)**
+- 🔴 **OPEN — APPLY:** `20260917a` → V1/V2 → `20260915b` (V0, V0b first) → CARD 6. Owner: ledger #346.
+- 🟡 **OPEN — `5fa0c32e`'s main phone value holds the number and words** — a cleanup for Lauren (the words are now also a note). Owner: ledger #346.
+
 **#345 — the writer registry; a typed phone is never dropped (build, NOT MERGED)**
 - ✅ **ANSWERED 2026-09-17 — MERGED** (`9d9214b`, production the same minute). Owner: ledger #345.
 - 🔴 **OPEN — A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK MAKES A DUPLICATE.** Lean: match on phone or street + ZIP, then ask; never email alone. Owner: tech-debt #314.
