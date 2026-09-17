@@ -142,5 +142,33 @@ In the app: **Inventory** → search the name.
 not stock); there is **one** row for that product, not two.
 
 ---
-**If anything went wrong after step 5:** the new run can be undone the same way as step 3, with its
-own run id — ask Thunder for the exact line. Do **not** press Import again first.
+
+## 9 · TONIGHT'S RUN ID — the one the NEXT wipe uses
+
+**`bffc7713-d275-436c-bf8c-1ff29f3d14b9`** — the run the 2026-09-17 20:16 UTC import created
+(1,956 customers · 631 products). The old run `eab7fbd2` is gone: zero customers, zero products,
+zero contact rows, zero rows retired by it — measured read-only after the reload.
+
+**Use it, not `eab7fbd2`, for the next undo.** Dry run first — this block CANNOT change anything,
+because it always ends by raising, which rolls the whole thing back:
+
+```sql
+DO $$
+DECLARE r jsonb;
+BEGIN
+  r := public.undo_import_run(
+         'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'::uuid,
+         'bffc7713-d275-436c-bf8c-1ff29f3d14b9'::uuid);
+  RAISE EXCEPTION 'DRY RUN — nothing was kept. Result: %', r::text;
+END $$;
+```
+
+Read the `refused` value in the error text. `refused: false` means the real undo would run and
+what it would remove is listed beside it. `refused: true` names what is holding it.
+
+⚠️ **The starting-number seed does not change this.** In test mode the seed writes **no ledger
+row** (R-158 / #342), so the seeded rows carry no history and the undo still takes them.
+
+---
+**If anything went wrong after step 5:** undo the NEW run — step 9 has its id and the dry-run
+block. Do **not** press Import again first.
