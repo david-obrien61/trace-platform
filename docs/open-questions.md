@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-17** (ledger #345 — the writer registry; contacts registered; not merged. Prior: ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
+**Last updated: 2026-09-17** (ledger #347 — the crew day link; built, not merged, migration not applied. Prior: ledger #345 — the writer registry; contacts registered; not merged. Prior: ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#347 — the crew day link, Saturday 2026-09-19 LAWNS pilot (build, NOT MERGED, migration NOT APPLIED)**
+- 🔴 **OPEN — MERGE AND APPLY BY FRIDAY AFTERNOON.** Merge `feat/crew-day-link`, apply `20260917c` in the SQL editor, run CARD 0 and CARDS A–E. Owner: ledger #347.
+- 🟡 **OPEN — STOP ORDER.** The page lists stops in schedule order; no route order is saved. Lean: save the sequence when Lauren routes a day. Owner: tech-debt #320.
+- 🟡 **OPEN — TWO WAYS TO MARK A STOP DONE.** The in-app Mark done shows the review prompt and cannot be undone; the crew link holds the ask and can. Which should the office tap do? Owner: tech-debt #321.
+- 🟡 **OPEN — THE PHONE IS TEXT, NOT A CALL BUTTON.** Read "no customer contact from this page" strictly. Say if the driver should get tap-to-call. Owner: ledger #347.
+- 🟡 **OPEN — THE CREW PAGE IS ENGLISH ONLY.** R-151 (the person chooses their language) is OPEN; the install crews' English is not reliable. Owner: `RULINGS.md` R-151.
 
 **#345 — the writer registry; a typed phone is never dropped (build, NOT MERGED)**
 - ✅ **ANSWERED 2026-09-17 — MERGED** (`9d9214b`, production the same minute). Owner: ledger #345.

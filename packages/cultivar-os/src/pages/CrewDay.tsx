@@ -17,7 +17,8 @@
  *              No Supabase client, no business context — the token is the only credential, sent in a
  *              header to /api/crew/day. The token lives in the URL FRAGMENT, which the browser never
  *              sends to a server.
- * OUTPUTS      <CrewDay /> at /crew (public route).
+ * OUTPUTS      <CrewDay /> at /crew — mounted in App.tsx OUTSIDE BusinessProvider (no picker, no device
+ *              lock, no login calls on the driver's phone).
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { MapPin, RefreshCw } from 'lucide-react';
@@ -33,7 +34,7 @@ const DARK = '#111827';
 const RED = '#A32D2D';
 
 const big = {
-  width: '100%', minHeight: 52, borderRadius: 12, fontWeight: 800, fontSize: '1rem', cursor: 'pointer',
+  width: '100%', boxSizing: 'border-box', minHeight: 52, borderRadius: 12, fontWeight: 800, fontSize: '1rem', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 14px',
 } as const;
 const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '');
@@ -76,7 +77,10 @@ export function CrewDay() {
     setLoadError(null);
     setDay(r.value);
   }
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [token]);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   function replaceStop(stop: CrewStop) {
     setDay(prev => (prev ? { ...prev, stops: prev.stops.map(s => (s.id === stop.id ? stop : s)) } : prev));

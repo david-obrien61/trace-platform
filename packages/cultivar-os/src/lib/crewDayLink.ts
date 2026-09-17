@@ -18,8 +18,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TRACE_CREW = true; // [TRACE:CREW] STD-003 — ON until David owner-proves
 
-export const CREW_ENDPOINT = '/api/crew/day';
-export const CREW_PAGE_PATH = '/crew';
+const CREW_ENDPOINT = '/api/crew/day';
+const CREW_PAGE_PATH = '/crew';
 
 type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 

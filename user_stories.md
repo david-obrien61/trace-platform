@@ -1332,7 +1332,7 @@ STATUS: written
 SCOPE: vertical:cultivar, platform
 BUILD: active
 MAPS-TO: 3.5, 2.3, 2.1
-PIECES: mobile_zone_walk, mobile_delivery_schedule_review, crew_route_send, crew_load_sheet_print, mobile_orders
+PIECES: mobile_zone_walk, mobile_delivery_schedule_review, crew_route_send, crew_day_link, crew_load_sheet_print, mobile_orders
 NEEDS: —
 _Dictated by David 2026-09-11; recovered from session history and filed 2026-09-12 (ledger #313). Prose is David's, unrewritten._ **This is the story `user_stories.md`'s breakpoint entry (`## PLATFORM STANDARD CAPABILITIES` → *One device, four questions*) explicitly deferred: *"the BEHAVIOURAL mobile story is a different story and it is OWED TO DAVID, not written here … that narrative is David's to dictate; this line covers only the vocabulary built underneath it."* The vocabulary shipped (ledger #305); this is the behaviour it was built for.**
 
@@ -1357,6 +1357,8 @@ copy is the deliverable and today that copy is paper.
 
 DAVID'S ORDER: the zone walk is the working example · delivery next ·
 then orders.
+
+🔧 **`crew_day_link` — BUILT 2026-09-17 (ledger #347), BUILDER-COMPLETE, owner-proof owed (`docs/owner-tests/crew-day-link-full-surface-test.md`).** David chose it the same day for the Saturday 2026-09-19 LAWNS pilot: *"a link, no login — light, adds little, captures data."* Lauren makes a link for ONE day on the schedule and pastes it into the text she already sends the driver; the driver's page shows that day's stops, addresses with a Maps button, the customer's name and phone, and what is on each order (no prices), and records **Start · Done · Undo · Note** with the typed name and the time. **Done does not fulfil the order or move stock (tech-debt #319) and HOLDS the review ask rather than sending it.** The paper day sheet stays for the load. ⚠️ Stops are listed in schedule order — no route order is saved anywhere (tech-debt #320) — and the page is English only.
 
 ### Give it to me in my language — Spanish for the people doing the work
 STATUS: written

@@ -319,10 +319,16 @@ const ALLOWED_DIVERGENCE = {
           + 'THIRD (2026-09-17, ledger #345): contactWriter.logContactChanges records every contact '
           + 'add / make-main / remove (David: "who, when, customer, list, value, outcome") AFTER the '
           + 'list write lands; a failed log is reported as audited:false and never undoes the change. '
-          + 'Both client inserts prove themselves by COUNT — a manager cannot read audit_log (#315).',
+          + 'Both client inserts prove themselves by COUNT — a manager cannot read audit_log (#315). '
+          + 'FOURTH + FIFTH (2026-09-17, ledger #347, PENDING DAVID\'S RATIFICATION): the crew day link. '
+          + 'Both write the row INSIDE the audited action — create_crew_day_link / revoke_crew_day_link '
+          + '(crewDayLink.ts, Lauren\'s session) and crew_stop_act (crewDay.ts, service key) — so the '
+          + 'manifest\'s own rule holds: no separate client insert, nothing to half-land.',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx',
             'packages/cultivar-os/src/lib/stopWrites.ts',
-            'packages/shared/src/business-logic/contactWriter.ts'],
+            'packages/shared/src/business-logic/contactWriter.ts',
+            'packages/cultivar-os/src/lib/crewDayLink.ts',
+            'packages/cultivar-os/api/members/crewDay.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
@@ -395,7 +401,25 @@ const ALLOWED_DIVERGENCE = {
             // record. It creates nothing and updates nothing here. It is David's ruling ④ made into a
             // delete: removability is decided by origin. Routing it through submit.ts's handleDelete
             // would be N HTTP calls and N transactions, which is precisely the half-run it replaces.
-            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+            'packages/shared/src/quickbooks/itemImportWriter.ts',
+            // ⚠️ DECLARED 2026-09-17 (ledger #347) — PENDING DAVID'S RATIFICATION. The CREW DAY LINK:
+            // `crew_stop_act` (20260917c), reached only through the endpoint's service key, sets
+            // status / started_at / completed_at on a stop of the link's own business and day, plus
+            // the two columns only it writes (completed_by_name, review_ask_held_at). It creates no
+            // stop and changes no date, address, customer or order. It overlaps stopWrites.ts on the
+            // Done columns by design — the second Done writer is tech-debt #321.
+            'packages/cultivar-os/api/members/crewDay.ts'],
+  },
+  // ⚠️ DECLARED 2026-09-17 (ledger #347) — PENDING DAVID'S RATIFICATION. A NEW TABLE BORN WITH TWO
+  // PATHS, and both are one set of database functions: Lauren's session makes and turns off links
+  // (crewDayLink.ts → create_crew_day_link / revoke_crew_day_link); the endpoint only stamps
+  // last_used_at on the link it just validated (crewDay.ts → crew_day_read / crew_stop_act). No client
+  // has an INSERT, UPDATE or DELETE privilege on the table — the migration revokes them.
+  'crew_day_links': {
+    reason: 'One migration\'s functions own every write: create/revoke from Lauren\'s session, and '
+          + 'last_used_at from the two endpoint functions. No table privilege for anon or authenticated.',
+    paths: ['packages/cultivar-os/src/lib/crewDayLink.ts',
+            'packages/cultivar-os/api/members/crewDay.ts'],
   },
   // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
   // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns

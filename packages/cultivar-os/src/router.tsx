@@ -5,7 +5,6 @@ import { PermissionRoute } from '@trace/shared/auth';
 
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
-import { CrewDay }         from './pages/CrewDay';
 import { ScanOrder }       from './pages/ScanOrder';
 import { CustomerCapture } from './pages/CustomerCapture';
 import { CartReview }      from './pages/CartReview';
@@ -104,8 +103,6 @@ export function AppRouter() {
       <Route path="/checkout/customer"   element={<CustomerCapture />} />
       <Route path="/checkout/review"     element={<CartReview />} />
       <Route path="/checkout/confirm"    element={<Confirmation />} />
-      {/* The crew day link (ledger #347): the token in the URL fragment is the only credential. */}
-      <Route path="/crew"                element={<CrewDay />} />
 
       {/* AUTH */}
       <Route path="/login"   element={<Login />} />

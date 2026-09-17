@@ -58,7 +58,10 @@ export function CrewLinkPanel({ businessId, date }: { businessId: string; date: 
     }
     setLive(r.value);
   }
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId, date]);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, date]);
 
   async function make() {
     setBusy(true); setError(null); setCopied(false);

@@ -2,7 +2,7 @@
 
 > **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-09-17 — **#345** the writer registry; a typed phone is never dropped — see ⚡ ACTIVE STATUS.
+> **Last updated:** 2026-09-17 — **#347** the crew day link (Saturday pilot) — see ⚡ ACTIVE STATUS.
 - 🟡 **ROUTE HANDOFF — WHAT THE DRIVER RECEIVES IS WHAT THE MANAGER SAW, ledger #286, R-116** · 🔴 **the optimised order never reached the link: `routeUrl` was frozen in `buildRoute()` eight lines before the optimised answer was cleared, and the source array was `created_at DESC` — the newest sale rung up was the first stop driven** · **the split fell along the line between who could SEE it and who GOT it** (pins ✅ · on-card list ✅ · link/SMS/clipboard 🔴), which is why it lived 14 months · ✅ **Google was innocent — no `optimize` parameter exists; it rendered our list faithfully** · **FIX: `routeUrl` is no longer state** — one derivation from `displayStops` (`packages/cultivar-os/src/lib/routeHandoff.ts`) feeds all four consumers, David's option B over A · the SMS count read `selectedOrders.length` and said *"(5 stops)"* above a 3-stop link · **44 probes · 20 mutants, 20 caught** incl. S1 (the defect restored) and S8 (reach, not subject) · ✏️ **the story gate found the CAUSE: the archived route story is OWNER-PROVEN and claims *"the pins, the on-card list, and the route all agree"* — all three on her screen** · ⚠️ **waypoint cap REPORTED not built (R-117, #223): 41% of LAWNS's days exceed Google's documented mobile cap of 3 and our form's real cap is UNKNOWN** · **board 0 of 8 — CARD 2 (text it, TAP it on a phone) has never been run in this feature's history** · **BUILDER-COMPLETE, owner-proof owed**
 - 🟢 **SELECT-POLICY CAP — `npm run verify:select-policies`, CHAINED into `npm run verify`** · every live table needs RLS **and** a policy that can actually SELECT, **or a declared reason** in `select-policy-declarations.json` · tables DERIVED from the migration corpus, never a hardcoded list · **the declaration list itself fails the build when it goes stale** (#73's lesson) · 17 probes both directions · RED-FIRST on the real corpus (exit 1, 2 undeclared, both then verified deliberate) · **closes Open Architecture Decision #11, whose own trigger fired 3× with nothing behind it** · ledger #178
 - 🟢 **DECISION REGISTER RECONCILED** · **D-55** (tier math = percent-off-baseline) numbered at last — it had three docs and no address · **D-37/D-38/D-39 rows added** after `DECISIONS.md` jumped D-36 → D-40 for three weeks · six CLAUDE.md open-decision rows CLOSED (5 principle names settled-by-usage · #10 data-values · #11 by build) · **`RULINGS.md` +4 rows, +2 OWED** (geofence radius/accuracy · the US-C hand-off mechanism) · ledger #178
@@ -78,6 +78,13 @@
 ---
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
+
+### 🟡 BUILT, NOT MERGED — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
+
+- 🟡 **BUILDER-COMPLETE · migration `20260917c` WRITTEN, NOT APPLIED · waiting on David's merge word.** Must be merged, applied and live by **Friday 2026-09-18 afternoon.**
+  Lauren makes a one-day link on the schedule → driver's phone shows the day's 7 LAWNS stops (addresses, Maps, name + phone, items, no prices) → Start / Done / Undo / Note with the typed name. Done holds a review ask; the order and stock do not move.
+  Registry `stop-progress` (6 paths · 7 guards, 17/17 mutants caught). Board: `crew-day-link-full-surface-test.md` 0/7. Debt: #320 (no saved route order) · #321 (two Done writers).
+- 🔴 **Friday order:** merge → apply `20260917c` in the SQL editor → CARD 0 → CARDS A–E on Test Dave's → make LAWNS's Saturday link.
 
 ### ✅ MERGED 2026-09-17 (`9d9214b`, production 16:27 UTC) — #345 (`fix/contact-card-visible`) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
 
