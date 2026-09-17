@@ -342,6 +342,14 @@
           "file": "scripts/verify-writer-registry.mjs",
           "reason": "this check itself: its --self-test plants violations as strings (a phone input, a table write) to prove each check goes red"
         }
+      ],
+      "dataFixes": [
+        {
+          "migration": "supabase/migrations/20260917a_keep_phone_notes_before_street_drop.sql",
+          "what": "copies the words beside a phone in the old street column onto the matching customer_phones row, for exactly five LAWNS customers, only where the note is empty (ledger #346)",
+          "why_not_through_the_writer": "a one-time SQL data fix applied by David in the SQL editor, before 20260915b drops the column it reads; contactWriter has no path from customers.address_line1 and must not grow one for a column that is about to go",
+          "test": "scripts/sql-harness/notes-before-drop-346.pglite.mjs (npm run verify:notes-before-drop)"
+        }
       ]
     },
     {

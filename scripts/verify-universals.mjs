@@ -694,6 +694,7 @@ function capN(key, v) {
     'nav_assets', 'nav_inventory', 'nav_receipts', 'nav_pmi', 'nav_social',
     'nav_campaigns', 'nav_campaign_detail', 'nav_help', 'nav_team', 'nav_add_business', 'nav_cost_to_produce',
     'nav_services',   // the offerings editor's first-class nav destination (nav rewire 2026-07-07)
+    'nav_container_sizes', // the ladder editor (ledger #343) — before it, adding a size was SQL
   ];
   const missing = REQUIRED_NAV_KEYS.filter((k) => !navBlock.includes(`'${k}'`));
   if (missing.length) problems.push(`navigable surfaces with no IA node: ${missing.join(', ')}`);

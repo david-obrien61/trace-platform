@@ -308,6 +308,22 @@ SIGNAL: `[TRACE:INVENTORY] promote — updated`
 - **PASS:** that row's qty is **set** to your count (a count sets on-hand; it is not a decrement). **No new row.**
 - **FAIL:** a second row at the same size appears (that is a CASE 5 twin, minted from the count path).
 
+### 🔴 The count screen offers the nursery's OWN sizes, and "#3" and "5 gal" are one size (ledger #343)
+STATUS: owed
+DEVICE: phone
+COVERS: ledger #343 — the count screen resolves sizes through the ladder
+LAST-PROVEN: never
+SIGNAL: `[TRACE:COUNT] ladder {phase: 'loaded', rungs: 9}`
+- ✅ Applied and merged (`56107ee`) — this card can run.
+- **Do (LAWNS, a phone, no console):** scan a variety tag. Under **Which size?** look below the variety's own size chips.
+- **PASS:** a second row of chips offers the nursery's sizes the variety does not have yet — **+ 15 gal**, **+ 30 gal** …
+  — and tapping one fills the size box with that exact name.
+- **Do:** on a variety that has a **#3** row, type **5 gal** and count. **PASS:** the **#3** row's count is set; **no new row**
+  is made — at LAWNS #3 and #5 are one size (3/5 gal).
+- **Do:** type **7 gal**. **PASS:** an amber line says *"7 gal" is not one of this nursery's sizes. It will be saved as typed —
+  add it in Settings → Container sizes…* — and the count still saves.
+- **FAIL:** "5 gal" mints a second row beside "#3"; or an off-ladder size is refused outright.
+
 ### The same (variety × size) counted twice in one session SURFACES, never silently overwrites
 STATUS: owed
 DEVICE: phone

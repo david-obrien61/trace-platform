@@ -10,6 +10,7 @@ import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink'
 import { readReviewAskConfig, reviewCopyProblems, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
+import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
   getMembersByBusiness,
   removeMember,
@@ -751,6 +752,8 @@ export function Settings() {
   // separately so the shared component's own union does not have to grow a member for a section it
   // knows nothing about — the same reason CostToProduce and Nursery live in `verticalContent`.
   const isOperations = sectionParam === 'operations';
+  // CONTAINER SIZES (ledger #343) — the ladder editor, a cultivar vertical section for the same reason.
+  const isContainerSizes = sectionParam === 'container-sizes';
 
   // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
   console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });
@@ -787,9 +790,13 @@ export function Settings() {
   const verticalContent = businessId && isOperations ? (
     // /settings/operations — the direct destination, rendering JUST this card (RULE 2a).
     <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
+  ) : businessId && isContainerSizes ? (
+    // /settings/container-sizes — the direct destination for the ladder editor (RULE 2a).
+    <ContainerSizesSettings businessId={businessId} canWrite={canManageSettings} />
   ) : (businessId && !section) ? (
     <>
       <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
+      <ContainerSizesSettings businessId={businessId} canWrite={canManageSettings} />
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
       <ReviewAskSection businessId={businessId} />

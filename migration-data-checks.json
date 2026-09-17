@@ -35,9 +35,9 @@
       "sql": "((SELECT count(*) = 0 FROM permission_aliases WHERE from_perm IN ('assets:read','assets:create','assets:update') OR implies_perm IN ('assets:read','assets:create','assets:update')) AND (SELECT bool_and(NOT (permissions ?| array['assets:read','assets:create','assets:update'])) FROM role_definitions WHERE business_id IS NULL))"
     },
     "20260729_backfill_billing_from_legacy.sql": {
-      "kind": "invariant",
-      "means": "no customer has a legacy address with an empty billing address",
-      "sql": "(SELECT count(*) = 0 FROM customers WHERE address_line1 IS NOT NULL AND billing_line1 IS NULL)"
+      "kind": "evidence",
+      "means": "\u270f\ufe0f ledger #346: the legacy column this backfill copied FROM is gone (20260915b, applied 2026-09-17), so the old invariant cannot be asked any more \u2014 and it had been false since 20260915 moved 475 phone-in-street values to the phone list. What stands is billing_* as the only address columns on customers",
+      "sql": "(SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'address_line1') AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'billing_line1'))"
     },
     "20260730a_owner_holds_all_backfill.sql": {
       "kind": "superseded",
@@ -70,10 +70,15 @@
       "means": "the audit row it writes about itself exists (ledgers #335/#342)",
       "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'ledger.test_mode_removal')"
     },
+    "20260917a_keep_phone_notes_before_street_drop.sql": {
+      "kind": "evidence",
+      "means": "the five customers whose phone words lived only in the old street column each hold a phone note (ledger #346)",
+      "sql": "(SELECT count(DISTINCT customer_id) = 5 FROM customer_phones WHERE active AND note IS NOT NULL AND customer_id IN ('492e0cda-b9fb-4549-ac5c-c24d5c46c368','5fa0c32e-cc60-480d-883b-293d16881f2c','5fd58cd9-9bd9-4fd9-91c0-64632628dba6','7c775806-f3c2-463d-abbe-814e7b7f46b8','c395e570-23ac-4a4d-89e1-f43f9d79b2de'))"
+    },
     "20260915_backfill_legacy_customer_address.sql": {
       "kind": "evidence",
-      "means": "Paul (58e9e0f9\u2026) \u2014 the one real address whose state and ZIP were legacy-only \u2014 carries TX and a ZIP in billing_*. Reads billing_* only, so it survives 20260915b dropping the legacy four",
-      "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX' AND COALESCE(btrim(billing_zip), '') <> '')"
+      "means": "Paul (58e9e0f9\u2026) \u2014 the one real address whose state and ZIP were legacy-only \u2014 carries TX in billing_state. \u270f\ufe0f ledger #346: this check also required a ZIP; Paul never had one (corrected on CARD 3b 2026-09-17). Reads billing_* only, so it survives 20260915b dropping the legacy four",
+      "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX')"
     }
   }
 }

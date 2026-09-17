@@ -40,7 +40,7 @@
 // DEPENDENCIES: ./basis · ./productionConfig. No date library — `addMonths`/`addWorkingDays` are
 //               local and pure, because a plan computed in the browser and a plan computed in a
 //               test must agree to the day.
-// OUTPUTS:      LotInput · LotPlan · PlanTotals · rungKey · classifyLot · splitLot · planLots ·
+// OUTPUTS:      LotInput · LotPlan · PlanTotals · rungKey · classifyLot · startingGallons · splitLot · planLots ·
 //               mixCubicYardsPerPot · runMinutes · minutesPerPot · crewHours · splitPenalty ·
 //               potCascade · scheduleBatches · arithmeticCheck · addMonths · addWorkingDays.
 // NOT THIS MODULE: reading inventory (../inventory) · the derived hold (./productionHold) · the
@@ -102,6 +102,29 @@ export function rungKey(lot: LotInput, ladder: Ladder | null = null): string | n
   if (lot.unitValue == null || !Number.isFinite(lot.unitValue)) return null;
   if (lot.unitValueMax != null && lot.unitValueMax !== lot.unitValue) return null;
   return `${lot.name.trim().toLowerCase()}|${lot.unitValue}`;
+}
+
+/**
+ * The container volume a lot STARTS from, in trade gallons (ledger #343).
+ *
+ * 🔴 WITH A LADDER, IT IS THE RUNG'S VOLUME — NEVER THE NUMBER READ OUT OF THE LOT'S SIZE TEXT.
+ * David, 2026-09-16: *"Every size is read from the ladder; each consumer applies its own math."* The
+ * difference is not cosmetic: a `#3` lot carries `unit_value` 3 and a `5 gal` lot carries 5, and at
+ * LAWNS both are ONE rung (`3/5 gal`, volume 4). Reading the text gave one bucket two starting
+ * volumes, so the same move cost two different amounts of mix.
+ * ⚠️ A RUNG WITH NO VOLUME (a slip, a 4" pot) STARTS FROM 0. The migration records why that column is
+ * null — *"a rooted cutting whose volume rounds to nothing"* — so the fill is the whole target pot.
+ * That is the reading this function already had (a slip's `unit_value` is null too); it is stated
+ * here so it is a decision rather than an accident of `Number(null)`.
+ * Without a ladder, or for a lot the ladder does not place, the stored projection stands — the
+ * pre-ladder behaviour, unchanged, and `classifyLot` has already refused anything it cannot plan.
+ */
+export function startingGallons(lot: LotInput, ladder: Ladder | null = null): number {
+  if (ladder != null) {
+    const r = resolveRung(ladder, lot.size);
+    if (r.ok) return r.rung.volumeGallons ?? 0;
+  }
+  return lot.unitValue ?? 0;
 }
 
 export type LotRefusal =
@@ -499,12 +522,13 @@ export function planLots(
     const refusal = classifyLot(lot, opts.ladder ?? null);
     if (!refusal.ok) { refused.push({ lot, refusal }); continue; }
     const target = opts.targets[lot.id];
-    if (target == null || !Number.isFinite(target) || target <= (lot.unitValue ?? 0)) continue;
+    const from = startingGallons(lot, opts.ladder ?? null);
+    if (target == null || !Number.isFinite(target) || target <= from) continue;
 
     const split = splitLot(lot, ops, opts.managerNumbers[lot.id] ?? null);
     if (split.uppotNow <= 0) continue;
 
-    const mixPerPot = mixCubicYardsPerPot(lot.unitValue!, target, ops);
+    const mixPerPot = mixCubicYardsPerPot(from, target, ops);
     const mixTotal = mixPerPot * split.uppotNow;
     const mixCost = money.blendedMixCostPerCubicYard == null
       ? null
@@ -519,7 +543,7 @@ export function planLots(
 
     batches.push({
       lotId: lot.id, name: lot.name,
-      fromUnitValue: lot.unitValue!, toUnitValue: target, location: lot.location,
+      fromUnitValue: from, toUnitValue: target, location: lot.location,
       split, mixPerPot, mixTotal, mixCost,
       startsOn, completesOn, workingDays: days,
       crewHoursAtBatch: hours,

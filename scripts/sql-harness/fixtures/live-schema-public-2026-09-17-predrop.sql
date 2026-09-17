@@ -1,4 +1,4 @@
--- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-17T17:11:13.095Z
+-- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-17T15:01:15.659Z
 -- @@
 -- by scripts/sql-harness/snapshot-live-schema.mjs. Do not edit by hand; re-run the script.
 -- @@
@@ -452,6 +452,10 @@ CREATE TABLE public."customers" (
   "last_name" text,
   "email" text,
   "phone" text,
+  "address_line1" text,
+  "city" text,
+  "state" text,
+  "zip" text,
   "qb_customer_id" text,
   "marketing_opt_in" boolean NOT NULL,
   "source" text NOT NULL,
@@ -3421,6 +3425,8 @@ ALTER TABLE public."customer_phones" ALTER COLUMN "created_at" SET DEFAULT now()
 ALTER TABLE public."customer_phones" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."customers" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."customers" ALTER COLUMN "state" SET DEFAULT 'TX'::text;
 -- @@
 ALTER TABLE public."customers" ALTER COLUMN "marketing_opt_in" SET DEFAULT true;
 -- @@

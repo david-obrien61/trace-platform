@@ -555,9 +555,11 @@ SCOPE: vertical:cultivar
 BUILD: in-build
 ARC: delivery
 MAPS-TO: 3.4, 3.6
-PIECES: load_list_print_view, bill_of_materials, unresolved_is_printed, deer_fence_capture, size_before_trailing_remark, ring_diameter_rule
+PIECES: load_list_print_view, bill_of_materials, unresolved_is_printed, deer_fence_capture, size_before_trailing_remark, ring_diameter_rule, bom_reads_the_ladder
 NEEDS: 🔴 **`deer_fence_capture` is OWED and blocks nothing.** Measured 2026-09-12 across the whole LAWNS tenant: **zero** order lines and **zero** stop notes mention deer, fence, T-post or stake, and `order_service_selections` holds two rows in total. `DF` — *Deer Fencing* — exists only as a QuickBooks CATALOGUE item nothing points at. David's instruction was explicit: *"DO NOT STOP ON THE DEER FENCE QUESTION … a line the yard person adds by hand is fine for v1."* 🔴 **`size_before_trailing_remark` is tech-debt #292** — 9 real trees whose text plainly states a gallon size the resolver cannot reach. ⚠️ **Written by Thunder 2026-09-12 (ledger #315) from David's dictated prompt**: the §9 gate found no story for the LOAD half — the delivery arc's stories all cover the ROUTE, the stop and the tap, and none covers what physically goes on the trailer.
 _David, 2026-09-12: "The crew's copy of the day is paper — the route goes digitally to the driver, the load goes on paper. This is the load half."_
+
+✏️ **2026-09-16 (ledger #343, `bom_reads_the_ladder`):** every size on the sheet is read from the nursery's container ladder, T-posts are a figure on each size, and the mix (now **2× the container**, David 2026-09-15), rope, bubblers and deer-fence posts are Settings → Operations figures the sheet prints. David: *"ONE LOCATION, MANY READS, EXTREMELY FLEXIBLE."*
 
 Lauren hand-assembles this every delivery morning from several printouts. The yard person loading the trailer needs one sheet: **consolidated is the headline, per-stop breakdown underneath** — he needs *"14 T-posts"*, and the per-stop detail is what he needs when a stop gets dropped. **Special mix is the first line because it loads first, trees on top.** Trees read by **name and size** — *"Live Oak 45 gal ×2"* — because he is matching against what is physically printed on the tag, not against a SKU.
 
@@ -1479,8 +1481,9 @@ SCOPE: vertical:cultivar, platform
 BUILD: active
 ARC: asset-inventory-pmi
 MAPS-TO: —
-PIECES: growth_ladder_config, rotation_date, under_production_state, uppot_schedule
+PIECES: growth_ladder_config, rotation_date, under_production_state, uppot_schedule, ladder_editor, ladder_is_the_one_source
 NEEDS: ✅ **THE CONTAINER SIZES IN ORDER ARE SUPPLIED — by DAVID, not Joel, 2026-09-14 (R-157, ledger #326): slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200, and `growth_ladder_config` IS BUILT** as the per-tenant `container_ladder` table. **STILL OWED and this story stays `needs-input` for them:** maturation plus hold per rung (per variety where he knows it) · **which rungs are never sold** — the ladder has no such column, deliberately, because nobody has said which they are · David to rule whether UNDER PRODUCTION is a new value in the lot-status vocabulary or a derived state, and whether up-potting is a transformation or a movement out and in.
+✏️ **2026-09-16 (ledger #343): `ladder_editor` — Settings → Container sizes adds, edits, orders and retires a size without SQL; `ladder_is_the_one_source` — the load list, the uppot plan (which now starts from the size's volume), the count screen and the import preview all read the ladder, and each size carries its install T-posts.**
 ⚠️ **AND ONE THE BUILD SURFACED RATHER THAN ANSWERED:** 121 live LAWNS rows carry a size that READS but is not one of the nine rungs (1 · 2 · 3 · 5 · 10 · 300 gal). They are LISTED on the plan screen as an unresolved population; whether each is a retired rung or a real one is per-size and is David's.
 Lauren corrected David on this, and the correction is the whole model. He had them
 repotting every six months. She said: *"I had that backwards. We don't repot them every six

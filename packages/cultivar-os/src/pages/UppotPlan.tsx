@@ -50,7 +50,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { resolveRung, rungsAbove, type Ladder } from '@trace/shared/inventory';
 import { loadContainerLadder, type LadderRead } from '../lib/containerLadderRead';
 import {
-  planLots, arithmeticCheck, basisSentence, splitPenalty, minutesPerPot,
+  planLots, arithmeticCheck, basisSentence, splitPenalty, minutesPerPot, startingGallons,
   WITHHELD_REASON,
   type LotInput, type ResolvedConfig, type Estimate,
 } from '@trace/shared/production';
@@ -286,7 +286,12 @@ export default function UppotPlan() {
                 return (
                   <tr key={lot.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '6px', fontWeight: 600 }}>{lot.name}<div style={{ fontSize: 11, color: '#888' }}>{lot.size}</div></td>
-                    <td style={{ padding: '6px' }}>{lot.unitValue}</td>
+                    {/* 🔴 THE STARTING VOLUME IS THE RUNG'S (ledger #343), the same number the plan costs
+                        with — a "#3" and a "5 gal" lot both read 4 at LAWNS, because they are one rung. */}
+                    <td style={{ padding: '6px' }}>
+                      {startingGallons(lot, ladder)}
+                      {ladderRung(lot) ? <div style={{ fontSize: 11, color: '#888' }}>{ladderRung(lot)!.label}</div> : null}
+                    </td>
                     <td style={{ padding: '6px' }}>
                       {/* 🔴 A PICKER, NOT A STEPPER (ledger #326). This was `<input type="number">`
                           with no min, no step and no list: getting 15 → 30 was fifteen presses of a

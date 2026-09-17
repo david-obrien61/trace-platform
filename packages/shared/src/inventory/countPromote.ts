@@ -46,17 +46,20 @@
 //   spelling (D-48's shape; §1.6 item 3 — validated before the WRITE, not merely hidden in the UI).
 //
 // DEPENDENCIES: variantGroup.ts (baseSkuOf + deriveSiblingSku — the ONE SKU-lineage convention,
-//               STD-011). No DB, no React, no vertical noun (AC-1).
+//               STD-011) · containerLadder.ts (sameSizeOnLadder — ledger #343). No DB, no React,
+//               no vertical noun (AC-1).
 // OUTPUTS:      isVarietyStub · sameSizeLabel · resolveCountTarget → CountTarget.
 // ============================================================
 
 import { baseSkuOf, deriveSiblingSku } from './variantGroup';
-import { sameSizeLabel } from '../utils/sizeLabel';
+import { sameSizeOnLadder, type Ladder } from './containerLadder';
 
 // sameSizeLabel now lives in the ONE shared home (STD-011) — `utils/sizeLabel` — so the count path,
 // the import matcher, and the L5 size-picker fold sizes the SAME way. Re-exported to keep this
 // module's public API (inventory/index + tests) stable.
-export { sameSizeLabel };
+// ✏️ 2026-09-16 (ledger #343): the DECISION below no longer calls it directly — it asks
+// `sameSizeOnLadder`, which uses the nursery's ladder when there is one and this fold when not.
+export { sameSizeLabel } from '../utils/sizeLabel';
 
 /** The minimum a stub check reads. Satisfied by a StockLineRow, a grid row, or a count sibling. */
 export interface StubCandidate {
@@ -122,11 +125,16 @@ export const SIZE_REQUIRED_MESSAGE =
  * @param groupKey  the variant_group to converge the family on: an existing sibling's group ??
  *                  the scanned QR slug ?? variantGroupSlug(typed name) — the D-45 convention
  * @param size      the size the counter supplied (free label; null = they gave none)
+ * @param ladder    this nursery's container ladder, or null when it has none (ledger #343).
+ *                  🔴 WITH A LADDER, "the same size" MEANS THE SAME RUNG — "#3" and "5 gal" are one
+ *                  bucket at LAWNS, and a text fold would mint a second row for the same pots.
+ *                  Without one, the shared text fold stands, unchanged.
  */
 export function resolveCountTarget(params: {
   siblings: CountSibling[];
   groupKey: string | null;
   size:     string | null;
+  ladder?:  Ladder | null;
 }): CountTarget {
   const { siblings, groupKey } = params;
   const size = (params.size ?? '').trim() || null;
@@ -141,7 +149,7 @@ export function resolveCountTarget(params: {
   //     count's item_label and nowhere else).
   //
   //     ⚠️ THIS RUNS BEFORE (0) DELIBERATELY, and that ordering is the fix, not a detail.
-  //     A blank size MATCHES a size-less row at (0) — sameSizeLabel(null, null) is true — so a stub
+  //     A blank size MATCHES a size-less row at (0) — a blank compares equal to a blank — so a stub
   //     counted with no size used to take a plain `update`: qty landed on a row that still had no
   //     size, turning a harmless placeholder into a size-LESS LOT. That is the Basham's shape minted
   //     through `update` instead of `create`, and D-49's own suite asserted it as CORRECT
@@ -153,7 +161,7 @@ export function resolveCountTarget(params: {
 
   // (0) Exact (variety × size) → UPDATE on-hand. A physical count SETS qty (never a decrement),
   //     and confirms/backfills the group on the row it touches.
-  const exact = siblings.find(s => sameSizeLabel(s.size, size));
+  const exact = siblings.find(s => sameSizeOnLadder(params.ladder ?? null, s.size, size));
   if (exact) return { action: 'update', rowId: exact.id, variantGroup: groupKey };
 
   // (1) STUB FILL (D-49) — the one resolved row is a variety PLACEHOLDER and the count supplies

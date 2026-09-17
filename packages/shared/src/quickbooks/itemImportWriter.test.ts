@@ -95,6 +95,10 @@ function recorder(opts: {
   otherRefs?: Record<string, number>;
   /** How the one-unit function answers: modelled (default), not installed, or failing inside. */
   undoRpc?: 'modelled' | 'absent' | 'error';
+  /** The tenant's `container_ladder` rows (ledger #343). Absent = no ladder. */
+  ladder?: any[];
+  /** Simulates the ladder read failing — the preview must continue and say so. */
+  ladderReadFails?: boolean;
 } = {}) {
   const calls: { table: string; verb: string; filters: [string, string, any][]; payload?: any }[] = [];
   const inventory: any[] = (opts.inventory ?? []).map(r => ({ ...r }));
@@ -108,7 +112,8 @@ function recorder(opts: {
     id: BIZ, qbo_writes_enabled: opts.writesEnabled === undefined ? false : opts.writesEnabled,
   }];
   const ledger: any[] = (opts.ledger ?? []).map(r => ({ ...r }));
-  const store = (t: string) => (t === 'customers' ? customers : t === 'businesses' ? businesses : inventory);
+  const ladderRows: any[] = (opts.ladder ?? []).map(r => ({ ...r }));
+  const store = (t: string) => (t === 'customers' ? customers : t === 'businesses' ? businesses : t === 'container_ladder' ? ladderRows : inventory);
   const orders: any[] = (opts.orders ?? []).map(r => ({ ...r }));
   const orderItems: any[] = (opts.orderItems ?? []).map(r => ({ ...r }));
   const deliveryRows: any[] = (opts.deliveryRows ?? []).map(r => ({ ...r }));
@@ -174,7 +179,8 @@ function recorder(opts: {
     }
     function result(): any {
       if (opts.failOn === verb) return { data: null, error: { message: `simulated ${verb} failure` }, count: null };
-      if (table !== 'business_inventory' && table !== 'customers' && table !== 'businesses') {
+      if (table === 'container_ladder' && opts.ladderReadFails) return { data: null, error: { message: 'simulated ladder read failure' }, count: null };
+      if (table !== 'business_inventory' && table !== 'customers' && table !== 'businesses' && table !== 'container_ladder') {
         reads[table] = (reads[table] ?? 0) + 1;
         const drift = (opts.driftAfter as any)?.[table];
         const n = (reads[table] > 1 && drift !== undefined) ? drift : (counts[table] ?? 0);
@@ -1129,6 +1135,36 @@ async function sectionPreview() {
   ok(p.wouldCreate === 1, 'preview counts one create — the Category folder is not a product');
   ok(p.countedRowsBeingRetired.length === 1 && p.countedRowsBeingRetired[0].qty === 4,
      '🔴 A ROW WITH A REAL COUNT ABOUT TO BE RETIRED IS LISTED, NOT SUMMARISED — a destroyed count must not be a number somebody has to go looking for');
+  ok(p.sizes.ladder === 'none' && p.sizes.coverage === null,
+     '🔴 SIZES — a tenant with no ladder is reported as NO LADDER, never as "every size is off it"');
+
+  // 🔴 THE LADDER, AGAINST THE INCOMING SIZES (ledger #343). Read-only; the rows stay as written.
+  const rungRow = (label: string, sort_order: number, volume: number | null, aliases: string[] = []) => ({
+    id: label, business_id: BIZ, label, aliases, sort_order, volume_gallons: volume, handling_minutes: null,
+    handling_because: 'not timed', install_t_posts_per_tree: 2, install_t_posts_because: 'LAWNS', active: true,
+  });
+  const withLadder = recorder({ ladder: [rungRow('15 gal', 40, 15), rungRow('95/100', 80, 95, ['100 gal'])] });
+  const q = await previewItemImport(withLadder.db as any, BIZ, [
+    it('1', 'A', { description: 'Live Oak - 15 gallon' }),
+    it('2', 'B', { description: 'Live Oak - 100 gal' }),
+    it('3', 'C', { description: 'Vitex - 7 gallon' }),
+    it('4', 'D', { description: 'Vitex - 7 gal' }),
+    it('5', 'E', { description: 'Fertilizer - 40 lb' }),
+    it('6', 'F', { description: 'Trip Charge' }),
+  ]);
+  ok(q.sizes.ladder === 'loaded' && q.sizes.coverage?.onLadder === 2,
+     `🔴 SIZES — "15 gallon" and "100 gal" land on the ladder (got ${JSON.stringify(q.sizes)})`);
+  ok(q.sizes.coverage?.offLadder.length === 1 && q.sizes.coverage.offLadder[0].count === 2,
+     '🔴 SIZES — the two 7 gallon products are NAMED once, with their count — never an anonymous total');
+  ok(q.sizes.coverage?.notContainer === 1 && q.sizes.coverage.noSize === 1, 'SIZES — the bag and the fee are their own buckets');
+  ok(withLadder.calls.every(c => c.verb === 'select'), '🔴 SIZES — reading the ladder writes nothing');
+  const rowAfter = rowForItem(BIZ, RUN, adaptQboItems([it('2', 'B', { description: 'Live Oak - 100 gal' })]).items[0]);
+  ok(rowAfter.size === '100 gal', '🔴 SIZES — the row still writes the size EXACTLY as QuickBooks states it (D-23), never the rung label');
+
+  const broken = recorder({ ladderReadFails: true });
+  const r = await previewItemImport(broken.db as any, BIZ, [it('1', 'A', { description: 'Live Oak - 15 gallon' })]);
+  ok(r.ok === true && r.sizes.ladder === 'failed' && r.wouldCreate === 1,
+     '🔴 SIZES — a FAILED ladder read does not fail the preview, and is reported as failed, not as "no ladder"');
 }
 
 // Sequential, not Promise.all: each section builds its own recorder, and a shared failure order
