@@ -172,3 +172,11 @@ Filed by the build that hosted it, in the same commit (ledger #298).
 | id | file:line | what it is | why it is debt | now | sev | status |
 |---|---|---|---|---|---|---|
 | T1 | [`public/tools/zone-walk.html`](../../packages/cultivar-os/public/tools/zone-walk.html) | `tenant:'LAWNS'`, 553 LAWNS QuickBooks item names and SKUs, four panels' run times and Panel A's handwritten zone descriptions — embedded in the page | one tenant's facts in a file the `cultivar-os` deploy serves on every tenant's domain | a disposable capture form for one walk at one customer: not imported by the app, not in the router or nav, writes nothing to the database. **The literal is the tool** — a zone walk without the customer's panels and plants is a blank form. No prices, customers or people are in it | LOW | **DOC** — single-customer capture tool, kept deliberately; retire the file once the walk is imported (David's call) |
+
+## Owning capability: **2.1 — Cart / QR checkout** — the leakage flag's container-size list (🟡 1 OPEN)
+
+Filed by ledger #343, which removed every other size list on David's ruling of 2026-09-16 (*"No second list of sizes, no size thresholds"*) and left this one because replacing it needs a decision that is David's.
+
+| id | file:line | what it is | why it is debt | now | sev | status |
+|---|---|---|---|---|---|---|
+| S1 | [`api/orders/submit.ts:19`](../../packages/cultivar-os/api/orders/submit.ts#L19) | `const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal']` — the "large tree" test behind the leakage flag (submit and edit paths) | a grower's size vocabulary hardcoded in platform code (AC-1); it misses LAWNS's 65 and 200 gal, names a 60 nobody sells, and matches exact strings so `45 Gallon` never counts | unchanged; commented at the line. ✏️ 2026-09-17: the replacement column `container_ladder.is_large` is PREPARED (LAWNS: 30 gal and above) and read by nothing yet | LOW (drives an alert, charges nothing) | 🟡 OPEN — tech-debt #310: waits on David confirming the switch |

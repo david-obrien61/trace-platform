@@ -225,5 +225,25 @@ ok(sameSizeLabel('15', '15 gal'), 'size compare: "15" == "15 gal" — tech-debt 
 ok(sameSizeLabel('#30', '30-gallon') && sameSizeLabel('45G', '45 gal'), 'size compare: the whole gallon family folds to one (#30 == 30-gallon, 45G == 45 gal)');
 ok(!sameSizeLabel('1.5', '1.5 gal'), 'size compare: a bare DECIMAL is NOT folded to gallon (likely caliper) — only bare integers');
 
+// ══ THE LADDER DECIDES "THE SAME SIZE" (ledger #343) ═══════════════════════════
+{
+  const LADDER = [
+    { label: '3/5 gal', aliases: ['#3/5', '3/5 Gallon'], sortOrder: 30, volumeGallons: 4, handlingMinutes: null,
+      handlingBecause: 'not timed', installTPostsPerTree: 0, installTPostsBecause: 'LAWNS', active: true },
+    { label: '15 gal', aliases: [], sortOrder: 40, volumeGallons: 15, handlingMinutes: null,
+      handlingBecause: 'not timed', installTPostsPerTree: 2, installTPostsBecause: 'LAWNS', active: true },
+  ];
+  const fam: CountSibling[] = [{ id: 'r3', size: '#3', qty: 10, variant_group: 'cedar-elm', sku: 'CE3' }];
+  const withLadder = resolveCountTarget({ siblings: fam, groupKey: 'cedar-elm', size: '5 gal', ladder: LADDER });
+  ok(withLadder.action === 'update' && (withLadder as { rowId: string }).rowId === 'r3',
+    '🔴 L1: WITH the ladder, counting "5 gal" UPDATES the "#3" row — one bucket at LAWNS, not a second row');
+  const noLadder = resolveCountTarget({ siblings: fam, groupKey: 'cedar-elm', size: '5 gal' });
+  ok(noLadder.action === 'create', 'L2 (negative control): without a ladder the same count mints a sibling, as before');
+  const off = resolveCountTarget({ siblings: fam, groupKey: 'cedar-elm', size: '7 gal', ladder: LADDER });
+  ok(off.action === 'create', 'L3: an off-ladder size is a different size from a rung — a sibling, never merged into one');
+  const blank = resolveCountTarget({ siblings: fam, groupKey: 'cedar-elm', size: '  ', ladder: LADDER });
+  ok(blank.action === 'refuse', '🔴 L4: a blank size is still refused with a ladder — the size-required rule comes first');
+}
+
 console.log(`\ncountPromote: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }

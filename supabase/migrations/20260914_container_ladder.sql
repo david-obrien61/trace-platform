@@ -29,7 +29,15 @@
 -- 2026-09-14 — so a past plan holds the numbers it was costed with. An FK here would re-cost every
 -- past plan the day somebody corrected a volume, which is exactly what D-41 forbids.
 --
--- ⚠️ NOT APPLIED. Written, not run. David applies it; the verification queries are at the foot.
+-- ✅ APPLIED 2026-09-16 by David, who ran the verification block at the foot:
+--   V1 — 12 columns (id … updated_at) · V2 — RLS on; container_ladder_member_select (r),
+--   container_ladder_settings_insert (a), container_ladder_settings_update (w), no delete ·
+--   V3 — the nine LAWNS rungs, 3/5 gal at 4 and 95/100 at 95 with their aliases · V4 — a second
+--   "15 GAL" refused by container_ladder_business_label_key.
+--   Catalog check 2026-09-16: `verify-migration-apply-state.mjs --catalog` lists this file APPLIED.
+-- ✏️ CORRECTED 2026-09-16 (ledger #343) — COMMENT ONLY, no statement changed. This line said
+--   "NOT APPLIED. Written, not run." after it had run; a recon repeated it from four files without
+--   reading the database. Same class as ledger #336: a claim left standing after it stopped being true.
 -- ══════════════════════════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.container_ladder (

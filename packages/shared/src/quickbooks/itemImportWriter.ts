@@ -130,6 +130,7 @@ import { adaptQboItems, type AdaptedItem, type AdaptedItemList } from './qboItem
 import { isPushHeld } from './pushHold';
 import { pushPermitted } from '../business-logic/testMode';
 import { unitColumnsFor } from '../inventory/unitOfMeasure';
+import { LADDER_SELECT, rungFromRow, ladderCoverage, type LadderCoverage, type LadderRow } from '../inventory/containerLadder';
 import { STOCK_LINE_IDENTITY_COLUMNS } from '../inventory/stockLineResolver';
 import { variantGroupSlug } from '../inventory/variantGroup';
 import type { QboItemRow } from './itemList';
@@ -182,6 +183,14 @@ export interface ImportPlanReport {
   /** Live rows carrying a real count, listed rather than summarised. R-A retires these too, and
    *  a count being destroyed should never be a number the owner has to go looking for. */
   countedRowsBeingRetired: { id: string; name: string; size: string | null; qty: number }[];
+  /**
+   * 🔴 HOW THE INCOMING SIZES LAND ON THE NURSERY'S LADDER (ledger #343). Read-only: the import still
+   * writes every size EXACTLY as QuickBooks states it (D-23) — this is the ladder saying, before the
+   * commit, which products are sizes the nursery grows and which are not, NAMED. `ladder` says which
+   * state the ladder read came back in, so "no sizes off the ladder" is never confused with "we
+   * could not read the ladder".
+   */
+  sizes: { ladder: 'loaded' | 'none' | 'failed'; coverage: LadderCoverage | null };
   error: string | null;
 }
 
@@ -507,21 +516,42 @@ export async function previewItemImport(
       .eq('business_id', businessId).is('retired_at', null).gt('qty', 0);
     if (error) throw new Error(error.message);
     const counted = (data ?? []) as { id: string; name: string; size: string | null; qty: number }[];
+    const sizes = await readLadderCoverage(db, businessId, adapted.items.map(i => i.size));
     console.log('[TRACE:QBITEMS] preview', {
       businessId, readIn: adapted.counts.readIn, sellable: adapted.counts.sellable,
       categories: adapted.counts.categories, wouldRetire, counted: counted.length,
       collisions: adapted.collisions.length,
+      ladder: sizes.ladder, offLadderSizes: sizes.coverage?.offLadder.length ?? null,
     });
     return {
       ok: true, adapted, wouldRetire, wouldCreate: adapted.items.length,
-      countedRowsBeingRetired: counted, error: null,
+      countedRowsBeingRetired: counted, sizes, error: null,
     };
   } catch (e: any) {
     console.log('[TRACE:QBITEMS] preview failed', { businessId, message: e?.message });
     return {
       ok: false, adapted, wouldRetire: 0, wouldCreate: adapted.items.length,
-      countedRowsBeingRetired: [], error: e?.message ?? 'unknown error',
+      countedRowsBeingRetired: [], sizes: { ladder: 'failed', coverage: null }, error: e?.message ?? 'unknown error',
     };
+  }
+}
+
+/**
+ * The ladder read for the preview. 🔴 A FAILED LADDER READ DOES NOT FAIL THE PREVIEW — the import
+ * does not depend on the ladder, only this report does — and it is reported as `failed`, never as
+ * an empty ladder (a failed read is not "no sizes").
+ */
+async function readLadderCoverage(db: DbLike, businessId: string, sizes: (string | null)[]): Promise<ImportPlanReport['sizes']> {
+  try {
+    const { data, error } = await db.from('container_ladder').select(LADDER_SELECT)
+      .eq('business_id', businessId).order('sort_order', { ascending: true });
+    if (error) throw new Error(error.message);
+    const ladder = ((data ?? []) as LadderRow[]).map(rungFromRow);
+    if (ladder.length === 0) return { ladder: 'none', coverage: null };
+    return { ladder: 'loaded', coverage: ladderCoverage(sizes, ladder) };
+  } catch (e: any) {
+    console.log('[TRACE:QBITEMS] ladder read failed — preview continues without size coverage', { businessId, message: e?.message });
+    return { ladder: 'failed', coverage: null };
   }
 }
 

@@ -20,8 +20,16 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 13.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
-reason stated.
+**Board: 0 of 19.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
+are new.** The page now reads every size from the nursery's container ladder and every figure from
+Settings → Operations, and it prints the figures it used.
+
+> ⛔ **MIGRATION GATE (ledger #343) — `supabase/migrations/20260916_container_ladder_install_t_posts.sql`
+> MUST BE APPLIED BEFORE THE `feat/ladder-one-source` CODE IS MERGED, AND BEFORE ANY CARD BELOW.**
+> The ladder read asks for `install_t_posts_per_tree`; on a database without it, every ladder read
+> fails and this page shows **"Could not read container sizes"** with every tree unresolved (CARD 14).
+> Apply it as `postgres` in the **SQL editor**, then run its V1–V4 block.
 
 **Why this exists.** The route goes to the driver digitally; the LOAD goes on paper, and nothing
 produced it. The arithmetic is Lauren's, done by hand, every delivery morning.
@@ -62,12 +70,13 @@ produced it. The arithmetic is Lauren's, done by hand, every delivery morning.
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #315 — the consolidated headline
-SIGNAL: `[TRACE:LOADLIST] built {date: '2026-08-29', stops: 6, trees: 11, mixYards: 2.5, tPosts: 24}`
+COVERS: ledger #315 — the consolidated headline · ledger #343 — the mix at 2.0, off the ladder
+SIGNAL: `[TRACE:LOADLIST] built {date: '2026-08-29', stops: 6, trees: 11, mixYards: 5, tPosts: 24}`
 
 Open **`/load-list?date=2026-08-29`**.
 **PASS — every one of these, and they are the numbers to compare against the real trailer:**
-- **6 stops** · **11 trees** · **2.5 yards special mix** · **24 T-posts** · **96 ft rope** · **11 bubblers**
+- **6 stops** · **11 trees** · **5 yards special mix** · **24 T-posts** · **96 ft rope** · **11 bubblers**
+  ✏️ *(was 2.5 yards: the ratio was 1.0 until David's 2026-09-15 correction — twice the container volume, so 470 container gallons → 940 gallons of mix → 4.65 yd → 5 rounded up.)*
 - Special mix is **section 1**, above the trees, and says *loads FIRST — trees on top*.
 - The tree list is **biggest first**, starting **Live Oak 200 gallon × 1 — 4 T-posts**.
 - Trees read as **name and size** (*"Mexican Sycamore 45 gallon"*), **never a SKU**.
@@ -81,12 +90,14 @@ COVERS: David's BOM correction — the ladder has no upper bound
 SIGNAL: —
 
 On the same page, find **Sherry Cooper**'s stop.
-**PASS:** it reads **1 tree · 1 yd mix · 4 posts**, and the day's tree list shows the 200 gallon
-carrying **4 T-posts**. Nowhere on the page do the words *"work out by hand"* or *"no T-post rule"*
+**PASS:** it reads **1 tree · 2 yd mix · 4 T-posts** *(✏️ was 1 yd — 400 gallons of mix at 2.0)*, and
+the day's tree list shows the 200 gallon carrying **4 T-posts** — read off the **200 gal** size, which
+the "Figures used" block lists with *(LAWNS, David 2026-09-12)*. Nowhere on the page do the words *"work out by hand"* or *"no T-post rule"*
 appear.
 **🔴 FAIL if** the 200 gallon shows 0 posts, a blank, or a hand-work note. **That was the defect**:
 a five-row lookup table answered for 15/30/45/65/95 and the biggest tree on the trailer fell off
-the end. It is now a threshold — 2 up to and including 65, 4 above — so there is no size it cannot answer.
+the end. ✏️ It is now **a figure on each size** (Settings → Container sizes), not a threshold — so a size
+answers exactly what its row says, and a size that is not set up prints as COULD NOT WORK OUT (CARD 16).
 
 ### CARD 3 — 🔴 THE UNREADABLE LINE IS PRINTED, NOT DROPPED
 STATUS: owed
@@ -96,7 +107,8 @@ COVERS: *"the page must never silently omit something it could not compute"*
 SIGNAL: `unresolved: 1`
 
 Same page. Find the red **COULD NOT WORK OUT** block.
-**PASS:** it lists **1 line — `Military Discount 5%`** — with the sentence *"We could not read "5%"
+**PASS:** its heading reads **(1)** and it lists **1 line — `Military Discount 5%`** — ✏️ *(2026-09-17: no
+deer-fence line here any more; the fence rule is printed once at the top, CARD 5)* — with the sentence *"We could not read "5%"
 as a size. Check the invoice."*, and the page states that nothing in it is counted in the totals
 above. **Leroy & Lila Ludemann**'s stop line ends **· 1 line could not be read**.
 **🔴 FAIL if** the block is absent or empty. A tidy page here is the failure, not the pass.
@@ -128,10 +140,15 @@ the hand-add is read off rather than worked out on a trailer.
 
 Same page.
 **PASS:** a block reads **DEER FENCE — nothing recorded**, states that nothing in the system marks
-which stops need it, gives the hand rule (*a fenced tree needs 4 T-posts in total, so a tree that
-already has 2 needs 2 MORE*), says fence material is **by the roll, measured as the circumference
-of the ring**, and states the open question at **95 gallon and above** (4 more, or reuse the 4 it
-has?) as **open**.
+which stops need it, gives the hand rule — ✏️ *a fenced tree carries **4 T-posts in total** (the figure
+from Settings → Operations)*, and **each tree row says how many stake posts it already has** — and
+says fence material is **by the roll, measured as the circumference of the ring**.
+✏️ **CHANGED 2026-09-16 (ledger #343):** the *"95 gallon and above — 4 more, or reuse?"* sentence is
+**GONE**: the rule's own words (*"4 T-posts per tree **in total**"*) settle it — a 95 gallon tree
+already has 4 and takes none.
+✏️ **CHANGED 2026-09-17 (David):** the deer-fence block is printed **ONCE, AT THE TOP** — above
+*1 · Special mix* — and **no stop is listed for fence** anywhere (not in COULD NOT WORK OUT, not on a
+stop's line). **FAIL if** a "Deer fence — N stops" line appears in the red block.
 **PASS also — new:** the ring rule is stated (*grows with the square root of container gallons —
 5 ft at 15 gallon, 12 ft at 95 gallon*), and **every tree size on the day carries its own figure**:
 a ring diameter in feet, feet of fence for one tree, and feet if every tree of that size were
@@ -193,6 +210,40 @@ Open `/load-list?date=` on a date with no stops (any Sunday well in the past).
 **PASS:** the page reads **"No stops are scheduled for this day."**, the **Print button is
 disabled**, and a note beside it says why.
 **FAIL if** it offers to print a blank sheet.
+
+---
+
+# 🔴 FRIDAY 2026-09-18 — BEFORE SATURDAY'S TRAILER
+
+### CARD 19 — 🔴 SATURDAY 2026-09-19 PRINTS THE MIX AT 2 × THE CONTAINER, WITH ITS FIGURES AT THE TOP
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — the go-live target for Saturday 2026-09-19
+SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYards: 7, tPosts: 54}`
+
+**Before you start:** the stamp at the foot of the screen must end **`· prod`** and show the SHA I give you
+after the merge.
+
+1. Open **Delivery → Load list** and pick **Saturday, September 19, 2026** (or go to
+   `/load-list?date=2026-09-19`).
+2. **At the very top**, find **Figures used for this list**. **PASS:** it reads
+   **Special mix per gallon of container — 2 gal** · **Rope per T-post — 4 ft** · **Bubblers per tree — 1** ·
+   **T-posts on a deer-fenced tree, in total — 4** · then **45 gal · 30 gal · 15 gal**, each **2 T-posts**
+   *(LAWNS, David 2026-09-12)* · and **Gallons in a cubic yard — 201.974**. It also says **"No figures have
+   been saved for this nursery — these are the standard ones."** — correct: LAWNS has saved none (measured
+   2026-09-17), and the standard mix IS 2.
+3. Just below it, the **Deer fence — add by hand** rule, once.
+4. **Section 1 · Special mix.** **PASS:** it reads **7 yards special mix**, and the sentence says
+   **"2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons"** with **1350 gallons**.
+   *(The old page would have said 3½ yards and 675 gallons.)*
+5. **Section 2 · Trees — 27 in total.** Each tree row shows its own gallons of mix — e.g.
+   **Eagleston Holly (Tree Form) 45 Gallon × 5 — 10 T-posts · 450 gal mix**.
+6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope · 27 bubblers**.
+7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"*.
+
+**FAIL if** the mix reads 3½ yards or 675 gallons (the old 1.0), if "Figures used" is missing or sits below
+the totals, or if the page says **"Could not read container sizes"** (the migration is not applied).
 
 ---
 
@@ -259,25 +310,103 @@ cannot reach**, because a remark trails *after* the size without brackets. The p
 them; it does not yet read them. **The fix is tech-debt #301 (was #292), not this card.**
 **FAIL if** such a line is silently absent from the page altogether.
 
-### CARD 13 — 🔴 ONE MIX RATIO, AND IT IS THE CONTAINER SIZE ([[R-155]])
+### CARD 13 — 🔴 ONE MIX RATIO, AND IT IS TWICE THE CONTAINER ([[R-155]], amended 2026-09-16)
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: [[R-155]] · closes tech-debt #300 (was #291)
-SIGNAL: section 1 reads **one container volume of mix per tree — a 45 gallon tree takes 45 gallons**
+COVERS: [[R-155]] as amended · ledger #343
+SIGNAL: section 1 reads **2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons**
+
+✏️ **CHANGED 2026-09-16 — THE RATIO IS 2.0, NOT 1.0.** David, 2026-09-15: *"install mix is TWICE the
+container volume (30 gal → 60 gal). The earlier 1.0 was Lightning's figure, not LAWNS's."*
 
 Same page, section 1.
-**PASS:** the mix rule states **one container volume per tree**, names the 45 gallon example, and
-the gallons figure reconciles: on Saturday 2026-08-29, **11 trees → 470 gallons → 2½ yards**, and
-`470 ÷ 201.974 = 2.33`, rounded UP to the next half yard.
-**PASS:** the sentence explains WHY it is a whole container rather than an allowance — *it settles
-on the drive and compacts when watered*. A number a person can question is a number they can trust.
-**🔴 FAIL if** the mix line is ~30% lower than the tree gallons on the day (e.g. 329 gallons against
-those same 11 trees). That is the 0.7 ratio returning, and on paper it reads perfectly.
-⚠️ **THIS CARD PROVES THE LOAD SHEET, NOT THE BOOKS.** `BOM_RULES` was already at 1.0 before the
-ruling, so **nothing a customer is charged moved.** ✏️ **And nothing was charged wrongly before it
-either: there is no install cost model in this repo to hold the old 0.7.** Building one — no mulch
-line, the ring as R-156's total function — is tech-debt **#299**, and no card here can reach it.
+**PASS:** the mix rule states **2 gallons of mix per gallon of container** with the 30 → 60 example, and
+the figure reconciles: on Saturday 2026-08-29, **470 container gallons × 2 = 940 gallons → 5 yards**
+(`940 ÷ 201.974 = 4.65`, rounded UP to the next half yard). Each tree row shows its own gallons of mix.
+**PASS:** change **Settings → Operations → Planting materials → "Special mix per gallon of container"**
+to **1.5**, Save, reload this page: the day reads **705 gallons → 3.5 yards** and "Figures used" says
+**1.5 gal**. **Put it back to 2 and Save.**
+**🔴 FAIL if** the page shows 470 gallons (the 1.0 figure returning) or ignores the saved 1.5.
+⚠️ **THIS CARD PROVES THE LOAD SHEET, NOT THE BOOKS.** There is no install cost model in this repo;
+building one is tech-debt **#299**, and no card here can reach it.
+
+### CARD 14 — 🔴 THE SIZES' OWN TWO STATES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — "could not read sizes" and "no sizes set up" are different sentences
+SIGNAL: `[TRACE:LOADLIST] settings read {sizes: 'loaded', rungs: 9, …}`
+
+**PASS (loaded):** on LAWNS neither banner appears and the console shows `sizes: 'loaded', rungs: 9`.
+**PASS (none set up):** switch to **Test Dave's** (no sizes) and open a day with a tree on it: a red block
+reads **"No container sizes set up."** and every container line sits under COULD NOT WORK OUT saying
+the sizes are not set up.
+**PASS (could not read) — only reachable before the migration is applied:** the red block reads
+**"Could not read container sizes."** with the database's message beneath it.
+**🔴 FAIL if** either state prints as an ordinary day with trees counted, or if the two states share one sentence.
+
+### CARD 15 — 🔴 THE PAGE PRINTS THE FIGURES IT USED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — *"The page states the values it used."*
+SIGNAL: the **Figures used for this list** block
+
+Saturday 2026-08-29. ✏️ **2026-09-17: the block is at the TOP of the page, above *1 · Special mix*.**
+**PASS:** the block lists **special mix 2 gal · rope 4 ft · bubblers 1 · deer-fenced tree 4 posts in total ·
+201.974 gallons in a cubic yard**, then one row per size on the day — **200 gal (200 gal container) 4 T-posts
+· 45 gal 2 · 15 gal 2** — each with *(LAWNS, David 2026-09-12)* once the migration's backfill has run.
+It also says **"No figures have been saved for this nursery — these are the standard ones."** (LAWNS has
+no Operations row today; measured 2026-09-16.)
+**FAIL if** a figure printed here differs from the one the totals used (CARD 13's 1.5 step proves it).
+
+### CARD 16 — 🔴 A SIZE THAT IS NOT SET UP IS COUNTED, NAMED, AND NOT STAKED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — *"A size with no rung prints UNRESOLVED, counted and named"*
+SIGNAL: `offLadderTrees` > 0 in `[TRACE:LOADLIST] built`
+
+Find a delivery day carrying a **7 gal**, **1 gal**, **10 gal** or **300 gal** tree (LAWNS has live rows at
+all four), or add one to a test order.
+**PASS:** the tree list is followed by an amber line *"N trees on this day are a size this nursery has not
+set up — counted as trees and given bubblers, but NO mix or posts"*; the line appears under COULD NOT WORK
+OUT with *"is not one of this nursery's container sizes … Add the size in Settings → Container sizes"*;
+the day's tree and bubbler counts INCLUDE it; the floor warning fires.
+**PASS also:** add that size in Settings → Container sizes (CARD 28 on the uppot board), reload — the same
+tree is now staked and mixed. **Retire the size again afterwards.**
+**🔴 FAIL if** the tree vanishes from the counts, or is staked with a number nobody set.
+
+### CARD 17 — "#3/5" AND "100 gal" ARE SIZES NOW
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — 3/5 is ONE rung; 95 and 100 are ONE container
+SIGNAL: —
+
+On a day carrying a `3/5 Gallon`/`#3/5` lot or a `100 gal` line (Cedar Elm and Native Pecan carry 3/5 at LAWNS).
+**PASS:** the 3/5 tree is a TREE on the **3/5 gal** size — 4 gallons of container, 8 gallons of mix, 0 posts;
+a 100 gallon tree is on **95/100** with 4 posts.
+**🔴 FAIL if** "#3/5" is still under COULD NOT WORK OUT as "a range" — that was the behaviour before.
+
+---
+
+# NEEDS A SECOND LOGIN
+
+### CARD 18 — 🔴 A STAFF LOGIN READS THE NURSERY'S OWN FIGURES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: tech-debt #309 (✏️ resolved 2026-09-17 — David: staff may READ the planting figures)
+SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'stored'}` for the STAFF login
+
+✏️ **CHANGED 2026-09-17.** Staff now read the four figures through `get_planting_materials`.
+1. As the **OWNER**, set *Special mix per gallon of container* to **2.5** in Settings → Operations and Save.
+2. As a **STAFF** member (no settings access), open Saturday's load list.
+**PASS:** "Figures used" shows **2.5 gal**, and no "standard figures" warning appears.
+**FAIL if** the staff login shows 2 or a warning — it is still being refused.
+3. As the OWNER, **set it back to 2** and Save.
 
 ---
 
@@ -288,9 +417,8 @@ line, the ring as R-156's total function — is tech-debt **#299**, and no card 
   computed and printed** — the ring is a total function of container gallons, so a figure exists at
   every size including ones LAWNS has never sold. What remains uncovered is the CAPTURE: nothing
   says which stops need fence at all, so no card can exercise a real fenced stop.
-- **The 66–94 gallon band.** `tPostsFor` returns 4 there, which is an INFERENCE from David's two
-  anchors (2 up to 65, 4 at 95 and above) and errs large on his own instruction. LAWNS sells no
-  size in that band, so no card can exercise it on real data.
+- ~~**The 66–94 gallon band.**~~ ✏️ **GONE 2026-09-16 (ledger #343):** there is no threshold any more —
+  posts are a figure on each size, and a size that is not set up is COULD NOT WORK OUT (CARD 16).
 - **Which √-fit David meant.** [[R-156]] gives two anchors and the word *through*, read as a curve
   passing through BOTH (`d = a√g + b`). A single-parameter `d = k√g` cannot hit both and would
   differ by up to ~6% away from the anchors. **Exact at 15 and 95 either way**, so no card on real

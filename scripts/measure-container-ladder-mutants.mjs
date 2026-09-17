@@ -91,9 +91,17 @@ const MUTANTS = [
   { id: 'R5', file: LADDER, why: '🔴 A RANGE COLLAPSES ONTO ONE END — "10/15 gallon" silently becomes the 15 rung, the exact laundering unitOfMeasure refuses to reproduce (tech-debt #125)',
     from: '      if (p.valueMax != null && p.valueMax !== p.value) {\n        if (keys.includes(p.value) && keys.includes(p.valueMax)) return { ok: true, rung, how: \'number\' };\n      } else if (keys.includes(p.value)) {',
     to:   '      if (false) {\n      } else if (keys.includes(p.value) || (p.valueMax != null && keys.includes(p.valueMax))) {' },
-  { id: 'R6', file: LADDER, why: 'a NON-container parse reaches the numeric match, so a 50 lb bag could land on a 50 gallon rung (R-99)',
-    from: "  if (p && p.kind === 'container' && p.value != null) {",
-    to:   '  if (p && p.value != null) {' },
+  // ✏️ R6 RE-AIMED 2026-09-16 (ledger #343): the kind check moved into the new `not_container`
+  // refusal, so the mutant now removes THAT — a bag falls through to the numeric match again.
+  { id: 'R6', file: LADDER, why: 'a NON-container parse reaches the numeric match, so a 15 lb bag lands on the 15 gallon rung (R-99)',
+    from: "  if (p.kind !== 'container') {",
+    to:   '  if (false) {' },
+  { id: 'J1', file: LADDER, why: '🔴 UNREADABLE collapses into OFF-LADDER — a scribble is reported as "a size you have not set up", sending somebody to add a size that does not exist (ledger #343)',
+    from: "      reason: 'unreadable',",
+    to:   "      reason: 'off_ladder'," },
+  { id: 'J2', file: LADDER, why: '🔴 a bag is reported as OFF-LADDER instead of NOT A CONTAINER — the load list would count fertiliser as an unstaked tree',
+    from: "      reason: 'not_container',",
+    to:   "      reason: 'off_ladder'," },
 
   // ── THE DERIVED KEYS ─────────────────────────────────────────────────────────────────────
   { id: 'K1', file: LADDER, why: '🔴 the keys stop being DERIVED and only the label counts — "15" and "#15" stop resolving, and every tenant must hand-declare every spelling',
@@ -138,6 +146,32 @@ const MUTANTS = [
   { id: 'M2', file: LADDER, why: 'a rung with no figure reports ZERO minutes rather than falling back — a 200-gallon pot costs no labour',
     from: '  return rung.handlingMinutes == null',
     to:   '  return false' },
+
+  // ── LEDGER #343: SAME SIZE ON THE LADDER · THE COPY SOURCE · COVERAGE · THE ROW MAPPING ──
+  { id: 'S1', file: LADDER, why: '🔴 the ladder stops deciding "the same size" — "#3" and "5 gal" become two sizes and the count screen mints a second row for one bucket',
+    from: '  if (ladder && ladder.length > 0) {\n    const ra = resolveRung(ladder, a);',
+    to:   '  if (false) {\n    const ra = resolveRung(ladder!, a);' },
+  { id: 'L1', file: LADDER, why: '🔴 a new size copies its posts from the SMALLEST rung instead of the largest — a new big size is born with a slip\'s 0 posts',
+    from: '  return offered.length ? offered[offered.length - 1] : null;',
+    to:   '  return offered.length ? offered[0] : null;' },
+  { id: 'L2', file: LADDER, why: '🔴 retired rungs are OFFERED again — and one can become the copy source for a new size',
+    from: '  return ladder.filter((r) => r.active).sort((a, b) => a.sortOrder - b.sortOrder);',
+    to:   '  return [...ladder].sort((a, b) => a.sortOrder - b.sortOrder);' },
+  { id: 'CV1', file: LADDER, why: '🔴🔴 off-ladder sizes are NAMED but not COUNTED — the preview says "7 gal" with a count of 0',
+    from: '      e.count++;',
+    to:   '' },
+  { id: 'CV2', file: LADDER, why: 'two spellings of one off-ladder size are reported as two findings',
+    from: '      const k = normalizeSize(size).toLowerCase();',
+    to:   '      const k = String(size);' },
+  { id: 'RM1', file: LADDER, why: '🔴 a row without the posts column reads 2 instead of the database default 0 — a number nobody entered',
+    from: '    installTPostsPerTree: numOrNull(r.install_t_posts_per_tree) ?? 0,',
+    to:   '    installTPostsPerTree: numOrNull(r.install_t_posts_per_tree) ?? 2,' },
+  { id: 'SG1', file: MATH, why: '🔴🔴 THE UPPOT START IS READ OUT OF THE SIZE TEXT AGAIN — a "3/5 Gallon" lot starts at 3, not the rung\'s 4',
+    from: '    if (r.ok) return r.rung.volumeGallons ?? 0;',
+    to:   '    if (r.ok) return lot.unitValue ?? 0;' },
+  { id: 'SG2', file: MATH, why: '🔴 the plan RECORDS the rung start but COSTS the mix from the text — two numbers for one move',
+    from: '    const mixPerPot = mixCubicYardsPerPot(from, target, ops);',
+    to:   '    const mixPerPot = mixCubicYardsPerPot(lot.unitValue ?? 0, target, ops);' },
 
   // ── THE REFUSAL REASONS ON THE PLAN ──────────────────────────────────────────────────────
   { id: 'C1', file: MATH, why: '🔴 ZERO ON HAND IS NO LONGER THE REASON GIVEN — 97 of Test Dave\'s 99 catalogue rows go back to being told their SIZE is unreadable, sending somebody to fix a size that would change nothing (David, 2026-09-14)',

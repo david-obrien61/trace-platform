@@ -21,7 +21,7 @@ import {
   MONEY_WALLED_KEYS, type OperationsConfig,
 } from './productionConfig';
 import {
-  rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot,
+  rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot, startingGallons,
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck, addMonths, addWorkingDays,
   workingDaysBetween, ARITHMETIC_TOLERANCE, type LotInput,
 } from './productionMath';
@@ -186,7 +186,8 @@ ok(!classifyLot(lot({ unitKind: 'weight', size: '40 lb' })).ok, '§D a weight is
 // coverage at all — every ladder branch could have been deleted silently.
 // ════════════════════════════════════════════════════════════════════════════════
 const mkRung = (p: Partial<Rung> & { label: string; sortOrder: number }): Rung => ({
-  aliases: [], volumeGallons: null, handlingMinutes: null, handlingBecause: 'untimed', active: true, ...p,
+  aliases: [], volumeGallons: null, handlingMinutes: null, handlingBecause: 'untimed',
+  installTPostsPerTree: 0, installTPostsBecause: 'not set', active: true, ...p,
 });
 const LADDER: Ladder = [
   mkRung({ label: '3/5 gal', sortOrder: 30, aliases: ['#3/5'] }),
@@ -227,6 +228,38 @@ ok(rungKey(three, LADDER) === rungKey(five, LADDER),
 ok(rungKey(three, LADDER) === 'cedar elm|3/5 gal', '§D2 …and the key is the RUNG LABEL, not a number');
 ok(rungKey(lot({ size: '7 gal', unitKind: 'container', unitValue: 7 }), LADDER) === null,
   '🔴 §D2 an off-ladder size has NO rung key — it cannot be quietly bucketed anywhere');
+
+// ════════════════════════════════════════════════════════════════════════════════
+// §D3 — THE STARTING SIZE IS THE RUNG'S VOLUME (ledger #343)
+// David, 2026-09-16: *"Every size is read from the ladder."* The plan used to start a lot from its
+// OWN stored `unit_value` — so a "#3" lot started at 3 and a "5 gal" lot at 5, while both are the
+// ONE 3/5 rung (volume 4) at LAWNS. Same bucket, two starting volumes, two mix figures.
+// ════════════════════════════════════════════════════════════════════════════════
+const VOL_LADDER: Ladder = [
+  mkRung({ label: '3/5 gal', sortOrder: 30, aliases: ['#3/5', '3/5 Gallon'], volumeGallons: 4 }),
+  mkRung({ label: '15 gal',  sortOrder: 40, volumeGallons: 15 }),
+  mkRung({ label: 'slip',    sortOrder: 10, volumeGallons: null }),
+];
+ok(startingGallons(threeFive, VOL_LADDER) === 4,
+  '🔴 §D3 a "3/5 Gallon" lot STARTS at 4 gallons — the rung\'s volume, not the 3 its size text parses to');
+ok(startingGallons(three, VOL_LADDER) === 4 && startingGallons(five, VOL_LADDER) === 4,
+  '🔴 §D3 "#3" and "5 gal" start from the SAME volume — one bucket, one number');
+ok(startingGallons(three) === 3 && startingGallons(five) === 5,
+  '§D3 (negative control) without a ladder each lot still starts from its own stored number');
+ok(startingGallons(lot({ size: 'slip', unitValue: null, qty: 9 }), VOL_LADDER) === 0,
+  '§D3 a rung with no volume (a slip) starts from 0 — the fill is the whole target pot, as the migration records');
+const bigThree = { ...three, id: 'T3', qty: 500, salesPerMonth: 0 };
+const fromRung = planLots([bigThree], cfg,
+  { managerNumbers: { T3: 5 }, targets: { T3: 15 }, batchSize: 40, startDate: '2026-11-16', ladder: VOL_LADDER });
+ok(fromRung.batches.length === 1 && fromRung.batches[0].fromUnitValue === 4,
+  `🔴 §D3 the plan line records it moved FROM 4 gallons (got ${fromRung.batches[0]?.fromUnitValue})`);
+ok(fromRung.batches.length === 1
+   && Math.abs(fromRung.batches[0].mixPerPot - mixCubicYardsPerPot(4, 15, cfg.ops)) < 1e-12,
+  '🔴 §D3 …and its mix is costed from 4, not from 3');
+const fromText = planLots([bigThree], cfg,
+  { managerNumbers: { T3: 5 }, targets: { T3: 15 }, batchSize: 40, startDate: '2026-11-16' });
+ok(fromText.batches.length === 1 && fromText.batches[0].fromUnitValue === 3,
+  '§D3 (negative control) the same lot WITHOUT a ladder moves from its own 3');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // §E — THE POT CASCADE (R-87). The named witness: Lauren has run out of pots mid-uppotting.
