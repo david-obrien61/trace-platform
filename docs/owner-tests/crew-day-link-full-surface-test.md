@@ -23,6 +23,13 @@
 > **All cards: your own login, on Test Dave's Tree Nest, plus your phone.** No console is needed on the phone.
 > **Never on LAWNS until Saturday:** a tap on LAWNS stamps a real customer's job.
 > **Run CARD 0 first** — it is the SQL check that the database update is in, and it writes nothing.
+>
+> 🔴 **APPLY THE MIGRATION BEFORE THIS CODE IS MERGED TO `main`, not after.** Marking a stop done is an
+> EXISTING feature, and under [[R-161]] it now goes through `stop_act` — a function that only exists once
+> `20260917c` is applied. Between a merge and an apply, **Mark done on the schedule would refuse**; it says
+> *"needs the database update (20260917c)"* rather than failing mysteriously, but it is still a working
+> feature stopped for that window. Same care `20260916_container_ladder_install_t_posts.sql` asked for in its
+> own header. **Order: apply → merge → CARD 0.**
 > **Before CARD A:** Test Dave's needs at least one stop scheduled for **today or tomorrow**. If it has none, schedule one from an invoice capture or the order screen, then come back.
 
 ---

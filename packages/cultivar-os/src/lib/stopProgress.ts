@@ -37,7 +37,16 @@ export async function stopAct(
     p_business_id: businessId, p_stop_id: stopId, p_action: action, p_note: note ?? null,
   });
   if (error) {
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] stop_act failed', { action, stopId, message: error.message });
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] stop_act failed', { action, stopId, code: (error as { code?: string }).code, message: error.message });
+    // 🔴 THE DEPLOY-ORDER CASE, SAID IN WORDS RATHER THAN AS A MYSTERY FAILURE. If this build is live
+    // before `20260917c` is applied, the function does not exist (PostgREST answers PGRST202) — and
+    // marking a stop done is an EXISTING feature that would otherwise fail with a raw error. It names
+    // the migration instead. (The migration should be applied BEFORE this code ships; this is the
+    // belt for the window where it is not — the same care `20260916_container_ladder…` asked for.)
+    if ((error as { code?: string }).code === 'PGRST202') {
+      return { ok: false, code: 'needs_migration',
+        message: 'Marking stops done needs the database update (20260917c) — it has not been applied yet.' };
+    }
     return { ok: false, code: 'error', message: error.message };
   }
   const d = data as { ok: boolean; code?: string; message?: string; changed?: boolean; stop?: CrewStop | null };
