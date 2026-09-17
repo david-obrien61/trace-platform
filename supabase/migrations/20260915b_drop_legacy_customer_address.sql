@@ -1,7 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260915b — THE LEGACY FOUR ARE DROPPED FROM `customers` · ledger #335, commit 3 of 3
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it, in the SQL EDITOR — never the table editor (§6 r17).
+-- ✅ APPLIED 2026-09-17 BY DAVID, in the SQL editor, after `20260917a` — no error. CARD 6: no `customers` rows.
+--    Checked live afterwards (ledger #346): of 62 tables only `customers` changed (the four columns); customers
+--    1,994 · addresses 1,474 · deliveries 63 unchanged; every billing row still derives onto its customer.
+--    (Was: "WRITTEN, NOT APPLIED. David applies it, in the SQL EDITOR — never the table editor (§6 r17).")
 --
 -- ⚠️ APPLY `20260917a_keep_phone_notes_before_street_drop.sql` BEFORE THIS (ledger #346): five phone
 -- notes live only in `address_line1` until it runs, and §1b below refuses while they do.
@@ -236,7 +239,11 @@ COMMIT;
 --    AND column_name IN ('address_line1', 'city', 'state', 'zip')
 --  ORDER BY column_name;
 
--- V4 · and so are the other tables that carry the same column names. Expect rows for each.
+-- V4 · and so are the other tables that carry these column names. ✏️ CORRECTED 2026-09-17 (ledger #346):
+--      this line said to expect rows for `vendors`, `receipts` and `businesses`. Measured on the live
+--      schema before the drop: `receipts` and `businesses` have NONE of the four names (`businesses` has
+--      one `address` column; `vendors` has `address_line1` plus `address_city/state/zip`). EXPECT:
+--      customer_addresses (city, state, zip) · deliveries (all four) · vendors (address_line1).
 -- SELECT table_name, column_name FROM information_schema.columns
 --  WHERE table_schema = 'public' AND column_name IN ('address_line1','city','state','zip')
 --  ORDER BY table_name, column_name;

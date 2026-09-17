@@ -73,7 +73,8 @@ function synthetic() {
 }
 
 async function freshDb(data) {
-  const db = await openLiveDb();
+  // The schema as it was BEFORE 20260915b ran (applied 2026-09-17): that is the schema this proves.
+  const db = await openLiveDb({ fixture: 'live-schema-public-2026-09-17-predrop.sql' });
   await db.exec(`insert into auth.users (id) values ('${OWNER}')`);
   await db.exec(`insert into public.businesses (id, owner_id, name, business_type, qbo_writes_enabled) values ('${L}', '${OWNER}', 'LAWNS copy', 'nursery', false)`);
   await db.exec(`SET session_replication_role = replica`);

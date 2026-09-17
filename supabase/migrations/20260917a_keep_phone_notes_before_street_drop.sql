@@ -1,7 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260917a — NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED · ledger #346
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR, BEFORE `20260915b` (§6 r17).
+-- ✅ APPLIED 2026-09-17 BY DAVID, in the SQL editor, before `20260915b`. V1: five = 5 · V2: mismatched = 0.
+--    (Was: "WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR, BEFORE `20260915b` (§6 r17).")
 --
 -- ── WHY ─────────────────────────────────────────────────────────────────────────────────────
 -- Nine LAWNS customers hold a phone number WITH WORDS beside it in the old street column

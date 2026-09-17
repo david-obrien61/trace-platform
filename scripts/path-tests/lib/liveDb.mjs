@@ -26,7 +26,8 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { readFileSync } from 'node:fs';
 
 // Resolved from the repo root: this module is bundled into each path test, so its own URL moves.
-const FIXTURE = `${process.env.PATH_TEST_ROOT ?? process.cwd()}/scripts/sql-harness/fixtures/live-schema-public.sql`;
+const FIXTURE_DIR = `${process.env.PATH_TEST_ROOT ?? process.cwd()}/scripts/sql-harness/fixtures`;
+const FIXTURE = `${FIXTURE_DIR}/live-schema-public.sql`;
 
 const STUBS = `
   CREATE SCHEMA IF NOT EXISTS extensions;
@@ -55,10 +56,16 @@ const GRANTS = `
   GRANT SELECT ON auth.users TO authenticated, service_role;
 `;
 
-let cachedDump = null;
+const cachedDumps = new Map();
 
-/** A fresh database holding the live schema. ~1–2 s the first time; later calls restore a dump. */
-export async function openLiveDb() {
+/**
+ * A fresh database holding the live schema. ~1–2 s the first time; later calls restore a dump.
+ * `fixture` names another snapshot in the fixtures folder — the notes harness (ledger #346) uses
+ * the 2026-09-17 PRE-DROP snapshot, because what it proves is what `20260915b` did to that schema.
+ */
+export async function openLiveDb({ fixture } = {}) {
+  const file = fixture ? `${FIXTURE_DIR}/${fixture}` : FIXTURE;
+  const cachedDump = cachedDumps.get(file) ?? null;
   const parsers = {
     [types.NUMERIC]: v => Number(v), [types.INT8]: v => Number(v),
     [types.TIMESTAMPTZ]: v => new Date(v.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00')).toISOString(),
@@ -71,14 +78,14 @@ export async function openLiveDb() {
   }
   const db = new PGlite({ extensions: { uuid_ossp, pgcrypto }, parsers });
   await db.exec(STUBS);
-  const statements = readFileSync(FIXTURE, 'utf8').split('\n-- @@\n');
+  const statements = readFileSync(file, 'utf8').split('\n-- @@\n');
   for (const s of statements) {
     try { await db.exec(s); }
     catch (e) { throw new Error(`live schema fixture: ${e.message}\n  in: ${s.slice(0, 160)}`); }
   }
   await db.exec(GRANTS);
   await db.exec(`ALTER DATABASE postgres SET search_path = public, extensions;`);
-  cachedDump = await db.dumpDataDir('none');
+  cachedDumps.set(file, await db.dumpDataDir('none'));
   return db;
 }
 

@@ -265,6 +265,10 @@ function selfTest() {
     p('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM anon;'), ['revoke_default:public.-.postgres>TRUNCATE:anon']);
   check('REVOKE ON FUNCTION is not a table privilege', p('REVOKE ALL ON FUNCTION public.f(uuid) FROM anon;'), []);
   check('nullability change is parsed', p('ALTER TABLE public.customers ALTER COLUMN last_name DROP NOT NULL;'), ['nullable:public.customers.last_name']);
+  // ledger #346 — session-only objects never reach the catalog, so they must not be tracked.
+  check('a pg_temp helper function is not tracked', p('CREATE OR REPLACE FUNCTION pg_temp.f(t text) RETURNS text LANGUAGE sql AS $$ select t $$;'), []);
+  check('a TEMP table is not tracked', p('CREATE TEMP TABLE _x ON COMMIT DROP AS SELECT 1;'), []);
+  check('…and a plain table still is', p('CREATE TABLE public.t2 (id int);'), ['table:public.t2.t2']);
 
   console.log('\n-- SELF-TEST · HISTORY + VERDICT (crafted) --');
   {

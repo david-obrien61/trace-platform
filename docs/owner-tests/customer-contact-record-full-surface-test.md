@@ -289,10 +289,10 @@ billing_* does not` — that is the guard doing its job, not a defect. Go back t
 ---
 
 ### CARD 6 — the legacy four are gone, and nothing else lost an address
-STATUS: owed
-LAST-PROVEN: —
+STATUS: covered
+LAST-PROVEN: 2026-09-17 (David, after `20260917a` and `20260915b`)
 DEVICE: desktop
-COVERS: ledger #335
+COVERS: ledger #335 · ledger #346
 
 ```sql
 SELECT table_name, column_name FROM information_schema.columns
@@ -300,9 +300,9 @@ SELECT table_name, column_name FROM information_schema.columns
  ORDER BY table_name, column_name;
 ```
 
-**PASS:** **NO rows for `customers`** — and rows for `deliveries` (four), `vendors`, `receipts` and
-`businesses` are all still there. 🔴 **`deliveries` keeping its four is D-41's surviving invariant:
-the stop holds its own snapshot, so a past invoice still says where the load actually went.**
+**PASS:** the result shows **no rows for `customers`**, and exactly these rows for the other tables: `customer_addresses` (city, state, zip), `deliveries` (all four), `vendors` (address_line1). 🔴 **`deliveries` keeping its four is D-41's surviving invariant: the stop holds its own snapshot, so a past invoice still says where the load actually went.**
+
+✏️ **CORRECTED 2026-09-17 (ledger #346).** This line used to say `vendors`, `receipts` and `businesses` would all show rows. **That was wrong:** measured on the live schema before the drop, `receipts` and `businesses` never had any of these four names (`businesses` has one `address` column), and `vendors` has only `address_line1` (its others are `address_city/state/zip`). David's 2026-09-17 run matched the corrected line exactly: customer_addresses city/state/zip · deliveries four · vendors address_line1 · no customers rows.
 
 ---
 
