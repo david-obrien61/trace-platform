@@ -15,9 +15,9 @@ H='packages/cultivar-os/api/members/crewDay.ts'
 mutants = [
  ('M1 expiry check removed', M, "IF now() >= link.expires_at THEN code := 'expired'; RETURN; END IF;", "", 'crew.expired'),
  ('M2 revoked check removed', M, "IF link.revoked_at IS NOT NULL THEN code := 'revoked'; RETURN; END IF;", "", 'crew.revoked'),
- ('M3 act ignores the day', M, "AND business_id = v_link.business_id AND delivery_date = v_link.service_date", "AND business_id = v_link.business_id", 'crew.other-day'),
+ ('M3 act ignores the day', M, "     AND (p_service_date IS NULL OR delivery_date = p_service_date)\n", "", 'crew.other-day'),
  ('M4 read ignores the day', M, "      AND d.delivery_date = p_service_date\n", "", 'crew.other-day'),
- ('M5 act ignores the business', M, "WHERE id = p_stop_id AND business_id = v_link.business_id AND", "WHERE id = p_stop_id AND", 'crew.other-business'),
+ ('M5 act ignores the business', M, "   WHERE id = p_stop_id AND business_id = p_business_id\n", "   WHERE id = p_stop_id\n", 'crew.other-business'),
  ('M6 read ignores the business', M, "    WHERE d.business_id = p_business_id\n      AND", "    WHERE", 'crew.other-business'),
  ('M7 anon may call the read', M, "GRANT EXECUTE ON FUNCTION public.crew_day_read(text, text)                         TO service_role;", "GRANT EXECUTE ON FUNCTION public.crew_day_read(text, text) TO service_role, anon;", 'crew.other-business'),
  ('M8 unit price in the line', M, "'quantity', oi.quantity)", "'quantity', oi.quantity, 'unit_price', oi.unit_price)", 'crew.no-prices'),
@@ -31,7 +31,22 @@ mutants = [
  ('M14 Done takes stock', M, "      UPDATE public.deliveries\n         SET status = 'fulfilled',",
    "      UPDATE public.business_inventory SET qty = qty - 1 WHERE business_id = v_link.business_id;\n      UPDATE public.deliveries\n         SET status = 'fulfilled',", 'crew.no-stock-or-order'),
  ('M15 office Done can be undone', M, "ELSIF v_stop.completed_by_name IS NULL OR v_stop.review_asked_at IS NOT NULL THEN", "ELSIF false THEN", 'crew.undo-done'),
- ('M16 no audit row for an action', M, "  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)\n  VALUES (v_link.business_id, NULL, 'crew_link',", "  PERFORM 1; INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)\n  SELECT v_link.business_id, NULL, 'crew_link',", 'crew.start'),
+ ('M16 no audit row for an action', M,
+   "  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)\n  VALUES (p_business_id, p_actor_user_id, p_actor_role, 'crew_stop.' || p_action, 'delivery', v_stop.id::text,",
+   "  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)\n  SELECT p_business_id, p_actor_user_id, p_actor_role, 'crew_stop.' || p_action, 'delivery', v_stop.id::text,", 'crew.start'),
+ ('M18 the office door skips its permission check', M,
+   "  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)\n     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries.');",
+   "  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries.');", 'office.start'),
+ ('M19 a Done SPENDS the review ask instead of holding it', M,
+   "             review_ask_held_at = CASE WHEN review_asked_at IS NULL THEN v_now ELSE review_ask_held_at END\n       WHERE id = v_stop.id;",
+   "             review_asked_at = v_now, review_ask_outcome = 'shown',\n             review_ask_held_at = CASE WHEN review_asked_at IS NULL THEN v_now ELSE review_ask_held_at END\n       WHERE id = v_stop.id;", 'office.done,crew.both-doors-agree'),
+ ('M20 undo is allowed after a review was asked', M,
+   "ELSIF v_stop.completed_by_name IS NULL OR v_stop.review_asked_at IS NOT NULL THEN",
+   "ELSIF v_stop.completed_by_name IS NULL THEN", 'office.undo-done'),
+ ('M21 the office door is day-scoped like the link', M,
+   "'app-session', NULL, p_note, v_uid, v_role, NULL);", "'app-session', NULL, p_note, v_uid, v_role, current_date);", 'office.done'),
+ ('M22 the office door records nobody', M,
+   "'app-session', NULL, p_note, v_uid, v_role, NULL);", "'app-session', NULL, p_note, NULL, v_role, NULL);", 'office.start,crew.both-doors-agree'),
  ('M17 create skips the permission check', M, "  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)\n     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');",
    "  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');", 'crew.link-create'),
 ]
@@ -41,8 +56,10 @@ for name, f, a, b, ids in mutants:
     if a not in src:
         print(f'{name}: ANCHOR MISSING'); continue
     if name.startswith('M16'):
-        # the audit insert becomes a SELECT … WHERE false
-        mutated = src.replace(a, b).replace("CASE WHEN v_change THEN 'success' ELSE 'no_change' END);\n\n  UPDATE public.crew_day_links", "CASE WHEN v_change THEN 'success' ELSE 'no_change' END WHERE false;\n\n  UPDATE public.crew_day_links")
+        # the audit INSERT … VALUES becomes INSERT … SELECT … WHERE false: no row is written
+        mutated = src.replace(a, b).replace(
+            "          CASE WHEN v_change THEN 'success' ELSE 'no_change' END);",
+            "          CASE WHEN v_change THEN 'success' ELSE 'no_change' END WHERE false;")
     else:
         mutated = src.replace(a, b)
     open(f, 'w').write(mutated)

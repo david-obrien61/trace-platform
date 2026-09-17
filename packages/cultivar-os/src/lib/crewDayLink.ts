@@ -159,11 +159,19 @@ const REFUSAL_TEXT: Record<string, string> = {
   not_on_this_day: 'That stop is not on this link’s day.',
   name_required: 'Enter your name first.',
   note_required: 'Type a note first.',
-  not_undoable: 'The office marked this stop done. Ask Lauren to reopen it.',
+  not_undoable: 'This stop cannot be reopened here.',
   network: 'No connection. Check your signal and try again.',
 };
-export function crewRefusalText(code: string, fallback?: string): string {
-  return REFUSAL_TEXT[code] ?? fallback ?? 'Something went wrong. Try again.';
+/**
+ * What to show for a refusal code. 🔴 THE SERVER'S OWN SENTENCE WINS when it sent one: the writer
+ * knows WHICH rule refused ("a review was already asked for this stop" vs "completed before the
+ * platform recorded who"), and a fixed client string in its place is a confident wrong answer —
+ * exactly what this cost once already (the old `not_undoable` text said "the office marked this
+ * stop done" whatever the real reason was). The table below is the fallback for codes the server
+ * states as a code alone (an expired or revoked link says nothing else).
+ */
+export function crewRefusalText(code: string, serverMessage?: string): string {
+  return serverMessage ?? REFUSAL_TEXT[code] ?? 'Something went wrong. Try again.';
 }
 /** Codes that mean the link itself is dead — the page stops and says "ask for a new link". */
 export function isDeadLink(code: string): boolean {

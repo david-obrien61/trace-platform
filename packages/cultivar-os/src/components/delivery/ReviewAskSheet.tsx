@@ -1,4 +1,18 @@
 /**
+ * 🔴 KEPT ON PURPOSE, AND NOTHING MOUNTS IT TODAY (ledger #347, 2026-09-17).
+ *
+ * David ruled that a completion tap HOLDS the review ask instead of spending it — through BOTH doors,
+ * the crew link and the office's own Mark done — so `useStopActions` no longer opens this sheet and
+ * `deliveries.review_ask_held_at` records the ask that is owed. Nothing sends it yet: the held-ask
+ * build is the next step, and THIS is the screen it will open.
+ *
+ * It is therefore listed in `knip.json` → `ignore` (a JSON file cannot carry a reason; this header is
+ * the reason). ⚠️ REMOVE BOTH — the ignore entry and this block — when the held-ask build mounts it
+ * again. The POLICY below is the reason deletion was refused: Google's three Rating-Manipulation
+ * rules are quoted verbatim at the point of refusal ([[R-34]]), and a rediscovered policy is how the
+ * prohibited wording reached this project the first time.
+ */
+/**
  * ── REVIEW ASK SHEET — two audiences, one device ────────────────────────────────
  *
  * PURPOSE      After a stop is marked done, offer the crew the chance to ask for a review, and —

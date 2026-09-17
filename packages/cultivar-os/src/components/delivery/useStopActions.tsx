@@ -28,18 +28,12 @@ import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
-import { BUSINESS_MODULE_COLUMNS, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
-import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink';
-import {
-  fulfilmentPatch, startPatch, reviewAskDecision, reviewAskPatch,
-  REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED, DELIVERY_STATUS_FULFILLED, type ReviewAskOffer,
-} from '../../lib/deliveryFulfilment';
+import { stopAct } from '../../lib/stopProgress';
 import { updateStop, saveShipTo as saveShipToRow, type ShipToForm, type ShipToSaveOutcome } from '../../lib/stopWrites';
 import { readCustomerAddresses, saveCustomerAddress, type SaveOutcome } from '@trace/shared/business-logic';
 import type { StopRow } from '../../lib/stopRead';
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../customers/customerFieldRegistry';
 import { CustomerPartyEditor, type PartyCustomer } from '../customers/CustomerPartyEditor';
-import { ReviewAskSheet } from './ReviewAskSheet';
 import { SaveSiteDialog, type SiteOffer, type SiteResult } from './SaveSiteDialog';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
@@ -55,10 +49,6 @@ export function useStopActions(
   const [editing, setEditing]           = useState<PartyCustomer | null>(null);
   // The follow-up module's per-tenant row — the ONLY thing that decides whether a review may be asked
   // for. Null until loaded, and a null row means OFF (absent is not enabled).
-  const [followUp, setFollowUp]         = useState<BusinessModuleRow | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>(null);
-  // The stop whose prompt is open, and the offer to render. `offer: null` renders NOTHING.
-  const [asking, setAsking]             = useState<{ id: string; offer: ReviewAskOffer | null } | null>(null);
   const [tierOptions, setTierOptions]   = useState<{ value: string; label: string }[]>([{ value: RETAIL_TIER_NAME, label: 'Retail (no discount)' }]);
 
   // ── D-41 L2 (ledger #303) — THE SAVE-THIS-SITE OFFER LIVES HERE, NOT ON THE CARD ───────────────
@@ -96,88 +86,33 @@ export function useStopActions(
     })();
   }, [businessId]);
 
-  // The follow-up module row + the business's own name (the customer screen greets with it).
-  useEffect(() => {
-    if (!businessId) return;
-    void (async () => {
-      const { data: mod } = await supabase
-        .from('business_modules')
-        .select(BUSINESS_MODULE_COLUMNS)
-        .eq('business_id', businessId)
-        .eq('module_key', REVIEW_LINK_MODULE_KEY)
-        .maybeSingle();
-      setFollowUp((mod ?? null) as BusinessModuleRow | null);
-      const { data: biz } = await supabase
-        .from('businesses').select('name').eq('id', businessId).maybeSingle();
-      setBusinessName((biz as { name?: string } | null)?.name ?? null);
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] follow-up module —', mod ? `enabled=${(mod as BusinessModuleRow).enabled}` : 'NO ROW (off)');
-    })();
-  }, [businessId]);
-
   /**
-   * THE TAP. One action; five consumers eventually read it (review request · completion status ·
-   * contractor pay · material consumption · what actually happened on a day). A plain RLS UPDATE under
-   * the crew member's own session — no endpoint, no service key, no new Vercel function (12 of 12).
+   * THE TAP — Start, Done, and Undo, through the ONE COMPLETION WRITER.
+   *
+   * 🔴 IT NO LONGER WRITES `deliveries` FROM HERE, AND THAT IS DAVID'S RULING (2026-09-17):
+   *    *"the office's Mark done must behave like the crew's Done — HOLD the review ask (never spend
+   *    it) and be undoable — so both doors do the same thing. One completion writer, registered with
+   *    its path tests."* So this calls `stop_act` → `stop_progress_apply` (20260917c §4b), which is
+   *    the same function the crew link's token door calls. One set of columns, one event row, one
+   *    audit row, one undo rule — whichever door the tap came through (§6 r8 · tech-debt #321).
+   *
+   * 🔴 THE REVIEW PROMPT NO LONGER OPENS HERE. The ask is HELD (`review_ask_held_at`) and nothing
+   *    sends it. `reviewAskDecision` / `ReviewAskSheet` are kept, unmounted, for the held-ask build:
+   *    the POLICY (Google's three rules, quoted at the code) is not the thing being changed — only
+   *    the moment of asking is. An ask spent at a desk days after the job cannot be taken back; a
+   *    held one can still be asked.
+   *
+   * `changed: false` means the stop was already in that state — reported, never dressed up as a write.
    */
-  async function markStop(d: StopRow, kind: 'start' | 'finish') {
+  async function markStop(d: StopRow, kind: 'start' | 'finish' | 'undo') {
     if (!can('deliveries:update')) { setActionError(requirementText('deliveries:update')); return; }
     setSavingId(d.id);
-    const now = new Date();
-    const patch = kind === 'start'
-      ? startPatch(now)
-      : fulfilmentPatch(now, { started_at: d.started_at, completed_at: d.completed_at });
-
-    const wrote = await updateStop(supabase, businessId!, d.id, { ...patch }, 'That stop');
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY]', kind, { id: d.id, patch, ok: wrote.ok });
-    if (!wrote.ok) { setActionError(wrote.error); setSavingId(null); return; }
-
-    // 🔴 THE ASK IS CONSULTED ONLY AFTER THE STOP IS ALREADY DONE — the honest moment (you cannot ask
-    // about a job that has not happened), and the reason the crew's own card never has to know whether
-    // the business pays for the tile.
-    if (kind === 'finish') {
-      let lastAsked: string | null = null;
-      if (d.customer_id && followUp?.enabled) {
-        const { data: prior } = await supabase
-          .from('deliveries')
-          .select('review_asked_at')
-          .eq('business_id', businessId!)
-          .eq('customer_id', d.customer_id)
-          .not('review_asked_at', 'is', null)
-          .order('review_asked_at', { ascending: false })
-          .limit(1);
-        lastAsked = (prior?.[0] as { review_asked_at?: string } | undefined)?.review_asked_at ?? null;
-      }
-      const decision = reviewAskDecision({
-        moduleEnabled:    !!followUp?.enabled,
-        moduleConfigured: !!followUp?.configured,
-        config:           followUp?.config ?? null,
-        businessName,
-        status:           DELIVERY_STATUS_FULFILLED,   // we just wrote it, in the update above
-        customerId:       d.customer_id,
-        deliveryDate:     d.delivery_date,   // the ask is for the door, not for catching up paperwork
-        reviewAskedAt:    d.review_asked_at,
-        customerLastAskedAt: lastAsked,
-        now,
-      });
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] review ask —', decision.offer ? 'OFFERED' : `suppressed:${decision.suppressedBy}`);
-      if (decision.offer) setAsking({ id: d.id, offer: decision.offer });
-    }
-
+    const action = kind === 'start' ? 'start' : kind === 'finish' ? 'done' : 'undo_done';
+    const out = await stopAct(supabase, businessId!, d.id, action);
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY]', kind, { id: d.id, ok: out.ok, changed: out.ok ? out.changed : null });
+    if (!out.ok) { setActionError(out.message); setSavingId(null); return; }
     await onChanged();
     setSavingId(null);
-  }
-
-  /**
-   * Record that the prompt was reached — shown or skipped. A8: the ask record is what the repeat-
-   * customer window reads, so a silently-lost row means this customer gets asked again next visit.
-   */
-  async function recordAsk(deliveryId: string, outcome: typeof REVIEW_ASK_SHOWN | typeof REVIEW_ASK_SKIPPED) {
-    const wrote = await updateStop(supabase, businessId!, deliveryId, { ...reviewAskPatch(new Date(), outcome) }, 'The review prompt');
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] review ask recorded —', outcome, wrote.ok ? 'ok' : wrote.error);
-    // Surfaced to the page's error line, not to the customer screen the crew may still be holding out.
-    if (!wrote.ok) setActionError('The review prompt was not recorded — this customer may be asked again next time.');
-    if (outcome === REVIEW_ASK_SKIPPED) setAsking(null);
-    await onChanged();
   }
 
   // Move a stop to a different day (e.g. off a Sunday). Data KEPT, never deleted. Empty → undated.
@@ -310,14 +245,9 @@ export function useStopActions(
 
   const overlays = (
     <>
-      {/* `offer` is null whenever there is nothing to offer, and a null offer renders NOTHING — no
-          greyed control and no upgrade copy on a crew member's phone. */}
-      <ReviewAskSheet
-        offer={asking?.offer ?? null}
-        onShown={() => { if (asking) void recordAsk(asking.id, REVIEW_ASK_SHOWN); }}
-        onSkip={()  => { if (asking) void recordAsk(asking.id, REVIEW_ASK_SKIPPED); }}
-        onClose={()  => setAsking(null)}
-      />
+      {/* The review prompt is NOT mounted here any more (ledger #347): a Done HOLDS the ask and
+          sends nothing. <ReviewAskSheet> and `reviewAskDecision` are kept for the held-ask build —
+          the policy is unchanged, only the moment of asking is. */}
       {/* §8 V1 — the save-a-site offer renders HERE, at page level, beside the review ask: outside the
           stop list, so its position cannot depend on how many stops are above it. V4 — bounded, with
           its buttons pinned. It renders NOTHING when there is no offer. */}

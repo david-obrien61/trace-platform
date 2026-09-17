@@ -4,7 +4,8 @@
     "@trace/shared": ["packages/shared/src/index.ts"],
     "@trace/shared/*": ["packages/shared/src/*"]
   },
-  "ignore": ["**/dist/**", "**/*.native.js", "**/*.d.ts"],
+  "ignore": ["**/dist/**", "**/*.native.js", "**/*.d.ts",
+             "packages/cultivar-os/src/components/delivery/ReviewAskSheet.tsx"],
   "ignoreWorkspaces": [
     "packages/ignition-os",
     "packages/assessment-app",

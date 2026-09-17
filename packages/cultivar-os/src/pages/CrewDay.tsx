@@ -2,12 +2,16 @@
  * ── CrewDay — the driver's page for one day, opened from a link, no login (ledger #347) ─────────
  *
  * PURPOSE      Lauren texts the driver a link (`/crew#<token>`). This page shows that day's stops in
- *              the schedule's order: address with a Maps button, customer name and phone, the office's
+ *              the schedule's order: address with a Maps button, the customer's name and number (readable,
+ *              and a Call button), the office's
  *              notes for the stop, and what is on the order (item + quantity — never a price). Per stop:
- *              Start, Done, Undo (a crew Done, while the link lives), and a Note. Every tap carries the
+ *              Start, Done, Undo (while the link lives), and a Note. Every tap carries the
  *              name typed once on this phone and a device id.
- *              What it does NOT do: fulfil the order, move stock, or contact the customer — the phone is
- *              shown as text, not a call button (David, 2026-09-17: no customer contact from this page).
+ *              What it does NOT do: fulfil the order or move stock. NOTHING here sends anything to a
+ *              customer by itself — no SMS, no email, no review ask (§ the no-outbound-action ruling).
+ *              ✏️ 2026-09-17, David: the number IS a Call button as well as text — "the crew already get
+ *              the number by text and call on arrival". A tap dials from the driver's own phone; the
+ *              platform still sends nothing.
  *              Story: user_stories.md → "Lauren does the job twice, every delivery day" (crew_route_send).
  *              Standard named (§6 r16): the magic-link / bearer-link page (a share link that opens without
  *              an account) with a first-visit name prompt, as field-service "job link" pages do.
@@ -21,7 +25,7 @@
  *              lock, no login calls on the driver's phone).
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { MapPin, RefreshCw } from 'lucide-react';
+import { MapPin, RefreshCw, Phone } from 'lucide-react';
 import {
   readCrewDay, crewStopAction, tokenFromHash, isDeadLink, crewDeviceId, rememberedCrewName,
   rememberCrewName, mapsUrl, type CrewDay as Day, type CrewStop, type CrewAction,
@@ -98,16 +102,16 @@ export function CrewDay() {
     return (
       <Shell>
         <div style={{ background: '#fff', borderRadius: 14, padding: 20, marginTop: 24 }}>
-          <h1 style={{ margin: 0, fontSize: '1.25rem', color: DARK }}>Who is using this phone?</h1>
-          <p style={{ margin: '8px 0 14px', fontSize: '0.9375rem', color: GRAY }}>Your name goes with each Start, Done and note. This phone will remember it.</p>
+          <h1 style={{ margin: 0, fontSize: '1.25rem', color: DARK }}>Your name?</h1>
+          <p style={{ margin: '8px 0 14px', fontSize: '0.9375rem', color: GRAY }}>It goes with each Start and Done. This phone remembers it.</p>
           <form onSubmit={e => { e.preventDefault(); if (!trimmed) return; rememberCrewName(trimmed); setName(trimmed); setAskName(false); }}>
-            <label htmlFor="crew-name" style={{ fontSize: '0.875rem', fontWeight: 700, color: DARK }}>Your name</label>
+            <label htmlFor="crew-name" style={{ fontSize: '0.875rem', fontWeight: 700, color: DARK }}>Name</label>
             <input id="crew-name" autoFocus value={draftName} maxLength={60} autoComplete="name"
               onChange={e => setDraftName(e.target.value)}
               style={{ display: 'block', width: '100%', boxSizing: 'border-box', minHeight: 52, marginTop: 6, border: '1.5px solid #d1d5db', borderRadius: 10, padding: '10px 12px', fontSize: '1.0625rem' }} />
             <button type="submit" disabled={!trimmed}
               style={{ ...big, marginTop: 14, background: trimmed ? GREEN : '#9ca3af', color: '#fff', border: 'none' }}>
-              Continue
+              OK
             </button>
           </form>
         </div>
@@ -144,7 +148,7 @@ export function CrewDay() {
       )}
       {day && day.stops.length > 0 && (
         <p style={{ margin: '12px 0 0', fontSize: '0.8125rem', color: GRAY }}>
-          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} · in the order they were scheduled, not a planned route
+          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} · scheduled order, not a planned route
         </p>
       )}
       {day?.stops.map((s, i) => (
@@ -193,12 +197,19 @@ function StopBlock({ n, stop: s, token, name, onStop, onDead }: {
       <div style={{ fontSize: '1.125rem', fontWeight: 800, color: DARK, marginTop: 4 }}>{street ?? 'No street address on this stop'}</div>
       {place && <div style={{ fontSize: '1rem', color: DARK }}>{place}</div>}
       {maps
-        ? <a href={maps} target="_blank" rel="noopener noreferrer" style={{ ...big, marginTop: 10, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`, textDecoration: 'none', boxSizing: 'border-box' }}><MapPin size={18} /> Open in Maps</a>
+        ? <a href={maps} target="_blank" rel="noopener noreferrer" style={{ ...big, marginTop: 10, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`, textDecoration: 'none', boxSizing: 'border-box' }}><MapPin size={18} /> Maps</a>
         : <div style={{ marginTop: 8, color: RED, fontSize: '0.9375rem' }}>No address — call Lauren.</div>}
 
       <div style={{ marginTop: 10, fontSize: '1rem', color: DARK }}>
         <strong>{s.customer_name ?? 'Customer name not on file'}</strong>
-        <div style={{ color: GRAY, userSelect: 'text' }}>{s.customer_phone ? `Phone: ${s.customer_phone}` : 'No phone on file'}</div>
+        {/* The number stays readable as text (a driver reads it aloud) AND dials on a tap — David's call. */}
+        <div style={{ color: GRAY, userSelect: 'text' }}>{s.customer_phone ?? 'No phone on file'}</div>
+        {s.customer_phone && (
+          <a href={`tel:${s.customer_phone.replace(/[^0-9+]/g, '')}`}
+            style={{ ...big, marginTop: 8, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`, textDecoration: 'none' }}>
+            <Phone size={18} /> Call
+          </a>
+        )}
       </div>
 
       {s.instructions && (
@@ -248,14 +259,14 @@ function StopBlock({ n, stop: s, token, name, onStop, onDead }: {
         {done && s.completed_by_name && (
           <button onClick={() => { void tap('undo_done'); }} disabled={!!busy}
             style={{ ...big, background: '#fff', color: RED, border: `1.5px solid ${RED}`, opacity: busy ? 0.6 : 1 }}>
-            {busy === 'undo_done' ? 'Saving…' : 'Undo Done'}
+            {busy === 'undo_done' ? 'Saving…' : 'Undo'}
           </button>
         )}
       </div>
 
       {!noteOpen && (
         <button onClick={() => setNoteOpen(true)} style={{ ...big, marginTop: 8, background: 'none', color: GREEN, border: '1.5px dashed #9ca3af' }}>
-          Add a note
+          Note
         </button>
       )}
       {noteOpen && (
@@ -267,7 +278,7 @@ function StopBlock({ n, stop: s, token, name, onStop, onDead }: {
             <button onClick={() => { setNoteOpen(false); setNote(''); }} style={{ ...big, background: '#fff', color: GRAY, border: '1.5px solid #d1d5db' }}>Cancel</button>
             <button onClick={() => { void tap('note'); }} disabled={!!busy || !note.trim()}
               style={{ ...big, background: note.trim() ? GREEN : '#9ca3af', color: '#fff', border: 'none' }}>
-              {busy === 'note' ? 'Saving…' : 'Save note'}
+              {busy === 'note' ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>

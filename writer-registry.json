@@ -346,14 +346,15 @@
     },
     {
       "id": "stop-progress",
-      "title": "What the crew did at a stop — Start, Done, Undo, Note — and the day link that lets them (ledger #347)",
+      "title": "What happened at a stop — Start, Done, Undo, Note — through ONE completion writer, from either door (ledger #347)",
       "writer": {
-        "name": "handleCrewDay → crew_stop_act (database)",
+        "name": "stop_progress_apply (database) — reached by crew_stop_act (token) and stop_act (session)",
         "at": "packages/cultivar-os/api/members/crewDay.ts#export async function handleCrewDay"
       },
       "writerFiles": [
         "packages/cultivar-os/api/members/crewDay.ts",
-        "packages/cultivar-os/src/lib/crewDayLink.ts"
+        "packages/cultivar-os/src/lib/crewDayLink.ts",
+        "packages/cultivar-os/src/lib/stopProgress.ts"
       ],
       "tables": [
         "crew_day_links",
@@ -365,7 +366,7 @@
           "completed_by_name",
           "review_ask_held_at"
         ],
-        "databaseGuard": "Set only inside crew_stop_act (20260917c). NOT a trigger: the in-app Mark done (useStopActions → fulfilmentPatch) writes status / started_at / completed_at on the same row through RLS, and is not part of this domain yet."
+        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation."
       },
       "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role — the endpoint.",
       "inputSignal": {
@@ -376,7 +377,8 @@
         "handleCrewDay",
         "crewStopAction",
         "createCrewDayLink",
-        "revokeCrewDayLink"
+        "revokeCrewDayLink",
+        "stopAct"
       ],
       "tests": "scripts/path-tests/crew-day.paths.mts",
       "paths": [
@@ -459,6 +461,42 @@
           ],
           "chain": "CrewDay.tap('note') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
           "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
+        },
+        {
+          "id": "office.start",
+          "what": "Schedule (or route / order screen) → a stop → Start this stop",
+          "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/cultivar-os/src/components/delivery/StopCard.tsx",
+            "packages/cultivar-os/src/lib/stopProgress.ts"
+          ],
+          "chain": "StopCard → useStopActions.markStop('start') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
+        },
+        {
+          "id": "office.done",
+          "what": "Schedule → a stop → Mark done (holds the review ask; no order or stock change)",
+          "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/cultivar-os/src/components/delivery/StopCard.tsx",
+            "packages/cultivar-os/src/lib/stopProgress.ts"
+          ],
+          "chain": "StopCard → useStopActions.markStop('finish') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
+        },
+        {
+          "id": "office.undo-done",
+          "what": "Schedule → a stop already done → Undo done",
+          "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/cultivar-os/src/components/delivery/StopCard.tsx",
+            "packages/cultivar-os/src/lib/stopProgress.ts"
+          ],
+          "chain": "StopCard → useStopActions.markStop('undo') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
         }
       ],
       "guards": [
@@ -489,6 +527,10 @@
         {
           "id": "crew.no-stock-or-order",
           "what": "test mode and live mode: nothing writes the stock ledger, stock, or the order"
+        },
+        {
+          "id": "crew.both-doors-agree",
+          "what": "the token door and the session door write the same columns, event and audit row for the same tap, and neither spends the review ask"
         }
       ],
       "declared": []

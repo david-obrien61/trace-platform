@@ -20,6 +20,7 @@ import {
   readCrewDay, crewStopAction,
 } from '../../packages/cultivar-os/src/lib/crewDayLink';
 import { readStops } from '../../packages/cultivar-os/src/lib/stopRead';
+import { stopAct } from '../../packages/cultivar-os/src/lib/stopProgress';
 import { readFileSync } from 'node:fs';
 
 process.env.SUPABASE_URL = 'http://pglite.test';
@@ -265,10 +266,10 @@ await path('crew.done', 'crew page → Done: stop done with the name, review ask
   check(noName.statusCode === 400 && noName.body.code === 'name_required', `no name: ${noName.statusCode} ${JSON.stringify(noName.body)}`);
 });
 
-await path('crew.undo-done', 'crew page → Undo: a crew Done is reopened the same day; an office Done is not', async (check) => {
+await path('crew.undo-done', 'crew page → Undo: a Done is reopened the same day; a stop completed outside these taps is not', async (check) => {
   const db = await freshDb();
   const s = await stop(db, B, DAY_X);
-  const office = await stop(db, B, DAY_X, { status: 'fulfilled' });
+  const office = await stop(db, B, DAY_X, { status: 'fulfilled' });   // imported history: no name on it
   const l = await link(db);
   await act(l.token, s.id, 'done');
   const r = await act(l.token, s.id, 'undo_done', 'Mike');
@@ -280,9 +281,9 @@ await path('crew.undo-done', 'crew page → Undo: a crew Done is reopened the sa
   const sch = await schedule(db, DAY_X);
   check(sch.stops.find(x => x.id === s.id)?.status === 'scheduled', 'the schedule does not show the stop reopened');
   const refused = await endpoint('POST', l.token, { action: 'undo_done', stopId: office.id, name: 'Mike', deviceId: DEVICE });
-  check(refused.statusCode === 409 && refused.body.code === 'not_undoable', `office done: ${refused.statusCode} ${JSON.stringify(refused.body)}`);
+  check(refused.statusCode === 409 && refused.body.code === 'not_undoable', `an imported stop: ${refused.statusCode} ${JSON.stringify(refused.body)}`);
   const officeRow = await one(db, `SELECT status FROM public.deliveries WHERE id = $1`, [office.id]);
-  check(officeRow.status === 'fulfilled', 'the office Done was reopened');
+  check(officeRow.status === 'fulfilled', 'an imported fulfilled stop was reopened');
   const a = await audit(db, s.id);
   check(a.some((x: any) => x.action === 'crew_stop.undo_done' && x.outcome === 'success'), `audit ${JSON.stringify(a)}`);
 });
@@ -303,6 +304,96 @@ await path('crew.note', 'crew page → Note: the note is kept with the name; the
   check(empty.statusCode === 400 && empty.body.code === 'note_required', `empty note: ${empty.statusCode}`);
   const a = await audit(db, s.id);
   check(a.some((x: any) => x.action === 'crew_stop.note' && x.detail.note === 'Customer asked for the tree left of the drive'), `audit ${JSON.stringify(a)}`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// THE OFFICE DOOR — the same writer, reached from Lauren's own session (David, 2026-09-17)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+await path('office.start', 'schedule → Start this stop: started_at set, the member\'s own name recorded', async (check) => {
+  const db = await freshDb();
+  const s = await stop(db, B, DAY_X);
+  const r = await stopAct(lauren(db), B, s.id, 'start');
+  check(r.ok && r.changed && !!r.stop?.started_at, `start: ${JSON.stringify(r)}`);
+  const row = await one(db, `SELECT status, started_at FROM public.deliveries WHERE id = $1`, [s.id]);
+  check(row.status === 'scheduled' && !!row.started_at, `row ${JSON.stringify(row)}`);
+  const act1 = await activity(db, s.id);
+  check(act1.started?.by === 'Lauren', `the schedule shows ${JSON.stringify(act1)}`);
+  const ev = await one(db, `SELECT actor_user_id, device_id, link_id FROM public.delivery_stop_events WHERE delivery_id = $1`, [s.id]);
+  check(ev.actor_user_id === MANAGER && ev.device_id === 'app-session' && ev.link_id === null, `event ${JSON.stringify(ev)}`);
+  const staff = await stopAct(restClient(db, { uid: STAFF }) as any, B, s.id, 'done');
+  check(!staff.ok && staff.code === 'not_permitted', `staff without deliveries:update: ${JSON.stringify(staff)}`);
+  const other = await stopAct(restClient(db, { uid: OTHER_OWNER }) as any, B, s.id, 'done');
+  check(!other.ok && other.code === 'not_permitted', `another business's manager: ${JSON.stringify(other)}`);
+  const stillScheduled = await one(db, `SELECT status FROM public.deliveries WHERE id = $1`, [s.id]);
+  check(stillScheduled.status === 'scheduled', 'a refused office tap changed the stop');
+});
+
+await path('office.done', 'schedule → Mark done: the stop is done, the review ask is HELD and nothing is sent, the order does not move', async (check) => {
+  const db = await freshDb();
+  const s = await stop(db, B, DAY_X);
+  const r = await stopAct(lauren(db), B, s.id, 'done');
+  check(r.ok && r.changed && r.stop?.status === 'fulfilled' && r.stop?.completed_by_name === 'Lauren', `done: ${JSON.stringify(r)}`);
+  const row = await one(db, `SELECT status, completed_at, completed_by_name, review_ask_held_at, review_asked_at, review_ask_outcome FROM public.deliveries WHERE id = $1`, [s.id]);
+  check(row.status === 'fulfilled' && row.completed_by_name === 'Lauren', `row ${JSON.stringify(row)}`);
+  // 🔴 THE RULING: the ask is HELD, never spent — no review_asked_at, no outcome, nothing sent.
+  check(!!row.review_ask_held_at && row.review_asked_at === null && row.review_ask_outcome === null, `the ask was spent, not held: ${JSON.stringify(row)}`);
+  const order = await one(db, `SELECT status FROM public.orders WHERE id = $1`, [s.orderId]);
+  check(order.status === 'invoiced', `the order moved to ${order.status}`);
+  const sch = await schedule(db, DAY_X);
+  check(sch.stops.find(x => x.id === s.id)?.status === 'fulfilled', 'the schedule does not show it done');
+  const again = await stopAct(lauren(db), B, s.id, 'done');
+  check(again.ok && !again.changed, 'a second Mark done changed something');
+  const a = await audit(db, s.id);
+  check(a.some((x: any) => x.action === 'crew_stop.done' && x.actor_user_id === MANAGER && x.actor_role === 'MANAGER'), `audit ${JSON.stringify(a)}`);
+});
+
+await path('office.undo-done', 'schedule → Undo done: the office can reopen its own Done; a stop completed outside these taps cannot be reopened', async (check) => {
+  const db = await freshDb();
+  const s = await stop(db, B, DAY_X);
+  const imported = await stop(db, B, DAY_X, { status: 'fulfilled' });   // an R-37 history stop: no name
+  await stopAct(lauren(db), B, s.id, 'done');
+  const r = await stopAct(lauren(db), B, s.id, 'undo_done');
+  check(r.ok && r.changed && r.stop?.status === 'scheduled', `undo: ${JSON.stringify(r)}`);
+  const row = await one(db, `SELECT status, completed_at, completed_by_name, review_ask_held_at FROM public.deliveries WHERE id = $1`, [s.id]);
+  check(row.status === 'scheduled' && row.completed_at === null && row.completed_by_name === null && row.review_ask_held_at === null, `row ${JSON.stringify(row)}`);
+  check((await activity(db, s.id)).done === null, 'the schedule still shows Done');
+  const refusedImport = await stopAct(lauren(db), B, imported.id, 'undo_done');
+  check(!refusedImport.ok && refusedImport.code === 'not_undoable', `an imported stop: ${JSON.stringify(refusedImport)}`);
+  // A stop whose review WAS asked (before this build) cannot be reopened either — the ask is spent.
+  const asked = await stop(db, B, DAY_X);
+  await stopAct(lauren(db), B, asked.id, 'done');
+  await db.query(`UPDATE public.deliveries SET review_asked_at = now(), review_ask_outcome = 'shown' WHERE id = $1`, [asked.id]);
+  const refusedAsked = await stopAct(lauren(db), B, asked.id, 'undo_done');
+  check(!refusedAsked.ok && refusedAsked.code === 'not_undoable' && /review was already asked/i.test(refusedAsked.message), `an asked stop: ${JSON.stringify(refusedAsked)}`);
+});
+
+await guard('crew.both-doors-agree', 'the crew link and the office write the same columns, events and audit for the same tap', async (check) => {
+  const viaCrew = await freshDb();
+  const c = await stop(viaCrew, B, DAY_X);
+  const l = await link(viaCrew);
+  await act(l.token, c.id, 'done');
+  const crewRow = await one(viaCrew, `SELECT status, completed_at IS NOT NULL done_at, completed_by_name IS NOT NULL named, review_ask_held_at IS NOT NULL held, review_asked_at FROM public.deliveries WHERE id = $1`, [c.id]);
+  const crewEv = await one(viaCrew, `SELECT action, actor_name IS NOT NULL named FROM public.delivery_stop_events WHERE delivery_id = $1`, [c.id]);
+
+  const viaOffice = await freshDb();
+  const o = await stop(viaOffice, B, DAY_X);
+  await stopAct(lauren(viaOffice), B, o.id, 'done');
+  const officeRow = await one(viaOffice, `SELECT status, completed_at IS NOT NULL done_at, completed_by_name IS NOT NULL named, review_ask_held_at IS NOT NULL held, review_asked_at FROM public.deliveries WHERE id = $1`, [o.id]);
+  const officeEv = await one(viaOffice, `SELECT action, actor_name IS NOT NULL named FROM public.delivery_stop_events WHERE delivery_id = $1`, [o.id]);
+
+  check(JSON.stringify(crewRow) === JSON.stringify(officeRow), `the two doors disagree: crew ${JSON.stringify(crewRow)} vs office ${JSON.stringify(officeRow)}`);
+  check(JSON.stringify(crewEv) === JSON.stringify(officeEv), `the event rows disagree: ${JSON.stringify(crewEv)} vs ${JSON.stringify(officeEv)}`);
+  check(crewRow.review_asked_at === null && officeRow.review_asked_at === null, 'a tap spent the review ask');
+  const crewAudit = (await audit(viaCrew, c.id)).map((x: any) => x.action).join();
+  const officeAudit = (await audit(viaOffice, o.id)).map((x: any) => x.action).join();
+  check(crewAudit === officeAudit && crewAudit === 'crew_stop.done', `audit actions differ: ${crewAudit} vs ${officeAudit}`);
+  // NEGATIVE CONTROL: the two doors are genuinely different callers — one has a link and a user, the
+  // other has neither, so the comparison above is not one row compared with itself.
+  const crewWho = await one(viaCrew, `SELECT link_id IS NOT NULL linked, actor_user_id IS NOT NULL who FROM public.delivery_stop_events WHERE delivery_id = $1`, [c.id]);
+  const officeWho = await one(viaOffice, `SELECT link_id IS NOT NULL linked, actor_user_id IS NOT NULL who FROM public.delivery_stop_events WHERE delivery_id = $1`, [o.id]);
+  check(crewWho.linked === true && crewWho.who === false && officeWho.linked === false && officeWho.who === true,
+    `the doors are not distinguishable: ${JSON.stringify(crewWho)} vs ${JSON.stringify(officeWho)}`);
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════

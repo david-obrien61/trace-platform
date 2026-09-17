@@ -2,7 +2,11 @@
 -- 20260917c — THE CREW DAY LINK · ledger #347
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- ⏳ NOT APPLIED. STANDALONE: it depends on no unmerged branch. Apply it on its own, then run the
---    V-block at the foot and paste the output back.
+--    V-block at the foot and paste the output back. ONE FILE, ONE PASTE.
+-- ✏️ AMENDED 2026-09-17, BEFORE ANY APPLY, on David's ruling that both completion doors behave the
+--    same (§4b). Amending rather than appending keeps Friday to a single paste, and §6 r1 guards
+--    APPLIED migrations — this one has never run anywhere (the #335 precedent). If you have already
+--    pasted an earlier copy of this file, paste this one again: every statement is re-runnable.
 --
 -- ── WHY ─────────────────────────────────────────────────────────────────────────────────────
 -- The install crew have no logins. Lauren texts the day's route to the DRIVER from her phone and
@@ -21,6 +25,9 @@
 --   deliveries.completed_by_name     the typed name on the Done tap.
 --   deliveries.review_ask_held_at    Done HOLDS a review ask: the flag is stored, nothing is sent.
 --
+--   stop_progress_apply    THE ONE COMPLETION WRITER (§4b) — both doors call it: the crew link and
+--                           the office's own Mark done. Internal; no role may call it directly.
+--   stop_act               the office door: a logged-in member with `deliveries:update`.
 --   create_crew_day_link / revoke_crew_day_link   — called by Lauren's app session. Each checks
 --       `deliveries:update` on the business INSIDE the function (§1.6 item 4: enforced server-side).
 --   crew_day_read / crew_stop_act                 — called ONLY by the API endpoint with the service
@@ -29,6 +36,7 @@
 --
 -- ── WHAT IT DOES NOT DO (and why) ───────────────────────────────────────────────────────────
 --   · Done does NOT touch `orders` — it does not fulfil the order (tech-debt #319 is separate).
+--   · Done HOLDS the review ask through BOTH doors and sends nothing (David, 2026-09-17).
 --   · Nothing here touches business_inventory or its ledger — no stock moves, in test mode or out.
 --   · Nothing here sends anything to a customer. The held review ask is a timestamp.
 --   · No prices, totals or discounts are returned by crew_day_read: the line projection names
@@ -61,6 +69,7 @@ CREATE TABLE IF NOT EXISTS public.delivery_stop_events (
   link_id      uuid        REFERENCES public.crew_day_links(id) ON DELETE SET NULL,
   action       text        NOT NULL CHECK (action IN ('start', 'done', 'undo_done', 'note')),
   actor_name   text        NOT NULL,
+  actor_user_id uuid,                              -- the office door records WHO; a crew link has no login
   device_id    text        NOT NULL,
   note         text,
   occurred_at  timestamptz NOT NULL DEFAULT now()
@@ -298,15 +307,28 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.crew_stop_act(
-  p_token text, p_client_key text, p_stop_id uuid, p_action text,
-  p_actor_name text, p_device_id text, p_note text DEFAULT NULL)
+-- ── 4b. THE ONE COMPLETION WRITER ───────────────────────────────────────────────────────────
+-- 🔴 ONE WRITER, TWO DOORS — David's ruling, 2026-09-17: *"the office's Mark done must behave like
+--    the crew's Done — HOLD the review ask (never spend it) and be undoable — so both doors do the
+--    same thing. One completion writer, registered with its path tests."*
+--    `stop_progress_apply` is that writer. Nothing else may set these columns:
+--      · `crew_stop_act`  — the crew link (token; the link's own business and DAY only)
+--      · `stop_act`       — a logged-in member with `deliveries:update` (any of their own stops)
+--    Both record the same event row and the same audit row, and both HOLD the review ask.
+--    It is internal: no role is granted EXECUTE on it (the two doors are SECURITY DEFINER).
+--
+-- ⚠️ ONE UNDO RULE FOR BOTH DOORS, and it is a rule about what has been SPENT, not about who tapped:
+--    a Done can be reopened while `review_asked_at IS NULL` (nothing was sent to a customer) AND
+--    `completed_by_name IS NOT NULL` (it was completed through one of these two taps). So an
+--    imported history stop ([[R-37]]: 19 LAWNS stops landed `fulfilled` with NULL timestamps) is NOT
+--    reopenable by either door — it is a record of the past, not today's work.
+CREATE OR REPLACE FUNCTION public.stop_progress_apply(
+  p_business_id uuid, p_stop_id uuid, p_action text, p_actor_name text, p_device_id text,
+  p_link_id uuid, p_note text, p_actor_user_id uuid, p_actor_role text, p_service_date date)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public, extensions
 AS $$
 DECLARE
-  r        record;
-  v_link   public.crew_day_links;
   v_stop   public.deliveries%ROWTYPE;
   v_name   text := nullif(btrim(coalesce(p_actor_name, '')), '');
   v_device text := nullif(btrim(coalesce(p_device_id, '')), '');
@@ -314,11 +336,6 @@ DECLARE
   v_now    timestamptz := now();
   v_change boolean := true;
 BEGIN
-  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;
-  SELECT * INTO r FROM public.crew_link_resolve(p_token);
-  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;
-  v_link := r.link;
-
   -- VALIDATE (§1.6 item 3): refuse, never fabricate.
   IF p_action IS NULL OR p_action NOT IN ('start', 'done', 'undo_done', 'note') THEN
     RETURN jsonb_build_object('ok', false, 'code', 'bad_action');
@@ -334,9 +351,10 @@ BEGIN
   END IF;
   IF p_action <> 'note' THEN v_note := NULL; END IF;
 
-  -- The stop must be on THIS link's business and THIS link's day. One answer for every miss.
+  -- The stop must belong to this business, and — for a crew link — to the link's own DAY.
   SELECT * INTO v_stop FROM public.deliveries
-   WHERE id = p_stop_id AND business_id = v_link.business_id AND delivery_date = v_link.service_date
+   WHERE id = p_stop_id AND business_id = p_business_id
+     AND (p_service_date IS NULL OR delivery_date = p_service_date)
      AND coalesce(status, '') <> 'cancelled'
    FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'not_on_this_day'); END IF;
@@ -347,7 +365,8 @@ BEGIN
     END IF;
 
   ELSIF p_action = 'done' THEN
-    -- The stop is done. The ORDER is not touched (tech-debt #319) and no stock moves.
+    -- The stop is done. The ORDER is not touched (tech-debt #319), no stock moves, and the review
+    -- ask is HELD: recorded here, sent by nothing (David, 2026-09-17 — never spend it on a tap).
     IF v_stop.status = 'fulfilled' THEN v_change := false;
     ELSE
       UPDATE public.deliveries
@@ -360,11 +379,12 @@ BEGIN
     END IF;
 
   ELSIF p_action = 'undo_done' THEN
-    -- Only a Done made from a crew link can be undone here, and only while the link is live
-    -- (it expires 06:00 the next morning). A stop the office marked done is not the crew's to reopen.
     IF v_stop.status <> 'fulfilled' THEN v_change := false;
     ELSIF v_stop.completed_by_name IS NULL OR v_stop.review_asked_at IS NOT NULL THEN
-      RETURN jsonb_build_object('ok', false, 'code', 'not_undoable', 'message', 'Ask the office to reopen this stop.');
+      RETURN jsonb_build_object('ok', false, 'code', 'not_undoable',
+        'message', CASE WHEN v_stop.review_asked_at IS NOT NULL
+                        THEN 'A review was already asked for this stop, so it cannot be reopened here.'
+                        ELSE 'This stop was completed before the platform recorded who, so it cannot be reopened here.' END);
     ELSE
       UPDATE public.deliveries
          SET status = 'scheduled',
@@ -377,20 +397,67 @@ BEGIN
   END IF;
 
   IF v_change THEN
-    INSERT INTO public.delivery_stop_events (business_id, delivery_id, link_id, action, actor_name, device_id, note, occurred_at)
-    VALUES (v_link.business_id, v_stop.id, v_link.id, p_action, v_name, v_device, v_note, v_now);
+    INSERT INTO public.delivery_stop_events (business_id, delivery_id, link_id, action, actor_name, actor_user_id, device_id, note, occurred_at)
+    VALUES (p_business_id, v_stop.id, p_link_id, p_action, v_name, p_actor_user_id, v_device, v_note, v_now);
   END IF;
 
   INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
-  VALUES (v_link.business_id, NULL, 'crew_link', 'crew_stop.' || p_action, 'delivery', v_stop.id::text,
-          jsonb_build_object('link_id', v_link.id, 'service_date', v_link.service_date,
+  VALUES (p_business_id, p_actor_user_id, p_actor_role, 'crew_stop.' || p_action, 'delivery', v_stop.id::text,
+          jsonb_build_object('link_id', p_link_id, 'service_date', v_stop.delivery_date,
                              'actor_name', v_name, 'device_id', v_device, 'note', v_note, 'changed', v_change),
           CASE WHEN v_change THEN 'success' ELSE 'no_change' END);
 
-  UPDATE public.crew_day_links SET last_used_at = v_now WHERE id = v_link.id;
   RETURN jsonb_build_object('ok', true, 'changed', v_change,
-    'stop', (SELECT x FROM jsonb_array_elements(public.crew_day_stops(v_link.business_id, v_link.service_date)) x
+    'stop', (SELECT x FROM jsonb_array_elements(public.crew_day_stops(p_business_id, v_stop.delivery_date)) x
               WHERE x->>'id' = v_stop.id::text));
+END;
+$$;
+
+-- DOOR 1 — the crew link. The token decides the business AND the day; nothing else may widen it.
+CREATE OR REPLACE FUNCTION public.crew_stop_act(
+  p_token text, p_client_key text, p_stop_id uuid, p_action text,
+  p_actor_name text, p_device_id text, p_note text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public, extensions
+AS $$
+DECLARE
+  r      record;
+  v_link public.crew_day_links;
+  v_out  jsonb;
+BEGIN
+  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;
+  SELECT * INTO r FROM public.crew_link_resolve(p_token);
+  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;
+  v_link := r.link;
+  v_out := public.stop_progress_apply(v_link.business_id, p_stop_id, p_action, p_actor_name, p_device_id,
+                                      v_link.id, p_note, NULL, 'crew_link', v_link.service_date);
+  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = v_link.id;
+  RETURN v_out;
+END;
+$$;
+
+-- DOOR 2 — the office. A logged-in member with `deliveries:update`, on their own business's stop, any
+-- day. The name recorded is the member's own name, so the schedule reads the same either way.
+CREATE OR REPLACE FUNCTION public.stop_act(
+  p_business_id uuid, p_stop_id uuid, p_action text, p_note text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public, extensions
+AS $$
+DECLARE
+  v_uid  uuid := auth.uid();
+  v_name text;
+  v_role text;
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries.');
+  END IF;
+  SELECT nullif(btrim(coalesce(name, '')), ''), role INTO v_name, v_role
+    FROM public.business_members WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+  -- A member row with no name still gets an honest attribution rather than a blank one.
+  RETURN public.stop_progress_apply(p_business_id, p_stop_id, p_action, coalesce(v_name, 'A team member'),
+                                    'app-session', NULL, p_note, v_uid, v_role, NULL);
 END;
 $$;
 
@@ -400,6 +467,9 @@ REVOKE ALL ON FUNCTION public.revoke_crew_day_link(uuid)             FROM PUBLIC
 GRANT EXECUTE ON FUNCTION public.create_crew_day_link(uuid, date, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.revoke_crew_day_link(uuid)             TO authenticated;
 
+REVOKE ALL ON FUNCTION public.stop_progress_apply(uuid, uuid, text, text, text, uuid, text, uuid, text, date) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.stop_act(uuid, uuid, text, text)                  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.stop_act(uuid, uuid, text, text)               TO authenticated;
 REVOKE ALL ON FUNCTION public.crew_link_hit(text)                               FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.crew_day_stops(uuid, date)                        FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.crew_link_resolve(text)                           FROM PUBLIC, anon, authenticated;
@@ -428,8 +498,8 @@ GRANT EXECUTE ON FUNCTION public.crew_stop_act(text, text, uuid, text, text, tex
 --   FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
 --    AND p.proname IN ('crew_day_read', 'crew_stop_act', 'crew_link_resolve', 'crew_day_stops', 'crew_link_hit',
 --                      'create_crew_day_link', 'revoke_crew_day_link') ORDER BY 1;
---   expect: crew_* read/act → anon f · authed f · service t; the three helpers → f · f;
---           create/revoke → anon f · authed t
+--   expect: crew_day_read / crew_stop_act → anon f · authed f · service t; the three helpers and
+--           stop_progress_apply → f · f; create/revoke and stop_act → anon f · authed t
 -- V4 a refused token (no rows written except one rate-limit count):
 -- SELECT public.crew_day_read(repeat('0', 64), 'v-block');
 --   expect: {"ok": false, "code": "invalid"}

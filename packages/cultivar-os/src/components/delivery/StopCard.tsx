@@ -23,7 +23,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { NotPermitted, WithheldData } from '@trace/shared/components/SurfaceState';
 import { OrderLineList } from '@trace/shared/components/OrderLineList';
-import { crewStopModel, openOrderNotice } from '../../lib/deliveryFulfilment';
+import { crewStopModel, openOrderNotice, isDeliveryFulfilled } from '../../lib/deliveryFulfilment';
 import { LOAD_COPY, type StopLoad } from '../../lib/stopLoad';
 import { stopLoadOf, orderStatusOf, type StopRead, type StopRow } from '../../lib/stopRead';
 import { shipToLine, shipToFormOf, SHIP_TO_FIELDS, type ShipToForm } from '../../lib/stopWrites';
@@ -305,6 +305,19 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: crew.statusColor, background: crew.statusBg, borderRadius: 6, padding: '3px 9px' }}>
                     {crew.statusLabel}
                   </span>
+                  {/* 🔴 A DONE IS UNDOABLE FROM HERE TOO (ledger #347, David's ruling): both doors
+                      behave the same. The writer refuses when a review was already asked, or when the
+                      stop was completed outside these taps (an imported history stop) — and says which,
+                      so a refusal is never a silent no-op. */}
+                  {isDeliveryFulfilled(d.status) && canEditStop && (
+                    <button
+                      onClick={() => { void actions.markStop(d, 'undo'); }}
+                      disabled={busy}
+                      style={{ background: 'none', border: 'none', padding: '12px 4px', margin: '-12px 0', color: RED, fontWeight: 700, fontSize: '0.75rem', cursor: busy ? 'default' : 'pointer', minHeight: 44 }}
+                    >
+                      {busy ? 'Saving…' : 'Undo done'}
+                    </button>
+                  )}
                   {/* Equal stamps mean UNMEASURED, so `minutes` is null and nothing is printed. */}
                   {crew.minutes !== null && <span style={{ fontSize: '0.75rem', color: GRAY }}>{crew.minutes} min on site</span>}
                   {d.review_ask_outcome && (
