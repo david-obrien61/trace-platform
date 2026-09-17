@@ -357,6 +357,9 @@ export function CartReview() {
           qbStatus:        result.qbStatus,
           qbError:         result.qbError ?? null,
           ownerView:       canOverride,
+          // #345: shown to a signed-in member only — on the public QR path "already on file" would
+          // tell a stranger which emails a business holds.
+          contactResults:  can('customers:read') ? result.contactResults : [],
         },
       });
     } catch {

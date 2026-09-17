@@ -1,4 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
+import { ContactResultList } from '@trace/shared/components/customers/ContactResultList';
 import { useCart } from '../hooks/useCart';
 import type { OrderBreakdown, QbSyncStatus } from '../hooks/useSubmitOrder';
 import type { TaxStatus } from '@trace/shared/business-logic';
@@ -38,6 +40,8 @@ interface ConfirmState {
    *  Scopes the QBO detail: the owner needs the actual error and the action; the customer does
    *  not need TRACE's accounting internals — and must never be handed an owner instruction. */
   ownerView?:       boolean;
+  /** #345: what became of each typed phone / email / address. Empty on the public QR path. */
+  contactResults?:  ContactValueResult[];
 }
 
 function StatusBadge({
@@ -84,7 +88,7 @@ export function Confirmation() {
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
           transportMode, transportName, serviceLines, breakdown, tierLabel,
           businessName, nettingActive, taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
-          qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError, ownerView } = state;
+          qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError, ownerView, contactResults } = state;
   // D-39 (E2): render the SERVER-AUTHORITATIVE breakdown (goods retail lines → discount line → net),
   // not the client preview → the receipt equals QBO and the discount is a visible line.
   const goodsLines    = (breakdown?.lines ?? []).filter(l => l.kind === 'goods');
@@ -161,6 +165,14 @@ export function Confirmation() {
         </p>
         <p style={{ fontSize: '0.8125rem', color: '#a8c890', marginTop: 4 }}>{invoiceNumber}</p>
       </div>
+
+      {/* #345 — NO SILENT DROP: every phone / email / address typed at checkout, and what became of
+          it. The order is confirmed either way; a NOT SAVED line is red and says why. */}
+      {(contactResults?.length ?? 0) > 0 && (
+        <div className="section">
+          <ContactResultList results={contactResults ?? []} title="Customer contact details" />
+        </div>
+      )}
 
       {/* QB invoice status — D-48: the three honest states, scoped to who is looking. */}
       <div className="section">

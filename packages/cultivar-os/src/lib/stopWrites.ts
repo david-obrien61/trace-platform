@@ -187,8 +187,12 @@ export async function saveShipTo(db: SupabaseClient, x: {
     customerId: x.stop.customer_id, orderId: x.stop.order_id,
     before: plan.before, after: plan.after, changedFields: plan.changedFields, at: x.now,
   });
-  const { data, error } = await db.from('audit_log').insert(row).select('id');
-  const rows = (data ?? []).length;
+  // ✏️ tech-debt #315 (ledger #345): NO `.select()`. Returning the inserted row needs a SELECT policy
+  // on `audit_log` (`audit_log:read`), which a MANAGER does not hold (measured live 2026-09-17: both
+  // tenants' managers lack it) — so every ship-to change a manager made was reported "saved, not
+  // recorded". The count proves the write without reading the row back.
+  const { error, count } = await db.from('audit_log').insert(row, { count: 'exact' });
+  const rows = count ?? 0;
   if (TRACE_STOP) console.log('[TRACE:STOP] ship-to recorded', { stopId: x.stop.id, changed: plan.changedFields, rows, error: error?.message ?? null });
   if (error) return { kind: 'saved', audited: false, auditError: error.message };
   if (rows !== 1) return { kind: 'saved', audited: false, auditError: `the history row came back ${rows} times` };

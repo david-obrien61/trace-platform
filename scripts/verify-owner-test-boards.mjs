@@ -26,6 +26,10 @@
  *      count AND on the status multiset — so under-parsing and over-parsing both fail
  *   D  negative + positive controls, asserted EVERY RUN. The script refuses to run without them:
  *      a check nobody has watched refuse is a claim (§6 r19).
+ *   E  (§6 r21, ledger #345) a PASS line names what the person SEES and WHERE. A PASS line that
+ *      describes code behaviour (backticked identifiers, "returns", "writes", "trigger"…) and names
+ *      no screen, list, button, message or result is REFUSED. The 23 that predate the rule are listed
+ *      in owner-test-pass-line-declarations.json; that list prunes itself (a stale entry fails).
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -98,6 +102,22 @@ for (const need of REQUIRED_CONTROLS) {
   }
 }
 
+/* ── E · a PASS line names what is SEEN and WHERE (§6 r21) ── */
+const PASS_LINE = /^\s*(?:\*\*|`)?PASS(?:\*\*|`)?\s*[:：]\s*(?:\*\*)?\s*(.*)$/i;
+const PASS_WHERE = /\b(page|screen|shows?|shown|see[sn]?|list|button|tab|banner|badge|dialog|modal|panel|menu|reads?|appears?|displays?|says?|message|row|column|card|field|box|label|footer|header|stamp|toast|drawer|map|link|email|pdf|print|receipt|invoice|confirmation|sheet|grid|chip|result|→|query returns|returns? (one|no|zero|\d)|no rows|sql editor|editor)\b/i;
+const PASS_CODE = /`[^`]*(\(\)|\.|_)[^`]*`|\b(function|trigger|rpc|returns|calls?|writes?|inserts?|updates?)\b/i;
+const codeOnlyPass = text => !!text.trim() && !PASS_WHERE.test(text) && PASS_CODE.test(text);
+note('\nCONTROLS · PASS lines (§6 r21)');
+for (const [name, text, want] of [
+  ['a code-only PASS line is refused', '`writeContactEdit` returns ok and inserts into `customer_phones`.', true],
+  ['a PASS line naming what is seen, and where, is accepted', 'the original stays the main number, and the new number appears in the customer\'s Phones list.', false],
+]) {
+  if (codeOnlyPass(text) !== want) bad(`control "${name}" did not hold`);
+  else note(`  ✓ ${name}`);
+}
+const PASS_DECL = JSON.parse(readFileSync('scripts/owner-test-pass-line-declarations.json', 'utf8')).lines;
+const passUsed = new Set();
+
 /* ── independent re-derivation of the card count. Same RULE, written separately: a heading is a
       card iff a status tag owns a line in its block, or sits in the heading itself. ── */
 function reDerive(md) {
@@ -140,6 +160,14 @@ note('\nBOARDS');
 let cards = 0, covered = 0;
 for (const key of onDisk) {
   const md = readFileSync(`${DIR}/${key}${SUFFIX}`, 'utf8');
+  for (const line of md.split('\n')) {
+    const pm = line.match(PASS_LINE) || line.match(/^\s*\*\*PASS[^*]*:\*\*\s*(.*)$/);
+    if (!pm || !codeOnlyPass(pm[1])) continue;
+    const starts = pm[1].trim().slice(0, 60);
+    const i = PASS_DECL.findIndex(d => d.board === key && d.starts === starts);
+    if (i >= 0) passUsed.add(i);
+    else bad(`${key}: a PASS line describes code, not what a person sees or where — "${starts}…" (§6 r21: name the screen and what shows on it)`);
+  }
   const parsed  = parseTests(md, key, key);
   const derived = reDerive(md);
   const by = s => parsed.filter(c => c.status === s).length;
@@ -178,6 +206,7 @@ const treeStamp = () => {
     return `${branch === 'HEAD' ? 'detached' : branch} @ ${sha}${dirty}`;
   } catch { return 'tree unknown — git could not be read'; }
 };
+PASS_DECL.forEach((d, i) => { if (!passUsed.has(i)) bad(`owner-test-pass-line-declarations.json: "${d.board}: ${d.starts}" is STALE — that code-only PASS line is gone or fixed; remove the entry`); });
 note(`\nTOTAL · ${onDisk.length} boards · ${cards} cards · ${covered} covered   [${treeStamp()}]`);
 if (fail.length) { console.log(`\n🔴 verify-owner-test-boards FAILED — ${fail.length} problem(s) above.`); process.exit(1); }
 console.log('\n✅ verify-owner-test-boards — every board on disk is reachable by owner-tests.html.');

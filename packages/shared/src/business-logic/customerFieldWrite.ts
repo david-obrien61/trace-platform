@@ -8,10 +8,11 @@
 //               harness can drive the real code against the real schema (the app module imports a
 //               browser-only client).
 // DEPENDENCIES: a supabase client passed in · contactWriter.
-// OUTPUTS:      EDITOR_CONTACT_POLICY · updateCustomerFields · insertCustomerFields
+// OUTPUTS:      EDITOR_CONTACT_POLICY · updateCustomerFields · insertCustomerFields — each returns
+//               `contact`: what became of every typed phone / email / address (ledger #345).
 // ============================================================
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { contactEditOf, writeContactEdit, type ContactEditPolicy } from './contactWriter';
+import { contactEditOf, writeContactEdit, type ContactEditPolicy, type ContactValueResult } from './contactWriter';
 
 // STD-003: ON by default until OWNER-PROVEN. Do not comment out (§7 standing instruction).
 const TRACE_CUSTOMER_WRITE = true;
@@ -23,41 +24,43 @@ export const EDITOR_CONTACT_POLICY: ContactEditPolicy = { phone: 'replace', emai
  * is what a refusal looks like (A8), and the caller says so in its own words.
  */
 export async function updateCustomerFields(db: SupabaseClient, params: {
-  id: string; businessId: string; patch: Record<string, unknown>;
-}): Promise<{ error: string | null; zeroRows: boolean }> {
+  id: string; businessId: string; patch: Record<string, unknown>; actorUserId?: string | null;
+}): Promise<{ error: string | null; zeroRows: boolean; contact: ContactValueResult[] }> {
   const { id, businessId, patch } = params;
   const { edit, rest, touched } = contactEditOf(patch);
   if (Object.keys(rest).length > 0) {
     const { data, error } = await db.from('customers').update(rest)
       .eq('id', id).eq('business_id', businessId).select('id');
-    if (error) return { error: error.message, zeroRows: false };
+    if (error) return { error: error.message, zeroRows: false, contact: [] };
     // A8 / R-12 — inline: zero rows back is a refusal, not a save.
-    if ((data ?? []).length === 0) return { error: null, zeroRows: true };
+    if ((data ?? []).length === 0) return { error: null, zeroRows: true, contact: [] };
   }
   if (touched) {
-    const out = await writeContactEdit(db, businessId, id, edit, EDITOR_CONTACT_POLICY);
+    const out = await writeContactEdit(db, businessId, id, edit, { ...EDITOR_CONTACT_POLICY, actorUserId: params.actorUserId ?? null });
     if (!out.ok) {
       if (TRACE_CUSTOMER_WRITE) console.log('[TRACE:customers] contact edit FAILED', { customerId: id, error: out.error });
-      return { error: out.error, zeroRows: false };
+      return { error: out.error, zeroRows: false, contact: out.results };
     }
+    return { error: null, zeroRows: false, contact: out.results };
   }
-  return { error: null, zeroRows: false };
+  return { error: null, zeroRows: false, contact: [] };
 }
 
 /** INSERT a new customer, then its contact rows. */
 export async function insertCustomerFields(db: SupabaseClient, params: {
-  businessId: string; values: Record<string, unknown>;
-}): Promise<{ error: string | null; id: string | null }> {
+  businessId: string; values: Record<string, unknown>; actorUserId?: string | null;
+}): Promise<{ error: string | null; id: string | null; contact: ContactValueResult[] }> {
   const { businessId, values } = params;
   const { edit, rest, touched } = contactEditOf(values);
   const { data, error } = await db.from('customers')
     .insert({ business_id: businessId, ...rest }).select('id').single();
-  if (error) return { error: error.message, id: null };
+  if (error) return { error: error.message, id: null, contact: [] };
   const id = (data as { id: string }).id;
   if (touched) {
-    const out = await writeContactEdit(db, businessId, id, edit, EDITOR_CONTACT_POLICY);
+    const out = await writeContactEdit(db, businessId, id, edit, { ...EDITOR_CONTACT_POLICY, actorUserId: params.actorUserId ?? null });
     // The customer exists; say plainly that its contact details did not save, so it can be re-edited.
-    if (!out.ok) return { error: `The customer was added, but their contact details were not saved: ${out.error}`, id };
+    if (!out.ok) return { error: `The customer was added, but their contact details were not saved: ${out.error}`, id, contact: out.results };
+    return { error: null, id, contact: out.results };
   }
-  return { error: null, id };
+  return { error: null, id, contact: [] };
 }

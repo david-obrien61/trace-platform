@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
 import { sendNotification } from '../../../shared/src/notifications/send';
-import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
+import { findOrCreateCustomer, saveTypedContact, contactEditFromInput } from '../../../shared/src/business-logic/customerUpsert';
+import { addressLine, type ContactValueResult } from '../../../shared/src/business-logic/contactWriter';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
 import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
@@ -22,6 +23,7 @@ const ORDER_DISCOUNT_APPLY = 'order_discount:apply';
 // D-40: the gated + LOGGED authority to zero an order's tax via a per-order exemption OVERRIDE.
 // Owner OR a member holding apply_tax_exempt. The anon/public path has no token → never self-exempt.
 const APPLY_TAX_EXEMPT = 'tax_exempt:apply';
+const CUSTOMERS_UPDATE = 'customers:update';
 
 // Order-exemption cols on `orders` are gated (20260713). Stripped-and-retried on 42703/PGRST204.
 const ORDER_EXEMPT_KEYS = ['tax_exempt_applied', 'tax_exempt_reason', 'tax_exempt_cert_ref', 'tax_exempt_by'];
@@ -561,19 +563,44 @@ async function handleCreate(req: any, res: any) {
     // duplicate; the finding-D class). AC-3: the id MUST belong to this business — a cross-tenant
     // id is never trusted; it falls back to find-or-create. No attached id → dedup as before
     // (unchanged anon QR path + way-4 NEW customers, which submit creates here).
+    //
+    // 🔴 LEDGER #345 — CLV-20260917-1769. The attached branch used the row AS IT WAS, so a phone,
+    // email or address typed over the pre-filled form was written NOWHERE. It now goes through the
+    // same contact rules as a new customer (`saveTypedContact`): a different phone is kept as an
+    // additional number and the one on file stays main. Changing a SAVED customer is an update of
+    // that customer, so it needs `customers:update` (or the owner) — this endpoint runs under the
+    // service key, so the check is made here, from the token. Without it the values are reported
+    // NOT SAVED, with the reason, and the order still goes through.
+    // `contactResults` travels back on the response and the confirmation screen shows every line.
     let customerId: string;
+    let contactResults: ContactValueResult[] = [];
+    const callerUid = authHeader ? await resolveCallerUid(authHeader) : null;
     if (attachedCustomerId) {
       const { data: attachedRow } = await db
         .from('customers').select('id').eq('id', attachedCustomerId).eq('business_id', businessId).maybeSingle();
       if ((attachedRow as any)?.id) {
         customerId = (attachedRow as any).id;
         console.log('[TRACE:lookup] order using ATTACHED customer (dedup skipped)', { customerId, businessId });
+        const mayChange = !!callerUid && await callerCanManageOrders(authHeader, businessId, CUSTOMERS_UPDATE);
+        if (mayChange) {
+          contactResults = await saveTypedContact(db, businessId, customerId, customer, 'qr-scan', callerUid);
+        } else {
+          const typed = contactEditFromInput(customer);
+          // Nothing is written; each typed value is reported, so nothing disappears unannounced.
+          const reason = 'only someone who may edit customers can change a saved customer\'s contact details';
+          contactResults = [
+            ...(typed.phone ? [{ list: 'phones' as const, value: typed.phone, outcome: 'not_saved' as const, reason }] : []),
+            ...(typed.email ? [{ list: 'emails' as const, value: typed.email, outcome: 'not_saved' as const, reason }] : []),
+            ...(typed.billing ? [{ list: 'addresses' as const, value: addressLine(typed.billing), outcome: 'not_saved' as const, reason }] : []),
+          ];
+          console.log('[TRACE:lookup] attached customer — typed contact NOT saved (caller may not edit customers)', { customerId, businessId, typed: contactResults.length });
+        }
       } else {
         console.log('[TRACE:lookup] attached customer not in this business — find-or-create (AC-3)', { attachedCustomerId, businessId });
-        ({ customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan'));
+        ({ customerId, contact: contactResults } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan', { actorUserId: callerUid }));
       }
     } else {
-      ({ customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan'));
+      ({ customerId, contact: contactResults } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan', { actorUserId: callerUid }));
     }
 
     // ── 2. Tax rate + price tier + tax exemption (business/customer-level, read once) ──────
@@ -1453,6 +1480,8 @@ async function handleCreate(req: any, res: any) {
       // no surface re-derives. taxRate carried so a taxed surface shows the exact %.
       taxStatus: pricing.taxStatus, taxRate,
       taxExemptReason: pricing.taxExemptReason ?? null, taxExemptCertRef: pricing.taxExemptCertRef ?? null,
+      // #345: what became of each typed phone / email / address — the confirmation screen shows it.
+      contactResults,
     });
 
   } catch (err: any) {

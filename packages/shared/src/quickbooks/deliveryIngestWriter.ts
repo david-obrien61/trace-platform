@@ -309,8 +309,8 @@ export async function commitDeliveryIngest(
         last_name: stop.lastName,
         customer_type: stop.customerType,
         // 🔴 THE PHONE IS THE GIFT — it is the ship-to contact number on a customer record that
-        // may carry none, and Lauren's call-ahead depends on it. `findOrCreateCustomer` fills it
-        // ONLY where the stored value is blank, so a curated number is never overwritten.
+        // may carry none, and Lauren's call-ahead depends on it. `findOrCreateCustomer` never
+        // overwrites a curated number: a different one is KEPT as an additional number (#345).
         phone: stop.shipTo.phone,
         // ⚠️ NOT the address. `address_line1`/`city`/… on `customers` is the BILLING address and
         // its canonical `billing_*` twin; a ship-to varies per job site (customerUpsert says so
@@ -322,6 +322,10 @@ export async function commitDeliveryIngest(
       });
       customerId = res.customerId;
       if (res.created) created++; else linked++;
+      // #345 — NO SILENT DROP: a phone the database refused is reported on this run's screen.
+      for (const r of res.contact) {
+        if (r.outcome === 'not_saved') errors.push({ invoiceId: stop.invoiceId, step: 'contact', message: `Phone ${r.value} was not saved: ${r.reason ?? 'refused'}` });
+      }
       // Keep the in-memory candidate set current so two invoices for the SAME new customer in
       // one run resolve to one row rather than racing each other into two.
       if (res.created) {

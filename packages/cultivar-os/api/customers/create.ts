@@ -13,11 +13,13 @@
  *              api/customers/create.ts. Body: { businessId, customer, source?, receiptId?,
  *              delivery?: { deliveryDate, address:{line1,city,state,zip}, serviceType?, notes? } }.
  *              `receiptId` turns the captured document into a HISTORY ORDER (see step 3).
- * OUTPUTS      { ok, customerId, created, deliveryId?, deliveryError?, orderId?, orderError? }
+ * OUTPUTS      { ok, customerId, created, contactResults, deliveryId?, deliveryError?, orderId?, orderError? }
+ *              — contactResults: what became of each typed phone / email / address (ledger #345).
  *              | { ok:false, error }.
  */
 import { createClient } from '@supabase/supabase-js';
-import { callerCan } from '../../../shared/src/auth/callerPermission';
+import { callerCan, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
+import type { ContactValueResult } from '../../../shared/src/business-logic/contactWriter';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { buildHistoryOrder, decodeCapturedDocument } from '../../../shared/src/business-logic/historyOrder';
 
@@ -80,13 +82,24 @@ export default async function handler(req: any, res: any) {
   // ── 1. Resolve the customer ONCE (find-or-create, dedup-by-email) ──
   let customerId: string;
   let created: boolean;
+  // #345 — NO SILENT DROP. What became of each typed phone / email / address goes back to the
+  // capture screen. `billing_line2` is now carried (it was accepted and ignored). A value sent
+  // under a RETIRED column name (`address_line1` / `city` / `state` / `zip`, dropped from
+  // `customers` by 20260915b) is reported NOT SAVED rather than vanishing.
+  let contactResults: ContactValueResult[] = [];
+  const retired = (['address_line1', 'city', 'state', 'zip'] as const)
+    .filter(k => typeof customer[k] === 'string' && customer[k].trim() !== '')
+    .map(k => ({ list: 'addresses' as const, value: String(customer[k]).trim(), outcome: 'not_saved' as const,
+                 reason: `it was sent as "${k}", a field that no longer exists — send it as billing_${k === 'address_line1' ? 'line1' : k}` }));
   try {
-    ({ customerId, created } = await findOrCreateCustomer(
+    ({ customerId, created, contact: contactResults } = await findOrCreateCustomer(
       db,
       businessId,
       customer,
       source || 'ocr-invoice',
+      { actorUserId: await resolveCallerUid(authHeader) },
     ));
+    contactResults = [...contactResults, ...retired];
     if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer', created ? 'created' : 'matched (dedup)', '— id:', customerId);
   } catch (err: any) {
     console.error('[TRACE:ROUTER] customer create failed:', err.message);
@@ -262,5 +275,5 @@ export default async function handler(req: any, res: any) {
     console.log('[TRACE:HISTORY] no receiptId supplied — no history order (a document with no customer never reaches here)');
   }
 
-  return res.json({ ok: true, customerId, created, deliveryId, deliveryError, orderId, orderError });
+  return res.json({ ok: true, customerId, created, contactResults, deliveryId, deliveryError, orderId, orderError });
 }

@@ -1,0 +1,370 @@
+{
+  "_about": [
+    "THE WRITER REGISTRY (ledger #345). David's rule, 2026-09-17: single functions that are called, repeatable, dependable and verifiable; the test for each verifies, from capture to write, that each path is validated; and any change to the writer re-runs the same validation from every capture/change form to the database, so there are no gaps.",
+    "One entry per DOMAIN: its writer, the tables it owns, and EVERY place a person (or an import, OCR, script or endpoint) can enter or change that domain's data, each with the id of its end-to-end test.",
+    "`npm run verify:writer-registry` (scripts/verify-writer-registry.mjs) fails the build when: a file in packages/, api/ or scripts/ looks like a capture path for a registered domain and is neither a path's file nor declared; a path's test is missing or failing; code writes a registered table outside the writer's files; a declaration or anchor has gone stale.",
+    "`at` is `file#anchor`: the verifier resolves the anchor to a line number on every run and prints file:line, so the number cannot drift from the code.",
+    "Read this file before touching any form, capture, import or endpoint (CLAUDE.md §10 step 12)."
+  ],
+  "domains": [
+    {
+      "id": "contacts",
+      "title": "A customer's phones, emails and addresses",
+      "writer": {
+        "name": "contactWriter",
+        "at": "packages/shared/src/business-logic/contactWriter.ts#export async function writeContactEdit"
+      },
+      "writerFiles": [
+        "packages/shared/src/business-logic/contactWriter.ts"
+      ],
+      "tables": [
+        "customer_phones",
+        "customer_emails",
+        "customer_addresses"
+      ],
+      "guardedColumns": {
+        "table": "customers",
+        "columns": [
+          "phone",
+          "email",
+          "billing_line1",
+          "billing_line2",
+          "billing_city",
+          "billing_state",
+          "billing_zip"
+        ],
+        "databaseGuard": "trg_customers_derived_contact_guard (20260915_contact_record §5e) refuses a direct write to these columns; the derivation `sync_customer_flat_contact` is the only thing that sets them."
+      },
+      "databaseGuardForTables": "NOT PRACTICAL TODAY, said rather than implied: the writer runs in the app and in API handlers through PostgREST, so the database cannot tell the writer's INSERT from any other. A table guard needs the writer moved into a database function first. Until then the code-level check (`table-write`) and RLS (`customer_*_member_*`) are the guard.",
+      "entryFunctions": [
+        "writeContactEdit",
+        "writeContactRecords",
+        "writeContactRecord",
+        "makeContactMain",
+        "retireContact",
+        "insertShipToSite",
+        "retireShipToSite",
+        "removeRunContactRows",
+        "findOrCreateCustomer",
+        "saveTypedContact",
+        "updateCustomerFields",
+        "insertCustomerFields",
+        "saveCustomerAddress",
+        "retireCustomerAddress",
+        "commitCustomerImport",
+        "persistCustomerPatch",
+        "insertCustomer",
+        "commitDeliveryIngest"
+      ],
+      "tests": "scripts/path-tests/contacts.paths.mts",
+      "paths": [
+        {
+          "id": "checkout.new-customer",
+          "what": "Checkout, a new customer — the customer step's form (search → Add new) or ScanOrder's New customer",
+          "at": "packages/cultivar-os/src/pages/CustomerCapture.tsx#async function handleSubmit",
+          "files": [
+            "packages/cultivar-os/src/pages/CustomerCapture.tsx",
+            "packages/cultivar-os/src/pages/ScanOrder.tsx",
+            "packages/cultivar-os/src/pages/CartReview.tsx",
+            "packages/cultivar-os/src/hooks/useSubmitOrder.ts",
+            "packages/cultivar-os/api/orders/submit.ts",
+            "packages/shared/src/business-logic/customerUpsert.ts"
+          ],
+          "chain": "CustomerCapture.handleSubmit → CartReview → useSubmitOrder → POST /api/orders/submit → findOrCreateCustomer → saveTypedContact → writeContactEdit",
+          "shown": "Confirmation → Customer contact details; customer page → Phones / Emails / Addresses"
+        },
+        {
+          "id": "checkout.attached-customer",
+          "what": "Checkout with a customer attached from ScanOrder, contact details typed over the pre-filled form (CLV-20260917-1769)",
+          "at": "packages/cultivar-os/src/pages/ScanOrder.tsx#function attachExisting",
+          "files": [
+            "packages/cultivar-os/src/pages/ScanOrder.tsx",
+            "packages/cultivar-os/api/orders/submit.ts"
+          ],
+          "chain": "ScanOrder.attachExisting → CustomerCapture → POST /api/orders/submit (customerId) → saveTypedContact → writeContactEdit",
+          "shown": "Confirmation → Customer contact details; customer page → Phones"
+        },
+        {
+          "id": "checkout.picked-customer",
+          "what": "Checkout with a customer picked in the customer step's own search (now attaches — no duplicate)",
+          "at": "packages/cultivar-os/src/pages/CustomerCapture.tsx#function onSelectExisting",
+          "files": [
+            "packages/cultivar-os/src/pages/CustomerCapture.tsx",
+            "packages/cultivar-os/src/components/customers/CustomerSearch.tsx"
+          ],
+          "chain": "CustomerSearch → CustomerCapture.onSelectExisting → attachCustomer → POST /api/orders/submit (customerId) → saveTypedContact",
+          "shown": "Confirmation; customer page → Phones"
+        },
+        {
+          "id": "checkout.attached-no-permission",
+          "what": "Checkout by a member who may not edit customers, with a customer attached — values reported NOT SAVED, order still goes through",
+          "at": "packages/cultivar-os/api/orders/submit.ts#const mayChange",
+          "files": [
+            "packages/cultivar-os/api/orders/submit.ts",
+            "packages/cultivar-os/src/pages/Confirmation.tsx"
+          ],
+          "chain": "POST /api/orders/submit → callerCanManageOrders(customers:update) false → contactResults not_saved",
+          "shown": "Confirmation → red NOT SAVED lines"
+        },
+        {
+          "id": "checkout.attached-new-address",
+          "what": "Checkout with a customer attached and a different billing address typed — kept as an additional address",
+          "at": "packages/shared/src/business-logic/contactWriter.ts#const conflicts = policy.billing === 'fill'",
+          "files": [
+            "packages/cultivar-os/api/orders/submit.ts",
+            "packages/shared/src/business-logic/contactWriter.ts"
+          ],
+          "chain": "POST /api/orders/submit → saveTypedContact → writeContactEdit (billing 'fill', conflict → additional)",
+          "shown": "customer page → Addresses"
+        },
+        {
+          "id": "ocr.new-customer",
+          "what": "Invoice capture (Receipts) creating a new customer — phone, email, both address lines",
+          "at": "packages/cultivar-os/src/pages/ReceiptKeeper.tsx#const needCustomer = addCustomer || scheduleDelivery",
+          "files": [
+            "packages/cultivar-os/src/pages/ReceiptKeeper.tsx",
+            "packages/cultivar-os/api/customers/create.ts"
+          ],
+          "chain": "ReceiptKeeper → POST /api/customers/create → findOrCreateCustomer → writeContactEdit",
+          "shown": "capture Saved screen → Customer contact details; customer page"
+        },
+        {
+          "id": "ocr.retired-field-names",
+          "what": "A capture body using the retired address field names — reported NOT SAVED",
+          "at": "packages/cultivar-os/api/customers/create.ts#const retired =",
+          "files": [
+            "packages/cultivar-os/api/customers/create.ts"
+          ],
+          "chain": "POST /api/customers/create → contactResults not_saved",
+          "shown": "capture Saved screen → red NOT SAVED line"
+        },
+        {
+          "id": "ocr.existing-customer",
+          "what": "Invoice capture for a customer already on file, different phone — kept as additional",
+          "at": "packages/cultivar-os/api/customers/create.ts#findOrCreateCustomer(",
+          "files": [
+            "packages/cultivar-os/api/customers/create.ts"
+          ],
+          "chain": "POST /api/customers/create → findOrCreateCustomer (match) → writeContactEdit ('add')",
+          "shown": "customer page → Phones"
+        },
+        {
+          "id": "editor.update",
+          "what": "Customer editor (roster, customer page, stop/route/order screens) — Save changes",
+          "at": "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx#async function save",
+          "files": [
+            "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx",
+            "packages/cultivar-os/src/components/customers/customerEdit.ts",
+            "packages/shared/src/business-logic/customerFieldWrite.ts"
+          ],
+          "chain": "CustomerPartyEditor.save → persistCustomerPatch → updateCustomerFields → writeContactEdit ('replace')",
+          "shown": "editor → Contact details; customer page"
+        },
+        {
+          "id": "editor.create",
+          "what": "Customer editor — Add Customer",
+          "at": "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx#insertCustomer({ businessId, values })",
+          "files": [
+            "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx",
+            "packages/cultivar-os/src/components/customers/customerEdit.ts",
+            "packages/shared/src/business-logic/customerFieldWrite.ts"
+          ],
+          "chain": "CustomerPartyEditor.save (create) → insertCustomer → insertCustomerFields → writeContactEdit",
+          "shown": "editor → Contact details; customer page"
+        },
+        {
+          "id": "editor.no-permission",
+          "what": "Customer editor used by a member who may only read customers",
+          "at": "packages/cultivar-os/src/components/customers/customerEdit.ts#export async function persistCustomerPatch",
+          "files": [
+            "packages/cultivar-os/src/components/customers/customerEdit.ts"
+          ],
+          "chain": "persistCustomerPatch → updateCustomerFields → writeContactEdit (RLS refuses) → not_saved",
+          "shown": "editor → red NOT SAVED line"
+        },
+        {
+          "id": "customer-page.make-main",
+          "what": "Customer page → Phones / Emails / Addresses → Make main",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#async function act",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx",
+            "packages/cultivar-os/src/pages/CustomerDetail.tsx"
+          ],
+          "chain": "ContactListsPanel.act('main') → makeContactMain",
+          "shown": "customer page → the row marked Main"
+        },
+        {
+          "id": "customer-page.remove",
+          "what": "Customer page → Phones / Emails / Addresses → Remove (retire, never delete)",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#async function act",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "ContactListsPanel.act('remove') → retireContact",
+          "shown": "customer page → the row is gone from the list"
+        },
+        {
+          "id": "customer-page.no-permission",
+          "what": "Customer page read by a member who may only read customers — lists visible, changes refused",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const mayChange",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "readContactLists (customers:read) · makeContactMain (RLS refuses) → not_saved",
+          "shown": "customer page → lists without buttons"
+        },
+        {
+          "id": "stop.save-site",
+          "what": "Delivery stop → Save as a site (and the ship-to picker's add)",
+          "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#saveCustomerAddress(supabase",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/SaveSiteDialog.tsx",
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/shared/src/business-logic/customerAddresses.ts"
+          ],
+          "chain": "SaveSiteDialog → useStopActions → saveCustomerAddress → insertShipToSite",
+          "shown": "customer page → Addresses (delivery site)"
+        },
+        {
+          "id": "qbo.customer-import",
+          "what": "QuickBooks customer import (owner) — POST /api/qbo/customers/ingest and the books import",
+          "at": "packages/cultivar-os/api/qbo/router.ts#async function handleCustomersIngest",
+          "files": [
+            "packages/cultivar-os/api/qbo/router.ts",
+            "packages/shared/src/quickbooks/customerImportWriter.ts"
+          ],
+          "chain": "router customers-ingest / books-ingest → commitCustomerImport → writeContactRecords (tagged with the run)",
+          "shown": "customer page → Phones / Emails / Addresses"
+        },
+        {
+          "id": "qbo.import-undo",
+          "what": "QuickBooks import undo (owner) — removes the run's contact rows with its customers",
+          "at": "packages/cultivar-os/api/qbo/router.ts#async function handleBooksUndo",
+          "files": [
+            "packages/cultivar-os/api/qbo/router.ts",
+            "packages/shared/src/quickbooks/customerImportWriter.ts"
+          ],
+          "chain": "router books-undo → undo_import_run (20260916d) · library: removeRunContactRows",
+          "shown": "the import panel's undo report"
+        },
+        {
+          "id": "qbo.delivery-ingest",
+          "what": "QuickBooks delivery (ShipDate) ingest — the ship-to phone",
+          "at": "packages/shared/src/quickbooks/deliveryIngestWriter.ts#export async function commitDeliveryIngest",
+          "files": [
+            "packages/shared/src/quickbooks/deliveryIngestWriter.ts",
+            "packages/cultivar-os/api/qbo/router.ts"
+          ],
+          "chain": "router deliveries-ingest → commitDeliveryIngest → findOrCreateCustomer → writeContactEdit ('add')",
+          "shown": "customer page → Phones; a refused phone on the run report (red)"
+        },
+        {
+          "id": "script.seed-sandbox",
+          "what": "scripts/seed-sandbox.mjs — sample customers' phone and email",
+          "at": "scripts/seed-sandbox.mjs#export function sandboxSeeder",
+          "files": [
+            "scripts/seed-sandbox.mjs"
+          ],
+          "chain": "sandboxSeeder.seed → writeContactEdit",
+          "shown": "customer page (sandbox business)"
+        }
+      ],
+      "declared": [
+        {
+          "file": "packages/shared/src/business-logic/customerUpsert.ts",
+          "reason": "the shared writer layer between the endpoints and contactWriter (typedContactPolicy, saveTypedContact) — exercised by every checkout and capture path above"
+        },
+        {
+          "file": "packages/shared/src/business-logic/customerFieldWrite.ts",
+          "reason": "the editor's write layer — exercised by editor.update / editor.create / editor.no-permission"
+        },
+        {
+          "file": "packages/shared/src/business-logic/customerAddresses.ts",
+          "reason": "the ship-to site planner — exercised by stop.save-site. `retireCustomerAddress` has NO screen caller (reported to David); the customer page's Remove covers a site through retireContact"
+        },
+        {
+          "file": "packages/shared/src/quickbooks/customerImportWriter.ts",
+          "reason": "the import writer — exercised by qbo.customer-import / qbo.import-undo. `undoCustomerImport` has no entry point (customerImport.test.ts §K)"
+        },
+        {
+          "file": "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
+          "reason": "the route planner's stop-address box feeds a map link and is never saved — not a customer's address. Reported to David: it is a typed value that is not kept, by design"
+        },
+        {
+          "file": "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
+          "reason": "a team-member INVITE email and the business profile — not a customer's contact details"
+        },
+        {
+          "file": "packages/cultivar-os/src/pages/Settings.tsx",
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
+        },
+        {
+          "file": "packages/shared/src/pages/Settings.tsx",
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
+        },
+        {
+          "file": "packages/shared/src/components/services/ServicesReview.tsx",
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
+        },
+        {
+          "file": "packages/ignition-os/CoreApp.jsx",
+          "reason": "Ignition OS — off limits (CLAUDE.md §7) and on its own database; not this platform's customers"
+        },
+        {
+          "file": "packages/ignition-os/OnboardingWizard.jsx",
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
+        },
+        {
+          "file": "packages/ignition-os/modules/IgnitionAdmin.jsx",
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
+        },
+        {
+          "file": "packages/ignition-os/modules/IgnitionCRM.jsx",
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
+        },
+        {
+          "file": "packages/ignition-os/modules/IgnitionOmni.jsx",
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
+        },
+        {
+          "file": "packages/ignition-os/modules/IgnitionIntake.jsx",
+          "reason": "Ignition OS writes phone/email straight onto a `customers` table — REPORTED to David as a (b) path. It is off limits (CLAUDE.md §7) and it targets `shop_id`, a column this database's `customers` does not have (measured live 2026-09-17), so it cannot reach these customers"
+        },
+        {
+          "file": "scripts/measure-customer-addresses-mutants.mjs",
+          "reason": "a mutation harness: it rewrites source text to plant mutants and restores it; the table names are in the mutant strings, not in a write"
+        },
+        {
+          "file": "scripts/verify-customer-upsert.mjs",
+          "reason": "RETIRED 2026-09-17 (refuseRetired) — exits before any write; kept as the record of what ran"
+        },
+        {
+          "file": "scripts/verify-writer-registry.mjs",
+          "reason": "this check itself: its --self-test plants violations as strings (a phone input, a table write) to prove each check goes red"
+        }
+      ]
+    }
+  ],
+  "proposed": [
+    {
+      "domain": "orders",
+      "order": 1,
+      "why": "the spine of the go-live bar (take an order, bill it correctly); three writers of `orders` today (submit, the QuickBooks invoice write-back, the history ingest) plus the OCR capture's direct insert"
+    },
+    {
+      "domain": "delivery-stops",
+      "order": 2,
+      "why": "get it on a truck: three independent `deliveries` insert copies, and an order's date change never reaches its stop"
+    },
+    {
+      "domain": "stock-movements",
+      "order": 3,
+      "why": "mostly behind RPCs already; grid status/cost edits and the imports still write around the ledger"
+    },
+    {
+      "domain": "cost-objects · service-offerings · team",
+      "order": 4,
+      "why": "off the go-live path; several unmanaged writers each"
+    }
+  ]
+}

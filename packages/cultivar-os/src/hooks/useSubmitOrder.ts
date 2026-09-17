@@ -8,6 +8,7 @@ import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
 import type { PricedLine, ShipToInput } from '@trace/shared/business-logic';
+import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
 import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from '../lib/netting';
 
 // D-39: the server-authoritative per-line breakdown returned by submit — the Confirmation receipt
@@ -108,6 +109,8 @@ export interface OrderResult {
   taxRate?:        number | null;    // the origin rate (for the taxed %); null when not identified
   taxExemptReason?: string | null;
   taxExemptCertRef?: string | null;
+  /** #345: what became of each typed phone / email / address (never blocks the order). */
+  contactResults:  ContactValueResult[];
 }
 
 export function useSubmitOrder() {
@@ -162,7 +165,7 @@ export function useSubmitOrder() {
               // NON-BLOCKING still holds (§6 r6): the order writes COMMIT BEFORE the push begins,
               // so a failed — or even a KILLED — push leaves a whole order with qbStatus 'failed',
               // which is exactly what the manual re-push endpoint repairs.
-              qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus: qbStatusRaw, qbError } = await res.json();
+              qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus: qbStatusRaw, qbError, contactResults } = await res.json();
       // ⚠️ THE CAST IS WHY A MISSING STATE WAS SILENT, AND IT IS KEPT DELIBERATELY. An
       // unrecognised string passes through untouched; `?? 'failed'` fires only on null/undefined.
       // Narrowing it to a whitelist would swap one wrong screen for another — a state we do not
@@ -230,7 +233,8 @@ export function useSubmitOrder() {
       });
 
       return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError, breakdown,
-               taxStatus, taxRate, taxExemptReason, taxExemptCertRef };
+               taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
+               contactResults: Array.isArray(contactResults) ? contactResults as ContactValueResult[] : [] };
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed';

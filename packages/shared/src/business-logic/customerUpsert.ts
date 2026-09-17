@@ -8,8 +8,12 @@
  *              `customers` table (business_id, first/last_name, marketing_opt_in, source, …) and,
  *              for phone / email / billing address, `contactWriter.writeContactEdit` — those
  *              three are list rows now (ledger #335). No DB client constructed here.
- * OUTPUTS      { customerId, created } — created:true = inserted, false = matched by email.
- * CALLERS      api/orders/submit.ts (source='qr-scan'), api/customers/create.ts ('ocr-invoice').
+ * OUTPUTS      { customerId, created, contact } — created:true = inserted, false = matched. `contact`
+ *              is what became of each typed phone / email / address (kept as main · additional ·
+ *              already on file · NOT SAVED + reason) — the screen shows it (ledger #345).
+ *              `saveTypedContact` — the same contact rules for a customer the operator PICKED.
+ * CALLERS      api/orders/submit.ts (source='qr-scan'), api/customers/create.ts ('ocr-invoice'),
+ *              quickbooks/deliveryIngestWriter.ts. Every capture path: writer-registry.json.
  */
 // Customer find-or-create — the ONE shared write path for resolving a customer
 // within a business. Extracted from api/orders/submit.ts (cart checkout) so it can be
@@ -30,7 +34,7 @@
 // invoice capture), mirroring the existing column convention.
 
 import { findOrCreatePerson } from './personUpsert';
-import { writeContactEdit, type ContactEdit } from './contactWriter';
+import { writeContactEdit, type ContactEdit, type ContactEditPolicy, type ContactValueResult } from './contactWriter';
 
 export interface CustomerInput {
   first_name: string;
@@ -39,6 +43,7 @@ export interface CustomerInput {
   email?: string | null;
   phone?: string | null;
   billing_line1?: string | null;
+  billing_line2?: string | null;
   billing_city?: string | null;
   billing_state?: string | null;
   billing_zip?: string | null;
@@ -55,6 +60,48 @@ export interface CustomerInput {
 export interface CustomerUpsertResult {
   customerId: string;
   created: boolean; // true = inserted, false = matched an existing row by email
+  /** What became of each typed contact value. Never thrown: a contact problem does not block the sale. */
+  contact: ContactValueResult[];
+}
+
+/**
+ * The contact rules for a TYPED capture (checkout, OCR, delivery ingest): a different phone is
+ * KEPT as an additional number, a typed email becomes the one invoices go to (the old one stays on
+ * file), a different billing address is kept as an additional one. One home for the policy, so the
+ * new-customer path and the picked-customer path cannot drift apart.
+ */
+export function typedContactPolicy(source: string, actorUserId?: string | null): ContactEditPolicy {
+  return { phone: 'add', email: 'primary', billing: 'fill', source, actorUserId: actorUserId ?? null };
+}
+
+/** The contact half of a `CustomerInput`, blanks omitted (absent is not empty — A9). */
+export function contactEditFromInput(customer: Pick<CustomerInput, 'phone' | 'email' | 'billing_line1' | 'billing_line2' | 'billing_city' | 'billing_state' | 'billing_zip'>): ContactEdit {
+  const given = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== '';
+  const edit: ContactEdit = {};
+  if (given(customer.phone)) edit.phone = String(customer.phone).trim();
+  if (given(customer.email)) edit.email = String(customer.email).trim();
+  const billing: NonNullable<ContactEdit['billing']> = {};
+  if (given(customer.billing_line1)) billing.line1 = String(customer.billing_line1).trim();
+  if (given(customer.billing_line2)) billing.line2 = String(customer.billing_line2).trim();
+  if (given(customer.billing_city))  billing.city  = String(customer.billing_city).trim();
+  if (given(customer.billing_state)) billing.state = String(customer.billing_state).trim();
+  if (given(customer.billing_zip))   billing.zip   = String(customer.billing_zip).trim();
+  if (Object.keys(billing).length > 0) edit.billing = billing;
+  return edit;
+}
+
+/**
+ * 🔴 CLV-20260917-1769 (ledger #345). A customer PICKED at checkout used to keep exactly what was on
+ * file: the order carried their id, `submit.ts` used the row as it was, and a phone typed over the
+ * pre-filled one was written nowhere. This saves what was typed under the same rules as a new
+ * customer. It never throws — the outcome travels back to the screen.
+ */
+export async function saveTypedContact(
+  db: any, businessId: string, customerId: string, customer: CustomerInput, source: string, actorUserId?: string | null,
+): Promise<ContactValueResult[]> {
+  const out = await writeContactEdit(db, businessId, customerId, contactEditFromInput(customer), typedContactPolicy(source, actorUserId));
+  if (!out.ok) console.log('[TRACE:PERSON] contact details NOT saved for the customer — reported, sale not blocked', { customerId, businessId, source, error: out.error });
+  return out.results;
 }
 
 // Deploy-window safety: customer_type rides on the 20260702 migration. If this code is
@@ -98,6 +145,8 @@ function normalizeMatchKey(s: string | null | undefined): string {
  */
 export interface UpsertOptions {
   resolvedCustomerId?: string | null;
+  /** Who is capturing, for the contact change log. Null/absent = a system write. */
+  actorUserId?: string | null;
 }
 
 export async function findOrCreateCustomer(
@@ -186,20 +235,11 @@ export async function findOrCreateCustomer(
   //   · email: SUPPLIED WINS → 'primary'. The typed address becomes the one invoices go to; the
   //     old one stays on file, demoted, instead of being overwritten.
   // A blank still never reaches the edit — `given()` is the same gate as before.
-  const contactEdit: ContactEdit = {};
-  if (given(customer.phone)) contactEdit.phone = String(customer.phone).trim();
-  if (given(customer.email)) contactEdit.email = String(customer.email).trim();
-  const billing: NonNullable<ContactEdit['billing']> = {};
-  if (given(customer.billing_line1)) billing.line1 = String(customer.billing_line1).trim();
-  if (given(customer.billing_city))  billing.city  = String(customer.billing_city).trim();
-  if (given(customer.billing_state)) billing.state = String(customer.billing_state).trim();
-  if (given(customer.billing_zip))   billing.zip   = String(customer.billing_zip).trim();
-  if (Object.keys(billing).length > 0) contactEdit.billing = billing;
-  const writeContacts = async (customerId: string) => {
-    const out = await writeContactEdit(db, businessId, customerId, contactEdit,
-      { phone: 'add', email: 'primary', billing: 'fill', source });
-    if (!out.ok) throw new Error(`Customer contact details not saved: ${out.error}`);
-  };
+  // ✏️ #345: the gathering and the policy moved to `contactEditFromInput` / `typedContactPolicy`
+  // (above), shared with the picked-customer path. A failed contact write no longer THROWS — it
+  // used to, which turned a refused phone into a failed sale. It is reported instead.
+  const writeContacts = (customerId: string) =>
+    saveTypedContact(db, businessId, customerId, customer, source, options.actorUserId);
   offer('qb_customer_id', customer.qb_customer_id);
   if (customer.marketing_opt_in !== undefined) supplied.marketing_opt_in = customer.marketing_opt_in;
   if (personId) supplied.person_id = personId;
@@ -310,15 +350,17 @@ export async function findOrCreateCustomer(
     }
     const patch: Record<string, unknown> = {};
     for (const [col, v] of Object.entries(fields)) {
-      if (col === 'customer_type' || col === 'person_id') { patch[col] = v; continue; } // derived/link — always current
+      if (col === 'person_id') { patch[col] = v; continue; }                             // link — always current
+      // ✏️ #345: an EXISTING row keeps its type unless the caller named one. The checkout form
+      // always derived 'person', so a matched organization was silently re-typed as a person.
+      if (col === 'customer_type') { if (customer.customer_type) patch[col] = v; continue; }
       if (SUPPLIED_WINS.includes(col)) { patch[col] = v; continue; }                     // typed → replaces stored
       if (!FILLABLE.includes(col)) { patch[col] = v; continue; }
       if (!given(stored[col])) patch[col] = v;                                          // blank → fill
     }
     if (Object.keys(patch).length === 0) {
       console.log('[TRACE:PERSON] link: existing customer already complete — nothing to fill', { customerId: existingId, businessId, source });
-      await writeContacts(existingId);
-      return { customerId: existingId, created: false };
+      return { customerId: existingId, created: false, contact: await writeContacts(existingId) };
     }
     const filled = Object.keys(patch).filter(k => k !== 'customer_type' && k !== 'person_id');
     if (filled.length) console.log('[TRACE:PERSON] fill: writing only fields blank on the stored row', { customerId: existingId, filled });
@@ -342,11 +384,11 @@ export async function findOrCreateCustomer(
     if (!updErr && updRows?.length !== 1) {
       throw new Error(`Customer: the fill did not affect exactly one row (${existingId}, matched ${updRows?.length ?? 0}).`);
     }
-    await writeContacts(existingId);
+    const contact = await writeContacts(existingId);
     console.log('[TRACE:PERSON] link: customer resolved to existing row', {
       customerId: existingId, personId, businessId, source, isOrg,
     });
-    return { customerId: existingId, created: false };
+    return { customerId: existingId, created: false, contact };
   }
 
   // #335: no `email` here any more — the contact lists hold it, written just below.
@@ -360,9 +402,9 @@ export async function findOrCreateCustomer(
   }
 
   if (custErr) throw new Error(`Customer: ${custErr.message}`);
-  await writeContacts(newCustomer!.id);
+  const contact = await writeContacts(newCustomer!.id);
   console.log('[TRACE:PERSON] link: new customer created', {
     customerId: newCustomer!.id, personId, businessId, source, isOrg,
   });
-  return { customerId: newCustomer!.id, created: true };
+  return { customerId: newCustomer!.id, created: true, contact };
 }

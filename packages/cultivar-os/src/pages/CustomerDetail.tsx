@@ -16,8 +16,9 @@
 //               CustomerPartyEditor (+ PartyCustomer), orderItemName (roster line summary),
 //               orderStatus (orderStatusMeta), readPricingConfig/normalizeDiscountTypes (tierOptions
 //               for the editor), taxExemptionLabel. NO migration, NO new dep, NO endpoint.
-// GATE:         OWNER-ONLY — /customers/:id sits in the owner-only PermissionRoute group beside
-//               /customers, matching customers_business_owner + orders_business_owner (both owner-only).
+// GATE:         `customers:read` — /customers/:id sits in the router's `customers:read` group beside
+//               /customers (✏️ #345: this line said OWNER-ONLY, which the router stopped being on
+//               2026-07-24). The contact lists' Make main / Remove additionally need `customers:update`.
 // INSTRUMENTATION (STD-003): `[TRACE:customers]` / `[TRACE:ROSTER]` on the fetches (ids/counts only —
 //               never PII, BENCH-C). ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
@@ -30,13 +31,13 @@ import { formatPersonName } from '@trace/shared/utils/personName';
 import { orderItemName, orderItemTag, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { orderStatusMeta } from '../lib/orderStatus';
 import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
+import { ContactListsPanel } from '../components/customers/ContactListsPanel';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
+// ✏️ #345: `address_line1` / `city` / `state` / `zip` are gone from this type — those columns are
+// dropped by 20260915b, and `city` was the one the header line read (so it went blank the moment the
+// backfill moved the value to `billing_city`). The billing address is `billing_*` (derived).
 interface CustomerRecord extends PartyCustomer {
-  address_line1?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
   source?: string | null;
 }
 
@@ -146,7 +147,7 @@ export function CustomerDetail() {
     ? (customer.organization_name?.trim() || customer.first_name)
     : formatPersonName(customer.first_name, customer.last_name) || customer.first_name) || '—';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
-  const contact = [customer.email, customer.phone, customer.city].filter(Boolean).join(' · ');
+  const contact = [customer.email, customer.phone, customer.billing_city].filter(Boolean).join(' · ');
 
   return (
     <Shell>
@@ -173,6 +174,9 @@ export function CustomerDetail() {
         </div>
         <button onClick={() => setEditing(true)} style={editBtn}><Pencil size={14} /> Edit record</button>
       </div>
+
+      {/* #345 — the lists a kept second number lives in. Customer page → Phones is where CARD 15 looks. */}
+      <ContactListsPanel businessId={businessId!} customerId={customer.id} onChanged={() => { void load(); }} />
 
       {/* Stat cards */}
       <div style={statGrid}>

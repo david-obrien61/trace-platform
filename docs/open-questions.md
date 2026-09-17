@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-16** (ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
+**Last updated: 2026-09-17** (ledger #345 — the writer registry; contacts registered; not merged. Prior: ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#345 — the writer registry; a typed phone is never dropped (build, NOT MERGED)**
+- 🔴 **OPEN — MERGE.** The branch waits on David's word; step i and step j wait on the merge. Owner: ledger #345.
+- 🔴 **OPEN — A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK MAKES A DUPLICATE.** Link by email/phone when exactly one matches, or ask? Owner: tech-debt #314.
+- 🟡 **OPEN — THE ROUTE PLANNER'S ADDRESS BOX IS NEVER SAVED.** Scratch, or save it to the stop? Owner: tech-debt #316.
+- 🟡 **OPEN — STAFF AT CHECKOUT.** A member without `customers:update` who types over a picked customer's phone gets NOT SAVED (red). Should staff be able to add a number? Owner: ledger #345 Blocker.
+- 🟡 **OPEN — WHICH DOMAIN IS REGISTERED NEXT.** Proposed: orders → delivery stops → stock movements. Owner: `writer-registry.json` → `proposed`.
 
 **#342 — during testing nothing writes the record; practice orders go with their import (build + migrations written, none applied)**
 - ✅ **ANSWERED 2026-09-16 — THE DISCOVERY FILE WAS RUN** (read-only, by Thunder). 7c found zero seed rows, so `20260916_rehearsal_cleanup_lawns.sql` is **not applied** and removed; the targeted `20260916e` replaces it. Owner: ledger #342 row.

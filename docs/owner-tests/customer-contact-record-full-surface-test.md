@@ -440,18 +440,21 @@ SELECT c.id, c.billing_line1 AS flat, a.line1 AS list
 
 ---
 
-### CARD 15 — Test Dave's, checkout: a second phone is KEPT, the first stays shown
+### CARD 15 — Test Dave's, checkout: a second phone is KEPT, the first stays main
 STATUS: owed
 LAST-PROVEN: —
 DEVICE: phone
-COVERS: ledger #335
+COVERS: ledger #345
 
-1. Start a checkout for an existing Test Dave's customer who has a phone.
-2. On the customer step, type a **different** phone number. Finish the order.
-3. Open that customer on /customers.
+0. GATE 0: the footer stamp shows the merged build and `prod`. If a green bar says **"A new version is ready — reload"**, tap **Reload** first.
+1. Start a checkout on Test Dave's. On the customer step, search **john smith** and tap him.
+2. Change **Phone** to a number he does not have (e.g. `222-333-9090`). Leave everything else. Finish the order.
+3. On the confirmation screen, read the **Customer contact details** box.
+4. Open **Customers → john smith**.
 
-**PASS:** the customer still shows the **original** phone; the new number is on file as a second
-phone. The order went through with no error.
+**PASS:** the confirmation says the phone was saved **as an additional one; the main one is unchanged**. On the customer page, the **Phones** list shows the original number marked **Main**, and the new number appears in the customer's Phones list below it. The order went through with no error.
+
+✏️ **WAS `needs-test` (2026-09-17, two reasons — both fixed by ledger #345):** checkout with a picked customer dropped the typed phone (CLV-20260917-1769), and no screen showed the phone list. The first run (9:29 CT) is VOID: the page was opened before the 14:15 UTC flip (footer `2a2f862`).
 
 ---
 
@@ -485,6 +488,118 @@ COVERS: ledger #335
 
 ---
 
+### CARD 18 — Test Dave's, customer page: Make main and Remove
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #345
+
+1. After CARD 15, open **Customers → john smith**.
+2. In **Phones**, tap **Make main** on the new number.
+3. Scroll up to the header line under his name.
+4. In **Phones**, tap **Remove** on the old number and confirm.
+5. Reload the page.
+
+**PASS:** after step 2 the new number shows **Main** in the Phones list and the header line under his name shows the new number. After step 5 the old number is gone from the Phones list and the new one is still **Main**. A **Last change** box says what happened each time. (Remove keeps it on file behind the scenes — nothing is deleted.)
+
+---
+
+### CARD 19 — Test Dave's, checkout as STAFF: a phone that cannot be saved says so in red
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #345
+
+⚠️ Needs a STAFF login on Test Dave's (a desk-visit card if you are not holding one).
+
+1. Signed in as the STAFF member, start a checkout, search **john smith**, tap him.
+2. Change **Phone** to another new number. Finish the order.
+3. Read the confirmation screen.
+
+**PASS:** the order is confirmed, and the **Customer contact details** box shows the phone in **red**: **NOT SAVED — only someone who may edit customers can change a saved customer's contact details.** Customers → john smith → Phones does not show that number.
+
+---
+
+### CARD 20 — Test Dave's, checkout: picking a QuickBooks-style customer does NOT make a second one
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #345
+
+1. Note how many customers **Customers** lists for a name that came from QuickBooks (or any customer made without an email), e.g. search it.
+2. Start a checkout, search that customer, tap them, type a new phone, finish the order.
+3. Search the name again on **Customers**.
+
+**PASS:** the Customers list shows the **same number of rows** for that name as in step 1 (no second copy), the order shows on that customer's page under **Order history**, and the new phone appears in their **Phones** list.
+
+---
+
+### CARD 21 — Test Dave's, checkout: a different billing address is KEPT, the one on file stays main
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #345
+
+1. Start a checkout, search a customer who has an address, tap them.
+2. Change the **street and city** to a different place. Finish the order.
+3. Open that customer.
+
+**PASS:** the confirmation says the address was saved **as an additional one; the main one is unchanged**. The customer page's **Addresses** list shows the original address marked **Main** and the new one below it; the header line still shows the original city.
+
+---
+
+### CARD 22 — LAWNS or Test Dave's, as the MANAGER: a stop's address change is recorded
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #345
+
+⚠️ Needs the manager's login (Lauren's role).
+
+1. As the manager, open a delivery stop and change its address. Save.
+2. Read the message under the address.
+
+**PASS:** the screen says the address was **saved** — and does **not** say it was "saved, not recorded". (Before tech-debt #315's fix every manager's change said that.)
+
+---
+
+### CARD 23 — Invoice capture: an existing customer's different phone is kept
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #345
+
+1. Capture an invoice for a customer created by an earlier capture (CARD 17's), with a **different phone** on it. Tick **Add customer**. Save.
+2. Read the **Saved** screen.
+3. Open the customer.
+
+**PASS:** the Saved screen's **Customer contact details** box says the phone was saved **as an additional one**. The customer page shows **one** customer (no copy), with both numbers in **Phones** and the original marked **Main**.
+
+---
+
+### CARD 24 — Any tenant: a page left open is told when a new version ships
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #345 · tech-debt #313
+
+1. Open the app on your phone and leave it open.
+2. After the next production deploy (any merge), bring the app back to the front, or tap to another screen.
+
+**PASS:** a green bar at the bottom says **"A new version is ready — reload"**. Tapping **Reload** reloads, and the footer stamp then shows the new build.
+
+---
+
+### CARD 25 — Not a phone card: the paths no screen can reach (recorded, not run by David)
+STATUS: needs-test
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #345
+
+**Reason it is `needs-test`:** three fixed inputs have no screen — the capture endpoint's **second address line** and its **retired field names** (no app screen sends either today), and the **sample-data script** (`seed-sandbox`). Each is covered by its end-to-end path test (`ocr.new-customer`, `ocr.retired-field-names`, `script.seed-sandbox`), which runs on every build. A card that told you to send a hand-made request would not be a test of anything you use.
+
+---
+
 ### CARD 14 — 🔴 LAWNS, AND ONLY AFTER EVERY CARD ABOVE IS GREEN
 STATUS: needs-test
 LAST-PROVEN: —
@@ -499,6 +614,6 @@ nobody has designed yet**, which is the thing OP-14's `needs-test` state exists 
 
 ---
 
-> **COVERAGE: 0 of 21.** Thunder may never mark a card `covered` — only David's live run flips one,
-> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–17 need the
+> **COVERAGE: 0 of 29.** Thunder may never mark a card `covered` — only David's live run flips one,
+> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–24 need the
 > build in front of you, and GATE 0 is what settles which build that is.**

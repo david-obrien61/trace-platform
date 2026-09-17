@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppRouter } from './router';
 import { BusinessProvider } from '@trace/shared/context';
 import { VersionStamp } from './components/VersionStamp';
+import { NewVersionPrompt } from './components/NewVersionPrompt';
 import './styles/globals.css';
 
 export function App() {
@@ -16,6 +17,8 @@ export function App() {
           error states. GATE 0 (OP-15) reads it to decide whether a screen is evidence
           at all; gating it behind debug would let a broken deploy hide its own tell. */}
       <VersionStamp />
+      {/* #313 — a page left open across a deploy is told, and reloads on tap. Same placement rule. */}
+      <NewVersionPrompt />
 
       {/* DebugPanel + RhythmLogger are NO LONGER MOUNTED HERE (ledger #142).
           They moved INSIDE AppLayout — i.e. inside PrivateRoute — because mounting
