@@ -315,9 +315,14 @@ const ALLOWED_DIVERGENCE = {
           + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC. '
           + 'SECOND (2026-09-11): stopWrites.ts records a ship-to change (delivery.ship_to_changed) '
           + 'AFTER the address update lands, so a partial save is "saved, not recorded" and says so — '
-          + 'never a row for a change that did not happen. The one-RPC form is tech-debt #276.',
+          + 'never a row for a change that did not happen. The one-RPC form is tech-debt #276. '
+          + 'THIRD (2026-09-17, ledger #345): contactWriter.logContactChanges records every contact '
+          + 'add / make-main / remove (David: "who, when, customer, list, value, outcome") AFTER the '
+          + 'list write lands; a failed log is reported as audited:false and never undoes the change. '
+          + 'Both client inserts prove themselves by COUNT — a manager cannot read audit_log (#315).',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx',
-            'packages/cultivar-os/src/lib/stopWrites.ts'],
+            'packages/cultivar-os/src/lib/stopWrites.ts',
+            'packages/shared/src/business-logic/contactWriter.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.

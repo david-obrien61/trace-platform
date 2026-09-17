@@ -83,7 +83,8 @@ export function CustomerCapture() {
   const {
     setCustomer, customer: saved, items, selectedTransport,
     deliveryDate: savedDeliveryDate, setDeliveryDate,
-    attachedCustomerId, setShipTo,
+    attachedCustomerId, setShipTo, attachCustomer, clearAttachedCustomer,
+    invokedTier, orderTierLabel, orderTier,
   } = useCart();
   const { can, business, businessId } = useBusinessContext();
   const firstItem = items[0] ?? null;
@@ -225,6 +226,20 @@ export function CustomerCapture() {
     // customer-first door (ScanOrder); this covers the search-at-checkout door, which is where
     // Lauren actually stands.
     setPickerCustomerId(h.id);
+    // 🔴 #345 — THE PICK NOW ATTACHES, THE SAME AS SCANORDER'S. It used to set only the picker id,
+    // so the order carried NO customer id and the server re-matched by typed fields — which, for a
+    // customer with no person link (every QuickBooks-imported row, every organization), created a
+    // DUPLICATE customer and put the typed details on it. Attached, the order goes to the customer
+    // the operator chose, and what they typed over the pre-filled form is saved to THAT customer.
+    // The order's invoked tier (if ScanOrder set one) is kept, not cleared.
+    attachCustomer({
+      customerId: h.id,
+      name: `${f.first_name} ${f.last_name}`.trim(),
+      customer: { ...(saved ?? {}), first_name: f.first_name, last_name: f.last_name, email: f.email },
+      invokedTier: invokedTier ?? null,
+      tierLabel: orderTierLabel ?? null,
+      resolvedTier: orderTier ?? null,
+    });
     setTouched(false); // a fresh record: do not show validation errors the operator has not earned
     setStep({ kind: 'add' }); // same form, now pre-filled — the operator confirms and continues
   }
@@ -353,6 +368,9 @@ export function CustomerCapture() {
                 // one customer's address on another customer's order. A new customer has no book
                 // by definition, so null is not merely safe here, it is the true answer.
                 setPickerCustomerId(null);
+                // #345: a NEW customer is not the one picked earlier — drop the attachment too, or
+                // the order (and the typed details) would land on the previous pick.
+                if (attachedCustomerId) clearAttachedCustomer();
                 console.log('[TRACE:customers] checkout add-new from no-match', { query });
                 setStep({ kind: 'add' });
               }}

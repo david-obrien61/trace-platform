@@ -51,9 +51,18 @@ function recordingDb(mode: { update?: Reply; audit?: Reply } = {}) {
           };
           return chain;
         },
-        insert(payload: Record<string, unknown>) {
-          calls.push({ table, op: 'insert', payload, filters: [] });
-          return { select(_c: string) { return answer(mode.audit ?? 'ok', 'audit-1'); } };
+        insert(payload: Record<string, unknown>, opts?: { count?: string }) {
+          calls.push({ table, op: 'insert', payload, filters: [opts?.count ? 'count' : 'no-count'] });
+          const m = mode.audit ?? 'ok';
+          const counted = m === 'error' ? { data: null, error: { message: 'permission denied' }, count: null }
+            : { data: null, error: null, count: m === 'zero' ? 0 : m === 'two' ? 2 : 1 };
+          return {
+            // 🔴 #315 — modelled as live: asking for the row back needs `audit_log:read`, which a
+            // MANAGER does not hold, so Postgres refuses the whole INSERT. A fake that returned the
+            // row here is exactly the forgiving double §6 r19 forbids.
+            select(_c: string) { return Promise.resolve({ data: null, error: { code: '42501', message: 'new row violates row-level security policy for table "audit_log"' } }); },
+            then(res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) { return Promise.resolve(counted).then(res, rej); },
+          };
         },
       };
     },
@@ -122,6 +131,8 @@ async function main(): Promise<void> {
     const { db, calls } = recordingDb();
     const out = await saveShipTo(db, { ...args, form: FORM_MOVED });
     ok(out.kind === 'saved' && out.audited === true, `C1 saved and recorded (got ${JSON.stringify(out)})`);
+    ok(calls.find(c => c.table === 'audit_log')?.filters[0] === 'count',
+      'C0 🔴 the history insert proves itself by COUNT, never by reading the row back (a manager cannot read audit_log — #315)');
     ok(calls.map(c => `${c.table}.${c.op}`).join(' → ') === 'deliveries.update → audit_log.insert',
       `C2 exactly two writes, stop first (got ${calls.map(c => `${c.table}.${c.op}`).join(' → ')})`);
     ok(!calls.some(c => c.table === 'customers'), 'C3 🔴 the customer\'s record is NEVER written');

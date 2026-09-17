@@ -11,6 +11,15 @@
  * Creates only __PROOF rows and deletes them at the end (real customer data untouched).
  * Requires packages/cultivar-os/.env.local (SUPABASE_URL + SUPABASE_SERVICE_KEY).
  */
+import { refuseRetired } from './lib/retiredScript.mjs';
+refuseRetired({
+  script:       'verify-customer-upsert.mjs',
+  retiredOn:    '2026-09-17 (ledger #345)',
+  supersededBy: 'the writer-registry path tests — scripts/path-tests/contacts.paths.mts, run by `npm run verify:writer-registry`. They drive the OCR and checkout endpoints end to end against the live schema on PGlite and read the rows back, with no live write.',
+  wrote:        'Four __PROOF customers into business 45830ba7 (the TRACE business, which no longer exists — tech-debt #250), with the retired `address_line1` key the contact record ignores. It also imported a hand-built bundle from /tmp that nothing produces.',
+  why:          'It could not run (its business is gone, its import is a /tmp file), and it wrote to the live database to prove what the path tests now prove without one.',
+});
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';

@@ -17,6 +17,12 @@
 // ============================================================
 import { supabase } from '../../lib/supabase';
 import { insertCustomerFields, updateCustomerFields } from '@trace/shared/business-logic/customerFieldWrite';
+import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
+
+/** Who is editing — for the contact change log (#345). Null when the session cannot be read. */
+async function currentUserId(): Promise<string | null> {
+  try { const { data } = await supabase.auth.getSession(); return data.session?.user.id ?? null; } catch { return null; }
+}
 
 // 🔴 LEDGER #335 — phone, email and the billing address are CONTACT-LIST rows, not customer columns
 // (the database derives the columns and refuses a direct write). The writes live in the shared
@@ -28,7 +34,8 @@ import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIEL
 // per-field writers are replaced by one diffed Save. Keys here must match CUSTOMER_TEXT_FIELDS.
 export type CustomerTextField =
   | 'first_name' | 'last_name' | 'phone' | 'email'
-  | 'address_line1' | 'city' | 'state' | 'zip'
+  // ✏️ #345: 'address_line1' | 'city' | 'state' | 'zip' removed — the columns are dropped
+  // (20260915b) and no registry entry names them.
   // Party-record (2026-07-13) text fields — all nullable (blank → null via coerceCustomerField).
   | 'organization_name' | 'display_name'
   | 'billing_line1' | 'billing_line2' | 'billing_city' | 'billing_state' | 'billing_zip'
@@ -81,16 +88,16 @@ export async function persistCustomerPatch(params: {
   id: string;
   businessId: string;
   patch: Record<string, unknown>;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; contact: ContactValueResult[] }> {
   const { id, businessId, patch } = params;
   for (const [field, to] of Object.entries(patch)) traceEdit(id, field, undefined, to);
-  const res = await updateCustomerFields(supabase, { id, businessId, patch });
-  if (res.error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), res.error); return { error: res.error }; }
+  const res = await updateCustomerFields(supabase, { id, businessId, patch, actorUserId: await currentUserId() });
+  if (res.error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), res.error); return { error: res.error, contact: res.contact }; }
   if (res.zeroRows) {
     console.error('[TRACE:customers] patch AFFECTED ZERO ROWS — refused or missing', { customerId: id, fields: Object.keys(patch) });
-    return { error: NOT_SAVED };
+    return { error: NOT_SAVED, contact: res.contact };
   }
-  return { error: null };
+  return { error: null, contact: res.contact };
 }
 
 /**
@@ -103,13 +110,13 @@ export async function persistCustomerPatch(params: {
 export async function insertCustomer(params: {
   businessId: string;
   values: Record<string, unknown>;
-}): Promise<{ error: string | null; id: string | null }> {
+}): Promise<{ error: string | null; id: string | null; contact: ContactValueResult[] }> {
   const { businessId, values } = params;
   const masked = Object.fromEntries(
     Object.entries(values).map(([k, v]) => [k, SENSITIVE_CUSTOMER_FIELDS.has(k) ? '(set)' : v]),
   );
   console.log('[TRACE:customers] insert', { businessId, fields: masked });
-  const res = await insertCustomerFields(supabase, { businessId, values });
+  const res = await insertCustomerFields(supabase, { businessId, values, actorUserId: await currentUserId() });
   if (res.error) console.error('[TRACE:customers] insert error', res.error);
   return res;
 }

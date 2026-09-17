@@ -61,3 +61,6 @@ docs/snapshots/
 # Added 2026-09-16 (#335, the LAWNS snapshot → migrate → reload). These files hold real
 # names, phones, emails and street addresses; the repo is read by family and by every clone.
 supabase/local-data/
+
+# writer-registry path-test bundles (ledger #345)
+.writer-registry-*.bundle.mjs

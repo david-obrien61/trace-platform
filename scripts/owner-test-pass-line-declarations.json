@@ -1,0 +1,99 @@
+{
+  "_about": [
+    "PASS lines that describe code behaviour and name nothing a person SEES or WHERE (CLAUDE.md §6 r21, ledger #345). These predate the rule — nearly all are SQL-editor or HTTP-response checks. verify-owner-test-boards check E refuses any NEW one; an entry here that no longer matches a code-only PASS line is STALE and fails, so the list only shrinks."
+  ],
+  "lines": [
+    {
+      "board": "campaign-lifecycle",
+      "starts": "`campaigns_member_update` (UPDATE) and `campaign_posts_membe"
+    },
+    {
+      "board": "channel-vocabulary",
+      "starts": "⑥ raises an error naming **`myspace`**; ⑦ reports **`UPDATE "
+    },
+    {
+      "board": "customer-addresses",
+      "starts": "🔴 **step 3 returns EXACTLY what step 1 returned.** The stop"
+    },
+    {
+      "board": "customer-contact-record",
+      "starts": "`rls_on = true` · `policies = 3` · `owner_id_policies = 0` ·"
+    },
+    {
+      "board": "customer-contact-record",
+      "starts": "two rows, different `value_norm`, exactly one `is_primary = "
+    },
+    {
+      "board": "customer-contact-record",
+      "starts": "the records whose `BillAddr.Line1` held a phone have **both*"
+    },
+    {
+      "board": "customer-edit-surface",
+      "starts": "the register returns **the same customers, by name**, as the"
+    },
+    {
+      "board": "discount-config",
+      "starts": "`tax` is **byte-identical** before and after (`0.0825` on LA"
+    },
+    {
+      "board": "qb-catalogue-import",
+      "starts": "`wouldCreate` (647) equals `adapted.counts.sellable` (647) —"
+    },
+    {
+      "board": "qb-catalogue-import",
+      "starts": "403 `OWNER_ONLY`, LAWNS fingerprint identical."
+    },
+    {
+      "board": "qb-catalogue-import",
+      "starts": "all five. 🔴 **AND WRITE THE THREE NUMBERS DOWN** — the phon"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "the preview reports `readable: 1946` against LAWNS. If Quick"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "all six come back, `tax_exempt = true`.** Fewer than six mea"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "every one of those rows still has `import_run_id IS NULL`, a"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "refused — **403**, `code: FORBIDDEN`. ⚠️ **The PREVIEW call "
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "all three behave as above. `/api/qbo/status` → `writes_enabl"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "the undo **succeeds** — `deliveries.customer_id` is `ON DELE"
+    },
+    {
+      "board": "qb-customer-import",
+      "starts": "it reports `phoneWouldBeLost: 5`. Those records have a real "
+    },
+    {
+      "board": "qb-test-mode",
+      "starts": "two nullable columns with no default · `already_retired` = `"
+    },
+    {
+      "board": "receipts-view",
+      "starts": "every line object carries **`uom`**, **`pack_size`** and **`"
+    },
+    {
+      "board": "team-permissions",
+      "starts": "`outcome='success'`, `members_affected` ≥ 1, and the member "
+    },
+    {
+      "board": "uppot-planning",
+      "starts": "availability returns to its pre-commit figure, and the hold "
+    },
+    {
+      "board": "uppot-planning",
+      "starts": "the insert is **REFUSED** by policy."
+    }
+  ]
+}

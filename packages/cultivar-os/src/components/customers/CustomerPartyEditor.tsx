@@ -41,6 +41,8 @@ import {
   persistCustomerPatch, insertCustomer, buildCustomerPatch, type CustomerTextField,
 } from './customerEdit';
 import { TAX_EXEMPTION_REASONS } from '@trace/shared/business-logic';
+import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
+import { ContactResultList } from '@trace/shared/components/customers/ContactResultList';
 
 // The full party row the editor reads. Party-record cols (2026-07-13) are optional so a
 // pre-migration row (cols stripped by the roster's deploy-safe fallback) still opens cleanly.
@@ -76,11 +78,9 @@ export const BLANK_PARTY_CUSTOMER: PartyCustomer = {
   customer_type: 'person', price_tier: 'retail', status: 'active',
 };
 
-// Billing → legacy consumed-address mirror (line2 has no legacy equivalent). D-41 shipped billing_*
-// as the address home, but checkout/delivery/order-detail still READ the unprefixed address_* today
-// (follow-up (b) will repoint them). To avoid regressing a manually-added customer's checkout address,
-// the shared editor writes billing AND the legacy field together — in BOTH create and edit — keeping
-// the consumed field in sync until (b) folds address_* into billing_* and drops this mirror.
+// ✏️ #345: the "billing → legacy mirror" note that stood here is retired. There is no mirror: the
+// legacy address columns are dropped, and phone / email / billing_* are written to the contact lists
+// by `customerFieldWrite` → `contactWriter` (the database derives the columns from them).
 
 interface Props {
   customer: PartyCustomer;
@@ -118,6 +118,9 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
   const [saved, setSaved] = useState<PartyCustomer>(customer);
   const [error, setError] = useState<string | null>(null);
   const [savingNew, setSavingNew] = useState(false);
+  // #345 — what became of each typed phone / email / address. Non-empty after a Save → the dialog
+  // stays open on the result list (NOT SAVED in red) and closes on Done.
+  const [contactResults, setContactResults] = useState<ContactValueResult[]>([]);
 
   // Tax-exemption sub-state (validated trio). Seed from the row; when exempt is ON but no reason
   // yet, the "Save exemption" is blocked (mirrors D-40 — never zero tax without a recorded reason).
@@ -167,10 +170,12 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
       ? await insertCustomer({ businessId, values })
       : await persistCustomerPatch({ id: draft.id, businessId, patch: values });
     setSavingNew(false);
+    setContactResults(res.contact);
     if (res.error) { setError(res.error); return; }   // includes the A8 zero-row refusal message
     setSaved({ ...draft, ...(values as Partial<PartyCustomer>) });
     onSaved();
-    onClose();
+    // Nothing contact-shaped was typed → nothing to report → close as before.
+    if (res.contact.length === 0) onClose();
   }
 
   // Cancel now genuinely discards. Guard only when there is something to lose.
@@ -371,6 +376,11 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         </div>
 
         <div style={{ ...SS.sheetActions, flexDirection: 'column', gap: 6 }}>
+          {/* #345 — beside the buttons, where the eye is when Save is pressed (E3's reasoning). */}
+          <ContactResultList results={contactResults} title="Contact details" />
+          {contactResults.length > 0 && !error ? (
+            <button type="button" onClick={onClose} style={{ ...SS.submitBtn, flex: 1 }}>Done</button>
+          ) : (
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" onClick={() => { void save(); }} disabled={savingNew}
               style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, flex: 1 }}>
@@ -381,6 +391,7 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
               Cancel
             </button>
           </div>
+          )}
           {/* E3 — the copy states the commit model. It rides WITH the buttons, because a promise about
               what Save does is worthless on a line the reader cannot see at the moment they press it. */}
           <p style={{ ...SS.hint, margin: 0 }}>Nothing is saved until you press Save. Cancel discards your changes.</p>

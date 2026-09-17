@@ -31,8 +31,10 @@
 //               contactFields (the column lists).
 // OUTPUTS:      CONTACT_PHONE_COLUMNS · CONTACT_EMAIL_COLUMNS · CONTACT_ADDRESS_READ_COLUMNS ·
 //               planContactRows · reconcileContactRows · writeContactRecord · writeContactRecords ·
-//               planContactEdit · writeContactEdit · contactEditOf · insertShipToSite ·
-//               retireShipToSite · removeRunContactRows · runCustomersWithHandAddedContacts
+//               planContactEdit · writeContactEdit · contactEditOf · contactResultSentence ·
+//               addressLine · logContactChanges · readContactLists · makeContactMain ·
+//               retireContact · insertShipToSite · retireShipToSite · removeRunContactRows ·
+//               runCustomersWithHandAddedContacts
 //
 // 🔴 EVERY WRITER OF A CUSTOMER'S PHONE, EMAIL OR ADDRESS COMES THROUGH THIS FILE (David, 2026-09-16).
 //    `customers.phone` / `email` / `billing_*` are DERIVED by the database from the three lists, and
@@ -40,13 +42,18 @@
 //    uses: the QuickBooks import → `writeContactRecords` (tagged with its run) · OCR capture, checkout
 //    and delivery ingest (all via `customerUpsert`) and the customer editor → `writeContactEdit` ·
 //    the ship-to picker → `insertShipToSite` / `retireShipToSite` · the customer-import undo →
-//    `removeRunContactRows`.
+//    `removeRunContactRows` · the customer page's lists → `makeContactMain` / `retireContact`.
+//    The full list of capture paths, each with its end-to-end test, is `writer-registry.json`
+//    (ledger #345) — and `npm run verify` fails on a path that is not in it.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContactRecord } from './contactRecord';
 import { addressKey, normalizeEmailValue, normalizePhoneValue, phonesInText, splitEmails } from './contactRecord';
-import { CONTACT_ADDRESS_EDIT_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_PHONE_COLUMNS } from './contactFields';
+import {
+  CONTACT_ADDRESS_EDIT_COLUMNS, CONTACT_ADDRESS_LIST_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS, CONTACT_EMAIL_COLUMNS,
+  CONTACT_PHONE_COLUMNS, CONTACT_VALUE_LIST_COLUMNS,
+} from './contactFields';
 import type { CustomerAddress } from './customerAddresses';
 
 // STD-003: ON by default until OWNER-PROVEN. Do not comment out (§7 standing instruction).
@@ -54,7 +61,7 @@ const TRACE_CONTACT = true;
 
 // The column lists live in `contactFields.ts` — `verify-field-lists` counts a list declared beside
 // its reader as hand-written, and an imported one as derived (the `customerAddressFields.ts` shape).
-export { CONTACT_PHONE_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS, CONTACT_ADDRESS_EDIT_COLUMNS };
+export { CONTACT_PHONE_COLUMNS, CONTACT_EMAIL_COLUMNS, CONTACT_ADDRESS_READ_COLUMNS, CONTACT_ADDRESS_EDIT_COLUMNS, CONTACT_VALUE_LIST_COLUMNS, CONTACT_ADDRESS_LIST_COLUMNS };
 
 export interface ContactRowPlan {
   phones: Record<string, unknown>[];
@@ -453,10 +460,19 @@ export async function writeContactRecords(
 //     'replace'  — the value becomes primary; the old primary is RETIRED (R-133: active=false,
 //                  never deleted). A cleared field retires the primary. (the customer editor.)
 //   billing:
-//     'fill'     — fill only the blank fields of the billing address on file; add one if none.
+//     'fill'     — fill the blank fields of the billing address on file; add one if none.
+//                  ✏️ 2026-09-17 (ledger #345): a supplied field that DIFFERS from a stored one no
+//                  longer vanishes. The typed address is KEPT as an additional billing address and
+//                  the one on file stays main — the same rule as a second phone. Before this, a
+//                  checkout that typed a new street for a known customer saved nothing.
 //     'replace'  — set the supplied fields on it (a cleared field clears); add one if none. An
 //                  address left with nothing in it is retired.
 // `undefined` = the caller did not touch the field. `null`/'' = cleared (meaningful for 'replace').
+//
+// 🔴 NO SILENT DROP (David, 2026-09-17): every typed value comes back with an OUTCOME the screen
+//    shows — kept as main · kept as additional · already on file · NOT SAVED + reason (· removed,
+//    for a cleared field). A contact problem never blocks the sale or the save it rides on; it is
+//    REPORTED, in red, instead. And every add, make-main and remove writes an `audit_log` row.
 
 export type ContactFieldPolicy = 'add' | 'primary' | 'replace';
 export type ContactAddressPolicy = 'fill' | 'replace';
@@ -476,6 +492,32 @@ export interface ContactEditPolicy {
   /** Provenance for new rows: 'checkout', 'ocr-invoice', 'manual', … */
   source: string;
   importRunId?: string | null;
+  /** Who made the change, for the change log. Null = a system write (service key, no caller). */
+  actorUserId?: string | null;
+}
+
+/** The three lists, by the name a person sees. */
+export type ContactList = 'phones' | 'emails' | 'addresses';
+export type ContactValueOutcome = 'kept_main' | 'kept_additional' | 'already_on_file' | 'removed' | 'not_saved';
+export interface ContactValueResult {
+  list: ContactList;
+  /** The value as typed (an address is shown as one line). */
+  value: string;
+  outcome: ContactValueOutcome;
+  /** Present when `outcome` is 'not_saved': the reason, in words a person can act on. */
+  reason?: string;
+}
+
+/** The sentence a screen shows for one result. One home, so every screen says the same thing. */
+export function contactResultSentence(r: ContactValueResult): string {
+  const what = r.list === 'phones' ? 'Phone' : r.list === 'emails' ? 'Email' : 'Address';
+  switch (r.outcome) {
+    case 'kept_main': return `${what} ${r.value} — saved as the main one.`;
+    case 'kept_additional': return `${what} ${r.value} — saved as an additional one; the main one is unchanged.`;
+    case 'already_on_file': return `${what} ${r.value} — already on file.`;
+    case 'removed': return `${what} ${r.value} — removed.`;
+    case 'not_saved': return `${what} ${r.value} — NOT SAVED: ${r.reason ?? 'the save was refused'}.`;
+  }
 }
 
 /** The contact keys a flat patch may carry, and how they map into a `ContactEdit`. */
@@ -515,14 +557,32 @@ export interface ContactEditPlan {
   updateAddress: { id: string; patch: Record<string, string | null> } | null;
   retireAddress: string | null;
   insertAddress: Record<string, unknown> | null;
+  /** What each typed value will become once the plan is written (the writer turns a failed write into 'not_saved'). */
+  results: ContactValueResult[];
 }
 
 const blank = (v: unknown) => v === null || v === undefined || String(v).trim() === '';
 const cleanOrNull = (v: unknown): string | null => (blank(v) ? null : String(v).trim());
+const sameText = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** One line for an address, the way a person reads it. */
+export function addressLine(a: ContactEditAddress): string {
+  const cityState = [cleanOrNull(a.city), cleanOrNull(a.state)].filter(Boolean).join(', ');
+  const tail = [cityState, cleanOrNull(a.zip)].filter(Boolean).join(' ');
+  return [cleanOrNull(a.line1), cleanOrNull(a.line2), tail].filter(Boolean).join(', ');
+}
+
+const ADDRESS_FIELDS = ['line1', 'line2', 'city', 'state', 'zip'] as const;
+const freeLabel = (held: { label: string }[], stem: string) => {
+  const taken = new Set(held.map(a => a.label.trim().toLowerCase()));
+  let label = stem;
+  for (let n = 2; taken.has(label.toLowerCase()); n++) label = `${stem} ${n}`;
+  return label;
+};
 
 /**
- * PURE. Held rows (active, oldest first) + the edit + the policy → exactly what to write.
- * Every decision below is asserted in `contactWriter.test.ts` §K without a client.
+ * PURE. Held rows (active, oldest first) + the edit + the policy → exactly what to write, and what
+ * each typed value will become. Every decision below is asserted in `contactWriter.test.ts` §K.
  */
 export function planContactEdit(
   held: { phones: HeldValue[]; emails: HeldValue[]; addresses: HeldAddress[] },
@@ -532,6 +592,7 @@ export function planContactEdit(
     retirePhones: [], demotePhones: [], promotePhones: [], respellPhone: null,
     retireEmails: [], demoteEmails: [], promoteEmails: [],
     insertPhones: [], insertEmails: [], updateAddress: null, retireAddress: null, insertAddress: null,
+    results: [],
   };
   const base: Record<string, unknown> = { business_id: ids.businessId, customer_id: ids.customerId, source: policy.source };
   if (policy.importRunId) base.import_run_id = policy.importRunId;
@@ -552,6 +613,7 @@ export function planContactEdit(
 
   // ── one list (phones or emails) ──
   const applyValues = (
+    listName: 'phones' | 'emails',
     list: HeldValue[], main: string | null | undefined, extras: { value: string; note?: string | null }[],
     mode: ContactFieldPolicy, norm: (v: string) => string,
     out: { retire: string[]; demote: string[]; promote: string[]; insert: Record<string, unknown>[] },
@@ -559,6 +621,7 @@ export function planContactEdit(
   ): { respell: { id: string; value: string } | null } => {
     const live = list.map(h => ({ ...h }));
     let respell: { id: string; value: string } | null = null;
+    const result = (value: string, outcome: ContactValueOutcome) => plan.results.push({ list: listName, value, outcome });
     const primaryOf = () => live.find(h => h.is_primary) ?? null;
     const find = (v: string) => live.find(h => (h.value_norm ?? norm(h.value)) === norm(v)) ?? null;
     const demote = (h: { id: string; is_primary: boolean }) => { if (h.is_primary) { out.demote.push(h.id); h.is_primary = false; } };
@@ -568,92 +631,188 @@ export function planContactEdit(
       const v = cleanOrNull(main);
       const current = primaryOf() ?? live[0] ?? null;
       if (v === null) {
-        if (mode === 'replace' && current) retire(current);
+        if (mode === 'replace' && current) { retire(current); result(current.value, 'removed'); }
       } else {
         const match = find(v);
         if (mode === 'add') {
-          if (!match) out.insert.push({ ...base, label, value: v, is_primary: primaryOf() === null });
+          if (match) result(v, 'already_on_file');
+          else {
+            const primary = primaryOf() === null && live.length === 0;
+            out.insert.push({ ...base, label, value: v, is_primary: primary });
+            live.push({ id: '(new)', value: v, value_norm: norm(v), is_primary: primary });
+            result(v, primary ? 'kept_main' : 'kept_additional');
+          }
         } else if (match) {
           if (match === current || match.is_primary) {
-            if (mode === 'replace' && match.value !== v) respell = { id: match.id, value: v };
+            if (mode === 'replace' && match.value !== v) { respell = { id: match.id, value: v }; result(v, 'kept_main'); }
+            else result(v, 'already_on_file');
           } else {
             // The value is on file but is not the one shown. 'replace' retires what WAS shown
             // (the primary, or — with no primary — the oldest, which is what the derivation shows);
             // 'primary' only demotes. Then the matching row is promoted.
-            if (mode === 'replace') { if (current && current.id !== match.id) retire(current); }
+            if (mode === 'replace') { if (current && current.id !== match.id) { retire(current); result(current.value, 'removed'); } }
             else { const p = primaryOf(); if (p) demote(p); }
             out.promote.push(match.id); match.is_primary = true;
+            result(v, 'kept_main');
           }
         } else {
           const p = primaryOf();
-          if (mode === 'replace') { if (current) retire(current); }
+          if (mode === 'replace') { if (current) { retire(current); result(current.value, 'removed'); } }
           else if (p) demote(p);
           out.insert.push({ ...base, label, value: v, is_primary: true });
           live.push({ id: '(new)', value: v, value_norm: norm(v), is_primary: true });
+          result(v, 'kept_main');
         }
       }
     }
     for (const x of extras) {
-      if (find(x.value) || out.insert.some(r => norm(String(r.value)) === norm(x.value))) continue;
-      const row: Record<string, unknown> = { ...base, label: extraLabel, value: x.value, is_primary: primaryOf() === null && !out.insert.some(r => r.is_primary === true) };
+      if (find(x.value)) { result(x.value, 'already_on_file'); continue; }
+      const primary = primaryOf() === null && live.length === 0;
+      const row: Record<string, unknown> = { ...base, label: extraLabel, value: x.value, is_primary: primary };
       if (x.note !== undefined) row.note = x.note;
       out.insert.push(row);
-      live.push({ id: '(new)', value: x.value, value_norm: norm(x.value), is_primary: row.is_primary === true });
+      live.push({ id: '(new)', value: x.value, value_norm: norm(x.value), is_primary: primary });
+      result(x.value, primary ? 'kept_main' : 'kept_additional');
     }
     return { respell };
   };
 
   const ph = { retire: plan.retirePhones, demote: plan.demotePhones, promote: plan.promotePhones, insert: plan.insertPhones };
-  plan.respellPhone = applyValues(held.phones, edit.phone, extraPhones, policy.phone, normalizePhoneValue, ph, 'main', 'other').respell;
+  plan.respellPhone = applyValues('phones', held.phones, edit.phone, extraPhones, policy.phone, normalizePhoneValue, ph, 'main', 'other').respell;
 
   if (edit.email !== undefined) {
     const parts = edit.email === null || blank(edit.email) ? [] : splitEmails(edit.email);
     const em = { retire: plan.retireEmails, demote: plan.demoteEmails, promote: plan.promoteEmails, insert: plan.insertEmails };
-    applyValues(held.emails, parts[0] ?? null, parts.slice(1).map(value => ({ value })), policy.email, normalizeEmailValue, em, 'main', 'main');
+    applyValues('emails', held.emails, parts[0] ?? null, parts.slice(1).map(value => ({ value })), policy.email, normalizeEmailValue, em, 'main', 'main');
   }
 
   // ── the billing address ──
   if (billing && Object.keys(billing).length > 0) {
     const target = held.addresses.find(a => a.kind === 'billing' || a.kind === 'both') ?? null;
-    const fields = ['line1', 'line2', 'city', 'state', 'zip'] as const;
+    const typed = addressLine(billing);
+    const result = (value: string, outcome: ContactValueOutcome) => plan.results.push({ list: 'addresses', value, outcome });
     if (target) {
-      const patch: Record<string, string | null> = {};
-      for (const f of fields) {
-        if (!(f in billing)) continue;
-        const v = cleanOrNull(billing[f]);
-        if (policy.billing === 'fill') { if (v !== null && blank(target[f])) patch[f] = v; }
-        else if (v !== (cleanOrNull(target[f]))) patch[f] = v;
+      // FILL: a supplied value that disagrees with a stored one is a DIFFERENT address, not a fill.
+      const conflicts = policy.billing === 'fill'
+        ? ADDRESS_FIELDS.filter(f => f in billing && !blank(billing[f]) && !blank(target[f]) && !sameText(billing[f], target[f]))
+        : [];
+      if (conflicts.length > 0) {
+        // Kept as an ADDITIONAL billing address; the one on file stays main (not default, and older).
+        // A different street is a different place: only what was typed is kept. The same street
+        // with a corrected city/state/ZIP keeps the stored street with the typed corrections.
+        const streetChanged = conflicts.includes('line1');
+        const row: Record<string, string | null> = {};
+        for (const f of ADDRESS_FIELDS) {
+          const typedValue = f in billing ? cleanOrNull(billing[f]) : null;
+          row[f] = typedValue ?? (streetChanged ? null : cleanOrNull(target[f]));
+        }
+        plan.insertAddress = {
+          ...base, kind: 'billing', label: freeLabel(held.addresses, 'Billing'), ...row,
+          is_default: false, active: true,
+        };
+        result(addressLine(row), 'kept_additional');
+      } else {
+        const patch: Record<string, string | null> = {};
+        for (const f of ADDRESS_FIELDS) {
+          if (!(f in billing)) continue;
+          const v = cleanOrNull(billing[f]);
+          if (policy.billing === 'fill') { if (v !== null && blank(target[f])) patch[f] = v; }
+          else if (v !== (cleanOrNull(target[f]))) patch[f] = v;
+        }
+        const after = { ...target, ...patch };
+        if (policy.billing === 'replace' && ADDRESS_FIELDS.every(f => blank(after[f]))) {
+          plan.retireAddress = target.id;
+          result(addressLine(target), 'removed');
+        } else if (Object.keys(patch).length > 0) {
+          plan.updateAddress = { id: target.id, patch };
+          result(addressLine(after), 'kept_main');
+        } else if (typed) result(typed, 'already_on_file');
       }
-      const after = { ...target, ...patch };
-      if (policy.billing === 'replace' && fields.every(f => blank(after[f]))) plan.retireAddress = target.id;
-      else if (Object.keys(patch).length > 0) plan.updateAddress = { id: target.id, patch };
     } else {
       const row: Record<string, string | null> = {};
-      for (const f of fields) row[f] = cleanOrNull(billing[f]);
-      if (fields.some(f => row[f] !== null)) {
-        const taken = new Set(held.addresses.map(a => a.label.trim().toLowerCase()));
-        let label = 'Billing';
-        for (let n = 2; taken.has(label.toLowerCase()); n++) label = `Billing ${n}`;
+      for (const f of ADDRESS_FIELDS) row[f] = cleanOrNull(billing[f]);
+      if (ADDRESS_FIELDS.some(f => row[f] !== null)) {
         plan.insertAddress = {
-          ...base, kind: 'billing', label, ...row,
+          ...base, kind: 'billing', label: freeLabel(held.addresses, 'Billing'), ...row,
           is_default: !held.addresses.some(a => a.is_default), active: true,
         };
+        result(addressLine(row), 'kept_main');
       }
     }
   }
   return plan;
 }
 
-export type ContactEditOutcome = { ok: true; wrote: number } | { ok: false; error: string };
+export type ContactEditOutcome =
+  | { ok: true; wrote: number; results: ContactValueResult[]; audited: boolean; auditError?: string }
+  | { ok: false; error: string; results: ContactValueResult[]; audited: boolean; auditError?: string };
+
+// ── THE CHANGE LOG ────────────────────────────────────────────────────────────────────────────
+// One `audit_log` row per add, make-main and remove (and per refused attempt): who, when, which
+// customer, which list, the value, the outcome. A failed log write NEVER undoes the change it
+// describes — it is reported as `audited: false`, the stopWrites.saveShipTo precedent.
+const ACTION_OF: Record<ContactValueOutcome, string | null> = {
+  kept_main: 'contact.make_main', kept_additional: 'contact.add', removed: 'contact.remove',
+  not_saved: 'contact.refused', already_on_file: null,
+};
+
+export async function logContactChanges(
+  db: SupabaseClient, businessId: string, customerId: string, results: ContactValueResult[],
+  meta: { actorUserId?: string | null; source: string; action?: string },
+): Promise<{ audited: boolean; auditError?: string }> {
+  const rows = results
+    .filter(r => ACTION_OF[r.outcome] !== null)
+    .map(r => ({
+      business_id: businessId,
+      actor_user_id: meta.actorUserId ?? null,
+      action: meta.action ?? ACTION_OF[r.outcome],
+      target_type: 'customer',
+      target_id: customerId,
+      detail: { list: r.list, value: r.value, outcome: r.outcome, source: meta.source, ...(r.reason ? { reason: r.reason } : {}) },
+      outcome: r.outcome === 'not_saved' ? 'failure' : 'success',
+    }));
+  if (rows.length === 0) return { audited: true };
+  // 🔴 NO `.select()`: returning the rows needs a SELECT policy on `audit_log` (`audit_log:read`),
+  // which a manager saving a phone need not hold — with it, every change-log write under RLS was
+  // refused (measured in the path tests). The count comes back without the rows.
+  let error: { message: string } | null = null;
+  let count: number | null = null;
+  try {
+    ({ error, count } = await db.from('audit_log').insert(rows, { count: 'exact' }));
+  } catch (e) {
+    // A log that cannot be written never undoes, or blocks, the change it describes.
+    error = { message: e instanceof Error ? e.message : String(e) };
+  }
+  if (error) {
+    if (TRACE_CONTACT) console.log('[TRACE:CONTACT] change log NOT written', { customerId, message: error.message });
+    return { audited: false, auditError: error.message };
+  }
+  // A8 / R-12 — inline.
+  if (count !== rows.length) return { audited: false, auditError: `${count ?? 0} of ${rows.length} change-log rows were written` };
+  return { audited: true };
+}
+
+/** Every result that was going to change something becomes NOT SAVED, with the reason. */
+function refuseAll(results: ContactValueResult[], reason: string): ContactValueResult[] {
+  return results.map(r => (r.outcome === 'already_on_file' ? r : { ...r, outcome: 'not_saved' as const, reason }));
+}
+
+/** The words a person sees for a write the database refused or could not make. */
+function refusalReason(message: string): string {
+  if (/row-level security|permission|42501/i.test(message)) return 'you do not have permission to change this customer\'s contact details';
+  if (/rows? came back|not saved|of \d+/i.test(message)) return 'the change was refused (you may not have permission to change this customer)';
+  return `the database refused it (${message})`;
+}
 
 /**
  * Apply a flat edit to one customer's lists. Reads what is held, plans, writes; every statement is
- * count-checked (A8). Returns `wrote: 0` for an edit that changes nothing — not an error.
+ * count-checked (A8). Returns `wrote: 0` for an edit that changes nothing — not an error. Always
+ * returns `results`: a failed write marks every value it carried NOT SAVED, with the reason.
  */
 export async function writeContactEdit(
   db: SupabaseClient, businessId: string, customerId: string, edit: ContactEdit, policy: ContactEditPolicy,
 ): Promise<ContactEditOutcome> {
-  if (edit.phone === undefined && edit.email === undefined && edit.billing === undefined) return { ok: true, wrote: 0 };
+  if (edit.phone === undefined && edit.email === undefined && edit.billing === undefined) return { ok: true, wrote: 0, results: [], audited: true };
   const [hp, he, ha] = await Promise.all([
     db.from('customer_phones').select(CONTACT_PHONE_COLUMNS)
       .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true).order('created_at', { ascending: true }),
@@ -663,122 +822,272 @@ export async function writeContactEdit(
       .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true)
       .order('is_default', { ascending: false }).order('created_at', { ascending: true }),
   ]);
-  for (const [table, res] of [['customer_phones', hp], ['customer_emails', he], ['customer_addresses', ha]] as const) {
-    if (res.error) {
-      if (TRACE_CONTACT) console.log('[TRACE:CONTACT] edit read FAILED', { table, customerId, message: res.error.message });
-      return { ok: false, error: `${table}: ${res.error.message}` };
-    }
-  }
   const plan = planContactEdit({
     phones: (hp.data ?? []) as unknown as HeldValue[],
     emails: (he.data ?? []) as unknown as HeldValue[],
     addresses: (ha.data ?? []) as unknown as HeldAddress[],
   }, edit, policy, { businessId, customerId });
+  const log = (results: ContactValueResult[]) => logContactChanges(db, businessId, customerId, results, policy);
+
+  for (const [table, res] of [['customer_phones', hp], ['customer_emails', he], ['customer_addresses', ha]] as const) {
+    if (res.error) {
+      if (TRACE_CONTACT) console.log('[TRACE:CONTACT] edit read FAILED', { table, customerId, message: res.error.message });
+      const results = refuseAll(plan.results, refusalReason(res.error.message));
+      return { ok: false, error: `${table}: ${res.error.message}`, results, ...(await log(results)) };
+    }
+  }
   let wrote = 0;
-  const fail = (table: string, message: string): ContactEditOutcome => {
+  // Each list is written on its own, so a refusal on one list does not un-report another that landed.
+  const failed = new Map<ContactList, string>();
+  const fail = (list: ContactList, table: string, message: string) => {
     if (TRACE_CONTACT) console.log('[TRACE:CONTACT] edit write FAILED', { table, customerId, message });
-    return { ok: false, error: `${table}: ${message}` };
+    failed.set(list, `${table}: ${message}`);
   };
 
   // ORDER IS FORCED by the partial unique indexes: retire and demote first, then promote/insert.
   const phoneOff = [...plan.retirePhones, ...plan.demotePhones];
-  if (plan.retirePhones.length > 0) {
-    const { data, error } = await db.from('customer_phones').update({ active: false, is_primary: false })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.retirePhones).select('id');
-    if (error) return fail('customer_phones', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.retirePhones.length) return fail('customer_phones', `retired ${(data ?? []).length} of ${plan.retirePhones.length} — not saved`);
-    wrote += plan.retirePhones.length;
-  }
-  if (plan.demotePhones.length > 0) {
-    const { data, error } = await db.from('customer_phones').update({ is_primary: false })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.demotePhones).select('id');
-    if (error) return fail('customer_phones', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.demotePhones.length) return fail('customer_phones', `demoted ${(data ?? []).length} of ${plan.demotePhones.length} — not saved`);
-    wrote += plan.demotePhones.length;
-  }
-  if (plan.promotePhones.length > 0) {
-    const { data, error } = await db.from('customer_phones').update({ is_primary: true })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.promotePhones).select('id');
-    if (error) return fail('customer_phones', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.promotePhones.length) return fail('customer_phones', `promoted ${(data ?? []).length} of ${plan.promotePhones.length} — not saved`);
-    wrote += plan.promotePhones.length;
-  }
-  if (plan.respellPhone) {
-    const { data, error } = await db.from('customer_phones').update({ value: plan.respellPhone.value })
-      .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.respellPhone.id).select('id');
-    if (error) return fail('customer_phones', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== 1) return fail('customer_phones', 'the number was not updated — not saved');
-    wrote += 1;
-  }
-  if (plan.insertPhones.length > 0) {
-    const { data, error } = await db.from('customer_phones').insert(plan.insertPhones).select('id');
-    if (error) return fail('customer_phones', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.insertPhones.length) return fail('customer_phones', `${(data ?? []).length} of ${plan.insertPhones.length} rows came back — not saved`);
-    wrote += plan.insertPhones.length;
-  }
-
-  if (plan.retireEmails.length > 0) {
-    const { data, error } = await db.from('customer_emails').update({ active: false, is_primary: false })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.retireEmails).select('id');
-    if (error) return fail('customer_emails', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.retireEmails.length) return fail('customer_emails', `retired ${(data ?? []).length} of ${plan.retireEmails.length} — not saved`);
-    wrote += plan.retireEmails.length;
-  }
-  if (plan.demoteEmails.length > 0) {
-    const { data, error } = await db.from('customer_emails').update({ is_primary: false })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.demoteEmails).select('id');
-    if (error) return fail('customer_emails', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.demoteEmails.length) return fail('customer_emails', `demoted ${(data ?? []).length} of ${plan.demoteEmails.length} — not saved`);
-    wrote += plan.demoteEmails.length;
-  }
-  if (plan.promoteEmails.length > 0) {
-    const { data, error } = await db.from('customer_emails').update({ is_primary: true })
-      .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.promoteEmails).select('id');
-    if (error) return fail('customer_emails', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.promoteEmails.length) return fail('customer_emails', `promoted ${(data ?? []).length} of ${plan.promoteEmails.length} — not saved`);
-    wrote += plan.promoteEmails.length;
-  }
-  if (plan.insertEmails.length > 0) {
-    const { data, error } = await db.from('customer_emails').insert(plan.insertEmails).select('id');
-    if (error) return fail('customer_emails', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== plan.insertEmails.length) return fail('customer_emails', `${(data ?? []).length} of ${plan.insertEmails.length} rows came back — not saved`);
-    wrote += plan.insertEmails.length;
+  phones: {
+    if (plan.retirePhones.length > 0) {
+      const { data, error } = await db.from('customer_phones').update({ active: false, is_primary: false })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.retirePhones).select('id');
+      if (error) { fail('phones', 'customer_phones', error.message); break phones; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.retirePhones.length) { fail('phones', 'customer_phones', `retired ${(data ?? []).length} of ${plan.retirePhones.length} — not saved`); break phones; }
+      wrote += plan.retirePhones.length;
+    }
+    if (plan.demotePhones.length > 0) {
+      const { data, error } = await db.from('customer_phones').update({ is_primary: false })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.demotePhones).select('id');
+      if (error) { fail('phones', 'customer_phones', error.message); break phones; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.demotePhones.length) { fail('phones', 'customer_phones', `demoted ${(data ?? []).length} of ${plan.demotePhones.length} — not saved`); break phones; }
+      wrote += plan.demotePhones.length;
+    }
+    if (plan.promotePhones.length > 0) {
+      const { data, error } = await db.from('customer_phones').update({ is_primary: true })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.promotePhones).select('id');
+      if (error) { fail('phones', 'customer_phones', error.message); break phones; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.promotePhones.length) { fail('phones', 'customer_phones', `promoted ${(data ?? []).length} of ${plan.promotePhones.length} — not saved`); break phones; }
+      wrote += plan.promotePhones.length;
+    }
+    if (plan.respellPhone) {
+      const { data, error } = await db.from('customer_phones').update({ value: plan.respellPhone.value })
+        .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.respellPhone.id).select('id');
+      if (error) { fail('phones', 'customer_phones', error.message); break phones; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length !== 1) { fail('phones', 'customer_phones', 'the number was not updated — not saved'); break phones; }
+      wrote += 1;
+    }
+    if (plan.insertPhones.length > 0) {
+      const { data, error } = await db.from('customer_phones').insert(plan.insertPhones).select('id');
+      if (error) { fail('phones', 'customer_phones', error.message); break phones; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.insertPhones.length) { fail('phones', 'customer_phones', `${(data ?? []).length} of ${plan.insertPhones.length} rows came back — not saved`); break phones; }
+      wrote += plan.insertPhones.length;
+    }
   }
 
-  if (plan.retireAddress) {
-    const { data, error } = await db.from('customer_addresses').update({ active: false, is_default: false })
-      .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.retireAddress).select('id');
-    if (error) return fail('customer_addresses', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== 1) return fail('customer_addresses', 'the billing address was not cleared — not saved');
-    wrote += 1;
+  emails: {
+    if (plan.retireEmails.length > 0) {
+      const { data, error } = await db.from('customer_emails').update({ active: false, is_primary: false })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.retireEmails).select('id');
+      if (error) { fail('emails', 'customer_emails', error.message); break emails; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.retireEmails.length) { fail('emails', 'customer_emails', `retired ${(data ?? []).length} of ${plan.retireEmails.length} — not saved`); break emails; }
+      wrote += plan.retireEmails.length;
+    }
+    if (plan.demoteEmails.length > 0) {
+      const { data, error } = await db.from('customer_emails').update({ is_primary: false })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.demoteEmails).select('id');
+      if (error) { fail('emails', 'customer_emails', error.message); break emails; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.demoteEmails.length) { fail('emails', 'customer_emails', `demoted ${(data ?? []).length} of ${plan.demoteEmails.length} — not saved`); break emails; }
+      wrote += plan.demoteEmails.length;
+    }
+    if (plan.promoteEmails.length > 0) {
+      const { data, error } = await db.from('customer_emails').update({ is_primary: true })
+        .eq('business_id', businessId).eq('customer_id', customerId).in('id', plan.promoteEmails).select('id');
+      if (error) { fail('emails', 'customer_emails', error.message); break emails; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.promoteEmails.length) { fail('emails', 'customer_emails', `promoted ${(data ?? []).length} of ${plan.promoteEmails.length} — not saved`); break emails; }
+      wrote += plan.promoteEmails.length;
+    }
+    if (plan.insertEmails.length > 0) {
+      const { data, error } = await db.from('customer_emails').insert(plan.insertEmails).select('id');
+      if (error) { fail('emails', 'customer_emails', error.message); break emails; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length === 0 || (data ?? []).length !== plan.insertEmails.length) { fail('emails', 'customer_emails', `${(data ?? []).length} of ${plan.insertEmails.length} rows came back — not saved`); break emails; }
+      wrote += plan.insertEmails.length;
+    }
   }
-  if (plan.updateAddress) {
-    const { data, error } = await db.from('customer_addresses').update(plan.updateAddress.patch)
-      .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.updateAddress.id).select('id');
-    if (error) return fail('customer_addresses', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== 1) return fail('customer_addresses', 'the billing address was not updated — not saved');
-    wrote += 1;
+
+  addresses: {
+    if (plan.retireAddress) {
+      const { data, error } = await db.from('customer_addresses').update({ active: false, is_default: false })
+        .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.retireAddress).select('id');
+      if (error) { fail('addresses', 'customer_addresses', error.message); break addresses; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length !== 1) { fail('addresses', 'customer_addresses', 'the billing address was not cleared — not saved'); break addresses; }
+      wrote += 1;
+    }
+    if (plan.updateAddress) {
+      const { data, error } = await db.from('customer_addresses').update(plan.updateAddress.patch)
+        .eq('business_id', businessId).eq('customer_id', customerId).eq('id', plan.updateAddress.id).select('id');
+      if (error) { fail('addresses', 'customer_addresses', error.message); break addresses; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length !== 1) { fail('addresses', 'customer_addresses', 'the billing address was not updated — not saved'); break addresses; }
+      wrote += 1;
+    }
+    if (plan.insertAddress) {
+      const { data, error } = await db.from('customer_addresses').insert(plan.insertAddress).select('id');
+      if (error) { fail('addresses', 'customer_addresses', error.message); break addresses; }
+      // A8 / R-12 — inline.
+      if ((data ?? []).length !== 1) { fail('addresses', 'customer_addresses', 'the billing address was not added — not saved'); break addresses; }
+      wrote += 1;
+    }
   }
-  if (plan.insertAddress) {
-    const { data, error } = await db.from('customer_addresses').insert(plan.insertAddress).select('id');
-    if (error) return fail('customer_addresses', error.message);
-    // A8 / R-12 — inline.
-    if ((data ?? []).length !== 1) return fail('customer_addresses', 'the billing address was not added — not saved');
-    wrote += 1;
+
+  const results = plan.results.map(r => {
+    const why = failed.get(r.list);
+    return why && r.outcome !== 'already_on_file' ? { ...r, outcome: 'not_saved' as const, reason: refusalReason(why) } : r;
+  });
+  const audit = await log(results);
+  if (TRACE_CONTACT) console.log('[TRACE:CONTACT] edit', { customerId, policy: { phone: policy.phone, email: policy.email, billing: policy.billing }, source: policy.source, wrote, phonesOff: phoneOff.length, outcomes: results.map(r => `${r.list}:${r.outcome}`), audited: audit.audited });
+  if (failed.size > 0) return { ok: false, error: [...failed.values()].join('; '), results, ...audit };
+  return { ok: true, wrote, results, ...audit };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE LISTS ON THE CUSTOMER PAGE — read, Make main, Remove (ledger #345)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// Read with `customers:read`; Make main and Remove are UPDATEs, so RLS gates them on
+// `customers:update` (`customer_*_member_update`). Remove RETIRES (active=false) — never a delete
+// (R-133). Removing the main phone or email makes the oldest remaining one main, so the list always
+// shows which number the invoices and the route use.
+
+export interface ContactListRow { id: string; value: string; label: string | null; is_main: boolean; source: string | null; created_at: string | null }
+/** `is_main` = the address the database shows as the customer's billing address. A shipping-only
+ *  site is never main; `is_default` says whether it is the site the checkout picker offers first. */
+export interface AddressListRow extends ContactListRow { kind: string; is_default: boolean }
+export interface CustomerContactLists { phones: ContactListRow[]; emails: ContactListRow[]; addresses: AddressListRow[] }
+
+export async function readContactLists(
+  db: SupabaseClient, businessId: string, customerId: string,
+): Promise<{ ok: true; lists: CustomerContactLists } | { ok: false; error: string }> {
+  const [hp, he, ha] = await Promise.all([
+    db.from('customer_phones').select(CONTACT_VALUE_LIST_COLUMNS)
+      .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true)
+      .order('is_primary', { ascending: false }).order('created_at', { ascending: true }),
+    db.from('customer_emails').select(CONTACT_VALUE_LIST_COLUMNS)
+      .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true)
+      .order('is_primary', { ascending: false }).order('created_at', { ascending: true }),
+    db.from('customer_addresses').select(CONTACT_ADDRESS_LIST_COLUMNS)
+      .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true)
+      .order('is_default', { ascending: false }).order('created_at', { ascending: true }),
+  ]);
+  for (const res of [hp, he, ha]) if (res.error) return { ok: false, error: res.error.message };
+  type V = { id: string; value: string; label: string | null; is_primary: boolean; source: string | null; created_at: string | null };
+  type A = { id: string; label: string; kind: string; line1: string | null; line2: string | null; city: string | null; state: string | null; zip: string | null; is_default: boolean; source: string | null; created_at: string | null };
+  const values = (rows: V[]): ContactListRow[] => {
+    // The main one is the primary, or — with none flagged — the oldest, which is what the database
+    // derives onto the customer row. The page must mark the same one the invoice uses.
+    const mainId = (rows.find(r => r.is_primary) ?? rows[0])?.id;
+    return rows.map(r => ({ id: r.id, value: r.value, label: r.label, is_main: r.id === mainId, source: r.source, created_at: r.created_at }));
+  };
+  const addrs = (ha.data ?? []) as unknown as A[];
+  // Same order as `sync_customer_flat_contact`: default first, then oldest — so the first billing row
+  // here IS the one on the customer row.
+  const billingMain = addrs.find(a => a.kind === 'billing' || a.kind === 'both')?.id;
+  return {
+    ok: true,
+    lists: {
+      phones: values((hp.data ?? []) as unknown as V[]),
+      emails: values((he.data ?? []) as unknown as V[]),
+      addresses: addrs.map(a => ({
+        id: a.id, value: addressLine(a), label: a.label, kind: a.kind,
+        is_main: a.id === billingMain, is_default: a.is_default,
+        source: a.source, created_at: a.created_at,
+      })),
+    },
+  };
+}
+
+/** The list's table, by LITERAL name — `contactRecord.test` G6 refuses a table reached through a
+ *  variable, because a variable is how a write escapes every text-based check. */
+function listTable(db: SupabaseClient, list: ContactList) {
+  switch (list) {
+    case 'phones': return db.from('customer_phones');
+    case 'emails': return db.from('customer_emails');
+    case 'addresses': return db.from('customer_addresses');
   }
-  if (TRACE_CONTACT) console.log('[TRACE:CONTACT] edit', { customerId, policy: { phone: policy.phone, email: policy.email, billing: policy.billing }, source: policy.source, wrote, phonesOff: phoneOff.length });
-  return { ok: true, wrote };
+}
+const MAIN_COLUMN: Record<ContactList, 'is_primary' | 'is_default'> = { phones: 'is_primary', emails: 'is_primary', addresses: 'is_default' };
+
+export interface ListActionInput {
+  businessId: string; customerId: string; list: ContactList; rowId: string; actorUserId?: string | null;
+}
+export type ListActionOutcome = { ok: boolean; result: ContactValueResult; audited: boolean; auditError?: string };
+
+async function heldRow(db: SupabaseClient, x: ListActionInput) {
+  const cols = x.list === 'addresses' ? 'id, line1, line2, city, state, zip, is_default, active' : 'id, value, is_primary, active';
+  const { data, error } = await listTable(db, x.list).select(cols)
+    .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('id', x.rowId).maybeSingle();
+  const row = data as unknown as ({ value?: string; active: boolean } & ContactEditAddress) | null;
+  const value = row ? (x.list === 'addresses' ? addressLine(row) : String(row.value ?? '')) : '';
+  return { row, value, error };
+}
+
+async function finishAction(db: SupabaseClient, x: ListActionInput, result: ContactValueResult, action: string): Promise<ListActionOutcome> {
+  const audit = await logContactChanges(db, x.businessId, x.customerId, [result], { actorUserId: x.actorUserId, source: 'customer-page', action });
+  if (TRACE_CONTACT) console.log('[TRACE:CONTACT] list action', { customerId: x.customerId, list: x.list, action, outcome: result.outcome, audited: audit.audited });
+  return { ok: result.outcome !== 'not_saved', result, ...audit };
+}
+
+/** Make one row the main one. The current main is demoted first (the partial unique index forces the order). */
+export async function makeContactMain(db: SupabaseClient, x: ListActionInput): Promise<ListActionOutcome> {
+  const col = MAIN_COLUMN[x.list];
+  const { row, value, error } = await heldRow(db, x);
+  const refuse = (reason: string) => finishAction(db, x, { list: x.list, value, outcome: 'not_saved', reason }, 'contact.refused');
+  if (error) return refuse(refusalReason(error.message));
+  if (!row || !row.active) return refuse('that entry is no longer on file');
+  const demote = await listTable(db, x.list).update({ [col]: false })
+    .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq(col, true).eq('active', true).neq('id', x.rowId).select('id');
+  if (demote.error) return refuse(refusalReason(demote.error.message));
+  // A8 / R-12 — inline: ZERO is legitimate (nothing was main); more than one cannot happen under the
+  // one-main index, so if it does the list is not what was read and the change is refused.
+  if ((demote.data ?? []).length > 1) return refuse('the list changed while you were looking at it — reload and try again');
+  const promote = await listTable(db, x.list).update({ [col]: true })
+    .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('id', x.rowId).select('id');
+  if (promote.error) return refuse(refusalReason(promote.error.message));
+  // A8 / R-12 — inline: under RLS a refused UPDATE returns zero rows and no error.
+  if ((promote.data ?? []).length !== 1) return refuse(refusalReason('0 rows came back'));
+  return finishAction(db, x, { list: x.list, value, outcome: 'kept_main' }, 'contact.make_main');
+}
+
+/** Remove = retire (active=false). Never a delete. The oldest remaining phone/email becomes main. */
+export async function retireContact(db: SupabaseClient, x: ListActionInput): Promise<ListActionOutcome> {
+  const col = MAIN_COLUMN[x.list];
+  const { row, value, error } = await heldRow(db, x);
+  const refuse = (reason: string) => finishAction(db, x, { list: x.list, value, outcome: 'not_saved', reason }, 'contact.refused');
+  if (error) return refuse(refusalReason(error.message));
+  if (!row || !row.active) return refuse('that entry is no longer on file');
+  const wasMain = (row as unknown as Record<string, unknown>)[col] === true;
+  const off = await listTable(db, x.list).update({ active: false, [col]: false })
+    .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('id', x.rowId).select('id');
+  if (off.error) return refuse(refusalReason(off.error.message));
+  // A8 / R-12 — inline.
+  if ((off.data ?? []).length !== 1) return refuse(refusalReason('0 rows came back'));
+  if (wasMain && x.list !== 'addresses') {
+    const next = await listTable(db, x.list).select('id').eq('business_id', x.businessId).eq('customer_id', x.customerId)
+      .eq('active', true).order('created_at', { ascending: true }).limit(1);
+    const nextId = ((next.data ?? []) as unknown as { id: string }[])[0]?.id;
+    if (nextId) {
+      const up = await listTable(db, x.list).update({ [col]: true }).eq('business_id', x.businessId).eq('id', nextId).select('id');
+      if (TRACE_CONTACT && (up.error || (up.data ?? []).length !== 1)) console.log('[TRACE:CONTACT] next main not flagged', { customerId: x.customerId, list: x.list });
+    }
+  }
+  return finishAction(db, x, { list: x.list, value, outcome: 'removed' }, 'contact.remove');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

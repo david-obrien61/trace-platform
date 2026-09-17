@@ -9,6 +9,11 @@
  *
  * DEPENDENCIES: packages/cultivar-os/.env.local (SUPABASE_URL + SUPABASE_SERVICE_KEY).
  *   Tables: customers, cultivar_plants, business_inventory, orders (all live, tenant-scoped).
+ *   Contact details (phone, email) go through the ONE contact writer, `contactWriter.writeContactEdit`
+ *   (ledger #345): `customers.phone`/`email` are derived by the database and refuse a direct write.
+ *   ✏️ The sample customers no longer carry a street/city/ZIP: address rows are ON DELETE RESTRICT,
+ *   so they would block `clear()`, and a sample dashboard needs no billing address. The retired
+ *   `address_line1`/`city`/`state`/`zip` keys this file used to write are gone with the columns.
  *
  * OUTPUTS: idempotent seed() / clear() for one business_id. Markers used for EXACT
  *   removal (clear deletes ONLY these, never real rows):
@@ -27,20 +32,8 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
-
-const envText = readFileSync(new URL('../packages/cultivar-os/.env.local', import.meta.url), 'utf8');
-const env = Object.fromEntries(
-  envText.split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
-    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
-);
-const sb = createClient(env.SUPABASE_URL || env.VITE_SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
-
-const arg = (k) => { const m = process.argv.find(a => a.startsWith(`--${k}=`)); return m ? m.split('=')[1] : null; };
-const flag = (k) => process.argv.includes(`--${k}`);
-const BUSINESS = arg('business') || env.VITE_DEMO_BUSINESS_ID || 'a1b2c3d4-0000-0000-0000-000000000001';
-
-const trace = (phase, extra = {}) =>
-  console.log(JSON.stringify({ tag: '[TRACE:SEED]', phase, business: BUSINESS, ...extra }));
+import { pathToFileURL } from 'url';
+import { importTs } from './lib/importTs.mjs';
 
 // ── believable, branded source material ──────────────────────────────────────────
 const CUSTOMERS = [
@@ -58,6 +51,15 @@ const PLANTS = [
   ['Platanus mexicana',                'Mexican Sycamore',      '30 gal', 24, 279.0],
   ['Prosopis glandulosa',              'Honey Mesquite',        '15 gal', 12, 149.0],
 ];
+
+/**
+ * The seeder for one business, with the client passed in — so the writer-registry path test can run
+ * the SAME seed against the live schema on PGlite (ledger #345). `writeContactEdit` is passed in by
+ * the test; run from the command line it is loaded from the TypeScript source.
+ */
+export function sandboxSeeder(sb, BUSINESS, writeContactEdit) {
+const trace = (phase, extra = {}) =>
+  console.log(JSON.stringify({ tag: '[TRACE:SEED]', phase, business: BUSINESS, ...extra }));
 
 async function clear() {
   // FK-safe order: orders (→customers) first, then plants (→inventory), then inventory, then customers.
@@ -83,15 +85,19 @@ async function seed() {
   await clear(); // idempotent re-seed
 
   // customers
-  const custRows = CUSTOMERS.map(([fn, ln, city, zip], i) => ({
+  const custRows = CUSTOMERS.map(([fn, ln], i) => ({
     business_id: BUSINESS, first_name: fn, last_name: ln,
-    email: `${fn.toLowerCase()}.${ln.toLowerCase()}@example-sample.com`,
-    phone: `(512) 555-0${(100 + i).toString().padStart(3, '0')}`,
-    address_line1: `${100 + i * 7} Sample Oak Dr`, city, state: 'TX', zip,
     marketing_opt_in: i % 2 === 0, source: 'sandbox', lifetime_value: 0,
   }));
   const { data: custs, error: cErr } = await sb.from('customers').insert(custRows).select('id');
   if (cErr) throw new Error(`customers: ${cErr.message}`);
+  for (const [i, [fn, ln]] of CUSTOMERS.entries()) {
+    const out = await writeContactEdit(sb, BUSINESS, custs[i].id, {
+      email: `${fn.toLowerCase()}.${ln.toLowerCase()}@example-sample.com`,
+      phone: `(512) 555-0${(100 + i).toString().padStart(3, '0')}`,
+    }, { phone: 'replace', email: 'replace', billing: 'replace', source: 'sandbox' });
+    if (!out.ok) throw new Error(`customer contact details: ${out.error}`);
+  }
 
   // plant identity rows + inventory lots (branded sample stock)
   const plantRows = PLANTS.map(([species, common, container, warranty], i) => ({
@@ -158,7 +164,23 @@ async function countSandbox() {
   return c;
 }
 
-// ── run ────────────────────────────────────────────────────────────────────────
+return { clear, seed, countSandbox };
+}
+
+// ── run (only when executed directly) ──────────────────────────────────────────
+// The file-name check keeps this block asleep when the seeder is BUNDLED into a path test.
+if (process.argv[1] && /seed-sandbox\.mjs$/.test(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const envText = readFileSync(new URL('../packages/cultivar-os/.env.local', import.meta.url), 'utf8');
+const env = Object.fromEntries(
+  envText.split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
+    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
+);
+const sb = createClient(env.SUPABASE_URL || env.VITE_SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+const arg = (k) => { const m = process.argv.find(a => a.startsWith(`--${k}=`)); return m ? m.split('=')[1] : null; };
+const flag = (k) => process.argv.includes(`--${k}`);
+const BUSINESS = arg('business') || env.VITE_DEMO_BUSINESS_ID || 'a1b2c3d4-0000-0000-0000-000000000001';
+const { writeContactEdit } = await importTs('packages/shared/src/business-logic/contactWriter.ts');
+const { clear, seed, countSandbox } = sandboxSeeder(sb, BUSINESS, writeContactEdit);
 if (flag('clear')) {
   await clear();
   console.log('Cleared sandbox rows for', BUSINESS);
@@ -188,4 +210,5 @@ if (flag('clear')) {
 } else {
   const counts = await seed();
   console.log('Seeded sandbox for', BUSINESS, JSON.stringify(counts));
+}
 }

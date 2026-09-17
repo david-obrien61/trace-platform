@@ -3949,7 +3949,12 @@ editor is an UPDATE of the customer, but it becomes an INSERT into `customer_pho
 writes go through a SECURITY DEFINER path gated on `customers:update`. A permission-model decision —
 David's. **Not a go-live item** (David, 2026-09-16).
 
-## #313 — 🟡 A PAGE LEFT OPEN ACROSS A DEPLOY KEEPS RUNNING THE OLD CODE, AND NOTHING TELLS THE PERSON (NEW 2026-09-17, ledger #335)
+## #313 — ✅ RESOLVED 2026-09-17 (ledger #345) — WAS: 🟡 A PAGE LEFT OPEN ACROSS A DEPLOY KEEPS RUNNING THE OLD CODE, AND NOTHING TELLS THE PERSON (NEW 2026-09-17, ledger #335)
+
+**✅ BUILT (ledger #345):** the build writes `/version.json` (a static file — 12/12 held); `NewVersionPrompt`
+checks it on every navigation and when the window regains focus, and when production is newer shows
+**"A new version is ready — reload"**, reloading on tap. A local build or an unreadable file never prompts.
+`newVersion.test.ts` §A–§C. Prompt, not force — the person taps.
 
 **What.** The app has no new-build check. The build id is only DISPLAYED (`VersionStamp.tsx:92`);
 nothing compares it with the deployed one, prompts, or reloads. Measured 2026-09-17: David's phone kept
@@ -3967,3 +3972,33 @@ emitted at build — a static file, not an api function, so 12/12 holds) and, wh
 "A new version is ready — reload" (or reload on the next navigation). **Owner:** David — prompt or
 force.
 
+## #314 — 🔴 A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK CREATES A DUPLICATE CUSTOMER (NEW 2026-09-17, ledger #345)
+
+**What.** `findOrCreateCustomer` dedups a PERSON by `person_id` after resolving the person by email/phone.
+A customer with no `person_id` — **every QuickBooks-imported customer**, and 5 of 14 on Test Dave's
+(measured live) — is never matched, so invoice capture (and any server-side match) makes a SECOND
+customer and puts the typed details on it. Found by the writer-registry path test `ocr.existing-customer`
+(first written against an imported-shape customer; it failed that way).
+
+**Fixed for checkout** (ledger #345): the checkout pick now attaches, so the server does not re-match.
+**Not changed for capture:** matching an existing customer by email alone is the rule that cross-billed
+nine invoices (#53, D-47). **Fix = a ruling:** link a person-less customer by email/phone when exactly one
+matches in the business, or surface it for a choice. **Owner:** David.
+
+## #315 — ✅ RESOLVED IN THE BUILD THAT FOUND IT — A MANAGER'S SHIP-TO CHANGE WAS "SAVED, NOT RECORDED" (NEW 2026-09-17, ledger #345)
+
+**What.** `stopWrites.saveShipTo` inserted its history row with `.select('id')`. Returning the row needs a
+SELECT policy on `audit_log` — `audit_log:read` — and **no MANAGER holds it** (measured live 2026-09-17,
+both tenants). Postgres refuses the whole INSERT, so every ship-to change Lauren made was reported
+"saved, not recorded" and left no history. Found while building the contact change log, which failed the
+same way in the path tests. **Fix:** both inserts prove themselves by count (`{ count: 'exact' }`), not by
+reading the row back. `stopWrites.test.ts` C0 — red on the old code, green now; the fake now refuses
+`.select()` the way RLS does (§6 r19).
+
+## #316 — 🟡 THE ROUTE PLANNER'S STOP-ADDRESS BOX IS TYPED AND NEVER SAVED (NEW 2026-09-17, ledger #345)
+
+**What.** `DeliveryRoute.tsx` lets a person edit a stop's address to build the map link; the value is
+kept in page state only. Under §6 r21 *"a value entered and not saved is a defect"* — unless it is meant
+to be scratch. **Declared** in `writer-registry.json` as not-a-capture, with this reason, so the check
+names it every run. **Owner:** David — keep it as scratch, or save it to the stop (the ship-to editor
+already does that properly).

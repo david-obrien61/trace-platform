@@ -29,3 +29,9 @@ export const CONTACT_ADDRESS_READ_COLUMNS = 'id,label,kind,line1,city,zip,is_def
  *  may fill or replace, plus what the label/default checks need. Only columns the migrations create
  *  (asserted with the other lists in `contactWriter.test.ts` §E). */
 export const CONTACT_ADDRESS_EDIT_COLUMNS = 'id,label,kind,line1,line2,city,state,zip,is_default,source,created_at';
+
+/** What the customer page's Phones / Emails lists read (`readContactLists`, ledger #345). */
+export const CONTACT_VALUE_LIST_COLUMNS = 'id,value,label,is_primary,source,created_at';
+
+/** What the customer page's Addresses list reads (`readContactLists`, ledger #345). */
+export const CONTACT_ADDRESS_LIST_COLUMNS = 'id,label,kind,line1,line2,city,state,zip,is_default,source,created_at';

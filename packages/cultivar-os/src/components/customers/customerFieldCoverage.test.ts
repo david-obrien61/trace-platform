@@ -262,7 +262,9 @@ const SRC = {
   // ✏️ LEDGER #335 (2026-09-16): phone, email and the billing address no longer ride offer() — they
   // are gathered into `contactEdit` and written to the contact lists by `writeContactEdit`. They still
   // REACH THE DATABASE, which is what this section asserts; read them where they now go.
-  for (const m of up.matchAll(/contactEdit\.(phone|email)\s*=/g)) namedBranches.add(m[1]);
+  // ✏️ #345: the gathering moved into `contactEditFromInput` (shared with the picked-customer path),
+  // whose object is `edit`.
+  for (const m of up.matchAll(/(?:contactEdit|edit)\.(phone|email)\s*=/g)) namedBranches.add(m[1]);
   for (const m of up.matchAll(/billing\.(line1|city|state|zip)\s*=/g)) namedBranches.add(`billing_${m[1]}`);
 
   const writable = ['first_name', 'last_name', 'email', 'phone',

@@ -74,6 +74,8 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
     people:     [],
     // #335: `findOrCreateCustomer` writes the phone to the contact list, not to `customers`.
     customer_phones: [], customer_emails: [], customer_addresses: [],
+    // #345: every contact add is written to the change log.
+    audit_log: [],
   };
   const hasColumn = seed.hasColumn !== false;
   const touched: { table: string; verb: string }[] = [];
@@ -97,10 +99,11 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
       limit() { return q._resolve(); },
       maybeSingle() { const r = q._resolve(); return Promise.resolve({ data: r.data?.[0] ?? null, error: r.error }); },
       single() { const r = q._resolve(); return Promise.resolve({ data: r.data?.[0] ?? null, error: r.error }); },
-      insert(row: any) {
+      insert(row: any, opts?: any) {
         touched.push({ table, verb: 'insert' });
         const rows = (Array.isArray(row) ? row : [row]).map((x: any) => ({ id: `${table}-${nextId++}`, active: true, ...x }));
         store[table].push(...rows);
+        if (opts?.count) q._count = rows.length;
         q._inserted = rows.length === 1 ? rows[0] : rows; return q;
       },
       upsert(row: any, opts: any) {
@@ -140,7 +143,7 @@ function makeDb(seed: { customers?: any[]; deliveries?: any[]; hasColumn?: boole
         }));
         if (q._patch) { rows.forEach(r => Object.assign(r, q._patch)); }
         if (q._inserted !== undefined) rows = q._inserted ? (Array.isArray(q._inserted) ? q._inserted : [q._inserted]) : [];
-        return { data: rows, error: null };
+        return { data: rows, error: null, count: q._count ?? null };
       },
       then(res: any, rej: any) { return Promise.resolve(q._resolve()).then(res, rej); },
     };
@@ -253,8 +256,9 @@ async function main() {
   // ✏️ #335: the customer's phone is written to its contact list (`customer_phones`), through
   // `findOrCreateCustomer` → `writeContactEdit`. Still no address list, no email list — the ingest
   // supplies a phone and nothing else about the customer.
-  ok(JSON.stringify(written) === JSON.stringify(['customer_phones', 'customers', 'deliveries']),
-     `🔴 EXACTLY THREE TABLES ARE WRITTEN — customers, their phone list, and deliveries. Got: ${written.join(', ')}`);
+  // ✏️ #345: and one change-log row per phone added (who, when, which customer, the value).
+  ok(JSON.stringify(written) === JSON.stringify(['audit_log', 'customer_phones', 'customers', 'deliveries']),
+     `🔴 EXACTLY FOUR TABLES ARE WRITTEN — customers, their phone list, the change log, and deliveries. Got: ${written.join(', ')}`);
 
   const FORBIDDEN = ['orders', 'order_items', 'order_addons', 'order_service_selections',
                      'business_inventory', 'inventory_counts', 'inventory_ledger', 'plants',

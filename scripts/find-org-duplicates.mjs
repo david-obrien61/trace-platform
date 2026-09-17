@@ -31,18 +31,19 @@ function normalizeMatchKey(s) {
 
 const { data, error } = await db
   .from('customers')
-  .select('id, business_id, first_name, last_name, email, phone, address_line1, customer_type, created_at')
+  .select('id, business_id, first_name, last_name, email, phone, billing_line1, customer_type, created_at')
   .eq('customer_type', 'organization')
   .order('created_at', { ascending: true });
 
 if (error) { console.error('Query failed:', error.message); process.exit(1); }
 console.log(`Scanned ${data.length} organization customer(s).\n`);
 
-// Group by business_id + normalized(name) + normalized(billing address_line1) — the new key.
+// Group by business_id + normalized(name) + normalized(billing_line1) — the new key.
 const groups = new Map();
 for (const r of data) {
   const nameKey = normalizeMatchKey(r.first_name);
-  const billKey = normalizeMatchKey(r.address_line1);
+  // ✏️ #345: `address_line1` is dropped from customers; the billing street is `billing_line1`.
+  const billKey = normalizeMatchKey(r.billing_line1);
   if (!nameKey || !billKey) continue; // no full key → not collapsible under the new rule
   const gk = `${r.business_id}|${nameKey}|${billKey}`;
   (groups.get(gk) ?? groups.set(gk, []).get(gk)).push(r);
@@ -53,7 +54,7 @@ for (const [gk, rows] of groups) {
   if (rows.length < 2) continue;
   dupSets++;
   const name = rows[0].first_name;
-  console.log(`── DUPLICATE SET: "${name}" @ ${rows[0].address_line1} (business ${rows[0].business_id.slice(0, 8)}…) ──`);
+  console.log(`── DUPLICATE SET: "${name}" @ ${rows[0].billing_line1} (business ${rows[0].business_id.slice(0, 8)}…) ──`);
   rows.forEach((r, i) => {
     console.log(`  [${i === 0 ? 'KEEP (oldest)' : 'DELETE?    '}] id=${r.id}  phone=${r.phone ?? '(none)'}  email=${r.email ?? '(none)'}  created=${r.created_at?.slice(0, 10)}`);
   });

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
+import { ContactResultList } from '@trace/shared/components/customers/ContactResultList';
 import { authHeaders } from '@trace/shared/auth';
 import { useInput } from '@trace/shared/hooks/useDevice';
 import { useBusinessContext } from '@trace/shared/context';
@@ -201,7 +203,7 @@ export function ReceiptKeeper() {
   const [addCustomer, setAddCustomer]   = useState(false); // destination: create a customer
   const [scheduleDelivery, setScheduleDelivery] = useState(false); // destination: create a dated delivery
   const [serviceType, setServiceType]   = useState<ServiceType>('delivery_only'); // inferred, correctable
-  const [customerResult, setCustomerResult] = useState<{ id: string; created: boolean } | null>(null);
+  const [customerResult, setCustomerResult] = useState<{ id: string; created: boolean; contact: ContactValueResult[] } | null>(null);
   const [customerWarn, setCustomerWarn] = useState<string | null>(null);
   const [deliveryResult, setDeliveryResult] = useState<{ id: string } | null>(null);
   const [deliveryWarn, setDeliveryWarn] = useState<string | null>(null);
@@ -754,7 +756,8 @@ export function ReceiptKeeper() {
         });
         const cData = await cRes.json().catch(() => ({}));
         if (cRes.ok && cData.ok) {
-          setCustomerResult({ id: cData.customerId, created: cData.created });
+          setCustomerResult({ id: cData.customerId, created: cData.created,
+            contact: Array.isArray(cData.contactResults) ? cData.contactResults as ContactValueResult[] : [] });
           if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer', cData.created ? 'created' : 'matched', '— id:', cData.customerId);
           if (scheduleDelivery) {
             if (cData.deliveryId) {
@@ -1472,6 +1475,8 @@ export function ReceiptKeeper() {
                     : `Existing ${invoice.customerName.trim() || 'customer'} updated`}
               </div>
             )}
+            {/* #345 — every phone / email / address read off the document, and what became of it. */}
+            {customerResult && <ContactResultList results={customerResult.contact} title="Customer contact details" />}
             {customerWarn && (
               <div style={{ fontSize: '0.8125rem', color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
                 {customerWarn}
