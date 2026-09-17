@@ -1357,7 +1357,7 @@ with their run. **FAIL:** the old sentence.
 ## CARD 42 — 🔴 THE PREVIEW SAYS WHICH PRODUCTS ARE SIZES YOU GROW, AND NAMES THE ONES THAT ARE NOT
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
 COVERS: ledger #343 — the importer resolves sizes through the ladder · SIGNAL: `[TRACE:QBITEMS] preview {… ladder: 'loaded', offLadderSizes: N}`
-⛔ Only after `20260916_container_ladder_install_t_posts.sql` is applied and `feat/ladder-one-source` is merged.
+✅ Applied and merged (`56107ee`) — this card can run.
 
 On **LAWNS**, press **Preview your books** (preview only — do not import).
 
