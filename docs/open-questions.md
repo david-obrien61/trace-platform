@@ -86,7 +86,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#346 — no phone note is lost when the old street column is dropped (migrations written, NOT APPLIED)**
-- ✅ **ANSWERED 2026-09-17 — APPLIED** (`20260917a` then `20260915b`; CARD 6 covered). 🔴 **OPEN — MERGE #346.** Owner: ledger #346.
+- ✅ **ANSWERED 2026-09-17 — APPLIED** (`20260917a` then `20260915b`; CARD 6 covered). ✅ **MERGED** (`0ff9499`). 🔴 **OPEN — GO-LIVE RELOAD before 12:00 Friday** (checklist in `docs/go-live/`). Owner: ledger #346.
 - 🟡 **OPEN — `5fa0c32e`'s main phone value holds the number and words** — a cleanup for Lauren (the words are now also a note). Owner: ledger #346.
 
 **#345 — the writer registry; a typed phone is never dropped (build, NOT MERGED)**

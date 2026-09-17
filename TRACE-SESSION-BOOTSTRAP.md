@@ -79,10 +79,10 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
-### 🟡 PUSHED — #346 (`fix/346-notes-before-drop`, 2026-09-17) — **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED**
+### ✅ MERGED 2026-09-17 (`0ff9499`, production 17:20 UTC) — #346 (`fix/346-notes-before-drop`) — **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED**
 
 - ✅ **APPLIED 2026-09-17 by David:** `20260917a` then `20260915b` — step j done; CARD 6 covered (on a corrected pass line). Checked live: only the four `customers` columns went.
-- 🔴 **Merge waits on David.**
+- 🔴 **GO-LIVE RELOAD before 12:00 Friday:** `docs/go-live/2026-09-18-lawns-reload-checklist.md` (backup → undo `eab7fbd2` dry then real → counts → ONE import → counts → spot-checks). Undo rehearsed on a LAWNS copy 2026-09-17: 1936 customers · 4609 contact rows · 647 products removed, 447 restored, nothing kept.
 
 ### ✅ MERGED 2026-09-17 (`9d9214b`, production 16:27 UTC) — #345 (`fix/contact-card-visible`) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
 
