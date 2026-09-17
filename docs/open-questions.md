@@ -85,6 +85,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#349 — Edit and Add on every contact list (build, NOT MERGED)**
+- 🔴 **OPEN — MERGE #349** (it carries #348). Owner: ledger #349.
+- 🔴 **OPEN — THE ADDRESS CHECK ON SAVE (tech-debt #323), sized ~1½–2 days, not built.** Which service (#327-e: Census free/batched/84.9% vs Google +3.3 points, no batch, 30-day refetch) and where coordinates live (#327-c). The ring map does not exist as data yet.
+- 🟡 **OPEN — ADD is gated on `customers:create`, EDIT on `customers:update`** (the list INSERT policies ask for create — #312's shape). Staff see neither button; confirm or change with #317's lean.
+
 **#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
 - 🟡 **OPEN — APPLY `20260917b`** when convenient; not a blocker for tonight's reload (0 typed rows live). Owner: ledger #348.
 - 🔴 **OPEN — NEXT GO-LIVE ITEM: a captured order does not re-attach after a reload.** Re-attach by `qb_customer_id`; needs a ruling on what a detached capture shows. Owner: tech-debt #322.

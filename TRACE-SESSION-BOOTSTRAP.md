@@ -94,6 +94,12 @@
 - 🔴 **Owner-prove in progress** (GATE 0 → 15 → 18 → 20, 21, 23; 19/22 need staff/manager logins). Then step i (snapshot proof) and step j (`20260915b` + CARD 6).
 - 🔴 **GO-LIVE ITEM FILED: tech-debt #319 — finishing a stop does not fulfil its order** (automatic SPM consumption depends on it). Pending David: #314 · #316 · #317 · #318 (leans recorded).
 
+### 🟡 PUSHED, NOT MERGED — #349 (`fix/contact-list-edit-add`, 2026-09-17) — **EDIT AND ADD ON EVERY CONTACT LIST**
+
+- 🟡 **BUILDER-COMPLETE.** Edit on every row (value, label, every address field), Add on every list, through `contactWriter`; two new registered paths, 21/21 green; the Edit customer form gains one line + link to the lists. CARD 15 ✅ **covered** (David, `249b772`); cards 26–29 owed.
+- 🔴 **Carries #348.** Merge waits on David.
+- 🔴 **FILED, NOT BUILT: tech-debt #323 — the address check on save** (geocode → ring, or "we can't find this address" + unverified marker). Sized ~1½–2 days off David's 2026-09-15 recons; service choice #327-e and coordinate home #327-c are his.
+
 ### 🟡 PUSHED, NOT MERGED — #348 (`fix/undo-test-edits`, 2026-09-17) — **A TEST-MODE EDIT NEVER BLOCKS THE WIPE**
 
 - 🟡 **BUILDER-COMPLETE. `20260917b` WRITTEN, NOT APPLIED** — in test mode the undo takes every contact row on a run customer; writes on → today's refusal; a captured order refuses in both modes. [[R-160]]. 15/15 probes, red-first.

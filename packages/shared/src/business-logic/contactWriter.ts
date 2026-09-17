@@ -33,7 +33,8 @@
 //               planContactRows · reconcileContactRows · writeContactRecord · writeContactRecords ·
 //               planContactEdit · writeContactEdit · contactEditOf · contactResultSentence ·
 //               addressLine · logContactChanges · readContactLists · makeContactMain ·
-//               retireContact · insertShipToSite · retireShipToSite · removeRunContactRows ·
+//               retireContact · editContactRow · addContactRow · insertShipToSite · retireShipToSite ·
+//               removeRunContactRows ·
 //               runCustomersWithHandAddedContacts
 //
 // 🔴 EVERY WRITER OF A CUSTOMER'S PHONE, EMAIL OR ADDRESS COMES THROUGH THIS FILE (David, 2026-09-16).
@@ -785,6 +786,8 @@ const ACTION_OF: Record<ContactValueOutcome, string | null> = {
   kept_main: 'contact.make_main', kept_additional: 'contact.add', removed: 'contact.remove',
   not_saved: 'contact.refused', already_on_file: null,
 };
+// #349: `editContactRow` / `addContactRow` pass their own action ('contact.edit' / 'contact.add'),
+// so the log says what a person did rather than what the outcome looked like.
 
 export async function logContactChanges(
   db: SupabaseClient, businessId: string, customerId: string, results: ContactValueResult[],
@@ -1074,6 +1077,114 @@ async function finishAction(db: SupabaseClient, x: ListActionInput, result: Cont
   const audit = await logContactChanges(db, x.businessId, x.customerId, [result], { actorUserId: x.actorUserId, source: 'customer-page', action });
   if (TRACE_CONTACT) console.log('[TRACE:CONTACT] list action', { customerId: x.customerId, list: x.list, action, outcome: result.outcome, audited: audit.audited });
   return { ok: result.outcome !== 'not_saved', result, ...audit };
+}
+
+export interface ContactValuePatch { value?: string; label?: string | null }
+export interface ContactAddressPatch {
+  label?: string; kind?: string;
+  line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; zip?: string | null;
+}
+
+/** The words for a refusal the database made on a list write, in a form a person can act on. */
+function listRefusal(message: string): string {
+  if (/duplicate key|23505|one_per_value/i.test(message)) return 'that one is already on this customer';
+  if (/one_label|customer_addresses_one_label/i.test(message)) return 'this customer already has an address with that name';
+  return refusalReason(message);
+}
+
+/**
+ * EDIT one row of a list (ledger #349 · David, 2026-09-17: *"every screen needs the create/edit/update
+ * pieces"*). Before this, a typo could only be REMOVED and retyped, which loses the row's history.
+ * A phone or email may have its value and its label corrected; an address, every field it holds.
+ * `value_norm` is recomputed by the database trigger, so a corrected number is compared as a number.
+ */
+export async function editContactRow(
+  db: SupabaseClient, x: ListActionInput & { patch: ContactValuePatch | ContactAddressPatch },
+): Promise<ListActionOutcome> {
+  const { row, value: before, error } = await heldRow(db, x);
+  const refuse = (reason: string, shown = before) => finishAction(db, x, { list: x.list, value: shown, outcome: 'not_saved', reason }, 'contact.refused');
+  if (error) return refuse(refusalReason(error.message));
+  if (!row || !row.active) return refuse('that entry is no longer on file');
+
+  const patch: Record<string, unknown> = {};
+  if (x.list === 'addresses') {
+    const p = x.patch as ContactAddressPatch;
+    for (const f of ['label', 'kind', ...ADDRESS_FIELDS] as const) {
+      if (!(f in p)) continue;
+      const v = p[f as keyof ContactAddressPatch];
+      patch[f] = f === 'label' || f === 'kind' ? String(v ?? '').trim() : cleanOrNull(v);
+    }
+    if ('label' in patch && !patch.label) return refuse('an address needs a name, such as "Billing" or "Job site"');
+    if (ADDRESS_FIELDS.every(f => blank(f in patch ? patch[f] : (row as unknown as Record<string, unknown>)[f])))
+      return refuse('an address needs at least a street, a city or a ZIP — use Remove to take it off');
+  } else {
+    const p = x.patch as ContactValuePatch;
+    if ('label' in p) patch.label = cleanOrNull(p.label) ?? 'other';
+    if ('value' in p) {
+      const v = cleanOrNull(p.value);
+      if (v === null) return refuse('leave it as it is, or use Remove — a blank is not a change');
+      patch.value = v;
+    }
+  }
+  if (Object.keys(patch).length === 0) return finishAction(db, x, { list: x.list, value: before, outcome: 'already_on_file' }, 'contact.refused');
+
+  const { data, error: upErr } = await listTable(db, x.list).update(patch)
+    .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('id', x.rowId).select('id');
+  if (upErr) return refuse(listRefusal(upErr.message));
+  // A8 / R-12 — inline: under RLS a refused UPDATE comes back as zero rows and no error.
+  if ((data ?? []).length === 0 || (data ?? []).length !== 1) return refuse(refusalReason('0 rows came back'));
+  const after = await heldRow(db, x);
+  return finishAction(db, x, { list: x.list, value: after.value || before, outcome: row[MAIN_COLUMN[x.list] as keyof typeof row] === true ? 'kept_main' : 'kept_additional' }, 'contact.edit');
+}
+
+/**
+ * ADD a row to a list (ledger #349). The first phone or email a customer has becomes their main one;
+ * after that a new row is additional and the main one is untouched — the same rule checkout follows.
+ * In test mode the row carries the customer's import run (#348), so a wipe takes it back.
+ */
+export async function addContactRow(
+  db: SupabaseClient, x: Omit<ListActionInput, 'rowId'> & { patch: ContactValuePatch | ContactAddressPatch; source?: string },
+): Promise<ListActionOutcome> {
+  const key = { ...x, rowId: '(new)' } as ListActionInput;
+  const shown = x.list === 'addresses' ? addressLine(x.patch as ContactAddressPatch) : cleanOrNull((x.patch as ContactValuePatch).value) ?? '';
+  const refuse = (reason: string) => finishAction(db, key, { list: x.list, value: shown, outcome: 'not_saved', reason }, 'contact.refused');
+  const source = x.source ?? 'manual';
+  const runId = await testModeRunTag(db, x.businessId, x.customerId);
+  const base: Record<string, unknown> = { business_id: x.businessId, customer_id: x.customerId, source, active: true };
+  if (runId) base.import_run_id = runId;
+
+  let insert: Record<string, unknown>;
+  if (x.list === 'addresses') {
+    const p = x.patch as ContactAddressPatch;
+    const row: Record<string, string | null> = {};
+    for (const f of ADDRESS_FIELDS) row[f] = cleanOrNull(p[f]);
+    if (ADDRESS_FIELDS.every(f => row[f] === null)) return refuse('type at least a street, a city or a ZIP');
+    const held = await db.from('customer_addresses').select('label, is_default')
+      .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('active', true);
+    if (held.error) return refuse(refusalReason(held.error.message));
+    const rows = (held.data ?? []) as unknown as { label: string; is_default: boolean }[];
+    const kind = (p.kind ?? 'shipping').trim();
+    insert = { ...base, ...row, kind,
+      label: cleanOrNull(p.label) ?? freeLabel(rows, kind === 'shipping' ? 'Job site' : 'Billing'),
+      is_default: !rows.some(r => r.is_default) };
+  } else {
+    const p = x.patch as ContactValuePatch;
+    const v = cleanOrNull(p.value);
+    if (v === null) return refuse(x.list === 'phones' ? 'type a number' : 'type an email address');
+    const held = await listTable(db, x.list).select('id, is_primary')
+      .eq('business_id', x.businessId).eq('customer_id', x.customerId).eq('active', true);
+    if (held.error) return refuse(refusalReason(held.error.message));
+    const rows = (held.data ?? []) as unknown as { is_primary: boolean }[];
+    insert = { ...base, value: v, label: cleanOrNull(p.label) ?? (rows.length === 0 ? 'main' : 'other'), is_primary: rows.length === 0 };
+  }
+
+  const { data, error } = await listTable(db, x.list).insert(insert).select('id');
+  if (error) return refuse(listRefusal(error.message));
+  // A8 / R-12 — inline.
+  if ((data ?? []).length === 0 || (data ?? []).length !== 1) return refuse(refusalReason('0 rows came back'));
+  const id = (data as unknown as { id: string }[])[0].id;
+  const main = insert.is_primary === true || insert.is_default === true;
+  return finishAction(db, { ...key, rowId: id }, { list: x.list, value: shown, outcome: main ? 'kept_main' : 'kept_additional' }, 'contact.add');
 }
 
 /** Make one row the main one. The current main is demoted first (the partial unique index forces the order). */

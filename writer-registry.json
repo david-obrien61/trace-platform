@@ -54,7 +54,9 @@
         "commitCustomerImport",
         "persistCustomerPatch",
         "insertCustomer",
-        "commitDeliveryIngest"
+        "commitDeliveryIngest",
+        "editContactRow",
+        "addContactRow"
       ],
       "tests": "scripts/path-tests/contacts.paths.mts",
       "paths": [
@@ -181,6 +183,26 @@
           ],
           "chain": "persistCustomerPatch → updateCustomerFields → writeContactEdit (RLS refuses) → not_saved",
           "shown": "editor → red NOT SAVED line"
+        },
+        {
+          "id": "customer-page.add",
+          "what": "Customer page → Phones / Emails / Addresses → Add (a number, an email or an address typed there)",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "ContactListsPanel.save (kind 'add') → addContactRow",
+          "shown": "customer page → the new row in its list (main when it is the first, additional otherwise)"
+        },
+        {
+          "id": "customer-page.edit",
+          "what": "Customer page → Edit on a row (a phone's or email's value and label; every field of an address)",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "ContactListsPanel.save (kind 'edit') → editContactRow",
+          "shown": "customer page → the corrected row, still in the same place in its list"
         },
         {
           "id": "customer-page.make-main",

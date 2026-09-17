@@ -4079,3 +4079,57 @@ there will be some.
 detaches a captured order's `customer_id` (keeping the QuickBooks id on the order) and the import
 re-attaches it, or (b) orders carry `qb_customer_id` and the link is derived rather than stored. Both
 need a ruling on what a captured order shows while it is detached. **Owner:** David.
+
+## #323 — 🔴 AN ADDRESS IS SAVED WITH NO CHECK AT ALL, AND NOTHING KNOWS WHERE IT IS (FILED 2026-09-17, ledger #349 — NOT BUILT, David's direction)
+
+**What.** Nothing validates an address anywhere: `505 new street, leander` saved silently on
+2026-09-17 (David's own CARD 15 run). Customer addresses, ship-to sites and delivery stops all accept
+whatever is typed, and **no coordinate is stored anywhere** — proven: zero `lat`/`lng`/`geocode`/
+`geometry` columns in the whole migration corpus (the census recon measured this).
+
+**What David asked for (2026-09-17, to be built after Saturday).** On every address save — customer
+address, ship-to, stop — geocode it:
+- **found** → store the coordinates (tech-debt #327-c, still open) and show which **delivery ring** it
+  falls in (the ring map / $3.50 loaded mile, David 2026-09-12);
+- **not found** → say *"we can't find this address"*, **ALLOW the save**, and mark it **unverified** —
+  a new street may genuinely not be mapped yet. Surface it; do not decide for the person;
+- **unverified addresses carry a marker** on the delivery schedule and the day sheet.
+
+**What the two recons concluded** (David's own, 2026-09-15, in his checkout — read for this filing;
+both are RECON ONLY, uncommitted, nothing shipped):
+
+`docs/recon/census-geocode-2026-09-15/` — **the free federal geocoder, run against LAWNS's real 1,959
+QuickBooks customers.**
+- **84.9% of resolvable addresses matched** (1,217 of 1,433); 62.1% of all 1,959 got a coordinate.
+  The August 60-address sample said 85.0% — it held at 24× the volume, 0.1 points apart.
+- **The misses are geography, not data quality: 61% are new-construction streets** TIGER has not
+  absorbed — Liberty Hill misses **35.3%**, Austin **2.0%**. No cleaning recovers them.
+- **17 misses are ours**: 9 phone-in-street rows (a tighter rule catches all 9 — this build's contact
+  lists already move those to the phone list), 5 with no house number, 3 PO boxes.
+- **Free, no key, no quota, one batch:** all 1,433 in ONE multipart POST in **6.13 seconds**; the
+  documented ceiling is 10,000 per file. ⚠️ It returns rows in a different order — join on the id.
+- `Tie` returns no coordinate (8 rows) and `Non_Exact` (207) is a weaker match that must not be shown
+  as an exact one (D-9).
+
+`docs/recon/two-stage-geocode-2026-09-15/` — **"Google normalises, Census geocodes" — the verdict is
+that it does not pay.**
+- **The ceiling is +3.3 points.** 168 of 216 misses (78%) are TIGER coverage gaps no normaliser can
+  touch: a *perfect* stage ① takes 84.9% → 88.3%.
+- **Licensing is one unresolved clause,** Google Maps Service Specific Terms §6.3.2: caching is allowed
+  only where it is *"not used as a replacement for making an additional call"* — a stored spine is
+  exactly that. A lawyer's question, not cleared.
+- **Cost: the initial run is free** (10,000 free calls per SKU per month, then $5/1,000 — 1,433 calls
+  is 14.3% of the free tier). 🔴 **But Google has no batch endpoint** (1,433 separate calls, ~1–2
+  minutes at 25 QPS), and under §6.3.1 coordinates must be **deleted and re-fetched every 30 days** —
+  ~165 addresses (11.5% of the book) on a permanent monthly refresh job that exists nowhere today.
+- It also found stage ① can **destroy a good address** (a normaliser "correcting" a real new street).
+
+**Size (not built).** ~1½–2 days: a `geocode` seam + the census batch call (half a day, the recon's
+resolver is written), 6 columns + a status on `customer_addresses` and `deliveries` with a migration
+and a cap (half a day — the recon notes `customerAddresses.test.ts` §G is pinned to one migration file
+and must be repointed), the unverified marker on the two screens and the save copy (half a day), the
+ring lookup (half a day, and it needs the ring map as data — not yet anywhere).
+
+**Open, David's:** the service choice (**tech-debt #327-e**, Google vs self-hosted) and where the
+coordinates live (**#327-c**). The recons' recommendation is Census first — free, batched, 85% — with
+the misses shown as unverified rather than guessed at. **Nothing is built and nothing is chosen here.**
