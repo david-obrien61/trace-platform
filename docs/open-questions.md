@@ -86,10 +86,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#345 — the writer registry; a typed phone is never dropped (build, NOT MERGED)**
-- 🔴 **OPEN — MERGE.** The branch waits on David's word; step i and step j wait on the merge. Owner: ledger #345.
-- 🔴 **OPEN — A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK MAKES A DUPLICATE.** Link by email/phone when exactly one matches, or ask? Owner: tech-debt #314.
-- 🟡 **OPEN — THE ROUTE PLANNER'S ADDRESS BOX IS NEVER SAVED.** Scratch, or save it to the stop? Owner: tech-debt #316.
-- 🟡 **OPEN — STAFF AT CHECKOUT.** A member without `customers:update` who types over a picked customer's phone gets NOT SAVED (red). Should staff be able to add a number? Owner: ledger #345 Blocker.
+- ✅ **ANSWERED 2026-09-17 — MERGED** (`9d9214b`, production the same minute). Owner: ledger #345.
+- 🔴 **OPEN — A CAPTURE FOR A CUSTOMER WITH NO PERSON LINK MAKES A DUPLICATE.** Lean: match on phone or street + ZIP, then ask; never email alone. Owner: tech-debt #314.
+- 🟡 **OPEN — THE ROUTE PLANNER'S ADDRESS BOX IS NEVER SAVED.** Lean: save as a ship-to through contactWriter; at minimum label it "not saved". Owner: tech-debt #316.
+- 🟡 **OPEN — STAFF AT CHECKOUT.** Lean: staff may ADD a phone/email; only `customers:update` may Make main or Remove. Owner: tech-debt #317.
+- 🟡 **OPEN — THE QUICKBOOKS IMPORT KEEPS AN EXISTING CUSTOMER'S CONTACT DETAILS AS THEY ARE.** A #278 build decision, not a ruling — confirm or change. Owner: tech-debt #318.
+- 🔴 **GO-LIVE — FINISHING A STOP DOES NOT FULFIL ITS ORDER** (automatic SPM consumption depends on it). Owner: tech-debt #319.
 - 🟡 **OPEN — WHICH DOMAIN IS REGISTERED NEXT.** Proposed: orders → delivery stops → stock movements. Owner: `writer-registry.json` → `proposed`.
 
 **#342 — during testing nothing writes the record; practice orders go with their import (build + migrations written, none applied)**

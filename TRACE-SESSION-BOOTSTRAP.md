@@ -79,14 +79,15 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
-### 🟡 PUSHED, NOT MERGED — #345 (`fix/contact-card-visible`, 2026-09-17) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
+### ✅ MERGED 2026-09-17 (`9d9214b`, production 16:27 UTC) — #345 (`fix/contact-card-visible`) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — customer-contact-record CARDS 15 and 18–24 (25 is `needs-test`, reason stated).
   Checkout with a picked customer saves typed contact details (CLV-20260917-1769); every typed value is reported
   (NOT SAVED in red); the customer page shows Phones · Emails · Addresses with Make main / Remove; the change log
   writes; the reload prompt (#313). `writer-registry.json` + `verify:writer-registry` — 19 contact paths, PGlite on
   the live schema. Rule: §6 r21 · [[R-159]] (PARTIAL — contacts only). Debt: #314 · #316 open, #315 fixed.
-- 🔴 **David merges.** Then step i (snapshot proof) and step j (`20260915b`).
+- 🔴 **Owner-prove in progress** (GATE 0 → 15 → 18 → 20, 21, 23; 19/22 need staff/manager logins). Then step i (snapshot proof) and step j (`20260915b` + CARD 6).
+- 🔴 **GO-LIVE ITEM FILED: tech-debt #319 — finishing a stop does not fulfil its order** (automatic SPM consumption depends on it). Pending David: #314 · #316 · #317 · #318 (leans recorded).
 
 ### 🔴 NEXT GO-LIVE ITEM (after the #345 merge) — REGISTER ORDERS, THEN THE PRODUCT IMPORT UPDATE — THE PRODUCT IMPORT UPDATES, IT DOES NOT DUPLICATE · NOT STARTED
 

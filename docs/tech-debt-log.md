@@ -3980,6 +3980,9 @@ A customer with no `person_id` — **every QuickBooks-imported customer**, and 5
 customer and puts the typed details on it. Found by the writer-registry path test `ocr.existing-customer`
 (first written against an imported-shape customer; it failed that way).
 
+**LIGHTNING'S LEAN (2026-09-17, recorded — David decides):** match a person-less customer on **phone**, or on
+**street + ZIP**, then ASK — *"Is this <name> at <address>?"* — before linking. **Never on email alone** (#53).
+
 **Fixed for checkout** (ledger #345): the checkout pick now attaches, so the server does not re-match.
 **Not changed for capture:** matching an existing customer by email alone is the rule that cross-billed
 nine invoices (#53, D-47). **Fix = a ruling:** link a person-less customer by email/phone when exactly one
@@ -4002,3 +4005,48 @@ kept in page state only. Under §6 r21 *"a value entered and not saved is a defe
 to be scratch. **Declared** in `writer-registry.json` as not-a-capture, with this reason, so the check
 names it every run. **Owner:** David — keep it as scratch, or save it to the stop (the ship-to editor
 already does that properly).
+
+**LIGHTNING'S LEAN (2026-09-17, recorded — David decides):** save it as a ship-to through `contactWriter`
+(a typed value not saved is a defect under §6 r21); at minimum, label the box **"not saved"**.
+
+## #317 — 🟡 STAFF AT CHECKOUT CANNOT ADD A PHONE OR EMAIL TO A PICKED CUSTOMER (NEW 2026-09-17, ledger #345 — decision pending David)
+
+**What.** Ledger #345 saves typed contact details for a picked customer only when the caller holds
+`customers:update` (or is the owner). A STAFF member who types a new number gets **NOT SAVED** in red; the
+order goes through. That rule was Thunder's choice, stated in the #345 report.
+
+**LIGHTNING'S LEAN (recorded — David decides):** staff may **ADD** an additional phone or email (it never
+changes which one is main, and nothing is removed); only `customers:update` may **Make main** or **Remove**.
+Note the list INSERT policies ask for `customers:create`, which STAFF does not hold either (#312's shape), so
+the lean needs a server-side path, not only a changed check in `submit.ts`.
+
+## #318 — 🟡 THE QUICKBOOKS IMPORT IGNORES A CHANGED PHONE, EMAIL OR ADDRESS ON AN EXISTING CUSTOMER (NEW 2026-09-17, ledger #345 — confirm or change)
+
+**What.** On an existing customer, the import updates the three tax-exemption columns and nothing else.
+✏️ **CORRECTION TO THE #345 REPORT:** it called this *"your earlier ruling"*. **It is not a ruling of
+David's.** It is a BUILD decision from ledger #278 (2026-09-06), written in
+`customerImportWriter.ts`'s header:
+
+> *"WHAT AN EXISTING ROW ACTUALLY RECEIVES: THE EXEMPTION, AND NOTHING ELSE."* …
+> *"NAME, EMAIL, PHONE AND ADDRESS ARE NOT TOUCHED ON AN EXISTING ROW. Those may have been curated locally —
+> corrected by Lauren, filled from a delivery, fixed after a bounced email — and QuickBooks is not
+> automatically the better copy. Overwriting them would be the clobber `findOrCreateCustomer` was rewritten
+> in August to stop doing."*
+
+It leans on the fill-never-clobber rule `customerUpsert.ts` records as *"the machine-writer ruling (David,
+2026-07-29)"* — that ruling is about a counter checkout blanking a curated value, and it is **not** in
+`docs/RULINGS.md`. **Under the contact lists the clobber no longer applies:** a QuickBooks number that differs
+can be ADDED (kept as additional) without touching the main one, as checkout now does. **Owner:** David —
+confirm "existing rows keep their contact details as they are", or change it to "add what QuickBooks has
+that we don't".
+
+## #319 — 🔴 GO-LIVE: FINISHING A DELIVERY STOP DOES NOT FULFIL ITS ORDER (NEW 2026-09-17, ledger #345 Part C)
+
+**What.** `useStopActions.tsx:130` sets the stop to fulfilled and nothing else: the order's status stays
+where it was, and `handleStatus` in `api/orders/submit.ts` — which moves stock for a fulfilled order — is
+never called. So a truck run completed in the app leaves every order open.
+
+**Why it is a go-live item.** It sits on the bar *"take an order, get it on a truck, bill it correctly"*.
+**Automatic SPM consumption depends on it**: stock (and the per-order consumption it will record) moves on
+ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
+Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
