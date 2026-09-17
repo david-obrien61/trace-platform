@@ -151,6 +151,20 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 
 ---
 
+## THE NOTE DAVID FORWARDS TO LAUREN (not a card — kept here so it is not only in a chat)
+
+> For Saturday, run the paper day sheet exactly as you always do — the printed orders are still the crew's copy for the load. The only new thing: on the delivery schedule, on Saturday's heading, tap **Crew link**, then **Make link**, then **Copy link**, and paste it into the same text you already send the driver. He opens it on his phone — no login, no app, no password — types his name once, and then has the day's stops with the addresses, a Maps button, the customer's name and number (with a Call button), and what's on each order. No prices are on it. As he works he taps **Start** and **Done** on each stop, and can add a note ("gate was locked") that you'll see on your schedule with his name and the time.
+>
+> **Send it on Saturday morning, not the night before** — a link covers that one day and stops working at 6 am Sunday.
+> **Anyone who has the link can use it** until then, so send it to the driver and nobody else; if you want it dead sooner, tap **Turn off link**.
+> **The link is shown only once.** If you lose it, tap **Make a new link** and re-send — that makes a new one and kills the old one, so the driver needs the new text.
+> **The load list now prints the right amount of special mix.** For Saturday that is **7 yards**, where the old page said 3½ — the old figure was half what it should have been.
+> If anything about the link misbehaves, ignore it and carry on with the paper; nothing about Saturday depends on it.
+
+⚠️ **The 7 yards is checked, not repeated:** Saturday's 7 LAWNS stops carry **27 trees — 14 × 15 gal, 8 × 30 gal, 5 × 45 gal = 675 container gallons**. At the corrected ratio (2 container volumes of mix per tree, [[R-155]] as amended 2026-09-15/16) that is 1,350 gallons ÷ 201.974 = 6.68, printed **7 yards** (rounded up to the next half yard, *"err large, do not skimp"*). At the old 1.0 ratio it was 3.34 → **3½**. The mix ratio is configuration now; LAWNS has no override, so the default of 2 applies.
+
+---
+
 ## WHAT THIS BOARD DOES NOT COVER
 - **Expiry at 6:00 AM the next day** — proven by the builder test `crew.expired`, not by a card: waiting overnight is not a useful owner test. If you want to see it, open Monday a link made for Saturday.
 - **The rate limit** (60 calls a minute per phone) — builder test `crew.rate-limit`.
