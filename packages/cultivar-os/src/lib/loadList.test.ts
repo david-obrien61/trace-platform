@@ -231,20 +231,19 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(empty.kind === 'unresolved' && empty.quantity === 1 && empty.reason !== null,
     '🔴 B9 (negative): a line with no description and no sku is UNRESOLVED with a reason');
 
-  // ✏️ B10/B10b REWRITTEN 2026-09-17: goods are not on David's list, so they do not print.
-  // 🔴 MEASURED CONSEQUENCE, FLAGGED TO DAVID: 12 live LAWNS lines are readable goods (fertiliser,
-  // fungicide, perlite, ant killer). None is on Saturday 2026-09-19. If one ever must ride the
-  // trailer, this is the assertion that says why it did not print.
+  // ✏️ B10/B10b, SECOND PASS 2026-09-17 — DAVID CORRECTED MY FIRST READING. I had goods printing
+  // nowhere; he ruled: *"anything physical that a customer bought is loaded on the truck, so it
+  // prints."* His original list named the INSTALL materials, not the whole sheet.
   const bag = res(line(10, 'Gardenline Lawn & Garden 19-5-9 Fertilizer - 40 lb', 'R190'));
-  ok(bag.kind === 'not_loaded' && bag.gallons === null && /sold by/i.test(bag.reason ?? ''),
-    '🔴 B10: a 40 lb bag is NOT on the list, so it does not print — and the reason says it is goods');
+  ok(bag.kind === 'other_goods' && bag.gallons === null && /rides the trailer/i.test(bag.reason ?? ''),
+    '🔴 B10: a 40 lb bag is GOODS — it prints, and it takes no mix or posts');
   const fifteenLb = res(line(1, 'Some Compost - 15 lb', 'X'));
-  ok(fifteenLb.kind === 'not_loaded' && fifteenLb.rung === null,
-    '🔴 B10b: a 15 POUND bag is still not a tree on the 15 GALLON rung — the kind is checked, not the number');
+  ok(fifteenLb.kind === 'other_goods' && fifteenLb.rung === null,
+    '🔴 B10b: a 15 POUND bag is goods, NOT a tree on the 15 GALLON rung — the kind is checked, not the number');
 
   const tsk = res(line(1, 'T-Post Stake Kit', 'TSK2'));
   ok(tsk.kind !== 'tree' && tsk.gallons === null, '🔴 B11 (negative): the SKU’s digits are NEVER read as a size');
-  ok(tsk.kind === 'unresolved', 'B11b: and it is UNRESOLVED — a stake kit might well go on the trailer, so it is printed, not dropped');
+  ok(tsk.kind === 'other_goods', 'B11b: a stake kit is a physical thing — it prints under "Also on the truck"');
   const ant = res(line(2, "Martin's Surrender Fire Ant Killer Insecticide - 1 lb", 'MT10002'));
   ok(ant.gallons === null, '🔴 B12 (negative): MT10002 does not become a 10,002 gallon container');
 
@@ -311,8 +310,8 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const none = res(line(1, 'Live Oak - 45 gallon', 'LO45'), []);
   ok(none.kind === 'unresolved' && /no container sizes are set up/i.test(none.reason ?? ''),
     '🔴 L6: with no ladder, a 45 gallon line is UNRESOLVED and says the sizes are not set up — never a guess');
-  ok(res(line(1, 'Fertilizer - 40 lb', 'X'), []).kind === 'not_loaded',
-    'L6b: goods are not on the list with or without a ladder');
+  ok(res(line(1, 'Fertilizer - 40 lb', 'X'), []).kind === 'other_goods',
+    'L6b: goods print with or without a ladder — the ladder is for containers only');
 
   // L7b — 🔴 AN ALIAS THE PARSER CANNOT READ IS STILL A SIZE. "cuttings" is only the slip rung's
   // alias; nothing numeric can place it, so a resolver that skipped aliases would call it unreadable.
@@ -550,8 +549,10 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(tp.stops[0].trunkProtection === 2, 'N1b: and the stop carries its own count, for when a stop is dropped');
   ok(tp.notLoaded.length === 2 && tp.unresolved.length === 0,
     '🔴 N2: the Trip Charge and the discount are NOT LOADED and NOT unresolved — they do not print at all');
-  ok(!('noSizeStated' in tp) && !('otherGoods' in tp),
-    '🔴 N3 (negative): the "also on these orders" bucket is GONE from the model — David: "too confusing"');
+  ok(!('noSizeStated' in tp),
+    '🔴 N3 (negative): the "also on these orders" bucket is GONE — David: "too confusing"');
+  ok('otherGoods' in tp,
+    '✏️ N3b: …but GOODS have their own bucket ("Also on the truck") — David, second pass: anything physical prints');
 
   // N4 — every known non-load name, from the live LAWNS book (144 lines, 44 distinct non-tree rows).
   for (const [d, sku] of [['Trip Charge', 'TC'], ['Tree Bubbler', 'TB'], ['Customer Discount', null],
@@ -584,6 +585,45 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
     '🔴 N7b: …so the stop is fenced and the in-total arithmetic runs — 2 more posts on a 45 gal');
   ok(build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 45 gallon', 'X')])]).stops[0].deerFence === 'unknown',
     'N7c (negative control): with no such line the stop is still unknown, and nothing is invented');
+}
+
+// ══ §O ANYTHING PHYSICAL PRINTS; MONEY LINES NEVER DO (David, 2026-09-17, second pass) ══
+{
+  const day = build('2026-09-01', [stop('s1', 'A', [
+    line(1, 'Oak - 45 gallon', 'X'),
+    line(10, 'Gardenline Lawn & Garden 19-5-9 Fertilizer - 40 lb', 'R190'),
+    line(2, 'Osmocote Blend 21-4-8 (12-14M) - 50 lb', 'OS98615'),
+    line(1, 'Trip Charge', 'TC'),
+    line(1, 'Customer Discount', null),
+  ])]);
+  ok(day.otherGoods.length === 2 && day.otherGoods.reduce((n, i) => n + i.quantity, 0) === 12,
+    `🔴 O1: both goods lines print, with their quantities (got ${day.otherGoods.length})`);
+  // O1b — 🔴 A PHYSICAL THING WE CANNOT READ IS STILL "COULD NOT WORK OUT", NOT GOODS. Perlite is
+  // sold by "4.4 cf" and the parser declines it, so the sheet says so rather than inventing a unit.
+  // Measured: 2 live LAWNS lines. This is the honest half of "anything physical prints".
+  const perlite = res(line(2, 'Hortiperl-G Coarse Perlite - 4.4 cf', 'TX412X'));
+  ok(perlite.kind === 'unresolved' && perlite.unreadText === '4.4 cf',
+    `🔴 O1b: a good whose unit we cannot read is UNRESOLVED and names the text it tried (got ${perlite.kind})`);
+  ok(day.treeCount === 1 && day.mixGallons === 90 && day.tPosts === 2,
+    '🔴 O2: and they are in NO tree, mix or post total — a bag is not a tree');
+  ok(day.notLoaded.length === 2 && day.unresolved.length === 0,
+    '🔴 O3: the charge and the discount are the only lines left off, and nothing is unresolved');
+  ok(day.totalsAreFloors === false,
+    '🔴 O4: goods do not make the day a floor — they are read, counted and printed');
+  ok(/rides the trailer|Also on the truck/i.test(LOAD_LIST_COPY.alsoOnTruckWhy + LOAD_LIST_COPY.alsoOnTruckHeading),
+    'O5: the section says what it is');
+  ok(/not counted as trees/i.test(LOAD_LIST_COPY.alsoOnTruckWhy) && /not shown anywhere/i.test(LOAD_LIST_COPY.alsoOnTruckWhy),
+    'O5b: …and that charges and fees appear nowhere on the sheet');
+
+  // O6 — 🔴 THE ONE PHYSICAL THING THAT STILL DOES NOT PRINT, AND WHY. A billed Tree Bubbler is a
+  // real object, but bubblers are computed one per tree in the hardware total, so printing the billed
+  // line would read as a second demand for the same thing. Nothing compares the two — tech-debt #326.
+  ok(res(line(4, 'Tree Bubbler', 'TB')).kind === 'not_loaded',
+    '🔴 O6: a BILLED Tree Bubbler still does not print — bubblers are computed per tree (tech-debt #326)');
+  ok(/counted per tree/i.test(res(line(4, 'Tree Bubbler', 'TB')).reason ?? ''),
+    'O6b: …and the reason says exactly that, so the exception is legible');
+  ok(res(line(1, 'Tree Tarp', null)).kind === 'other_goods',
+    'O7: a Tree Tarp IS physical and prints — it was wrongly in the not-loaded list on the first pass');
 }
 
 // ══ §W PLANT YOUR TREE IS WORK, NOT A FEE (David, 2026-09-17) ══════════════════════

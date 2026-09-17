@@ -54,7 +54,7 @@ function ok(cond: boolean, msg: string): void {
   // ✏️ 2026-09-17: `model.noSizeStated` and `model.otherGoods` are GONE — the sheet is an allow-list,
   // and a recognised non-load line prints nowhere (David: "additional information to yard crew is too
   // confusing"). What must still be rendered is every bucket that CAN go on the trailer.
-  for (const bucket of ['model.unresolved', 'model.stops', 'model.trees']) {
+  for (const bucket of ['model.unresolved', 'model.stops', 'model.trees', 'model.otherGoods']) {
     ok(src.includes(`${bucket}.map(`),
       `🔴 A: the page RENDERS ${bucket} — a bucket the model fills and the page ignores is the same omission, one layer out`);
   }
@@ -126,6 +126,11 @@ function ok(cond: boolean, msg: string): void {
     '🔴 B2b: …and a tree already on site to plant is printed on its stop (David, 2026-09-17)');
   ok(/model\.trunkProtection > 0 \?/.test(src) && /trunkProtectionLine/.test(src),
     'B2c: trunk protection is on the list, so the day total prints it');
+  // ✏️ 2026-09-17 second pass: goods print in their own section (David: anything physical prints).
+  ok(/model\.otherGoods\.length > 0 \?/.test(src) && /alsoOnTruckHeading/.test(src) && /alsoOnTruckWhy/.test(src),
+    '🔴 B2d: "Also on the truck" prints every physical good, with the sentence saying money lines are nowhere');
+  ok(code.indexOf('alsoOnTruckHeading') > code.indexOf('3 · Hardware'),
+    'B2e: …after the load itself, not above it');
   ok(/s\.unresolvedCount > 0/.test(src),
     'B3: a stop carrying a line nobody could read says so on its OWN row, not only in the day total');
   // B3b (negative) — the out-of-ladder concept is GONE from the page too, not just from the model.

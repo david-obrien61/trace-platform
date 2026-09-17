@@ -159,8 +159,11 @@ export type LoadItemKind =
    *  extra on site which is (PYT)"* — the crew plants NINE. Its size is unknown, so it is NOT counted
    *  as a tree and earns no mix or posts; it is printed on its stop and it raises the FLOOR. */
   | 'plant_on_site'
-  /** A line we RECOGNISE as not going on the trailer — a charge, a discount, a delivery option, a
-   *  removal, a bubbler line (bubblers are computed per tree), or goods. It prints NOWHERE. */
+  /** Physical goods a customer bought — a 50 lb bag, a 4.4 cf bale, a tarp. They ride the trailer, so
+   *  they print under "Also on the truck" with their quantity. They are NOT trees: no mix, no posts. */
+  | 'other_goods'
+  /** A MONEY line, or a service with nothing to load — a charge, a discount, a delivery option, a
+   *  removal, or a billed bubbler (computed per tree above). It prints NOWHERE. */
   | 'not_loaded'
   /** It might be loadable and we could not read it — including a container size this nursery's ladder
    *  does not have (`offLadder`), and a tree whose size we cannot reach. The ONE printed refusal. */
@@ -299,6 +302,8 @@ export interface LoadListModel {
   valuesUsed: ValuesUsed;
 
   // ── everything the headline does not cover ─────────────────────────────────
+  /** 🔴 PHYSICAL GOODS — printed under "Also on the truck", counted in no tree, mix or post total. */
+  otherGoods: ResolvedLoadItem[];
   /** 🔴 THE ONE PRINTED REFUSAL: lines that might be loadable and could not be read. */
   unresolved: ResolvedLoadItem[];
   /** Lines we RECOGNISE as not going on the trailer. Carried for the trace; printed NOWHERE
@@ -309,8 +314,17 @@ export interface LoadListModel {
 }
 
 /**
- * 🔴 THE LINES WE RECOGNISE AS NOT GOING ON THE TRAILER. Matched on the description OR the SKU.
- * Every entry was read out of LAWNS's own order lines on 2026-09-17, with its line count.
+ * 🔴 THE RULE, IN DAVID'S WORDS (2026-09-17, second pass): **ANYTHING PHYSICAL PRINTS; MONEY LINES
+ * NEVER DO.** *"Fertiliser, fungicide, perlite, ant killer and anything else physical that a customer
+ * bought is loaded on the truck, so it prints."* His first list — trees, T-posts, special mix, deer
+ * fence, trunk protection — named the INSTALL MATERIALS, not the whole sheet.
+ * ⚠️ So this list holds ONLY money lines and services with nothing to load. A physical thing is never
+ * in it. The one deliberate exception is a billed **Tree Bubbler**: bubblers are computed one per tree
+ * in the hardware total, so the billed line would read as a second demand for the same object — and
+ * NOTHING compares the two (tech-debt #326, filed not built).
+ *
+ * Matched on the description OR the SKU. Every entry was read out of LAWNS's own order lines on
+ * 2026-09-17, with its line count.
  * ⚠️ A DATED "Flat fee …" IS DELIBERATELY ABSENT. David's own worked example keeps it in the one
  * printed refusal — we cannot read it, and a thing we cannot read is not a thing we recognise. (His
  * two instructions disagreed on that line; this is the reading his Saturday example gives.)
@@ -324,8 +338,10 @@ const NON_LOAD_LINES: ReadonlyArray<{ re: RegExp; why: string }> = [
   { re: /surcharge|credit card fee/i,     why: 'a charge' },
   { re: /^(morning|tailgate) delivery\b/i, why: 'a delivery option, not a thing to load' },
   { re: /^existing tree removal$|^TR$/i,  why: 'work on site, not a thing to load' },
-  { re: /^tree tarp$/i,                   why: 'a service line' },
 ];
+
+/** Physical things that state no size — they go on the truck, so they print (David, 2026-09-17). */
+const KNOWN_GOODS = /^tree tarp$|^stake kit$|^t-post stake kit$|^TSK\d*$/i;
 
 /** Lines that ARE on David's list, matched the same way. */
 const TRUNK_PROTECTION = /^trunk protection\b|^TP$/i;
@@ -371,8 +387,11 @@ export function resolveLoadItem(item: StopOrderItem, ladder: Ladder): ResolvedLo
     if (matches(PLANT_ON_SITE, label, sku)) {
       return { ...flat, kind: 'plant_on_site', reason: 'A tree already on site, to plant — size unknown; add its mix and T-posts by hand.' };
     }
+    if (matches(KNOWN_GOODS, label, sku)) {
+      return { ...flat, kind: 'other_goods', reason: 'Goods — it rides the trailer; it is not a tree, so it takes no mix or posts.' };
+    }
     const known = NON_LOAD_LINES.find(n => matches(n.re, label, sku));
-    if (known) return { ...flat, kind: 'not_loaded', reason: `Not one of the things this sheet carries — ${known.why}.` };
+    if (known) return { ...flat, kind: 'not_loaded', reason: `Not loaded — ${known.why}.` };
   }
 
   // ── 1. the anchored lot ───────────────────────────────────────────────────
@@ -405,7 +424,7 @@ function classify(
   // raw line ("Tree Bubbler. ( no existing irrigation … )" reads out as "Tree Bubbler").
   const known = NON_LOAD_LINES.find(n => matches(n.re, name, sku));
   if (known && !sizeText) {
-    return { ...base, kind: 'not_loaded', reason: `Not one of the things this sheet carries — ${known.why}.` };
+    return { ...base, kind: 'not_loaded', reason: `Not loaded — ${known.why}.` };
   }
 
   if (!sizeText) {
@@ -420,9 +439,9 @@ function classify(
     case 'blank':
       return { ...base, kind: 'unresolved', reason: 'No container size on this line, and we do not recognise it — check it before you load.' };
     case 'not_container':
-      // Goods are NOT on David's list, so they do not print. ⚠️ 12 live LAWNS lines are goods
-      // (fertiliser, fungicide, perlite, ant killer); none is on Saturday 2026-09-19. Flagged to David.
-      return { ...base, kind: 'not_loaded', reason: `Not one of the things this sheet carries — sold by ${r.unit}, not by container.` };
+      // 🔴 GOODS PRINT (David, 2026-09-17, correcting the first pass): a customer bought it, so it is
+      // on the truck. 12 live LAWNS lines are goods — fertiliser, fungicide, perlite, ant killer.
+      return { ...base, kind: 'other_goods', reason: `Sold by ${r.unit}, not by container — it rides the trailer, and takes no mix or posts.` };
     case 'off_ladder':
       return {
         ...base, kind: 'unresolved', offLadder: true, unreadText: sizeText,
@@ -600,6 +619,7 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
       gallonsPerCubicYard: settings.ops.trueGallonsPerCubicYard,
       rungs: [...seen.values()],
     },
+    otherGoods: allItems.filter(i => i.kind === 'other_goods'),
     unresolved,
     notLoaded: allItems.filter(i => i.kind === 'not_loaded'),
     unreadStops,
@@ -637,6 +657,10 @@ export const LOAD_LIST_COPY = {
   /** 🔴 Planting work on a stop — a tree already there. David, 2026-09-17: the crew plants nine. */
   plantOnSite: 'plus %n tree%s to plant on site (Plant Your Tree) — size unknown; add mix and T-posts by hand.',
   trunkProtectionLine: (n: number) => `${n} trunk protection`,
+  /** 🔴 Physical goods the customer bought. David, 2026-09-17: *"anything physical prints."* */
+  alsoOnTruckHeading: 'Also on the truck',
+  alsoOnTruckWhy:
+    'Bought on these orders and loaded with the trees. Not counted as trees, and they take no mix or T-posts. Charges, discounts and fees are not shown anywhere on this sheet.',
   valuesHeading: 'Figures used for this list',
   sizesFailed: 'Could not read this nursery’s container sizes — no tree can be staked or mixed until they load. Reload before you load the trailer.',
   sizesNone: 'No container sizes are set up for this nursery, so no tree can be staked or mixed. Set them up in Settings → Container sizes.',

@@ -392,6 +392,17 @@ export function LoadList() {
 
               {/* 🔴 THE FIGURES USED (ledger #343) — every number the totals below multiplied by,
                 printed, so nobody has to trust a figure they cannot see. */}
+            {/* 🔴 ALSO ON THE TRUCK (David, 2026-09-17, second pass): anything physical the customer
+                bought is loaded, so it prints — with its quantity, in no tree, mix or post total.
+                Money lines still print nowhere. */}
+            {model.otherGoods.length > 0 ? (
+              <div className="ll-block">
+                <h2 style={S.h2}>{LOAD_LIST_COPY.alsoOnTruckHeading}</h2>
+                <p style={S.note}>{LOAD_LIST_COPY.alsoOnTruckWhy}</p>
+                {model.otherGoods.map((i, n) => <ItemRow key={n} item={i} />)}
+              </div>
+            ) : null}
+
             <div className="ll-block ll-figures">
               <h2 style={S.h2}>{LOAD_LIST_COPY.valuesHeading}</h2>
               {settingsRead && settingsRead.figures !== 'stored' ? (
