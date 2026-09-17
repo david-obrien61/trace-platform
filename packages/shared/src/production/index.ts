@@ -11,12 +11,13 @@ export type { BasisKind, Estimate, EstimateGap } from './basis';
 
 export {
   OPERATIONS_DEFAULTS, OPERATIONS_BASIS, MONEY_DEFAULTS, MONEY_WALLED_KEYS, WITHHELD_REASON,
-  resolveConfig, coverMonthsFor, isWithheld,
+  resolveConfig, coverMonthsFor, isWithheld, GALLONS_PER_CUBIC_YARD, PLANTING_MATERIAL_KEYS,
+  PLANTING_MATERIAL_LABELS, plantingMaterialProblems,
 } from './productionConfig';
 export type { OperationsConfig, MoneyConfig, ResolvedConfig } from './productionConfig';
 
 export {
-  rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot,
+  rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot, startingGallons,
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck,
   addMonths, addWorkingDays, workingDaysBetween, ARITHMETIC_TOLERANCE,
 } from './productionMath';

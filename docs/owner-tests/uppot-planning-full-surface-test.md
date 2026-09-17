@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 27 covered** (25 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.**
+**Board: 0 of 30 covered** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -473,8 +473,10 @@ Recording the hole rather than pretending the code path is proven.
 
 # THE CONTAINER LADDER — CARDS 22–27 (ledger #326, 2026-09-14)
 
-> ⛔ **MIGRATION GATE — `supabase/migrations/20260914_container_ladder.sql` IS NOT APPLIED.**
-> **CARDS 22–27 CANNOT PASS WITHOUT IT.** It creates `public.container_ladder` and seeds LAWNS's
+> ✅ **MIGRATION GATE — `supabase/migrations/20260914_container_ladder.sql` IS APPLIED (David, 2026-09-16).**
+> He ran the verify block: V1 — 12 columns (id, business_id, label, aliases, sort_order, volume_gallons, handling_minutes, handling_because, active, retired_at, created_at, updated_at) · V2 — RLS on, exactly three policies: container_ladder_member_select (r), container_ladder_settings_insert (a), container_ladder_settings_update (w), no delete · V3 — nine LAWNS rungs: slip (no volume) · 4 in (no volume) · 3/5 gal (4; aliases "#3/5", "3/5 Gallon") · 15 · 30 · 45 · 65 · 95/100 (95; aliases "95 gal", "100 gal", "95 gallon", "100 gallon") · 200 · V4 — a second "15 GAL" refused by container_ladder_business_label_key. The catalog check lists it APPLIED. **CARDS 22–27 are unblocked.**
+> ✏️ Corrected by ledger #343 — this gate said NOT APPLIED after the migration had run (the #336 class).
+> The text below is kept for the next tenant: it creates `public.container_ladder` and seeds LAWNS's
 > nine rungs (slip · 4" · 3/5 gal · 15 · 30 · 45 · 65 · 95/100 · 200).
 >
 > Apply it **as `postgres`, in the SQL EDITOR — never the dashboard TABLE EDITOR** (§6 r17: the
@@ -496,6 +498,8 @@ Recording the hole rather than pretending the code path is proven.
 
 **PASS:** it is a **dropdown**, and opening it offers **30 gal · 45 gal · 65 gal · 95/100 · 200 gal**
 — and nothing else.
+**PASS also — ✏️ changed 2026-09-16 (ledger #343):** the **In now** cell shows the row's starting volume
+from its SIZE (**15**) with the size name **15 gal** beneath it.
 **FAIL:** it is still a number box with up/down arrows, or the list offers sizes at or below 15.
 
 🔴 **WHY THIS IS THE HEADLINE CARD.** The control was `<input type="number">` with no `min`, no
@@ -624,3 +628,63 @@ retiring from a screen is an UPDATE, by design.
 🔴 **WHY.** Two rungs claiming one number makes which rung a lot lands on **an accident of row
 order** — the silent, order-dependent wrong answer the whole ladder exists to remove (R-96's shape:
 two things that collide both get flagged).
+
+---
+
+# LEDGER #343 — THE LADDER IS THE ONE SOURCE (2026-09-16)
+
+> ⛔ **APPLY `supabase/migrations/20260916_container_ladder_install_t_posts.sql` FIRST** (SQL editor, as
+> `postgres`), run its V1–V4, and only then merge `feat/ladder-one-source`. The ladder read asks for the
+> new column; without it every ladder read fails.
+
+## CARD 28 — 🔴 SETTINGS → CONTAINER SIZES: ADD, EDIT, MOVE, RETIRE — AND NEVER DELETE
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #343 · SIGNAL: `[TRACE:LADDER] add size` / `edit size` / `move size` / `retire/restore size`
+
+1. Open **Admin → Container sizes** (`/settings/container-sizes`).
+   **PASS:** nine sizes in order — slip · 4 in · 3/5 gal · 15 gal · 30 gal · 45 gal · 65 gal · 95/100 · 200 gal —
+   each showing its volume, handling time and **T-posts at install with where the figure came from**
+   (*LAWNS, David 2026-09-12*). There is **no Delete button anywhere**.
+2. Press **+ Add a size**.
+   **PASS:** the T-posts box already reads **4**, bordered amber, with **"copied — confirm — copied from 200 gal.
+   Saving confirms it."** The Add button stays disabled and says **"A size needs a name."**
+3. Type name **7 gal**, volume **7**, change posts to **2**, source **Terry, by phone**, press **Add size**.
+   **PASS:** a green line says it was added; **7 gal** appears at the END of the list with *2 T-posts at install
+   (Terry, by phone)*.
+4. Press **↑** on 7 gal until it sits between **3/5 gal** and **15 gal**.
+   **PASS:** it moves one place per press and stays there after a reload.
+5. Press **Edit** on 7 gal, change volume to **7.5**, Save. **PASS:** the row shows **7.5 gal** after a reload.
+6. Try **+ Add a size** with name **15 GAL**. **PASS:** refused in red — *"already a size here … if it is retired,
+   bring it back instead."*
+7. Press **Retire** on 7 gal. **PASS:** it greys out and reads *retired*; the button now says **Bring back**.
+   The uppot picker no longer offers it (CARD 26's check).
+
+**FAIL:** a Delete appears; a copied figure is not marked as copied; a refused save says "Saved".
+⚠️ Leave 7 gal RETIRED at the end — or delete it in the SQL editor as `postgres`; the app cannot.
+
+## CARD 29 — SETTINGS → OPERATIONS → PLANTING MATERIALS
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #343 · SIGNAL: `[TRACE:UPPOT] operations settings saved`
+
+1. Open `/settings/operations`.
+   **PASS:** a **Planting materials** group lists, in plain words (no key names):
+   *Special mix per gallon of container, when planting (gallons)* **2** · *Rope per T-post (feet)* **4** ·
+   *Bubblers per planted tree* **1** · *T-posts on a deer-fenced tree, in total* **4** — each with a provenance line
+   (**FACT — LAWNS, David 2026-09-15; corrects an earlier 1.0 that was Lightning's** on the mix).
+2. Set the mix to **0** and Save. **PASS:** *"Not saved — … must be more than 0 — a tree is never planted with no mix."*
+3. Set it back to **2** and Save. **PASS:** *"Saved."*, and it survives a reload.
+
+**FAIL:** a key name shows; a 0 ratio saves.
+
+## CARD 30 — 🔴 A 3/5 LOT STARTS FROM THE SIZE'S 4 GALLONS, NOT ITS TEXT
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #343 — the uppot starting size is the rung's volume
+
+1. On the uppot plan, find **Cedar Elm** or **Native Pecan** (size *3/5 Gallon*).
+   **PASS:** **In now** reads **4** with **3/5 gal** beneath it (it used to read 3).
+2. Pick **15 gal** as the target and look at **Mix yd³**. **PASS:** it is the mix for an **11-gallon** step
+   (15 − 4), not a 12-gallon one.
+3. A `#3` lot and a `5 gal` lot of the same variety both read **4**.
+
+**FAIL:** In now shows 3 or 5 for a 3/5-size lot.
+

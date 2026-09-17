@@ -19,6 +19,7 @@
  */
 import {
   foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
+  sameSizeOnLadder, largestRung, activeRungs, rungFromRow, ladderCoverage, LADDER_FIELDS, LADDER_SELECT,
   type Rung, type Ladder,
 } from './containerLadder';
 
@@ -30,7 +31,7 @@ function ok(cond: boolean, msg: string): void {
 
 const rung = (p: Partial<Rung> & { label: string; sortOrder: number }): Rung => ({
   aliases: [], volumeGallons: null, handlingMinutes: null,
-  handlingBecause: 'untimed', active: true, ...p,
+  handlingBecause: 'untimed', installTPostsPerTree: 0, installTPostsBecause: 'not set', active: true, ...p,
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -212,6 +213,57 @@ const SHUFFLED: Ladder = [
 ok(rungsAbove(SHUFFLED, SHUFFLED[1]).map((x) => x.label).join('') === 'bcd',
   '🔴 §I the offer list is SORTED from a shuffled ladder — row order must not decide what "the next rung up" means');
 ok(nextRung(SHUFFLED, SHUFFLED[1])?.label === 'b', '🔴 §I …and the next rung is the lowest above, not the first row returned');
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// §J  THE RESOLVER SAYS WHICH REFUSAL IT IS (ledger #343)
+//     The load list must not parse a size itself (David, 2026-09-16), so the resolver has to tell a
+//     bag, an off-ladder container and a scribble apart. Before this build all three said off_ladder.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+const bag = resolveRung(LAWNS, '40 lb');
+ok(!bag.ok && bag.reason === 'not_container' && bag.kind === 'weight' && bag.unit.length > 0,
+  '🔴 §J a 40 lb bag is NOT_CONTAINER, carrying its kind and unit — goods, not an off-ladder tree');
+ok(!resolveRung(LAWNS, '15 lb').ok && (resolveRung(LAWNS, '15 lb') as any).reason === 'not_container',
+  '🔴 §J a 15 lb bag is not_container even though 15 is a rung number');
+ok((resolveRung(LAWNS, '3GP') as any).reason === 'unreadable', '🔴 §J a trade code nobody can read is UNREADABLE');
+ok((resolveRung(LAWNS, '7 gallon') as any).reason === 'off_ladder', '§J a readable container size no rung claims is still OFF_LADDER');
+ok((resolveRung(LAWNS, '100 gal') as any).rung?.label === '95/100', '🔴 §J "100 gal" lands on 95/100');
+ok((resolveRung(LAWNS, '#3/5') as any).rung?.label === '3/5 gal', '🔴 §J "#3/5" lands on 3/5 gal by alias');
+ok(resolveRung([], '15 gal').ok === false && (resolveRung([], '15 gal') as any).reason === 'off_ladder',
+  '§J an EMPTY ladder places nothing — a container size is off it');
+
+// §K  SAME SIZE, ON THE LADDER — the count screen's comparison
+ok(sameSizeOnLadder(LAWNS, '#3', '5 gal'), '🔴 §K "#3" and "5 gal" are the SAME size at LAWNS — one rung');
+ok(!sameSizeOnLadder(null, '#3', '5 gal'), '§K (negative control) without a ladder they are two sizes');
+ok(sameSizeOnLadder(LAWNS, '45 Gallon', '45 gal'), '§K two spellings of one rung are one size');
+ok(!sameSizeOnLadder(LAWNS, '15 gal', '7 gal'), '🔴 §K a rung and an off-ladder size are NOT the same');
+ok(sameSizeOnLadder(LAWNS, '7 gal', '7 gallon'), '§K two off-ladder spellings of one size still match by the text fold');
+ok(sameSizeOnLadder(LAWNS, null, null), '§K two blanks match — the count promote\'s stub branch depends on it');
+
+// §L  THE NEW-RUNG COPY SOURCE AND THE OFFER LIST
+const POSTED: Ladder = [rung({ label: 'a', sortOrder: 10, installTPostsPerTree: 2 }),
+  rung({ label: 'b', sortOrder: 30, installTPostsPerTree: 4 }), rung({ label: 'c', sortOrder: 40, installTPostsPerTree: 9, active: false })];
+ok(largestRung(POSTED)?.label === 'b', '🔴 §L the LARGEST rung is the top ACTIVE one in ladder order — a retired top rung is skipped');
+ok(largestRung([]) === null, '§L an empty ladder has no largest rung');
+ok(activeRungs(POSTED).map((x) => x.label).join('') === 'ab', '§L the offer list drops retired rungs and keeps ladder order');
+
+// §M  THE ONE ROW→RUNG MAPPING
+const mapped = rungFromRow({ id: 'x', label: '3/5 gal', aliases: null, sort_order: 30, volume_gallons: '4',
+  handling_minutes: null, handling_because: null, install_t_posts_per_tree: '0', install_t_posts_because: 'LAWNS, David 2026-09-12', active: true });
+ok(mapped.volumeGallons === 4 && mapped.installTPostsPerTree === 0 && mapped.aliases.length === 0,
+  '§M a PostgREST row maps to a Rung — string numerics become numbers, a null alias list becomes []');
+ok(rungFromRow({ ...({} as any), label: 'x', sort_order: 1, active: true, install_t_posts_per_tree: null }).installTPostsPerTree === 0,
+  '§M a row without the posts column reads 0 — what the database default says');
+ok(LADDER_SELECT === LADDER_FIELDS.join(', ') && LADDER_FIELDS.includes('install_t_posts_per_tree'),
+  '§M the select is derived from the ONE field list, which includes the install posts');
+
+// §N  COVERAGE — every size lands in exactly one bucket, and the off-ladder ones are named
+const cov = ladderCoverage(['15 gal', '15 Gallon', '7 gal', '7 gallon', '1 gal', '50 lb', null, '', '3GP', '#3/5'], LAWNS);
+ok(cov.onLadder === 3 && cov.notContainer === 1 && cov.noSize === 2 && cov.unreadable === 1,
+  `🔴 §N the buckets are right (got ${JSON.stringify(cov)})`);
+ok(cov.offLadder.length === 2 && cov.offLadder[0].size === '7 gal' && cov.offLadder[0].count === 2 && cov.offLadder[1].size === '1 gal',
+  '🔴 §N off-ladder sizes are NAMED with their counts, most first — "7 gal" twice, "1 gal" once');
+ok(cov.onLadder + cov.notContainer + cov.noSize + cov.unreadable + cov.offLadder.reduce((n, o) => n + o.count, 0) === 10,
+  '🔴 §N nothing is dropped — the buckets sum to the input');
 
 console.log(`\n── containerLadder: ${passed} passed, ${failed} failed ──`);
 if (failed) { failures.forEach((f) => console.error('  ✗ ' + f)); process.exit(1); }

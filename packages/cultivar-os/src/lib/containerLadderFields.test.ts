@@ -16,7 +16,7 @@
  * Run:  node_modules/.bin/esbuild packages/cultivar-os/src/lib/containerLadderFields.test.ts \
  *         --bundle --platform=node --format=cjs | node
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { LADDER_FIELDS, LADDER_SELECT } from './containerLadderFields';
 
 let passed = 0, failed = 0;
@@ -25,22 +25,36 @@ function ok(cond: boolean, msg: string): void {
   if (cond) passed++; else { failed++; failures.push(msg); console.error('   ✗ ' + msg); }
 }
 
-const MIGRATION = 'supabase/migrations/20260914_container_ladder.sql';
-const sql = readFileSync(MIGRATION, 'utf8');
-
-// Pull the CREATE TABLE body and read the column names out of it. Parsed, never transcribed —
-// a transcribed copy is the thing that drifts.
-const body = sql.slice(
-  sql.indexOf('CREATE TABLE IF NOT EXISTS public.container_ladder'),
-  sql.indexOf('CREATE UNIQUE INDEX'),
-);
+// ✏️ CHANGED 2026-09-16 (ledger #343). This read ONE file — `20260914_container_ladder.sql` — so a
+// column added by a LATER migration (`20260916_container_ladder_install_t_posts.sql`) failed §B as
+// "the select asks for a column the migration does not create", which is false: the corpus creates
+// it, one file later. The table is now the REPLAY of every migration that touches it, in filename
+// order: the CREATE TABLE body, then each `ADD COLUMN`, minus each `DROP COLUMN`.
+const DIR = 'supabase/migrations';
+const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
 const created = new Set<string>();
-for (const line of body.split('\n')) {
-  const m = line.match(/^\s{2}([a-z_]+)\s{2,}(uuid|text|integer|numeric|boolean|timestamptz)/);
-  if (m) created.add(m[1]);
+let createdIn: string | null = null;
+for (const f of files) {
+  const sql = readFileSync(`${DIR}/${f}`, 'utf8');
+  const at = sql.indexOf('CREATE TABLE IF NOT EXISTS public.container_ladder');
+  if (at >= 0) {
+    createdIn = f;
+    // Parsed, never transcribed — a transcribed copy is the thing that drifts.
+    const body = sql.slice(at, sql.indexOf(');', at));
+    for (const line of body.split('\n')) {
+      const m = line.match(/^\s{2}([a-z_]+)\s{2,}(uuid|text|integer|numeric|boolean|timestamptz)/);
+      if (m) created.add(m[1]);
+    }
+  }
+  const code = sql.split('\n').filter((l) => !l.trimStart().startsWith('--')).join('\n');
+  for (const m of code.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g)) created.add(m[1]);
+  for (const m of code.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\s+DROP COLUMN\s+(?:IF EXISTS\s+)?([a-z_]+)/g)) created.delete(m[1]);
 }
 
-ok(created.size >= 12, `§A the migration parse found the columns (found ${created.size}) — a parse that finds nothing would make every check below vacuously true`);
+ok(createdIn === '20260914_container_ladder.sql', `§A the replay found the migration that CREATES the table (found ${createdIn})`);
+ok(created.has('install_t_posts_per_tree') && created.has('install_t_posts_because') && created.has('is_large'),
+  '🔴 §A the replay sees the columns a LATER migration adds — the one-file read could not (ledger #343)');
+ok(created.size >= 14, `§A the migration parse found the columns (found ${created.size}) — a parse that finds nothing would make every check below vacuously true`);
 ok(created.has('label') && created.has('aliases') && created.has('sort_order'),
   '§A …and it really is THIS table — label, aliases and sort_order are all present');
 
@@ -57,6 +71,10 @@ const NOT_READ: Record<string, string> = {
   retired_at:  'not read yet — `active` is the flag the UI uses; this is the timestamp for the audit trail',
   created_at:  'not shown on any ladder surface',
   updated_at:  'not shown on any ladder surface',
+  // ledger #343 — PREPARED, not read: the leakage flag keeps submit.ts LARGE_CONTAINERS until David
+  // confirms the switch (tech-debt #310). Reading it before then would imply a use it does not have.
+  is_large:         'prepared for the leakage flag; not read until David confirms it (tech-debt #310)',
+  is_large_because: 'the source of is_large; not read for the same reason',
 };
 for (const c of created) {
   if ((LADDER_FIELDS as readonly string[]).includes(c)) continue;

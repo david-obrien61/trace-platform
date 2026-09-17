@@ -22,6 +22,7 @@
  */
 import { adaptQboItems, readProductFromDescription, SIZE_STATE_NOTE } from './qboItemAdapter';
 import type { QboItemRow } from './itemList';
+import { NINE_301 } from './__redfirst__/nineTrees301.cases';
 
 let passed = 0, failed = 0;
 function ok(cond: boolean, msg: string): void {
@@ -302,6 +303,19 @@ const it = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow =
   const both = adaptQboItems([rows[0], { ...rows[1], active: true }]);
   ok(both.collisions.length === 1 && both.collisions[0].pricesDiffer,
     '§J negative control — the SAME pair with both active DOES collide, so the probe above measured the filter');
+}
+
+// ── §P301 · A PINNED DEFECT — tech-debt #301 (ledger #343) ─────────────────────────────────────────
+// The nine live LAWNS lines whose size sits before an unbracketed "Install & Warranty" / "15% Off"
+// remark. The reader does NOT reach their size today, and this pin says so in the suite. The
+// red-first case is `__redfirst__/nineTrees301.redfirst.ts` (9 failed today, run by hand).
+// 🔴 WHEN #301 IS FIXED THIS PIN GOES RED — that is its job: move the cases here as real assertions,
+// delete this pin, and close the row. A fix that lands without anybody noticing is what it prevents.
+{
+  const unread = NINE_301.filter(([d]) => readProductFromDescription(d).state !== 'sized');
+  ok(NINE_301.length === 9, '§P301 the red-first case holds the nine measured lines');
+  ok(unread.length === 9,
+    `§P301 PINNED DEFECT (tech-debt #301): all nine are still unread today (got ${unread.length} unread) — if this fails, #301 may be FIXED: move the cases in and remove the pin`);
 }
 
 console.log(`\nqboItemAdapter — ${passed} passed, ${failed} failed`);

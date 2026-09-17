@@ -74,9 +74,11 @@ import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine, storageWarning } from '@trace/shared/sync';
 import type { StoreWriteResult } from '@trace/shared/sync';
 import {
-  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel, SIZE_REQUIRED_MESSAGE, readFailureMessage,
-  type StockLineResolution, type CountSibling,
+  resolveStockLine, variantGroupSlug, resolveCountTarget, SIZE_REQUIRED_MESSAGE, readFailureMessage,
+  sameSizeOnLadder, resolveRung, activeRungs,
+  type StockLineResolution, type CountSibling, type Ladder,
 } from '@trace/shared/inventory';
+import { loadContainerLadder } from '../lib/containerLadderRead';
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { canonicalNameKey, nameTokenSet } from '@trace/shared/utils/canonicalName';
 import { QrScanner } from '../components/inventory/QrScanner';
@@ -118,7 +120,9 @@ function isMissingTable(err: { code?: string; message?: string } | null): boolea
 // Size is a FREE LABEL — compare case/whitespace-insensitively. The local copy was RETIRED in
 // favour of the shared sameSizeLabel (STD-011: the promote decision and this screen must agree
 // on what "the same size" means, or the UI's size-chip match and the write's match can diverge).
-const sameSize = sameSizeLabel;
+// ✏️ 2026-09-16 (ledger #343): the comparison now lives INSIDE the component as
+// `sameSizeOnLadder(ladder, …)` — the SAME function `resolveCountTarget` is handed — so with a
+// ladder "#3" and "5 gal" are one size here AND in the write, and without one the text fold stands.
 // variant_group key for a NEW variety when there is no QR slug and no existing sibling to
 // adopt — a product-slug from the name. SHARED with the manual "+ Add size" path
 // (variantGroupSlug, @trace/shared/inventory) so a scan-promoted row and a hand-added size of
@@ -176,6 +180,9 @@ export function InventoryCount() {
   const [unknownTag, setUnknownTag]   = useState('');
   const [unknownName, setUnknownName] = useState(''); // typed variety (no QR)
   const [unknownSize, setUnknownSize] = useState(''); // typed size (no QR)
+  // 🔴 THE NURSERY'S LADDER (ledger #343) — the one list of sizes. `null` = none set up, or the read
+  // failed; either way the count still works on typed sizes, exactly as before the ladder existed.
+  const [ladder, setLadder] = useState<Ladder | null>(null);
   const [counted, setCounted]     = useState<CountedItem[]>([]);
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({}); // countKey → last counted qty this session
   const [conflict, setConflict]   = useState<Conflict | null>(null);
@@ -196,6 +203,26 @@ export function InventoryCount() {
   // discovered at the first failed save. A Safari Private tab and a phone with site data turned
   // off both look completely normal until a write is attempted — and by then a row is walked.
   const [storageIssue, setStorageIssue] = useState<Extract<StoreWriteResult, { ok: false }> | null>(null);
+
+  useEffect(() => {
+    if (!businessId) return;
+    let live = true;
+    void loadContainerLadder(businessId).then((r) => {
+      if (!live) return;
+      setLadder(r.phase === 'loaded' && r.rungs.length > 0 ? r.rungs : null);
+      if (TRACE_COUNT) console.log('[TRACE:COUNT] ladder', { phase: r.phase, rungs: r.phase === 'loaded' ? r.rungs.length : null });
+    });
+    return () => { live = false; };
+  }, [businessId]);
+  const sameSize = (a: string | null | undefined, b: string | null | undefined) => sameSizeOnLadder(ladder, a, b);
+  /** A typed size that reads as something the ladder does not have — warned, never blocked. */
+  const offLadderNote = (typed: string): string | null => {
+    const t = typed.trim();
+    if (!ladder || !t) return null;
+    const r = resolveRung(ladder, t);
+    return r.ok ? null : `"${t}" is not one of this nursery's sizes. It will be saved as typed — add it in Settings → Container sizes so every screen offers it.`;
+  };
+  const rungChips = ladder ? activeRungs(ladder) : [];
 
   // ── SYNC ENGINE ───────────────────────────────────────────
   const engine = useMemo(
@@ -392,7 +419,11 @@ export function InventoryCount() {
 
   // The within-session dedup key for a counted (variety × size).
   function countKey(ctx: Ctx, size: string | null): string | null {
-    if (ctx.groupKey) return `grp:${ctx.groupKey}|${(size ?? '').trim().toLowerCase()}`;
+    if (ctx.groupKey) {
+      // One key per RUNG when the ladder places the size — "#3" and "5 gal" are the same recount.
+      const r = ladder && size ? resolveRung(ladder, size) : null;
+      return `grp:${ctx.groupKey}|${r?.ok ? r.rung.label : (size ?? '').trim().toLowerCase()}`;
+    }
     const sib = ctx.siblings.find(s => sameSize(s.size, size));
     return sib ? `inv:${sib.id}` : null;
   }
@@ -407,7 +438,7 @@ export function InventoryCount() {
     // than by two rules that look alike until one of them changes (D-48's shape; §1.6 item 3).
     // The live defect: this sheet let a blank size through, the write took it, and the variety was
     // permanently unscannable a second later.
-    const check = resolveCountTarget({ siblings: resolved.siblings, groupKey: resolved.groupKey, size });
+    const check = resolveCountTarget({ siblings: resolved.siblings, groupKey: resolved.groupKey, size, ladder });
     if (check.action === 'refuse') {
       if (TRACE_INV) console.warn('[TRACE:INVENTORY] promote — REFUSED at the sheet:', check.reason, '— variety:', resolved.varietyName, 'group:', resolved.groupKey);
       setFieldErrors({ size: SIZE_REQUIRED_MESSAGE });
@@ -478,7 +509,7 @@ export function InventoryCount() {
     // screen only performs the IO it returns. The invariant it enforces: any path that mints a
     // sibling leaves the family picker-ready by construction (group on EVERY row, distinct
     // non-empty sizes, SKU lineage) — see countPromote.ts.
-    const target = resolveCountTarget({ siblings: ctx.siblings, groupKey: key, size });
+    const target = resolveCountTarget({ siblings: ctx.siblings, groupKey: key, size, ladder });
 
     // THE WRITE GATE (§1.6 item 3 — validated before the WRITE, never merely hidden in the UI).
     // Every caller lands here: the review sheet, the conflict re-save, and the typed UNKNOWN entry.
@@ -907,6 +938,20 @@ export function InventoryCount() {
                 ))}
               </div>
             )}
+            {/* THE NURSERY'S OWN SIZES (ledger #343) — every active rung the family has no row for
+                yet, so a new size is picked, not spelled. Tapping one fills the size with the rung's
+                own label. */}
+            {rungChips.filter(r => !sizeChips.some(s => sameSize(s.size, r.label))).length > 0 && (
+              <div style={S.chipRow}>
+                {rungChips.filter(r => !sizeChips.some(s => sameSize(s.size, r.label))).map(r => (
+                  <button key={`rung|${r.label}`} type="button"
+                    style={sameSize(r.label, sizeInput.trim() || null) ? S.chipActive : S.chip}
+                    onClick={() => { setSizeInput(r.label); setQtyInput(''); if (fieldErrors.size) setFieldErrors(f => ({ ...f, size: '' })); }}>
+                    + {r.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               style={{ ...S.input, ...errBorder(!!fieldErrors.size) }}
               value={sizeInput}
@@ -914,6 +959,7 @@ export function InventoryCount() {
               placeholder="e.g. 30 gal, 5 gal, flat, 4 in"
             />
             <FieldError msg={fieldErrors.size} />
+            {offLadderNote(sizeInput) && <p style={{ ...S.hint, color: '#8a6d00' }}>{offLadderNote(sizeInput)}</p>}
             <p style={S.hint}>
               {sizeChips.length > 0
                 ? 'Pick an existing size or type a new one — a new size becomes its own stock row under this variety.'
@@ -994,6 +1040,18 @@ export function InventoryCount() {
               onChange={e => { setUnknownSize(e.target.value); if (fieldErrors.unknownSize) setFieldErrors(f => ({ ...f, unknownSize: '' })); }}
               placeholder="e.g. 45 gal, flat, 4 in" />
             <FieldError msg={fieldErrors.unknownSize} />
+            {rungChips.length > 0 && (
+              <div style={S.chipRow}>
+                {rungChips.map(r => (
+                  <button key={`urung|${r.label}`} type="button"
+                    style={sameSize(r.label, unknownSize.trim() || null) ? S.chipActive : S.chip}
+                    onClick={() => { setUnknownSize(r.label); if (fieldErrors.unknownSize) setFieldErrors(f => ({ ...f, unknownSize: '' })); }}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {offLadderNote(unknownSize) && <p style={{ ...S.hint, color: '#8a6d00' }}>{offLadderNote(unknownSize)}</p>}
             <p style={S.hint}>We'll match this to an existing variety if we can, so different spellings don't split into separate items. Not sure of the size? Use <b>Skip &amp; flag</b> below — that records the count without guessing.</p>
             <label style={S.label}>Count</label>
             <input style={{ ...S.qtyInput, ...errBorder(!!fieldErrors.qty) }} type="number" inputMode="numeric" min="0" value={qtyInput}

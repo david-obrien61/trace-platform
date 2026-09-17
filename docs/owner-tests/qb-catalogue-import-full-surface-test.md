@@ -37,7 +37,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 7 of 42 covered** (32 `owed` · 3 `needs-test`; CARDS 38–41 added by #342) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
+**Board: 7 of 43 covered** (33 `owed` · 3 `needs-test`; CARDS 38–41 added by #342; CARD 42 added by #343) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
 ⚠️ **THE TOTAL WAS WRONG IN THIS HEADER AND IN THE SESSION REPORTS — corrected 2026-09-09.** It has been stated as **24**, as **34**, and the file holds **35**: CARD 14 was split into 14a/14b and the header was never re-added up. The counted figure is now derived on every `npm run verify` by `verify:owner-boards`, which prints a board whose header disagrees with its own cards. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
@@ -1351,3 +1351,22 @@ After CARD 39's successful undo, read the last line of the green box.
 **PASS:** it says your receipts, your captured invoices and their stops **were not touched**, and gives the
 stop count *now* — not *"exactly as they were"*, which stopped being true when practice stops started going
 with their run. **FAIL:** the old sentence.
+
+---
+
+## CARD 42 — 🔴 THE PREVIEW SAYS WHICH PRODUCTS ARE SIZES YOU GROW, AND NAMES THE ONES THAT ARE NOT
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #343 — the importer resolves sizes through the ladder · SIGNAL: `[TRACE:QBITEMS] preview {… ladder: 'loaded', offLadderSizes: N}`
+⛔ Only after `20260916_container_ladder_install_t_posts.sql` is applied and `feat/ladder-one-source` is merged.
+
+On **LAWNS**, press **Preview your books** (preview only — do not import).
+
+1. **PASS:** a box reads *"Against your container sizes: N on a size you grow, N sold by weight, volume or length, N with
+   no size, N we could not read, and N in a container size you have not set up:"* followed by a list — at LAWNS expect
+   sizes such as **1 gal, 2 gal, 7 gal, 10 gal, 300 gal**, each with a product count.
+2. **PASS:** it says *"They still import, exactly as written."* The Import button is unchanged.
+3. On **Test Dave's** (no sizes set up), the box instead reads *"No container sizes are set up yet…"*.
+
+**FAIL:** off-ladder sizes are counted without being named; or "no sizes set up" reads as "nothing off the ladder";
+or the preview refuses to import because of them.
+

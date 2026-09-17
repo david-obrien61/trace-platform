@@ -827,6 +827,9 @@ export const NAV_IA: NavNode[] = [
   // Admin nav item at /settings/services, peer of Business Profile / Accounting. manage_settings-
   // gated (owner-default, delegable). Served by the /settings/:section route (no router change).
   { key: 'nav_services',         section: 'admin',     parent: 'sec_admin',           label: 'Services',         route: '/settings/services',   matchRoute: '/settings/services',   required_permission: 'settings:read' },
+  // CONTAINER SIZES (ledger #343) — the nursery's ladder: add, edit, order, retire. Before this node
+  // adding a size was SQL. Same gate and same /settings/:section route as Services (no router change).
+  { key: 'nav_container_sizes',  section: 'admin',     parent: 'sec_admin',           label: 'Container sizes',  route: '/settings/container-sizes', matchRoute: '/settings/container-sizes', required_permission: 'settings:read' },
   // Team & Roles — the agnostic member/device console (D-31): invite, roles (visibility axis),
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.

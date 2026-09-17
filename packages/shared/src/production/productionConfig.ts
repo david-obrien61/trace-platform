@@ -51,11 +51,23 @@
 //               ✅ THE TABLE UNDERNEATH IS AC-1-CLEAN, AND THAT MATTERS MORE THAN THE TYPE:
 //               `20260905_production_planning.sql:57-62` stores this as a `jsonb config` blob —
 //               variation in DATA, not schema. Only the TypeScript narrows it.
-//               ⚠️ The rename is FREE ONLY UNTIL THAT MIGRATION IS APPLIED (tech-debt #253: it is
-//               not applied, so there is no live row to migrate). See #297 before applying it.
+//               ✏️ CORRECTED 2026-09-16 (ledger #343): this said the migration was not applied
+//               (tech-debt #253). It IS applied — #253 was closed on David's live save 2026-09-15 —
+//               so a key rename now has live rows to migrate. See #297 before renaming one.
 // DEPENDENCIES: ./basis (every default carries how it was arrived at).
 // OUTPUTS:      OperationsConfig · MoneyConfig · ResolvedConfig · OPERATIONS_DEFAULTS ·
-//               MONEY_DEFAULTS · resolveConfig · coverMonthsFor · WITHHELD_REASON · isWithheld.
+//               MONEY_DEFAULTS · resolveConfig · coverMonthsFor · WITHHELD_REASON · isWithheld ·
+//               GALLONS_PER_CUBIC_YARD · PLANTING_MATERIAL_KEYS · PLANTING_MATERIAL_LABELS ·
+//               plantingMaterialProblems.
+//
+// 🔴 PLANTING MATERIALS (ledger #343) — THE INSTALL BILL OF MATERIALS IS CONFIGURED HERE TOO.
+//   The load list's ratios lived in a code constant (`BOM_RULES`) that no screen could change. David,
+//   2026-09-16: *"ONE LOCATION, MANY READS, EXTREMELY FLEXIBLE."* The per-SIZE figure (T-posts) is on
+//   the RUNG (`container_ladder.install_t_posts_per_tree`); the four per-TREE figures are here.
+//   ⚠️ THEY ARE A DIFFERENT RECIPE FROM THE UPPOT KEYS AND MUST STAY SEPARATE. `tradeGallonFactor`
+//   and `mixShrinkPct` describe POTTING UP; `installMixContainerVolumesPerTree` describes PLANTING
+//   OUT. Both numbers were once 0.7 by coincidence and that coincidence has already cost one
+//   reconciliation (R-155). Nothing reads one in place of the other.
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import { type BasisKind } from './basis';
@@ -119,11 +131,35 @@ export interface OperationsConfig {
    * the smaller crew, and capacity computed at four people is wrong for 56 of its 65 days.
    */
   seasonalStaffLastDay: string | null;
+
+  // ── PLANTING MATERIALS — the install bill of materials, per tree (ledger #343) ──────────────────
+  /**
+   * Gallons of special mix per gallon of the tree's container, at INSTALL. 2.0 — David, 2026-09-15:
+   * *"install mix is TWICE the container volume (30 gal → 60 gal)."* The earlier 1.0 (R-155 as first
+   * written) was Lightning's figure, not LAWNS's. The container volume is the RUNG's, never a number
+   * read out of the size text.
+   */
+  installMixContainerVolumesPerTree: number;
+  /** Feet of staking rope per T-post. */
+  ropeFeetPerTPost: number;
+  /** Bubblers per planted tree. */
+  bubblersPerTree: number;
+  /** T-posts a deer-fenced tree carries IN TOTAL — a tree already staked with 2 needs 2 more. */
+  deerFenceTPostsPerTree: number;
 }
+
+/** US gallons in one cubic yard: 46,656 in³ ÷ 231 in³. THE one definition (ledger #343) — the load
+ *  list, the uppot plan and the Settings default all read it through `trueGallonsPerCubicYard`. */
+export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
+
+/** The Settings → Operations "Planting materials" group, in display order. */
+export const PLANTING_MATERIAL_KEYS = [
+  'installMixContainerVolumesPerTree', 'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree',
+] as const;
 
 export const OPERATIONS_DEFAULTS: OperationsConfig = {
   tradeGallonFactor: 0.7,
-  trueGallonsPerCubicYard: 201.974,
+  trueGallonsPerCubicYard: GALLONS_PER_CUBIC_YARD,
   mixShrinkPct: 0,
   setupMinutesPerRun: 60,
   handlingMinutesPerPot: 3,
@@ -140,6 +176,10 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   windowStart: null,
   windowEnd: null,
   seasonalStaffLastDay: null,
+  installMixContainerVolumesPerTree: 2,
+  ropeFeetPerTPost: 4,
+  bubblersPerTree: 1,
+  deerFenceTPostsPerTree: 4,
 };
 
 /**
@@ -165,7 +205,38 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   windowStart:             { basis: 'fact',       because: 'the window the owner set' },
   windowEnd:               { basis: 'fact',       because: 'the window the owner set' },
   seasonalStaffLastDay:    { basis: 'fact',       because: 'when the seasonal staff leave' },
+  installMixContainerVolumesPerTree: { basis: 'fact', because: "LAWNS, David 2026-09-15; corrects an earlier 1.0 that was Lightning's" },
+  ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
+  bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
+  deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
 };
+
+/** Plain-language names for the planting-material keys. The screen shows these, never a key. */
+export const PLANTING_MATERIAL_LABELS: Record<typeof PLANTING_MATERIAL_KEYS[number], string> = {
+  installMixContainerVolumesPerTree: 'Special mix per gallon of container, when planting (gallons)',
+  ropeFeetPerTPost: 'Rope per T-post (feet)',
+  bubblersPerTree: 'Bubblers per planted tree',
+  deerFenceTPostsPerTree: 'T-posts on a deer-fenced tree, in total',
+};
+
+/**
+ * What is wrong with the planting figures, in words — empty when nothing is (§1.6 item 3).
+ * 🔴 A ZERO MIX RATIO IS REFUSED: it would print "0 yards of mix" on every load list, which reads
+ * as a measurement. The counts may be 0 (a nursery that uses no bubblers) but never negative, and
+ * nothing may be a non-number — an emptied input box reads as 0, and 0 is refused only where it lies.
+ */
+export function plantingMaterialProblems(ops: Pick<OperationsConfig, typeof PLANTING_MATERIAL_KEYS[number]>): string[] {
+  const out: string[] = [];
+  for (const k of PLANTING_MATERIAL_KEYS) {
+    const v = ops[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) out.push(`${PLANTING_MATERIAL_LABELS[k]} must be a number.`);
+    else if (v < 0) out.push(`${PLANTING_MATERIAL_LABELS[k]} cannot be negative.`);
+  }
+  if (Number.isFinite(ops.installMixContainerVolumesPerTree) && ops.installMixContainerVolumesPerTree <= 0) {
+    out.push(`${PLANTING_MATERIAL_LABELS.installMixContainerVolumesPerTree} must be more than 0 — a tree is never planted with no mix.`);
+  }
+  return out;
+}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // THE MONEY SIDE — `business_pricing_config.config.production`, gated pricing_recipe:read
@@ -232,7 +303,18 @@ export function resolveConfig(
   storedMoney: Partial<MoneyConfig> | null | undefined,
   canReadMoney: boolean,
 ): ResolvedConfig {
-  const ops: OperationsConfig = { ...OPERATIONS_DEFAULTS, ...(storedOps ?? {}) };
+  // 🔴 A MISSING OR UNUSABLE STORED KEY READS ITS DEFAULT (ledger #343). A plain spread let a stored
+  // `null` or `"abc"` replace a numeric default, and every figure downstream would then compute NaN
+  // with nothing on screen saying why. Only keys whose DEFAULT is a number are guarded: the nullable
+  // keys (`coverMonthsOverride`, the window dates) mean something by being null.
+  const ops: OperationsConfig = { ...OPERATIONS_DEFAULTS };
+  for (const [k, v] of Object.entries(storedOps ?? {})) {
+    // An unknown key is CARRIED, not dropped: Settings saves the whole object back, and dropping a
+    // key some other build wrote would erase it on the next save.
+    const d = (OPERATIONS_DEFAULTS as unknown as Record<string, unknown>)[k];
+    if (typeof d === 'number' && (v == null || v === '' || !Number.isFinite(Number(v)))) continue;
+    (ops as unknown as Record<string, unknown>)[k] = typeof d === 'number' ? Number(v) : v;
+  }
   const money: MoneyConfig = { ...MONEY_DEFAULTS, ...(storedMoney ?? {}) };
   if (!canReadMoney) {
     money.labourRateInSeason = null;

@@ -17,27 +17,19 @@
 //   `Ladder | null` at the call site rather than defaulting to `[]`: an empty array would claim
 //   "a ladder exists and it has no rungs", which is a different and wrong statement.
 //
-// DEPENDENCIES: ./supabaseClient · shared/inventory/containerLadder (types only).
-// OUTPUTS:      LadderRead · loadContainerLadder. (The field list lives in ./containerLadderFields —
-//               split out so a probe can assert it without a database handle; tech-debt #179's lesson.)
+// DEPENDENCIES: ./supabase · shared/inventory/containerLadder (LADDER_SELECT, rungFromRow — ledger #343).
+// OUTPUTS:      LadderRead · loadContainerLadder. (The field list is shared — see ./containerLadderFields.)
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import { supabase } from './supabase';
-import { LADDER_SELECT } from './containerLadderFields';
-import { type Ladder, type Rung, validateLadder, type LadderConflict } from '@trace/shared/inventory';
-
-interface LadderRow {
-  id: string; label: string; aliases: string[] | null; sort_order: number;
-  volume_gallons: number | string | null; handling_minutes: number | string | null;
-  handling_because: string | null; active: boolean;
-}
+import {
+  LADDER_SELECT, rungFromRow, validateLadder,
+  type Ladder, type LadderConflict, type LadderRow,
+} from '@trace/shared/inventory';
 
 export type LadderRead =
   | { phase: 'loaded'; rungs: Ladder; conflicts: LadderConflict[] }
   | { phase: 'failed'; message: string };
-
-const nOrNull = (v: number | string | null): number | null =>
-  v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
 
 /**
  * Read one tenant's ladder, newest-ordered by its own `sort_order`.
@@ -63,15 +55,8 @@ export async function loadContainerLadder(businessId: string): Promise<LadderRea
     };
   }
 
-  const rungs: Rung[] = (data ?? []).map((r) => ({
-    label: r.label,
-    aliases: r.aliases ?? [],
-    sortOrder: r.sort_order,
-    volumeGallons: nOrNull(r.volume_gallons),
-    handlingMinutes: nOrNull(r.handling_minutes),
-    handlingBecause: r.handling_because ?? 'not timed',
-    active: r.active,
-  }));
+  // The ONE row→Rung mapping (shared), so this reader and the server's import preview agree.
+  const rungs: Ladder = (data ?? []).map(rungFromRow);
 
   // 🔴 A COLLIDING LADDER IS SURFACED AT READ TIME, NEVER SILENTLY FIRST-WINS. Two rungs claiming
   // one number makes which rung a lot lands on an accident of row order (R-96's shape).

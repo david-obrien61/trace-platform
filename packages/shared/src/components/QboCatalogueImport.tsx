@@ -92,6 +92,12 @@ interface ItemPlan {
   adapted?: { counts: AdaptedCounts; collisions: Collision[] };
   wouldRetire?: number; wouldCreate?: number;
   countedRowsBeingRetired?: CountedRow[];
+  /** How the incoming sizes land on the nursery's container ladder (ledger #343). */
+  sizes?: {
+    ladder: 'loaded' | 'none' | 'failed';
+    coverage: { onLadder: number; notContainer: number; noSize: number; unreadable: number;
+      offLadder: Array<{ size: string; count: number }> } | null;
+  };
   error?: string;
 }
 interface ItemRun extends ItemPlan {
@@ -400,6 +406,50 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
               <strong>{plan.customers.existingCustomers}</strong> today.</>
             )}
           </p>
+
+          {/* 🔴 THE SIZES, AGAINST THE NURSERY'S OWN LADDER (ledger #343). Read-only: the import writes
+              every size exactly as QuickBooks states it. This says, BEFORE the commit, which products
+              are sizes this nursery grows — and names the ones that are not, so a missing size is
+              added in Container sizes rather than discovered on a load list. */}
+          {plan.items?.sizes && (
+            <div style={{ marginBottom: '.9rem', padding: '.75rem', borderRadius: 6,
+                          background: plan.items.sizes.ladder === 'loaded' && (plan.items.sizes.coverage?.offLadder.length ?? 0) === 0 ? '#f0f7e8' : '#fffbeb',
+                          border: `1px solid ${plan.items.sizes.ladder === 'loaded' && (plan.items.sizes.coverage?.offLadder.length ?? 0) === 0 ? GREEN : AMBER}` }}>
+              {plan.items.sizes.ladder === 'failed' && (
+                <strong style={{ color: AMBER, fontSize: '.85rem' }}>
+                  Could not read your container sizes, so we cannot say which of these products are sizes you grow. The import itself is not affected.
+                </strong>
+              )}
+              {plan.items.sizes.ladder === 'none' && (
+                <strong style={{ color: AMBER, fontSize: '.85rem' }}>
+                  No container sizes are set up yet, so no product can be placed on one. Set them up in Settings → Container sizes.
+                </strong>
+              )}
+              {plan.items.sizes.ladder === 'loaded' && plan.items.sizes.coverage && (() => {
+                const c = plan.items!.sizes!.coverage!;
+                return (
+                  <>
+                    <span style={{ color: DARK, fontSize: '.85rem', lineHeight: 1.6 }}>
+                      Against your container sizes: <strong>{c.onLadder}</strong> on a size you grow,{' '}
+                      <strong>{c.notContainer}</strong> sold by weight, volume or length,{' '}
+                      <strong>{c.noSize}</strong> with no size, <strong>{c.unreadable}</strong> we could not read
+                      {c.offLadder.length > 0 ? <>, and <strong style={{ color: AMBER }}>{c.offLadder.reduce((n, o) => n + o.count, 0)}</strong> in a container size you have not set up:</> : '.'}
+                    </span>
+                    {c.offLadder.length > 0 && (
+                      <ul style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem', color: AMBER, fontSize: '.82rem' }}>
+                        {c.offLadder.map(o => <li key={o.size}><strong>{o.size}</strong> — {o.count} product{o.count === 1 ? '' : 's'}</li>)}
+                      </ul>
+                    )}
+                    {c.offLadder.length > 0 && (
+                      <p style={{ margin: '.35rem 0 0', color: AMBER, fontSize: '.8rem' }}>
+                        They still import, exactly as written. Add the size in Settings → Container sizes and every screen will recognise them.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
 
           {/* 🔴 THE COUNTED ROWS ABOUT TO BE HIDDEN — LISTED, NEVER SUMMARISED. A count is the one
               number nobody can recreate, so if one is about to disappear from the grid it is named
