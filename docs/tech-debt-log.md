@@ -4123,3 +4123,7 @@ choosing it inside a checkout handler would answer a question David has not been
 (a) that proxy (`installTPostsPerTree > 0`); (b) a boolean column on the rung; (c) a threshold
 volume in Operations config — which the 2026-09-16 ruling forbids. **The server path would also
 need its own ladder read, and a failed read must never block an order (§6 r6).**
+
+## #326 — ⏳ RESERVED 2026-09-17 (ledger #350, branch `feat/load-list-allow-list`)
+
+Reserved before content is written (R-149). Body lands with the build.
