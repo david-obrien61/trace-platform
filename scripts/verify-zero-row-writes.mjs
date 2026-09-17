@@ -139,6 +139,15 @@ const ALLOWED_UNCHECKED = {
   'scripts/rls/pricing-config-clobber.rls.mjs::a1#business_pricing_config.update': CLOBBER_PROBE_REASON,
   'scripts/rls/pricing-config-clobber.rls.mjs::owner#business_pricing_config.update': CLOBBER_PROBE_REASON,
   'scripts/rls/pricing-config-clobber.rls.mjs::w#business_pricing_config.upsert': CLOBBER_PROBE_REASON,
+  // ── DECLARED 2026-09-16 — the customer-import undo's CONTACT half (ledger #335) ─────────────
+  // Same shape as the catalogue undo above: a customer may hold no phone, no email or no address,
+  // so a zero-row delete is a correct outcome and cannot be the failure condition. The stronger
+  // check is the one `undoCustomerImport` already runs — it RE-READS how many customers still carry
+  // the run id after the customer delete, and a customer whose tagged address survived is still
+  // there, because `customer_addresses` is ON DELETE RESTRICT and refuses the customer delete.
+  'packages/shared/src/business-logic/contactWriter.ts::p#customer_phones.delete': UNDO_REREAD_REASON,
+  'packages/shared/src/business-logic/contactWriter.ts::e#customer_emails.delete': UNDO_REREAD_REASON,
+  'packages/shared/src/business-logic/contactWriter.ts::a#customer_addresses.delete': UNDO_REREAD_REASON,
 };
 
 function stripComments(src) {

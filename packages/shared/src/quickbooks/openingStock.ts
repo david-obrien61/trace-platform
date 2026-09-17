@@ -5,7 +5,17 @@
 // DEPENDENCIES: ./invoiceList (QboInvoiceRow · goodsLines · monthOf · monthsBetween). PURE: no
 //   db, no network, no env, and no clock it did not receive.
 // OUTPUTS: OpeningStockMeasurement · SEED_CAP · measureOpeningStock · suggestOpeningStock ·
-//   seedRefusal · planOpeningStockSeed · SEED_LEDGER_KIND.
+//   seedRefusal · planOpeningStockSeed · SEED_LEDGER_KIND · SeedMode · seedModeFor.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 LEDGER #342 — IN TEST MODE THE SEED WRITES NO LEDGER ROW (David, 2026-09-16, ruling ②).
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// *"We must never allow them to write to the actual record during testing."* So in TEST mode the
+// plan touches ONLY rows the QuickBooks import created (`import_run_id IS NOT NULL`), and its
+// steps set qty WITHOUT a ledger line (`writesLedger: false`). The opening ledger entry is written
+// once, AFTER the switch. Out of test mode, nothing here changes. SEED_CAP holds in both.
+// ⚠️ The after-the-switch writer is NOT built — tech-debt #308. Until it is, a test-seeded lot
+// carries qty with no ledger line, and the reconcile screen reads it in `baseline` mode.
 // STORY: *The imported catalogue can be sold from* (`user_stories.md`, ARC: cost-to-produce).
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -244,6 +254,17 @@ export function seedRefusal(qty: number): string | null {
   return null;
 }
 
+/**
+ * Which record a seed may write. `test` = the business has not switched QuickBooks writes on:
+ * qty only, imported rows only, no ledger. `live` = today's behaviour, through the ledger RPC.
+ */
+export type SeedMode = 'test' | 'live';
+
+/** The mode from the stored switch. An UNREAD switch is test mode — the side that writes no ledger. */
+export function seedModeFor(qboWritesEnabled: boolean | null | undefined): SeedMode {
+  return qboWritesEnabled === true ? 'live' : 'test';
+}
+
 /** A lot the seed may touch, as the planner needs to see it. */
 export interface SeedCandidate {
   id: string;
@@ -251,6 +272,9 @@ export interface SeedCandidate {
   qty: number;
   /** TRUE if this lot already has ANY ledger history. Such a lot is never seeded. */
   hasHistory: boolean;
+  /** TRUE if the QuickBooks import created it (`import_run_id IS NOT NULL`). In TEST mode only
+   *  these are seeded; a row somebody made by hand is never touched there. */
+  imported?: boolean;
 }
 
 export interface SeedStep {
@@ -261,10 +285,12 @@ export interface SeedStep {
   newQty: number;
   kind: typeof SEED_LEDGER_KIND;
   reason: string;
+  /** 🔴 FALSE IN TEST MODE: the step sets qty and appends NOTHING to the ledger (ruling ②). */
+  writesLedger: boolean;
 }
 
 export type SeedPlan =
-  | { ok: true; steps: SeedStep[]; skipped: { withStock: number; withHistory: number } }
+  | { ok: true; mode: SeedMode; steps: SeedStep[]; skipped: { withStock: number; withHistory: number; notImported: number } }
   | { ok: false; error: string };
 
 /**
@@ -279,15 +305,19 @@ export type SeedPlan =
  * The counts are returned so the screen can say *"1 of your 648 already had stock"* instead of
  * quietly doing 647 of 648 (D-9 / A9 — an unexplained absence reads as a defect).
  */
-export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number): SeedPlan {
+export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number, mode: SeedMode): SeedPlan {
+  // 🔴 THE CAP IS CHECKED FIRST, IN BOTH MODES — a test-mode number is still a placeholder.
   const refusal = seedRefusal(qty);
   if (refusal !== null) return { ok: false, error: refusal };
 
-  let withStock = 0, withHistory = 0;
+  let withStock = 0, withHistory = 0, notImported = 0;
   const steps: SeedStep[] = [];
   for (const c of candidates) {
     if (Number(c.qty ?? 0) > 0) { withStock++; continue; }
     if (c.hasHistory) { withHistory++; continue; }
+    // 🔴 TEST MODE TOUCHES ONLY WHAT THE IMPORT MADE. `imported` must be TRUE, not merely truthy-
+    // absent: a candidate built without the field is treated as hand-made and left alone.
+    if (mode === 'test' && c.imported !== true) { notImported++; continue; }
     steps.push({
       lotId: c.id,
       name: c.name,
@@ -296,11 +326,14 @@ export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number): 
       // The human-readable half of the ledger row. D-50: a reason cannot be derived or
       // backfilled, so it is written at the moment the choice is made, in the owner's terms.
       reason: `Starting number chosen at setup — a placeholder, not a count`,
+      writesLedger: mode === 'live',
     });
   }
 
   if (steps.length === 0) {
-    return { ok: false, error: 'Nothing to start — every product either already holds stock or has already been counted or sold.' };
+    return { ok: false, error: mode === 'test'
+      ? 'Nothing to start — in test mode only products your QuickBooks import created are given a starting number, and every one of those already holds stock or has been counted or sold.'
+      : 'Nothing to start — every product either already holds stock or has already been counted or sold.' };
   }
-  return { ok: true, steps, skipped: { withStock, withHistory } };
+  return { ok: true, mode, steps, skipped: { withStock, withHistory, notImported } };
 }

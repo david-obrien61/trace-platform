@@ -69,17 +69,17 @@ interface Row {
   customer_type?: string | null;
   phone?: string | null;
   email?: string | null;
-  address_line1?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
+  billing_line1?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  billing_zip?: string | null;
 }
 
 const DIANE_PERSON: Row = {
   id: '0ee368fe-5b2f-4458-a75d-d4498024a605',
   first_name: 'Diane', last_name: 'Foster', customer_type: 'person',
   phone: '(512) 555-0101', email: 'diane@example.com',
-  address_line1: '904 Hialeah Circle', city: 'Georgetown', state: 'TX', zip: '78628',
+  billing_line1: '904 Hialeah Circle', billing_city: 'Georgetown', billing_state: 'TX', billing_zip: '78628',
 };
 
 // 🔴 THE ROW THE OLD SEARCH COULD NOT SEE. Its name is in `organization_name`; `first_name` holds
@@ -89,7 +89,7 @@ const DIANE_ORG: Row = {
   first_name: 'Diane', last_name: null, customer_type: 'organization',
   organization_name: 'Diane Foster Landscaping',
   phone: '(512) 555-0102', email: 'ap@dfl.example.com',
-  city: 'Leander', state: 'TX', zip: '78641',
+  billing_city: 'Leander', billing_state: 'TX', billing_zip: '78641',
 };
 
 // A row whose ONLY distinguishing identity is `display_name` — the invoice name.
@@ -100,16 +100,16 @@ const INVOICE_NAME_ONLY: Row = {
   phone: '(512) 555-0103', email: 'robert@example.com',
 };
 
-const MARCUS_1: Row = { id: '1724c7a6-0000-4000-8000-000000000004', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', city: 'Cedar Park', state: 'TX' };
-const MARCUS_2: Row = { id: '3b9a22ba-0000-4000-8000-000000000005', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', city: 'Cedar Park', state: 'TX' };
-const MARCUS_3: Row = { id: '71bc710d-0000-4000-8000-000000000006', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', city: 'Leander', state: 'TX' };
+const MARCUS_1: Row = { id: '1724c7a6-0000-4000-8000-000000000004', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', billing_city: 'Cedar Park', billing_state: 'TX' };
+const MARCUS_2: Row = { id: '3b9a22ba-0000-4000-8000-000000000005', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', billing_city: 'Cedar Park', billing_state: 'TX' };
+const MARCUS_3: Row = { id: '71bc710d-0000-4000-8000-000000000006', first_name: 'Marcus', last_name: 'Webb', customer_type: 'person', billing_city: 'Leander', billing_state: 'TX' };
 
 // A row with EVERY searchable field absent except the NOT NULL first name — the A9 probe's subject.
 const SPARSE: Row = {
   id: '99999999-0000-4000-8000-000000000007',
   first_name: 'Sparse', last_name: null,
   organization_name: null, display_name: null,
-  phone: null, email: null, address_line1: null, city: null, state: null, zip: null,
+  phone: null, email: null, billing_line1: null, billing_city: null, billing_state: null, billing_zip: null,
 };
 
 const ROWS: Row[] = [DIANE_PERSON, DIANE_ORG, INVOICE_NAME_ONLY, MARCUS_1, MARCUS_2, MARCUS_3, SPARSE];
@@ -134,9 +134,13 @@ ok(CUSTOMER_SEARCH_FIELDS.includes('organization_name'),
    'A2 🔴 organization_name IS searchable — the field the Name cell renders and the old list omitted');
 ok(CUSTOMER_SEARCH_FIELDS.includes('display_name'),
    'A3 display_name IS searchable — matches CustomerSearch.tsx:97, which already did');
-ok(['first_name', 'last_name', 'phone', 'email', 'address_line1', 'city', 'state', 'zip']
+// ✏️ THE ADDRESS HALF IS NAMED FOR THE CANONICAL COLUMNS NOW (ledger #335). The old literal
+// covered `address_line1`/`city`/`state`/`zip`; those are DROPPED from `customers` and `billing_*`
+// is the derived view. The COVERAGE is unchanged — eight fields, same four concepts — which is
+// what "no regression" meant; only the column names moved.
+ok(['first_name', 'last_name', 'phone', 'email', 'billing_line1', 'billing_city', 'billing_state', 'billing_zip']
      .every(k => CUSTOMER_SEARCH_FIELDS.includes(k)),
-   'A4 NO REGRESSION: all eight fields the old literal covered are still covered');
+   'A4 NO REGRESSION: all eight fields the old literal covered are still covered — the address four under their canonical names');
 ok(new Set(CUSTOMER_SEARCH_FIELDS).size === CUSTOMER_SEARCH_FIELDS.length,
    'A5 the list has no duplicate entry');
 

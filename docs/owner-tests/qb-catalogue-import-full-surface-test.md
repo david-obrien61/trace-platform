@@ -37,7 +37,7 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 7 of 38 covered** (28 `owed` · 3 `needs-test`) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
+**Board: 7 of 42 covered** (32 `owed` · 3 `needs-test`; CARDS 38–41 added by #342) — CARD 5 and CARD 14a proven live 2026-09-07; **CARDS 6, 7, 8, 10 and 20 proven live 2026-09-08 on LAWNS** (the 647-row import, the retire, the ledger, and the wipe closed by its fingerprint).
 ⚠️ **THE TOTAL WAS WRONG IN THIS HEADER AND IN THE SESSION REPORTS — corrected 2026-09-09.** It has been stated as **24**, as **34**, and the file holds **35**: CARD 14 was split into 14a/14b and the header was never re-added up. The counted figure is now derived on every `npm run verify` by `verify:owner-boards`, which prints a board whose header disagrees with its own cards. *(CARD 14 split into 14a READ / 14b WRITE — they are refused by different gates and only the read half was proven.)*
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
@@ -1286,3 +1286,68 @@ On **Test Dave's**, with findings showing (or CARD 35's LAWNS preview still on s
 column is a go-live blocker for the *delivery* capability, not a reason to refuse a customer list
 that is 75% correct. If you would rather the import refused while `address_line1` holds phone
 numbers, say so — it is a one-line change to `canImport` and a different ruling.
+
+---
+
+## CARD 38 — 🔴 BEFORE 20260916c IS APPLIED, THE UNDO REFUSES AND SAYS WHY (ledger #342)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+On **Test Dave's**, with a fresh import in place and **before** applying `20260916c`, press **Undo this import**.
+
+1. The box reads **Undo is closed.** and says the undo *now runs as one single step* and that step *is
+   not installed yet* — **nothing was deleted and nothing was changed.**
+2. The products and customers are all still there.
+
+**PASS:** a clear refusal, nothing moved. **FAIL:** anything is deleted, or it reports success.
+
+---
+
+## CARD 39 — 🔴 A PRACTICE ORDER GOES WITH ITS IMPORT; A CAPTURED ONE DOES NOT (ruling ④)
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+**Needs `20260916c` applied.** On **Test Dave's**: import, then ring up **one delivery order** in test mode
+on an imported product and an imported customer. Press **Undo this import**.
+
+1. The box reads **Undone.** and says **1 practice order(s) … were removed with this import, and the 1
+   delivery stop(s) they had scheduled.**
+2. The order is gone from the orders list, and its stop is gone from the delivery schedule.
+
+In the **SQL editor**, before pressing, note the practice order's run id:
+
+```sql
+SELECT id, order_kind, import_run_id FROM public.orders
+ WHERE business_id::text LIKE 'f7ec5d67%' ORDER BY created_at DESC LIMIT 3;
+```
+
+**PASS:** the newest row shows `test` and a non-empty `import_run_id`, and after the undo it is gone.
+**FAIL:** `import_run_id` is empty (the order was born without its run), or the order survives.
+
+---
+
+## CARD 40 — 🔴 A LIVE RECORD ON AN IMPORTED CUSTOMER REFUSES THE WHOLE UNDO, AND NOTHING MOVES
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+**Needs `20260916c` applied.** On **LAWNS**, press **Undo this import** (it is expected to refuse — the
+discovery file says why).
+
+1. The box reads **Undo is closed.** and lists what is live — *products with stock history*, *orders that
+   are not practice*, *delivery stops*, and any other record by table — ending **NOTHING WAS DELETED AND
+   NOTHING WAS CHANGED.**
+2. In the SQL editor, the counts are what they were:
+
+```sql
+SELECT (SELECT count(*) FROM public.customers          WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74') AS customers,
+       (SELECT count(*) FROM public.business_inventory WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74') AS products,
+       (SELECT count(*) FROM public.orders             WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74') AS orders,
+       (SELECT count(*) FROM public.deliveries         WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74') AS stops;
+```
+
+Run it before and after the press. **PASS:** identical. 🔴 **FAIL:** any number dropped — that is a
+half-run, the defect this card exists for.
+
+---
+
+## CARD 41 — the undo panel no longer promises deliveries are untouchable
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** — · **COVERS:** #342
+After CARD 39's successful undo, read the last line of the green box.
+
+**PASS:** it says your receipts, your captured invoices and their stops **were not touched**, and gives the
+stop count *now* — not *"exactly as they were"*, which stopped being true when practice stops started going
+with their run. **FAIL:** the old sentence.

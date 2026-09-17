@@ -25,7 +25,7 @@
  *   POST /api/qbo/books/undo         → _route=books-undo      (items THEN customers, that one run id)
  *   GET  /api/qbo/customers/preview  → _route=customers-preview (READ-ONLY — plans the customer import, writes nothing)
  *   POST /api/qbo/customers/ingest   → _route=customers-ingest  (WRITES `customers` ONLY — creates, and reconciles tax exemption)
- *   POST /api/qbo/customers/undo     → _route=customers-undo    (DELETES this run's customers; RESTRICT-aware, reports what it could not remove)
+ *   POST /api/qbo/customers/undo     → _route=customers-undo    (SAME handler as books/undo since #335 — one all-or-nothing undo)
  */
 
 import crypto from 'crypto';
@@ -49,7 +49,7 @@ import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pu
 import { pushPermitted } from '../../../shared/src/business-logic/testMode';
 import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
 import { adaptCustomers } from '../../../shared/src/quickbooks/qboCustomerAdapter';
-import { previewCustomerImport, commitCustomerImport, undoCustomerImport } from '../../../shared/src/quickbooks/customerImportWriter';
+import { previewCustomerImport, commitCustomerImport } from '../../../shared/src/quickbooks/customerImportWriter';
 import { randomUUID } from 'crypto';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -1172,37 +1172,13 @@ async function handleCustomersIngest(req: any, res: any) {
   }
 }
 
-async function handleCustomersUndo(req: any, res: any) {
-  const businessId = (req.query.business_id as string) || '';
-  const runId = (req.query.run_id as string) || '';
-  if (!businessId) return res.status(400).json({ error: 'business_id required' });
-  // A blank run id must NEVER be treated as "undo everything". It is a bad request.
-  if (!runId) return res.status(400).json({ error: 'run_id required — an undo names exactly one import run' });
-  const auth = req.headers?.authorization;
-  if (!(await refuseUnlessOwner(auth, businessId, 'CUSTIMPORT', res))) return;
-  // 🔴 GATED ON `customers:create` + `customers:update`, NOT ON A DELETE VERB, AND THAT IS
-  // DELIBERATE. `customers:delete` is one of the FIVE UNMINTABLE DELETES (permissionManifest R2 /
-  // A3: it "must be UNFINDABLE by grep in this file"). David answered R2's FK-cascade condition on
-  // 2026-09-06 — `orders_customer_id_fkey` is ON DELETE RESTRICT — and ruled that the undo may be
-  // wired; he did NOT rule that a general customer-delete capability should exist, and minting one
-  // here would assert a protection boundary nobody decided on. The authority that created these
-  // rows is the authority that un-creates them, and the OWNER gate above is the real protection
-  // (R-80). This endpoint can only ever remove rows carrying its own run id.
-  if (!(await callerCan(auth, businessId, 'customers:create'))
-      || !(await callerCan(auth, businessId, 'customers:update'))) {
-    console.log('[TRACE:CUSTIMPORT] undo REFUSED — caller lacks customers:create + customers:update', { businessId });
-    return res.status(403).json({ error: 'Not authorized to undo a customer import for this business', code: 'FORBIDDEN' });
-  }
-  try {
-    const report = await undoCustomerImport(supabase(), businessId, runId, process.env[QBO_PUSH_HOLD_ENV]);
-    // 200 when everything that COULD go went — including a partial undo blocked only by real
-    // orders, which is a success. 409 for the wholesale refusal (writes are on).
-    return res.status(report.ok ? 200 : 409).json(report);
-  } catch (e: any) {
-    console.log('[TRACE:CUSTIMPORT] undo failed', { businessId, runId, message: e?.message });
-    return res.status(500).json({ error: `The undo failed: ${e?.message ?? 'unknown error'}` });
-  }
-}
+// ✏️ 2026-09-16 (ledger #335, David): `handleCustomersUndo` IS GONE. It ran `undoCustomerImport` — a
+// series of separate PostgREST calls, NOT one transaction — and `/api/qbo/customers/undo` stayed
+// reachable on prod by any owner with a token even though no screen called it. The route now goes to
+// `handleBooksUndo` (below), the ONE undo: after ledger #342 it is `undo_import_run`, a single
+// all-or-nothing transaction that also removes the run's contact rows (20260916d). A customers-only
+// run is just a run whose products are none. `undoCustomerImport` stays as a library function with its
+// tests, and has NO entry point — `customerImport.test.ts` §K asserts that.
 
 // ─── THE BOOKS: customers AND items, one run id, one undo ─────────────────────
 //
@@ -1321,13 +1297,14 @@ async function handleBooksIngest(req: any, res: any) {
   });
 }
 
-// 🔴 BOTH UNDOS, ONE RUN ID, ITEMS FIRST. Each half's own undo runs against the shared id, so
-// `customerImportWriter`'s row-by-row FK retry is USED rather than reimplemented — a chunk refused
-// on a foreign key is retried per row there, so one undeletable customer does not take 1,925 others
-// down with it. That retry is #278's code and it stays #278's code.
-// ITEMS FIRST is the reverse of the import order: an order line points at inventory with ON DELETE
-// SET NULL and survives, while a customer with an order is the one that can genuinely refuse — so
-// the half that can refuse goes last, after everything that cannot has already gone.
+// 🔴 ONE UNDO, ONE RUN ID, ONE TRANSACTION (ledger #342). `undoItemImport` calls
+// `undo_import_run` (20260916c), which removes the run's PRACTICE orders, products and customers
+// and un-retires what it hid — all or nothing, after a pre-flight that refuses on any live record
+// (captured orders, live orders, delivery stops, saved addresses, stock history, any other FK).
+// ✏️ WAS: two undos in sequence, the customer half a PARTIAL undo (#278's per-row FK retry) that
+// ran even when the items half had thrown — the split state tech-debt #304 describes. David's
+// ruling is all-or-nothing for a run, so the customer half is no longer called from here; the
+// customers-only route (`customers-undo`) now comes HERE too (#335) — it has no entry point of its own.
 async function handleBooksUndo(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   const runId = (req.query.run_id as string) || '';
@@ -1345,12 +1322,18 @@ async function handleBooksUndo(req: any, res: any) {
     // A refusal on the first half stops the second — undoing customers while the catalogue stayed
     // would be the split state this whole design exists to prevent.
     if (items.refused) return res.status(409).json({ ok: false, refused: true, runId, items, customers: null, error: items.error });
-    const customers = await undoCustomerImport(supabase(), businessId, runId, hold);
-    const ok = items.ok && customers.ok !== false;
-    console.log('[TRACE:QBBOOKS] undo', { businessId, runId, ok, inventory: items.inventoryDeleted, customers: customers.deleted });
+    // The panel's customer envelope, from the SAME transaction's counts and the post-write re-read.
+    // `blocked` is empty and `deliveriesUnlinked` is 0 BY CONSTRUCTION, not by default: the
+    // pre-flight refuses the whole run before any customer with an order or a stop could be touched.
+    const customers = {
+      ok: items.ok, runId, deleted: items.customersDeleted, blocked: [], deliveriesUnlinked: 0,
+      refusedBecause: null, remainingWithThisRun: items.customersRemaining,
+    };
+    const ok = items.ok;
+    console.log('[TRACE:QBBOOKS] undo', { businessId, runId, ok, inventory: items.inventoryDeleted, customers: items.customersDeleted, practiceOrders: items.practiceOrdersDeleted });
     return res.status(ok ? 200 : 409).json({
       ok, refused: false, runId, items, customers,
-      error: ok ? null : (items.error ?? customers.refusedBecause ?? 'The undo did not finish.'),
+      error: ok ? null : (items.error ?? 'The undo did not finish.'),
     });
   } catch (e: any) {
     console.log('[TRACE:QBBOOKS] undo failed', { businessId, runId, message: e?.message });
@@ -1381,7 +1364,8 @@ export default async function handler(req: any, res: any) {
     case 'books-undo':         return handleBooksUndo(req, res);
     case 'customers-preview':  return handleCustomersPreview(req, res);
     case 'customers-ingest':   return handleCustomersIngest(req, res);
-    case 'customers-undo':     return handleCustomersUndo(req, res);
+    // One undo for every run (#335): all-or-nothing, never the customers-only PostgREST sequence.
+    case 'customers-undo':     return handleBooksUndo(req, res);
     default: {
       const txn = TRANSACTION_BY_ROUTE[route];
       if (txn) return handleTransactions(req, res, txn);

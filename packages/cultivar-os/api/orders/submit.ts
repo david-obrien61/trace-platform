@@ -8,7 +8,8 @@ import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRat
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
-import { orderKindForMode } from '../../../shared/src/business-logic/testMode';
+import { orderKindForMode, mayWriteStockRecord } from '../../../shared/src/business-logic/testMode';
+import { TEST_ORDER_KIND } from '../../../shared/src/business-logic/orderKind';
 
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
@@ -97,6 +98,72 @@ async function resolveItemForServer(
   return { sellPrice: null, inventoryId: null, container: null, name: 'this item' };
 }
 
+// ── THE STOCK-RECORD GATE (ledger #342 — David's rulings ① and ②, 2026-09-16) ──────────────
+// 🔴 EVERY write this file makes to `business_inventory.qty` or `business_inventory_ledger` goes
+// through `adjustLotQty` or `recordOrderEvent`, and BOTH NOW TAKE THIS GATE AS THEIR SECOND
+// ARGUMENT — required, not defaulted, so a new call site that forgets it does not compile.
+//   ① a test order never changes stock — forever, including after go-live;
+//   ② in test mode NO order of ANY origin writes the record — checkout or captured, at any step.
+// Status still moves. Routing, delivery and the fulfilled tap behave exactly as before; only the
+// stock movement and its ledger line are withheld, and the withholding is TRACEd, never silent.
+//
+// WHY: R-63 (2026-09-02) put "your tree counts do not change" on the test-mode banner, and not one
+// of the five decrement/restore sites below checked the mode. Order 6a60a0ca (LAWNS, 2026-09-09,
+// a test walk-in) took 2 units off an imported lot and wrote four permanent ledger rows.
+export interface StockRecordGate {
+  writable: boolean;
+  writesEnabled: boolean | null;
+  orderKind: string | null;
+}
+
+/** The gate for an order that already exists. An unread switch reads as test mode (write nothing). */
+export async function readStockRecordGate(
+  db: { from: (t: string) => any }, businessId: string, orderKind: string | null | undefined,
+): Promise<StockRecordGate> {
+  const { data, error } = await db.from('businesses')
+    .select('qbo_writes_enabled').eq('id', businessId).maybeSingle();
+  if (error) {
+    console.log('[TRACE:TESTMODE] write-switch read FAILED — the stock record is NOT written for this change (safe direction, not silent)', {
+      businessId, code: (error as { code?: string }).code ?? null, message: error.message,
+    });
+  }
+  const writesEnabled = (data as { qbo_writes_enabled?: boolean } | null)?.qbo_writes_enabled ?? null;
+  return stockRecordGateFor(writesEnabled, orderKind);
+}
+
+/** The same gate from values already in hand (checkout reads the switch once, for both uses). */
+export function stockRecordGateFor(
+  writesEnabled: boolean | null | undefined, orderKind: string | null | undefined,
+): StockRecordGate {
+  return {
+    writable: mayWriteStockRecord({ writesEnabled, orderKind }),
+    writesEnabled: writesEnabled ?? null,
+    orderKind: orderKind ?? null,
+  };
+}
+
+/**
+ * The import run a PRACTICE order belongs to (the 2026-09-09 ruling: a test order carries a run id
+ * so it is removed like imported data). "Current" = the run that made the live catalogue — a commit
+ * retires every row that is not its own, so the live, non-retired rows carry exactly one run id.
+ * NULL when the business has never imported: the order then belongs to no run, and says so.
+ */
+export async function currentImportRunId(db: { from: (t: string) => any }, businessId: string): Promise<string | null> {
+  const { data, error } = await db.from('business_inventory')
+    .select('import_run_id')
+    .eq('business_id', businessId)
+    .is('retired_at', null)
+    .not('import_run_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    console.log('[TRACE:TESTMODE] current import run read FAILED — the practice order carries no run id', { businessId, message: error.message });
+    return null;
+  }
+  const row = (data ?? [])[0] as { import_run_id?: string | null } | undefined;
+  return row?.import_run_id ?? null;
+}
+
 // D-42: the ONE server-authoritative inventory-adjust path (STD-011 / STD-012). Atomic per-unit
 // qty change via the adjust_inventory_qty RPC (a single guarded UPDATE — concurrency-safe, cannot
 // drive qty negative). delta < 0 decrements (a sale/commit at order-paid); delta > 0 restores
@@ -110,12 +177,20 @@ async function resolveItemForServer(
 // and is NULL only where there genuinely is no caller: anonymous QR checkout. That NULL is the
 // HONEST answer, not a gap — assert_movement_actor admits it as a system write, and D-50 §11 is
 // explicit that it must never be defaulted to the owner (a fabricated actor is worse than none).
-async function adjustLotQty(
-  db: ReturnType<typeof adminDb>, businessId: string, lotId: string | null, delta: number, ctx: string,
+export async function adjustLotQty(
+  db: { rpc: (fn: string, args: Record<string, unknown>) => any }, gate: StockRecordGate,
+  businessId: string, lotId: string | null, delta: number, ctx: string,
   mv: { actorUserId: string | null; kind: string; orderId: string; occurredAt: string },
 ): Promise<{ applied: boolean; newQty: number | null; reason: string }> {
   if (!lotId) return { applied: false, newQty: null, reason: 'no_lot' };
   if (delta === 0) return { applied: true, newQty: null, reason: 'noop' };
+  // 🔴 RULINGS ① + ② — checked BEFORE the RPC, so no qty moves and no ledger row is appended.
+  if (!gate.writable) {
+    console.log('[TRACE:TESTMODE] stock record NOT written — test mode / test order (status still moves)', {
+      ctx, lotId, delta, orderId: mv.orderId, writesEnabled: gate.writesEnabled, orderKind: gate.orderKind ?? '(checkout)',
+    });
+    return { applied: false, newQty: null, reason: 'test_mode' };
+  }
   const { data, error } = await db.rpc('adjust_inventory_qty', {
     p_lot_id: lotId, p_business_id: businessId, p_delta: delta,
     p_actor_user_id: mv.actorUserId, p_kind: mv.kind,
@@ -148,10 +223,18 @@ async function adjustLotQty(
 // block the transition itself (§6 r6 — integration failure never blocks an order). A dropped event
 // is surfaced loudly in the trail rather than swallowed. Deploy-window-safe the same way
 // adjustLotQty is: if the gated migration has not landed yet, the call no-ops loudly.
-async function recordOrderEvent(
-  db: ReturnType<typeof adminDb>, businessId: string, orderId: string, eventType: string,
+export async function recordOrderEvent(
+  db: { rpc: (fn: string, args: Record<string, unknown>) => any }, gate: StockRecordGate,
+  businessId: string, orderId: string, eventType: string,
   actorUserId: string | null, occurredAt: string, reason?: string,
 ): Promise<boolean> {
+  // 🔴 RULING ② — the order event is a row in business_inventory_ledger (delta 0, but a row).
+  if (!gate.writable) {
+    console.log('[TRACE:TESTMODE] order event NOT written to the ledger — test mode / test order', {
+      orderId, eventType, writesEnabled: gate.writesEnabled, orderKind: gate.orderKind ?? '(checkout)',
+    });
+    return false;
+  }
   const { error } = await db.rpc('record_order_event', {
     p_business_id: businessId, p_order_id: orderId, p_event_type: eventType,
     p_actor_user_id: actorUserId, p_reason: reason ?? null, p_occurred_at: occurredAt,
@@ -275,10 +358,14 @@ export async function scheduleCheckoutDelivery(
   // first, fall back to the mirror, and leave a genuinely absent field NULL — an address the
   // platform does not hold must not be invented (A9: absent is not empty).
   const c = args.customerRow ?? {};
-  const pick = (canonical: unknown, legacy: unknown): string | null => {
-    for (const v of [canonical, legacy]) if (typeof v === 'string' && v.trim()) return v.trim();
-    return null;
-  };
+  // ✏️ ONE ARGUMENT NOW (ledger #335) — it took `(canonical, legacy)` and returned the first
+  // non-blank of the two. There is no legacy column to fall back to.
+  // 🔴 THE TRIM IS THE HALF THAT MATTERS AND IT IS KEPT DELIBERATELY: a first draft of this repoint
+  // used `c.billing_line1 ?? null`, which passes '   ' through as a string, and
+  // `checkoutDelivery.test.ts` G4 went red — a whitespace-only value would have been written onto
+  // a delivery row as an address. A blank is not a value (A9).
+  const pick = (v: unknown): string | null =>
+    (typeof v === 'string' && v.trim() ? v.trim() : null);
 
   // 🔴 THE ORDER'S OWN SHIP-TO WINS, AND THIS IS THE SNAPSHOT D-41 RULED (ledger #303).
   //
@@ -289,8 +376,10 @@ export async function scheduleCheckoutDelivery(
   // discarded and the truck was sent to the billing address. Preferring the order's own ship-to is
   // what makes the field mean what it says on the screen.
   //
-  // The fallback below is untouched: no ship-to ⇒ the customer's address, billing-first, exactly as
-  // before. And what is stored is TEXT, never a `customer_addresses.id` — editing a saved site
+  // The fallback below still applies: no ship-to ⇒ the customer's address. ✏️ It used to say
+  // *"billing-first, exactly as before"*; there is no "first" any more, because the legacy columns
+  // it fell back TO are dropped (ledger #335) and `billing_*` is the derived view of the address
+  // list. And what is stored is TEXT, never a `customer_addresses.id` — editing a saved site
   // tomorrow cannot move this stop, because this stop does not point at it.
   const st = args.shipTo ?? null;
   const shipField = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
@@ -301,14 +390,33 @@ export async function scheduleCheckoutDelivery(
     ? { address_line1: shipField(st.line1), city: shipField(st.city), state: shipField(st.state), zip: shipField(st.zip) }
     : null;
 
+  // 🔴 THE BILLING FALLBACK IS RESOLVED HERE, NOT INSIDE THE ROW LITERAL, AND THAT IS DELIBERATE.
+  // Reading `c.billing_line1` inside the `deliveries` row made the literal look CUSTOMER-shaped to
+  // `verify-customer-address-columns` — a false positive my own repoint created. Hoisting it is
+  // also plainer: the row below now reads as four delivery columns taking four resolved values,
+  // with the choosing done once, above, where it can be read in one line.
+  // ⚠️ THE KEYS ARE THE COLUMN NAMES THEY HOLD. Calling them `line1`/`city`/`state`/`zip` read as
+  // the retired customer columns to both a person and the cap; naming them for their source makes
+  // the line below say exactly where the value came from.
+  const billTo = {
+    billing_line1: pick(c.billing_line1),
+    billing_city:  pick(c.billing_city),
+    billing_state: pick(c.billing_state),
+    billing_zip:   pick(c.billing_zip),
+  };
+
   const row: Record<string, unknown> = {
     business_id:   args.businessId,
     customer_id:   args.customerId,
     delivery_date: args.deliveryDate,                        // null = undated; the day view buckets it last
-    address_line1: shipTo ? shipTo.address_line1 : pick(c.billing_line1, c.address_line1),
-    city:          shipTo ? shipTo.city          : pick(c.billing_city,  c.city),
-    state:         shipTo ? shipTo.state         : pick(c.billing_state, c.state),
-    zip:           shipTo ? shipTo.zip           : pick(c.billing_zip,   c.zip),
+    // ✏️ ONE COLUMN SET (ledger #335). This was `pick(c.billing_*, c.<legacy>)` — billing-first
+    // with a legacy fallback; the legacy four are dropped and `billing_*` is the derived view of
+    // the address list, so there is nothing to fall back to. These keys are `deliveries` columns
+    // and are UNCHANGED — the stop still SNAPSHOTS the address (D-41's surviving invariant).
+    address_line1: shipTo ? shipTo.address_line1 : billTo.billing_line1,
+    city:          shipTo ? shipTo.city          : billTo.billing_city,
+    state:         shipTo ? shipTo.state         : billTo.billing_state,
+    zip:           shipTo ? shipTo.zip           : billTo.billing_zip,
     status:        'scheduled',
     source:        'checkout',                               // distinguishable from 'ocr-invoice'
     service_type:  serviceType,
@@ -901,6 +1009,10 @@ async function handleCreate(req: any, res: any) {
     }
     const writesEnabled = (modeRow as { qbo_writes_enabled?: boolean } | null)?.qbo_writes_enabled;
     const bornKind = orderKindForMode(writesEnabled);
+    const stockGate = stockRecordGateFor(writesEnabled, bornKind);
+    // 2026-09-09 ruling (ledger #342): a PRACTICE order carries the run id, so the run's undo
+    // removes it with the run. A live order never carries one. A captured order is never born here.
+    const practiceRunId = bornKind === TEST_ORDER_KIND ? await currentImportRunId(db, businessId) : null;
     console.log('[TRACE:TESTMODE] order born —', {
       businessId, writesEnabled: writesEnabled ?? null, order_kind: bornKind ?? '(live checkout order)',
     });
@@ -943,6 +1055,7 @@ async function handleCreate(req: any, res: any) {
     // the value an ordinary checkout order has always carried — so going live stops adding a
     // mark rather than starting to write a different one, and not one live row changes shape.
     if (bornKind !== null) gatedCols.order_kind = bornKind;
+    if (practiceRunId !== null) gatedCols.import_run_id = practiceRunId;
 
     let order: any;
     let orderErr: any;
@@ -951,6 +1064,24 @@ async function handleCreate(req: any, res: any) {
       .insert({ ...orderBase, ...gatedCols })
       .select('id')
       .single());
+
+    // 🔴 `orders.import_run_id` ARRIVES WITH 20260916c (GATED), AND ITS ABSENCE IS RETRIED ON ITS
+    // OWN. The generic fallback below strips EVERY gated key — including `order_kind` — so letting a
+    // missing run-id column fall through to it would write a practice order as a LIVE one. Only the
+    // one key goes; the test mark stays.
+    if (orderErr && 'import_run_id' in gatedCols
+        && (orderErr.code === '42703' || orderErr.code === 'PGRST204')
+        && String(orderErr.message ?? '').includes('import_run_id')) {
+      console.log('[TRACE:TESTMODE] orders.import_run_id absent (20260916c pending) — practice order written WITHOUT its run id', {
+        runId: practiceRunId, code: orderErr.code,
+      });
+      delete gatedCols.import_run_id;
+      ({ data: order, error: orderErr } = await db
+        .from('orders')
+        .insert({ ...orderBase, ...gatedCols })
+        .select('id')
+        .single());
+    }
 
     // Missing-column fallback (42703 = undefined_column; PGRST204 = schema-cache miss).
     if (orderErr && (orderErr.code === '42703' || orderErr.code === 'PGRST204')) {
@@ -1141,7 +1272,7 @@ async function handleCreate(req: any, res: any) {
     if (isWalkIn) {
       for (const rl of resolvedLines) {
         const lotId = rl.stockLineId ?? rl.plant.inventory_id ?? null;
-        await adjustLotQty(db, businessId, lotId, -rl.quantity, 'walk-in sale decrement (commit+fulfill collapsed)',
+        await adjustLotQty(db, stockGate, businessId, lotId, -rl.quantity, 'walk-in sale decrement (commit+fulfill collapsed)',
           { actorUserId: checkoutActor, kind: 'sale', orderId, occurredAt: soldAt });
       }
     } else {
@@ -1152,7 +1283,7 @@ async function handleCreate(req: any, res: any) {
     }
 
     // The order's own birth event — the first entry in its lifecycle stream (delta 0).
-    await recordOrderEvent(db, businessId, orderId, 'order_created', checkoutActor, soldAt,
+    await recordOrderEvent(db, stockGate, businessId, orderId, 'order_created', checkoutActor, soldAt,
       'checkout');
 
     // D-52: the COMMIT event — the moment units became spoken-for. This is the start of the
@@ -1160,13 +1291,13 @@ async function handleCreate(req: any, res: any) {
     // Emitted for EVERY order including a walk-in, whose commit and fulfill share a timestamp:
     // recording only the fulfill would erase the fact that a commitment happened at all, and a
     // zero-length interval is a real, meaningful measurement (it says "collapsed"), not a gap.
-    await recordOrderEvent(db, businessId, orderId, 'order_committed', checkoutActor, soldAt,
+    await recordOrderEvent(db, stockGate, businessId, orderId, 'order_committed', checkoutActor, soldAt,
       isWalkIn ? 'walk-in — commit and fulfill collapsed' : `committed at checkout (${transportMethod})`);
 
     // A walk-in is fulfilled at birth, so its fulfillment event belongs to checkout too. The order
     // never passes through handleStatus, so this is the ONLY place that event can be written.
     if (isWalkIn) {
-      await recordOrderEvent(db, businessId, orderId, 'order_fulfilled', checkoutActor, soldAt,
+      await recordOrderEvent(db, stockGate, businessId, orderId, 'order_fulfilled', checkoutActor, soldAt,
         'walk-in — customer took delivery at checkout');
     }
 
@@ -1468,9 +1599,10 @@ async function handleUpdate(req: any, res: any) {
     // so a NULL here would be a defect, not an honest system write. Direction picks the vocabulary:
     // restoring stock is a 'sale_reversal', taking more is a further 'sale'.
     const editActor = await resolveCallerUid(req.headers?.authorization);
+    const stockGate = await readStockRecordGate(db, businessId, (order as any).order_kind);
     const editedAt = new Date().toISOString();
     for (const [lotId, delta] of editDeltas) {
-      await adjustLotQty(db, businessId, lotId, delta, 'order edit (fulfilled — physical correction)',
+      await adjustLotQty(db, stockGate, businessId, lotId, delta, 'order edit (fulfilled — physical correction)',
         { actorUserId: editActor, kind: delta > 0 ? 'sale_reversal' : 'sale', orderId, occurredAt: editedAt });
     }
     if (!editTouchesOnHand) {
@@ -1478,7 +1610,7 @@ async function handleUpdate(req: any, res: any) {
         orderId, status: (order as any).status, lines: resolvedAll.length,
       });
     }
-    await recordOrderEvent(db, businessId, orderId, 'order_edited', editActor, editedAt,
+    await recordOrderEvent(db, stockGate, businessId, orderId, 'order_edited', editActor, editedAt,
       removed.size > 0 ? `lines removed: ${removed.size}` : undefined);
     console.log('[TRACE:PRICE] order edit — re-reserved + recomputed', {
       orderId, itemCount, linesSubtotal: round2(linesSubtotal), addonsAmount: round2(addonsAmount),
@@ -1565,12 +1697,15 @@ async function handleDelete(req: any, res: any) {
   const db = adminDb();
   try {
     const { data: order } = await db
-      .from('orders').select('id, status').eq('id', orderId).eq('business_id', businessId).maybeSingle();
+      .from('orders').select('*').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    // select('*'), not a named list: `order_kind` is a GATED column and a named select of a missing
+    // column errors, where '*' does not (the handleUpdate precedent).
 
     const { data: itemsRaw } = await db
       .from('order_items').select('id, quantity, business_inventory_id').eq('order_id', orderId);
     const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
+    const stockGate = await readStockRecordGate(db, businessId, (order as any).order_kind);
 
     // RESTORE on-hand — but ONLY for an order that actually took stock off the property.
     // D-52: that is exactly a FULFILLED order (movesOnHand). Deleting a pending/invoiced order
@@ -1590,7 +1725,7 @@ async function handleDelete(req: any, res: any) {
     if (deletingFulfilled) {
       for (const it of items) {
         if (!it.business_inventory_id) continue;
-        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore (was fulfilled)',
+        await adjustLotQty(db, stockGate, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore (was fulfilled)',
           { actorUserId: deleteActor, kind: 'sale_reversal', orderId, occurredAt: deletedAt });
         restored++;
       }
@@ -1599,7 +1734,7 @@ async function handleDelete(req: any, res: any) {
         orderId, status: (order as any).status, lines: items.length,
       });
     }
-    await recordOrderEvent(db, businessId, orderId, 'order_deleted', deleteActor, deletedAt,
+    await recordOrderEvent(db, stockGate, businessId, orderId, 'order_deleted', deleteActor, deletedAt,
       deletingFulfilled ? 'was fulfilled — on-hand restored' : `was ${(order as any).status ?? 'open'} — commitment released, on-hand untouched`);
 
     await db.from('order_compliance_records').delete().eq('order_id', orderId);
@@ -1634,7 +1769,7 @@ async function handleStatus(req: any, res: any) {
   const db = adminDb();
   try {
     const { data: order } = await db
-      .from('orders').select('id, status').eq('id', orderId).eq('business_id', businessId).maybeSingle();
+      .from('orders').select('*').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const prevStatus = (order as any).status ?? null;
@@ -1648,6 +1783,9 @@ async function handleStatus(req: any, res: any) {
 
     // D-50 LAYER 2A-2: the transition is manager-gated above, so the actor is always real here.
     const statusActor = await resolveCallerUid(req.headers?.authorization);
+    // Captured (history) orders arrive here too — the fulfilled tap on a delivery stop. Ruling ②
+    // covers them in test mode; out of test mode their lines carry no lot, exactly as before.
+    const stockGate = await readStockRecordGate(db, businessId, (order as any).order_kind);
     const changedAt = new Date().toISOString();
 
     // ── D-52: ON-HAND MOVES ON THE FULFILL TRANSITION, AND ONLY THERE ──────────────────────
@@ -1672,7 +1810,7 @@ async function handleStatus(req: any, res: any) {
       if (willDecrementOnHand) {
         for (const it of items) {
           if (!it.business_inventory_id) continue;
-          await adjustLotQty(db, businessId, it.business_inventory_id, -Number(it.quantity), 'fulfillment sale decrement',
+          await adjustLotQty(db, stockGate, businessId, it.business_inventory_id, -Number(it.quantity), 'fulfillment sale decrement',
             { actorUserId: statusActor, kind: 'sale', orderId, occurredAt: changedAt });
         }
         console.log('[TRACE:INVENTORY] D-52 fulfilled — on-hand decremented at departure', {
@@ -1690,7 +1828,7 @@ async function handleStatus(req: any, res: any) {
       if (mustRestoreOnHand) {
         for (const it of items) {
           if (!it.business_inventory_id) continue;
-          await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'un-fulfill restore',
+          await adjustLotQty(db, stockGate, businessId, it.business_inventory_id, Number(it.quantity), 'un-fulfill restore',
             { actorUserId: statusActor, kind: 'sale_reversal', orderId, occurredAt: changedAt });
         }
         console.log('[TRACE:INVENTORY] D-52 backed out of fulfilled — on-hand restored', {
@@ -1716,7 +1854,7 @@ async function handleStatus(req: any, res: any) {
     // event_type is DERIVED from the status (`order_${status}`), not a hand-maintained mapping:
     // ORDER_STATUSES is an OPEN decision (R-STATUS — David ratifies the set), so when a status is
     // added it emits correctly with no code change here. A switch would silently miss the new one.
-    await recordOrderEvent(db, businessId, orderId, `order_${status}`, statusActor, changedAt,
+    await recordOrderEvent(db, stockGate, businessId, orderId, `order_${status}`, statusActor, changedAt,
       prevStatus ? `from ${prevStatus}` : undefined);
 
     console.log('[TRACE:ROSTER] order status changed', { orderId, from: prevStatus, to: status, actor: statusActor ?? 'NULL' });

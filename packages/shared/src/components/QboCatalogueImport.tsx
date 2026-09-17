@@ -101,6 +101,7 @@ interface ItemRun extends ItemPlan {
 interface ItemUndo {
   ok?: boolean; inventoryDeleted?: number; unretired?: number;
   leftovers?: string[]; receiptsAfter?: number; deliveriesAfter?: number;
+  practiceOrdersDeleted?: number; practiceDeliveriesDeleted?: number;
   refused?: boolean; error?: string;
 }
 
@@ -552,9 +553,19 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
                   actually in the table before importing again.
                 </p>
               )}
+              {/* ✏️ LEDGER #342 — practice orders go WITH the run (David's ruling ④: removability is
+                  decided by origin). Captured invoices, receipts and their delivery stops are live and
+                  the undo refuses rather than touch them, so "exactly as they were" is still true of
+                  everything EXCEPT the practice stops, and the sentence names that number. */}
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
-                Your receipts ({undone.items?.receiptsAfter}) and deliveries ({undone.items?.deliveriesAfter}) are
-                exactly as they were — the undo cannot reach them. You can preview and import again.
+                {undone.items?.practiceOrdersDeleted === undefined
+                  ? 'The server did not report how many practice orders were removed'
+                  : `${undone.items.practiceOrdersDeleted} practice order(s) rung up in test mode were removed with this import`}
+                {undone.items?.practiceDeliveriesDeleted
+                  ? `, and the ${undone.items.practiceDeliveriesDeleted} delivery stop(s) they had scheduled.`
+                  : '.'}{' '}
+                Your receipts ({undone.items?.receiptsAfter}), your captured invoices and their delivery
+                stops ({undone.items?.deliveriesAfter} stops now) were not touched. You can preview and import again.
               </p>
             </>
           ) : (

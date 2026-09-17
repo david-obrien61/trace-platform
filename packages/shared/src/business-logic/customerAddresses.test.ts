@@ -7,8 +7,9 @@
  *     recording client and asserted to touch exactly one table.
  *   · D-41 L1 survives: nothing here writes `customers`, and no `shipping_*` key is ever composed.
  *   · R-133 soft delete — retiring is an UPDATE of `active`; no code path deletes a row.
- *   · §4 of the migration: NO BACKFILL. §F reads the migration corpus and fails if anything seeds
- *     this table — the promise made checkable rather than merely written down.
+ *   · §4 of the migration: HISTORY IS NEVER THE SOURCE. §F reads the migration corpus and fails if
+ *     an undeclared file seeds this table, or if any seed reads delivery/order history — the rule
+ *     §4 actually made (ledger #335 corrected it from "nothing seeds", 2026-09-16).
  *   · §1.6 item 3 — every refusal is in words, and a saved site needs a street plus a city or ZIP.
  *
  * 🔴 THE FAKE CAN REFUSE WHAT THE REAL THING REFUSES (§6 r19 / R-33): zero rows (an RLS refusal),
@@ -27,6 +28,7 @@ import {
   addressOf, siteLine, sameAddress, findSameAddress, sortSites, normalizeAddressPart,
   SITE_ADDRESS_FIELDS, CUSTOMER_ADDRESS_COLUMNS, type CustomerAddress,
 } from './customerAddresses';
+import { contactSeedStatements, historySourceViolation, DECLARED_CONTACT_SEEDERS } from './contactRecord';
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -241,27 +243,45 @@ async function main(): Promise<void> {
     ok(!/shipping_/.test(src), 'E5 the word `shipping_` appears nowhere — D-41\'s redline');
   }
 
-  // ══ F. 🔴 NO BACKFILL — the migration\'s §4 promise, made checkable ══════════════════════════
-  // If the book were seeded from QuickBooks history, AGAVE's four spellings would become four
-  // SAVED SITES and the drift would be permanent. This goes red the day anything seeds the table.
+  // ══ F. 🔴 HISTORY IS NEVER THE SOURCE — `20260911b` §4, made checkable ══════════════════════
+  // ✏️ REWRITTEN 2026-09-16 (ledger #335, David). This section asserted *"nothing seeds
+  // customer_addresses"*. That was stricter than §4 and blind to its reason, and it is what let
+  // `20260915` install a derivation over an EMPTY table — the first phone written would have
+  // blanked every customer's address. The rule, the declaration and the predicate live in
+  // `contactRecord.ts`; this section is where they are enforced across the whole corpus.
   {
     const dir = join(process.cwd(), 'supabase/migrations');
     const files = readdirSync(dir).filter(f => f.endsWith('.sql'));
     ok(files.length > 50, `F1 the migration corpus was READ (${files.length} files) — the probe reached its target`);
-    const seeders: string[] = [];
+    const statements = new Map<string, string[]>();
     for (const f of files) {
-      // Comments stripped first: the migration DISCUSSES backfilling at length, and a probe that
-      // matched prose would report the file that forbids the act as the file that commits it.
-      const body = readFileSync(join(dir, f), 'utf8').split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
-      if (/(insert\s+into|copy)\s+(public\.)?customer_addresses/i.test(body)) seeders.push(f);
+      const s = contactSeedStatements(readFileSync(join(dir, f), 'utf8'), ['customer_addresses']);
+      if (s.length > 0) statements.set(f, s);
     }
-    ok(seeders.length === 0, `F2 🔴 NOTHING seeds customer_addresses (found: ${seeders.join(', ') || 'none'})`);
-    // The negative control: the stripped-comment predicate must still be able to SEE a real seed.
-    const planted = 'INSERT INTO public.customer_addresses (label) VALUES (\'x\');';
-    ok(/(insert\s+into|copy)\s+(public\.)?customer_addresses/i.test(planted), 'F3 the seed probe can detect a real seed');
-    const commented = '-- INSERT INTO public.customer_addresses (label) VALUES (\'x\');';
-    const strippedPlant = commented.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
-    ok(!/(insert\s+into)\s+(public\.)?customer_addresses/i.test(strippedPlant), 'F4 and it does NOT fire on a commented one');
+    const seeders = [...statements.keys()];
+    const undeclared = seeders.filter(f => !(f in DECLARED_CONTACT_SEEDERS));
+    ok(undeclared.length === 0,
+      `F2 🔴 only a DECLARED migration seeds customer_addresses (undeclared: ${undeclared.join(', ') || 'none'})`);
+    const stale = Object.keys(DECLARED_CONTACT_SEEDERS).filter(f => !seeders.includes(f));
+    ok(stale.length === 0,
+      `F2b a declared seeder that no longer seeds is STALE and its declaration must go (stale: ${stale.join(', ') || 'none'})`);
+    const violations = [...statements].flatMap(([f, stmts]) =>
+      stmts.map(st => historySourceViolation(st)).filter((v): v is string => v !== null).map(v => `${f}: ${v}`));
+    ok(seeders.length > 0 && violations.length === 0,
+      `F2c 🔴 20260911b §4 FORBIDS HISTORY AS THE SOURCE, NOT A SEED — every seed of customer_addresses reads FROM public.customers and names no delivery, order or invoice table (seeds read: ${seeders.length} file(s); violations: ${violations.join(' | ') || 'none'})`);
+
+    // Negative controls. Each proves a predicate above can DISAGREE (§6 r19 / R-33).
+    const planted = "INSERT INTO public.customer_addresses (label) VALUES ('x');";
+    ok(contactSeedStatements(planted, ['customer_addresses']).length === 1, 'F3 the seed probe can detect a real seed');
+    const commented = "-- INSERT INTO public.customer_addresses (label) VALUES ('x');";
+    ok(contactSeedStatements(commented, ['customer_addresses']).length === 0, 'F4 and it does NOT fire on a commented one');
+    const fromHistory = "INSERT INTO public.customer_addresses (customer_id, label, line1) SELECT customer_id, 'x', address_line1 FROM public.deliveries";
+    ok(historySourceViolation(fromHistory) !== null, 'F5 🔴 a seed read FROM deliveries is refused');
+    const joinedHistory = "INSERT INTO public.customer_addresses (customer_id, label, line1) SELECT c.id, 'x', d.address_line1 FROM public.customers c JOIN public.deliveries d ON d.customer_id = c.id";
+    ok(historySourceViolation(joinedHistory)?.includes('deliveries') === true,
+      'F6 🔴 …and so is one that reads customers but JOINS history — the FROM clause alone is not the rule');
+    const fromCustomers = "INSERT INTO public.customer_addresses (customer_id, label, line1) SELECT c.id, 'Billing', c.billing_line1 FROM public.customers c";
+    ok(historySourceViolation(fromCustomers) === null, 'F7 a seed read FROM customers alone is legal — the rule refuses history, not seeding');
   }
 
   // ══ G. THE COLUMN LIST IS THE MIGRATION\'S, NOT A HAND-MAINTAINED COPY (#179) ════════════════

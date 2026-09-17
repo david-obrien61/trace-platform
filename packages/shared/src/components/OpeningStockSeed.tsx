@@ -6,10 +6,15 @@
 // DEPENDENCIES: ../quickbooks/openingStock (the pure rule + planner) · ../quickbooks/booksRunStore
 //   (`readLatestResult` — the last stored books run) · ../context (useBusinessContext) ·
 //   ../supabase/client · the `adjust_inventory_manual` RPC (D-50 LAYER 1, member-checked
-//   server-side). NO new `api/` function — the ceiling is 12 of 12 (§6 r11).
+//   server-side) in LIVE mode · ../quickbooks/openingStockTestWrite (`seedQtyWithoutLedger`) in
+//   TEST mode. NO new `api/` function — the ceiling is 12 of 12 (§6 r11).
 // OUTPUTS: <OpeningStockSeed /> — mounted in the Accounting card beneath <QboCatalogueImport />.
 // STORY: *The imported catalogue can be sold from* (`user_stories.md`, ARC: cost-to-produce).
 // INSTRUMENTATION (STD-003): `[TRACE:SEED]` on load, plan, and every RPC step. ON BY DEFAULT.
+//
+// 🔴 LEDGER #342 — TWO MODES, AND THE SCREEN SAYS WHICH. In TEST mode (QuickBooks writes off) the
+// seed sets qty on IMPORTED rows only and writes NO ledger row (David, 2026-09-16: *"we must never
+// allow them to write to the actual record during testing"*). In LIVE mode it is unchanged.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 THE CUSTOMER RUNS THIS. WE DO NOT DO IT TO THEM.
@@ -38,9 +43,10 @@ import { useBusinessContext } from '../context';
 import { supabase } from '../supabase/client';
 import { readLatestResult } from '../quickbooks/booksRunStore';
 import {
-  planOpeningStockSeed, seedRefusal, SEED_CAP, SEED_MIN, SEED_LEDGER_KIND,
+  planOpeningStockSeed, seedRefusal, seedModeFor, SEED_CAP, SEED_MIN, SEED_LEDGER_KIND,
   OPENING_STOCK_RULE_ID, type SeedCandidate,
 } from '../quickbooks/openingStock';
+import { seedQtyWithoutLedger } from '../quickbooks/openingStockTestWrite';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -55,7 +61,7 @@ type Phase =
   | { k: 'empty'; why: string }
   | { k: 'ready' }
   | { k: 'working'; done: number; of: number }
-  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number } };
+  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number; notImported: number } };
 
 /** What the books review last said, or why it said nothing. Never a silent absence. */
 interface Suggestion {
@@ -70,7 +76,9 @@ interface Suggestion {
 }
 
 export function OpeningStockSeed(): React.ReactElement | null {
-  const { businessId, isOwner } = useBusinessContext();
+  const { businessId, isOwner, business } = useBusinessContext();
+  // An unread switch is TEST mode — the side that writes nothing permanent.
+  const mode = seedModeFor(business?.qbo_writes_enabled);
   const [phase, setPhase] = useState<Phase>({ k: 'loading' });
   const [userId, setUserId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<SeedCandidate[]>([]);
@@ -103,11 +111,11 @@ export function OpeningStockSeed(): React.ReactElement | null {
       // replaced, and giving it stock would put it back in front of people.
       const inv = await supabase
         .from('business_inventory')
-        .select('id,name,qty')
+        .select('id,name,qty,import_run_id')
         .eq('business_id', businessId)
         .is('retired_at', null);
       if (inv.error) { setPhase({ k: 'error', why: inv.error.message }); return; }
-      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null }[];
+      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null; import_run_id: string | null }[];
       setTotalProducts(rows.length);
 
       // ── which of them have ANY ledger history ─────────────────────────────
@@ -129,16 +137,19 @@ export function OpeningStockSeed(): React.ReactElement | null {
         name: String(r.name ?? 'Unnamed product'),
         qty: Number(r.qty ?? 0),
         hasHistory: withHistory.has(String(r.id)),
+        imported: r.import_run_id != null,
       }));
       setCandidates(cands);
 
-      const seedable = cands.filter(c => c.qty <= 0 && !c.hasHistory).length;
-      console.log('[TRACE:SEED] loaded', { products: rows.length, seedable, withHistory: withHistory.size });
+      const seedable = cands.filter(c => c.qty <= 0 && !c.hasHistory && (mode === 'live' || c.imported)).length;
+      console.log('[TRACE:SEED] loaded', { products: rows.length, seedable, withHistory: withHistory.size, mode });
 
       if (seedable === 0) {
         setPhase({ k: 'empty', why: rows.length === 0
           ? 'There are no products here yet. Import your product list first, then come back.'
-          : 'Every product here either already holds stock or has already been counted or sold — there is nothing to give a starting number to. That is the state you want to be in.' });
+          : mode === 'test'
+            ? 'In test mode only the products your QuickBooks import created get a starting number, and every one of those already holds stock or has been counted or sold.'
+            : 'Every product here either already holds stock or has already been counted or sold — there is nothing to give a starting number to. That is the state you want to be in.' });
         return;
       }
 
@@ -168,20 +179,33 @@ export function OpeningStockSeed(): React.ReactElement | null {
     } catch (e: unknown) {
       setPhase({ k: 'error', why: e instanceof Error ? e.message : String(e) });
     }
-  }, [businessId, isOwner]);
+  }, [businessId, isOwner, mode]);
 
   useEffect(() => { void load(); }, [load]);
 
   async function apply(): Promise<void> {
     setStepError(null);
     const qty = Number(qtyText.trim());
-    const plan = planOpeningStockSeed(candidates, qty);
+    const plan = planOpeningStockSeed(candidates, qty, mode);
     if (!plan.ok) { setStepError(plan.error); return; }
     if (!userId) { setStepError('Confirming your sign-in — one moment, then try again.'); return; }
     if (!businessId) return;
 
-    console.log('[TRACE:SEED] plan', { steps: plan.steps.length, qty, skipped: plan.skipped });
+    console.log('[TRACE:SEED] plan', { steps: plan.steps.length, qty, skipped: plan.skipped, mode: plan.mode });
     setPhase({ k: 'working', done: 0, of: plan.steps.length });
+
+    // ── TEST MODE: qty on imported rows, NO ledger row (ruling ②) ─────────
+    if (plan.mode === 'test') {
+      const r = await seedQtyWithoutLedger(supabase, businessId, plan.steps);
+      if (!r.ok) {
+        setStepError(r.error);
+        setPhase({ k: 'ready' });
+        return;
+      }
+      console.log('[TRACE:SEED] applied (TEST MODE — no ledger rows)', { seeded: r.written, qty });
+      setPhase({ k: 'done', seeded: r.written, qty, skipped: plan.skipped });
+      return;
+    }
 
     let done = 0;
     for (const step of plan.steps) {
@@ -240,15 +264,24 @@ export function OpeningStockSeed(): React.ReactElement | null {
       <div style={card}>
         <h3 style={h}>Setting starting numbers…</h3>
         <p style={p}>{phase.done.toLocaleString()} of {phase.of.toLocaleString()} products.</p>
-        <p style={note}>Each one is being written as a dated line, so it can be explained later. Please leave this open.</p>
+        <p style={note}>{mode === 'test'
+          ? 'Test mode: only the number is set — nothing is written to your stock record. Please leave this open.'
+          : 'Each one is being written as a dated line, so it can be explained later. Please leave this open.'}</p>
       </div>
     );
   }
   if (phase.k === 'done') {
-    const skipped = phase.skipped.withStock + phase.skipped.withHistory;
+    const skipped = phase.skipped.withStock + phase.skipped.withHistory + phase.skipped.notImported;
     return (
       <div style={card}>
         <h3 style={h}>Done — {phase.seeded.toLocaleString()} products start at {phase.qty}</h3>
+        {mode === 'test' && (
+          <p style={{ ...p, color: AMBER }}>
+            <b>Test mode:</b> these numbers are on your imported products only, and nothing was written
+            to your stock record — so this import can still be undone and loaded again. The permanent
+            opening line for each product is written once, after you switch QuickBooks writes on.
+          </p>
+        )}
         <p style={p}>
           From this moment we track every movement: every sale takes units off, every delivery in puts
           them on. <b>When you count, we will compare what we have tracked against what you found and
@@ -262,7 +295,9 @@ export function OpeningStockSeed(): React.ReactElement | null {
           <p style={note}>
             {skipped.toLocaleString()} left alone: {phase.skipped.withStock.toLocaleString()} already
             held stock and {phase.skipped.withHistory.toLocaleString()} had already been sold or
-            counted, so their numbers are real and we did not touch them.
+            counted, so their numbers are real and we did not touch them
+            {phase.skipped.notImported > 0 && <>; {phase.skipped.notImported.toLocaleString()} were not
+            created by your QuickBooks import, and test mode leaves those alone</>}.
           </p>
         )}
       </div>
@@ -270,7 +305,7 @@ export function OpeningStockSeed(): React.ReactElement | null {
   }
 
   // ── READY ────────────────────────────────────────────────────────────────
-  const seedable = candidates.filter(c => c.qty <= 0 && !c.hasHistory).length;
+  const seedable = candidates.filter(c => c.qty <= 0 && !c.hasHistory && (mode === 'live' || c.imported)).length;
   const qty = Number(qtyText.trim());
   const refusal = qtyText.trim() === '' ? null : seedRefusal(qty);
   const canPress = qtyText.trim() !== '' && refusal === null;
@@ -278,6 +313,21 @@ export function OpeningStockSeed(): React.ReactElement | null {
   return (
     <div style={card}>
       <h3 style={h}>Starting numbers</h3>
+
+      {/* ⓪ WHICH MODE, AND WHAT IT MEANS (ledger #342). */}
+      {mode === 'test' ? (
+        <p style={{ ...p, color: AMBER }}>
+          <b>You are in test mode.</b> A starting number set now goes onto the products your
+          QuickBooks import created, and nowhere else. <b>Nothing is written to your stock record</b> —
+          so you can still undo the import and load it again. The permanent opening line is written
+          once, after you switch QuickBooks writes on.
+        </p>
+      ) : (
+        <p style={p}>
+          <b>QuickBooks writes are on.</b> A starting number set now is written to your stock record
+          as a dated line, and it stays there.
+        </p>
+      )}
 
       {/* ① EXPLAIN THE STATE. */}
       <p style={p}>
@@ -347,10 +397,12 @@ export function OpeningStockSeed(): React.ReactElement | null {
         movement, and when you do count, we will net off the sales and the deliveries and hand you
         only the part we cannot explain.
       </p>
-      <p style={note}>
-        ⚠️ Once a product has a starting number it has a history, and re-importing your product list
-        will no longer clear it. Do your import first and press this last.
-      </p>
+      {mode === 'live' && (
+        <p style={note}>
+          ⚠️ Once a product has a starting number it has a history, and re-importing your product list
+          will no longer clear it. Do your import first and press this last.
+        </p>
+      )}
     </div>
   );
 }

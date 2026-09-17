@@ -197,7 +197,7 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
 
   // ShipAddr is on all 1,946 LAWNS records but only 754 carry a Line1: the rest are id-only husks.
   const shipOnly = adaptCustomer(person({ BillAddr: undefined, ShipAddr: { Id: '4' } }))!;
-  ok(shipOnly.address_line1 === null && shipOnly.city === null,
+  ok(shipOnly.billing_line1 === null && shipOnly.billing_city === null,
     '🔴 an id-only ShipAddr husk yields NO address — testing the OBJECT rather than a field counts 1,946 addresses where there are 1,448');
   // 🔴 THE FIXTURE THAT CATCHES THE FALLBACK. The husk above has no Line1, so reading it changes
   // nothing — mutant A9 survived there. This record has NO billing address and a REAL job-site
@@ -206,10 +206,10 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
     BillAddr: undefined,
     ShipAddr: { Id: '4', Line1: '9 Job Site Rd', City: 'Georgetown', CountrySubDivisionCode: 'TX', PostalCode: '78626' },
   }))!;
-  ok(jobSiteOnly.address_line1 === null && jobSiteOnly.city === null && jobSiteOnly.zip === null,
+  ok(jobSiteOnly.billing_line1 === null && jobSiteOnly.billing_city === null && jobSiteOnly.billing_zip === null,
     '🔴 a real ShipAddr is NOT used as the billing address — ShipAddr is a JOB SITE (Dave\'s Tree Svs bills one office and ships to three sites), and billing an invoice to a work site is a wrong address that looks entirely plausible');
   const billed = adaptCustomer(person())!;
-  ok(billed.address_line1 === '1 Oak St' && billed.city === 'Leander' && billed.state === 'TX' && billed.zip === '78641',
+  ok(billed.billing_line1 === '1 Oak St' && billed.billing_city === 'Leander' && billed.billing_state === 'TX' && billed.billing_zip === '78641',
     'a real BillAddr fills all four columns');
 
   const a = adaptCustomers([body([person({ Id: '1' }), person({ Id: '1' })])]);
@@ -309,6 +309,9 @@ function makeDb(opts: {
       not(c: string, op: string, v: any) { filters.push([c, `not.${op}`, v]); return b; },
       in(c: string, v: any[]) { filters.push([c, 'in', v]); return b; },
       is(c: string, v: any) { filters.push([c, 'is', v]); return b; },
+      // PostgREST `or=(a.is.null,a.neq.X)` — the only shape the contact undo sends.
+      or(expr: string) { filters.push(['', 'or', expr]); return b; },
+      order() { return b; },
       range() { return b; },
       maybeSingle() {
         const r = result();
@@ -324,6 +327,16 @@ function makeDb(opts: {
         if (op === 'eq' && String(row[c]) !== String(v)) return false;
         if (op === 'not.is' && v === null && row[c] == null) return false;
         if (op === 'is' && v === null && row[c] != null) return false;
+        if (op === 'or') {
+          const any = String(v).split(',').some(part => {
+            const [col, o, ...rest] = part.split('.');
+            const val = rest.join('.');
+            if (o === 'is' && val === 'null') return row[col] == null;
+            if (o === 'neq') return row[col] != null && String(row[col]) !== val;
+            return false;
+          });
+          if (!any) return false;
+        }
       }
       return true;
     }
@@ -340,6 +353,15 @@ function makeDb(opts: {
           other.orders.push({ id: '__late', customer_id: opts.lateOrderFor });
         }
         return headMode ? { data: null, error: null, count: hits.length } : { data: hits, error: null, count: hits.length };
+      }
+      // 🔴 THE GUARD (20260915 §5e), MODELLED: a customers write carrying a derived contact field is
+      // refused by the database. A double that accepted it would bless the defect #335 removes.
+      if (table === 'customers' && (verb === 'insert' || verb === 'update')) {
+        const incoming = Array.isArray(payload) ? payload : [payload];
+        const FLAT = ['phone', 'email', 'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_zip'];
+        if (incoming.some((p: any) => FLAT.some(k => k in p && (verb === 'update' || p[k] != null)))) {
+          return { data: null, error: { code: 'P0001', message: 'Not saved: contact fields are kept in the contact lists' }, count: null };
+        }
       }
       if (verb === 'insert') {
         const incoming = Array.isArray(payload) ? payload : [payload];
@@ -371,6 +393,19 @@ function makeDb(opts: {
         // Postgres does. A per-row double would quietly turn "nothing was deleted" into "most of
         // them were", which is the exact difference the per-row fallback exists to handle.
         if (table === 'customers') {
+          // 🔴 `customer_addresses.customer_id` is RESTRICT too (20260911b:78) — modelled the same way.
+          const addrBlocked = hits.find((h: any) => (other.customer_addresses ?? []).some((a: any) => String(a.customer_id) === String(h.id)));
+          if (addrBlocked) {
+            return { data: null, count: null, error: {
+              code: '23503',
+              message: 'update or delete on table "customers" violates foreign key constraint '
+                + '"customer_addresses_customer_id_fkey" on table "customer_addresses"',
+            } };
+          }
+          // Phones and emails CASCADE.
+          for (const t of ['customer_phones', 'customer_emails']) {
+            other[t] = (other[t] ?? []).filter((x: any) => !hits.some((h: any) => String(h.id) === String(x.customer_id)));
+          }
           const blocked = hits.find((h: any) => other.orders.some(o => String(o.customer_id) === String(h.id)));
           if (blocked) {
             return { data: null, count: null, error: {
@@ -480,20 +515,31 @@ async function main() {
   await commitCustomerImport(db as any, BIZ, a, RUN);
 
   const written = calls.filter(c => c.verb !== 'select');
-  ok(written.every(c => c.table === 'customers'),
-    '🔴 EVERY write goes to `customers`. Not `people`, not `orders`, not `business_inventory`, not the ledger — asserted over the recorded calls');
+  // ✏️ #335: the contact lists are the fourth, fifth and sixth tables — and nothing else is.
+  const ALLOWED = ['customers', 'customer_phones', 'customer_emails', 'customer_addresses'];
+  ok(written.every(c => ALLOWED.includes(c.table)),
+    '🔴 EVERY write goes to `customers` or its three contact lists. Not `people`, not `orders`, not `business_inventory`, not the ledger — asserted over the recorded calls');
+  const listWrites = written.filter(c => c.table !== 'customers');
+  ok(listWrites.length > 0 && listWrites.every(c => (Array.isArray(c.payload) ? c.payload : [c.payload]).every((p: any) => p.import_run_id === RUN)),
+    '🔴 #335: every contact row the import writes carries THIS run id — so the undo can take it with its customer');
   ok(!calls.some(c => c.table === 'people'),
     '🔴 NOT ONE `people` ROW. `people` has no import_run_id (probed live: 9 columns, no run provenance), so a person row created here could never be undone — R-93\'s argument on a different table');
   ok(!written.some(c => c.verb === 'delete'),
     'a commit never deletes — the undo is the only path that does');
   ok(written.every(c => c.verb === 'insert' || c.verb === 'update'), 'insert and update are the only verbs a commit issues');
 
-  const ins = calls.find(c => c.verb === 'insert')!;
+  const ins = calls.find(c => c.verb === 'insert' && c.table === 'customers')!;
   ok(Object.keys(ins.payload[0]).sort().join(',') === [...CUSTOMER_INSERT_COLUMNS].sort().join(','),
     'the INSERT payload matches the declared column list exactly — a wider write would be a visible edit, not a silent one');
   const row = rowForCustomer(BIZ, RUN, a.customers[0]);
-  ok(row.billing_line1 === row.address_line1 && row.billing_city === row.city,
-    '🔴 canonical + mirror (D-41): billing_* and the legacy four are written TOGETHER, or the invoice prints one address and the delivery route shows another');
+  // ✏️ THIS ASSERTED THE MIRROR AND NOW ASSERTS ITS ABSENCE (ledger #335). It read: *"canonical +
+  // mirror (D-41): billing_* and the legacy four are written TOGETHER, or the invoice prints one
+  // address and the delivery route shows another."* The legacy four are DROPPED; writing one would
+  // now be a 42703 on every insert, so the payload must name only the canonical four.
+  // ✏️ #335 (2026-09-16): and now NO contact column at all — the address travels as a list row.
+  ok(!['address_line1', 'city', 'phone', 'email', 'billing_line1', 'billing_city'].some(k => k in row)
+      && a.customers[0].contact.addresses[0]?.line1 === '1 Oak St',
+    '🔴 the insert payload names NO contact column (the database derives them and refuses a direct write); the address is in the contact record');
   ok(row.business_id === BIZ, 'every row is scoped to the tenant (AC-3)');
 }
 
@@ -597,6 +643,42 @@ async function main() {
     '…and its order count honestly reads 0, because the pre-read never saw it — a fabricated count would be worse than an absent one');
 }
 
+// ══ §J5 #335 — THE UNDO TAKES A RUN'S CONTACT ROWS AND REFUSES A HAND-ADDED ONE ══════════
+{
+  const { db } = makeDb({
+    customers: [
+      { id: 'c1', business_id: BIZ, qb_customer_id: '901', import_run_id: RUN, display_name: 'Tagged' },
+      { id: 'c2', business_id: BIZ, qb_customer_id: '902', import_run_id: RUN, display_name: 'Hand-added phone' },
+    ],
+  });
+  const put = async (table: string, row: any) => { await (db.from(table) as any).insert(row); };
+  await put('customer_addresses', { business_id: BIZ, customer_id: 'c1', label: 'Billing', import_run_id: RUN });
+  await put('customer_phones', { business_id: BIZ, customer_id: 'c1', value: '1', import_run_id: RUN });
+  await put('customer_addresses', { business_id: BIZ, customer_id: 'c2', label: 'Billing', import_run_id: RUN });
+  await put('customer_phones', { business_id: BIZ, customer_id: 'c2', value: '2', import_run_id: null });
+  const u = await undoCustomerImport(db as any, BIZ, RUN, undefined);
+  ok(u.deleted === 1, `§J5a the tagged customer is removed WITH its address (RESTRICT) and phone (deleted ${u.deleted})`);
+  ok(u.blocked.length === 1 && u.blocked[0].customerId === 'c2' && u.blocked[0].handAddedContacts === 1,
+    '🔴 §J5b a customer carrying a HAND-ADDED phone is blocked and named — the undo never takes what a person typed');
+}
+
+// ══ §K #335 — THE CUSTOMERS-ONLY UNDO HAS NO ENTRY POINT ═════════════════════════════════
+// `undoCustomerImport` is a sequence of separate PostgREST calls. The only undo a caller can reach
+// must be the all-or-nothing one, so the router's customers-undo route goes to handleBooksUndo.
+{
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const router = readFileSync(join(process.cwd(), 'packages/cultivar-os/api/qbo/router.ts'), 'utf8');
+  const code = router.split('\n').filter(l => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n');
+  ok(/case 'customers-undo':\s*return handleBooksUndo\(req, res\);/.test(code),
+    '🔴 §K1 /api/qbo/customers/undo is served by the ONE undo (handleBooksUndo), not a customers-only sequence');
+  ok(!/undoCustomerImport/.test(code),
+    '🔴 §K2 no deployed route can call undoCustomerImport (the non-atomic undo) — it is referenced nowhere in the router');
+  ok(/case 'books-undo':\s*return handleBooksUndo\(req, res\);/.test(code), '§K3 (control) the books route is still wired, so K1 read a real dispatch');
+  const vercel = readFileSync(join(process.cwd(), 'vercel.json'), 'utf8');
+  ok(vercel.includes('_route=customers-undo'), '§K4 (control) the public URL still exists — it now reaches the atomic undo instead of 404ing a caller');
+}
+
 // ══ §J4 A NON-FK ERROR IS NOT A BLOCKED CUSTOMER ══════════════════════════════════════
 {
   // 🔴 THE DIFFERENCE BETWEEN "the database protected an order" AND "something went wrong".
@@ -610,7 +692,8 @@ async function main() {
   let threw = '';
   try { await undoCustomerImport(db as any, BIZ, RUN, 'all'); }
   catch (e: unknown) { threw = e instanceof Error ? e.message : ''; }
-  ok(/undo failed: simulated delete failure/.test(threw),
+  // ✏️ #335: the contact-row delete now runs first, so the same failure names that step.
+  ok(/undo failed.*simulated delete failure/.test(threw),
     '🔴 an error that is NOT a foreign-key violation THROWS and names itself — it is never folded into the blocked list as though an order had protected the row');
 }
 
@@ -721,7 +804,7 @@ async function main() {
 // `business_inventory`'s CREATE TABLE out of the migration corpus. `customers` HAS NO CREATE
 // TABLE ANYWHERE IN THE CORPUS (live-only schema, tech-debt #39) and 10 of the 23 columns this
 // import writes — `qb_customer_id`, `source`, `first_name`, `last_name`, `email`, `phone`,
-// `address_line1`, `city`, `state`, `zip` — appear in NO migration at all. Run the corpus check
+// `billing_*` (added 2026-07-13) and the rest — appear in NO migration at all. Run the corpus check
 // against this table and it reports ten real columns as unknown.
 //
 // So the assertion rests on a COMMITTED SNAPSHOT of the live column list
@@ -813,53 +896,53 @@ async function main() {
 
   // ── ① `Line1` is already a street ────────────────────────────────────────────────────
   const n1 = at({ BillAddr: addr('1 Oak St'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n1.branch === 'line1-street' && n1.customer.address_line1 === '1 Oak St' && n1.customer.phone === '(512) 555-0101',
+  ok(n1.branch === 'line1-street' && n1.customer.billing_line1 === '1 Oak St' && n1.customer.phone === '(512) 555-0101',
     'N1 — a street in `Line1` is used as it stands, and the record\'s own phone is untouched (962 records)');
 
   const n2 = at({ BillAddr: addr('501 Shadow Glen', '(737) 555-0199'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n2.customer.address_line1 === '501 Shadow Glen',
+  ok(n2.customer.billing_line1 === '501 Shadow Glen',
     '🔴 N2 — THE BLANKET-RULE KILLER, DIRECTION ONE. `Line1` is a street and `Line2` is a PHONE (6 real records). A "Line2 is the street" implementation writes the phone number over a correct street here');
 
   const n3 = at({ BillAddr: addr('1250 W Parmer Ln', 'Bldg 1, Ste 320'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n3.customer.address_line1 === '1250 W Parmer Ln',
+  ok(n3.customer.billing_line1 === '1250 W Parmer Ln',
     '🔴 N3 — `Line2` is READ to choose a line, never APPENDED to one. `customers` has `billing_line2` and the party editor owns it; concatenating here would make this writer disagree with that one (3 real records)');
 
   // ── ③ `Line1` is a phone and `Line2` is the street — the repair ──────────────────────
   const n4 = at({ BillAddr: addr('(254) 555-0142', '2700 Ranch Road'), PrimaryPhone: { FreeFormNumber: '(254) 555-0142' } });
-  ok(n4.branch === 'line2-street' && n4.customer.address_line1 === '2700 Ranch Road',
+  ok(n4.branch === 'line2-street' && n4.customer.billing_line1 === '2700 Ranch Road',
     'N4 — a phone in `Line1` and a street in `Line2`: the STREET is taken from `Line2` (448 records)');
   ok(n4.customer.phone === '(254) 555-0142' && n4.phoneRescued === false,
     '🔴 N4b — the SAME number is already in `PrimaryPhone`, so nothing is rescued and nothing is lost. 474 of the 484 are this case, which is why the repair is cheap');
 
   const n5 = at({ BillAddr: addr('832-555-0177', '2700 Ranch Road') });
-  ok(n5.branch === 'line2-street' && n5.customer.address_line1 === '2700 Ranch Road' && n5.customer.phone === '832-555-0177' && n5.phoneRescued === true,
+  ok(n5.branch === 'line2-street' && n5.customer.billing_line1 === '2700 Ranch Road' && n5.customer.phone === '832-555-0177' && n5.phoneRescued === true,
     '🔴 N5 — KEEP THE PHONE. No `PrimaryPhone` and no `Mobile`, so the `Line1` number is the ONLY one this customer has: it lands in the empty `phone` column rather than being deleted along with the street move (2 real records)');
 
   const n6 = at({ BillAddr: addr('(213) 555-0188', '2700 Ranch Road'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n6.branch === 'phone-would-be-lost' && n6.customer.address_line1 === '(213) 555-0188',
+  ok(n6.branch === 'phone-would-be-lost' && n6.customer.billing_line1 === '(213) 555-0188',
     '🔴 N6 — THE COLLISION, AND THE PHONE WINS. `Line2` holds a street, but `Line1` holds a SECOND, DIFFERENT number and `customers` has one phone column. The record is left EXACTLY as today and counted, because recovering a street by deleting a phone number held nowhere else is not a repair (5 real records)');
   ok(n6.customer.phone === '(512) 555-0101',
-    '🔴 N6b — and the `PrimaryPhone` is NOT displaced by the one in the address. This probe is what a "just discard it" implementation fails: the second number is still on the row, in `address_line1`, where it was');
+    '🔴 N6b — and the `PrimaryPhone` is NOT displaced by the one in the address. This probe is what a "just discard it" implementation fails: the second number is still on the row, in `billing_line1` (was `address_line1`, ledger #335), where it was');
 
   // ── ④ `Line1` is a phone and there is no `Line2` — there is no street ────────────────
   const n7 = at({ BillAddr: addr('(512) 555-0133'), PrimaryPhone: { FreeFormNumber: '(512) 555-0133' } });
-  ok(n7.branch === 'no-street' && n7.customer.address_line1 === null,
-    '🔴 N7 — NOTHING IS INVENTED. A phone in `Line1` and no `Line2` means this customer HAS no street: `address_line1` is NULL, not the phone number and not an empty string (D-9 — an absent value must not read as a present one). 27 records');
+  ok(n7.branch === 'no-street' && n7.customer.billing_line1 === null,
+    '🔴 N7 — NOTHING IS INVENTED. A phone in `Line1` and no `Line2` means this customer HAS no street: `billing_line1` is NULL, not the phone number and not an empty string (D-9 — an absent value must not read as a present one). 27 records');
   const n8 = at({ BillAddr: addr('404 555-0121') });
-  ok(n8.branch === 'no-street' && n8.customer.address_line1 === null && n8.customer.phone === '404 555-0121' && n8.phoneRescued === true,
+  ok(n8.branch === 'no-street' && n8.customer.billing_line1 === null && n8.customer.phone === '404 555-0121' && n8.phoneRescued === true,
     'N8 — and the phone is still kept when there is no street to take at all (2 real records)');
 
   // ── ⑤ every other shape — left EXACTLY as today, and counted ─────────────────────────
   const n9 = at({ BillAddr: addr('(512) 555-0144', '(512) 555-0155') });
-  ok(n9.branch === 'unchanged' && n9.customer.address_line1 === '(512) 555-0144',
+  ok(n9.branch === 'unchanged' && n9.customer.billing_line1 === '(512) 555-0144',
     'N9 — two phones and no street anywhere: left exactly as the previous import left it (3 real records)');
 
   const n10 = at({ BillAddr: addr('(512) 555-0166 (cell 555-0167)', '2600 Round Rock Ave'), PrimaryPhone: { FreeFormNumber: '(512) 555-0101' } });
-  ok(n10.branch === 'unchanged' && n10.customer.address_line1 === '(512) 555-0166 (cell 555-0167)',
+  ok(n10.branch === 'unchanged' && n10.customer.billing_line1 === '(512) 555-0166 (cell 555-0167)',
     '🔴 N10 — THE LIMIT OF THIS PASS, ASSERTED RATHER THAN ASSUMED. `Line1` is a phone WITH extra text, so the classifier answers `other`, and `other` is never a verdict — the record is left alone even though `Line2` plainly holds a street. 6 real records have a recoverable street this rule does NOT reach; widening the classifier is a different change, and this probe is what would break loudly if someone widened it without revisiting these counts');
 
   const n11 = at({ BillAddr: undefined });
-  ok(n11.branch === 'unchanged' && n11.customer.address_line1 === null && n11.customer.city === null,
+  ok(n11.branch === 'unchanged' && n11.customer.billing_line1 === null && n11.customer.billing_city === null,
     'N11 — no `BillAddr` object at all yields no address and no branch decision (499 records)');
 
   // ── the tally: a PARTITION, and a cross-cut that is not part of it ───────────────────
@@ -897,7 +980,7 @@ async function main() {
 
   // The resolver is pure and independently drivable — no record, no adapter, no IO.
   const direct = resolveBillingAddress({ BillAddr: addr('(254) 555-0142', '2700 Ranch Road') }, null);
-  ok(direct.address_line1 === '2700 Ranch Road' && direct.phone_from_line1 === '(254) 555-0142' && direct.branch === 'line2-street',
+  ok(direct.billing_line1 === '2700 Ranch Road' && direct.phone_from_line1 === '(254) 555-0142' && direct.branch === 'line2-street',
     'N18 — `resolveBillingAddress` is pure and takes the held phone as an argument, so every rule above is provable at a desk without building a customer record');
   ok(heldPhoneOf({ Mobile: { FreeFormNumber: '(512) 555-0102' } }) === '(512) 555-0102'
     && heldPhoneOf({ PrimaryPhone: { FreeFormNumber: '(512) 555-0101' }, Mobile: { FreeFormNumber: '(512) 555-0102' } }) === '(512) 555-0101',

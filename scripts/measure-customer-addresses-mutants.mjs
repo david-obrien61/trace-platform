@@ -14,8 +14,16 @@
  *                 form whose result never reaches the truck. That is the LIVE defect this build
  *                 closes, restored exactly; if it survives, the picker is decoration.
  *               · G1 — the save-site gate admits everybody. A gate seen only to admit is not a gate.
- *               · B1 — the book is seeded from history. AGAVE's four spellings of one yard become
- *                 four CURATED sites, and the drift is made permanent instead of fixed.
+ *               · B3 — the book is seeded from DELIVERY HISTORY. AGAVE's four spellings of one yard
+ *                 become four CURATED sites, and the drift is made permanent instead of fixed.
+ *                 This is the hazard `20260911b` §4 named, and it is planted INTO the one file that
+ *                 is permitted to seed — so it can only be caught by the SOURCE rule, not by the
+ *                 declaration (ledger #335, 2026-09-16).
+ *
+ * ✏️ B1 WAS LABELLED AS THAT HAZARD AND DID NOT PLANT IT (corrected 2026-09-16, David). It seeds one
+ *               row per customer from `customers.billing_line1`, which cannot produce four
+ *               spellings of anything. What it actually plants is an UNDECLARED seeder, and that is
+ *               what its label now says.
  *
  * 🔴 THE PROBES WERE WRITTEN ALONGSIDE THE CODE, SO THEIR FIRST GREEN RUN PROVED NOTHING (§6 r19 /
  *               R-33). This is where they are made to refuse.
@@ -43,8 +51,8 @@ const LIB       = 'packages/shared/src/business-logic/customerAddresses.ts';
 // this harness treats that as a failure rather than a pass. A mutant that cannot land proves nothing.
 const FIELDS    = 'packages/shared/src/business-logic/customerAddressFields.ts';
 const MIGRATION = 'supabase/migrations/20260911b_customer_addresses.sql';
+const CONTACT_MIGRATION = 'supabase/migrations/20260915_contact_record.sql';
 const SUBMIT    = 'packages/cultivar-os/api/orders/submit.ts';
-const CARD      = 'packages/cultivar-os/src/components/delivery/StopCard.tsx';
 const ACTIONS   = 'packages/cultivar-os/src/components/delivery/useStopActions.tsx';
 const PICKER    = 'packages/shared/src/components/customers/ShipToPicker.tsx';
 const CAPTURE   = 'packages/cultivar-os/src/pages/CustomerCapture.tsx';
@@ -52,9 +60,12 @@ const CAPTURE   = 'packages/cultivar-os/src/pages/CustomerCapture.tsx';
 const UNIT      = 'packages/shared/src/business-logic/customerAddresses.test.ts';
 const SURFACES  = 'packages/cultivar-os/src/lib/shipToSurfaces.test.ts';
 const CHECKOUT  = 'packages/cultivar-os/api/orders/checkoutDelivery.test.ts';
+// Added 2026-09-16 (ledger #335): the seed rule is asserted in TWO places — §F across the corpus,
+// §H inside the contact-record migration — and a mutant aimed at §H is measured only if §H runs.
+const CONTACT   = 'packages/shared/src/business-logic/contactRecord.test.ts';
 
-/** A mutant is CAUGHT when ANY of the three suites goes red — they are one net, not three. */
-const SUITES = [UNIT, SURFACES, CHECKOUT];
+/** A mutant is CAUGHT when ANY of the four suites goes red — they are one net, not four. */
+const SUITES = [UNIT, SURFACES, CHECKOUT, CONTACT];
 
 function suiteIsGreen(suite) {
   try {
@@ -69,8 +80,10 @@ const MUTANTS = [
   // ══ THE SNAPSHOT — the invariant D-41 ruled ═════════════════════════════════════════════════
   { id: 'C1', target: SUBMIT,
     why: '🔴 THE LIVE DEFECT RESTORED — the stop is addressed from the CUSTOMER RECORD again, so a chosen or typed ship-to never reaches the truck and the picker is decoration',
-    from: '    address_line1: shipTo ? shipTo.address_line1 : pick(c.billing_line1, c.address_line1),',
-    to:   '    address_line1: pick(c.billing_line1, c.address_line1),' },
+    // ✏️ RETARGETED 2026-09-16: the #335 repoint replaced `pick(c.billing_line1, c.address_line1)` with
+    // `billTo.billing_line1`, and this mutant stopped applying — reported ERROR, never CAUGHT (#182).
+    from: '    address_line1: shipTo ? shipTo.address_line1 : billTo.billing_line1,',
+    to:   '    address_line1: billTo.billing_line1,' },
   { id: 'C2', target: SUBMIT,
     why: '🔴 a street-less ship-to is merged FIELD BY FIELD over the customer\'s — a street from one place in a city from another, which is how an address stops being one fact',
     from: '  const shipTo = st && shipField(st.line1)\n    ? { address_line1: shipField(st.line1), city: shipField(st.city), state: shipField(st.state), zip: shipField(st.zip) }\n    : null;',
@@ -82,9 +95,26 @@ const MUTANTS = [
 
   // ══ NO BACKFILL — §4 of the migration ══════════════════════════════════════════════════════
   { id: 'B1', target: MIGRATION,
-    why: '🔴 THE BOOK IS SEEDED FROM HISTORY — AGAVE\'s four spellings of one yard become four CURATED sites and the drift is permanent instead of fixed',
+    why: 'an UNDECLARED migration seeds the book — one row per customer, from `customers.billing_line1`, in a file no declaration permits (the rule a seeder must be NAMED)',
     from: 'COMMIT;\n\n-- ═════',
     to:   "INSERT INTO public.customer_addresses (business_id, customer_id, label, line1)\n  SELECT business_id, id, 'Imported', billing_line1 FROM public.customers WHERE billing_line1 IS NOT NULL;\n\nCOMMIT;\n\n-- ═════" },
+  // ══ HISTORY IS NEVER THE SOURCE — the rule §4 actually made (ledger #335) ══════════════════
+  { id: 'B3', target: CONTACT_MIGRATION,
+    why: '🔴 THE BOOK IS SEEDED FROM DELIVERY HISTORY — AGAVE\'s four spellings of one yard become four CURATED sites and the drift is permanent. Planted in the DECLARED seeder, so only the source rule can see it',
+    from: "INSERT INTO public.customer_addresses\n  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)\nSELECT c.business_id, c.id, 'Billing', 'billing',\n       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),\n       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),\n       true, 'migrated:customers.billing_*', true\n  FROM public.customers c",
+    to:   "INSERT INTO public.customer_addresses\n  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)\nSELECT DISTINCT d.business_id, d.customer_id, d.address_line1, 'shipping', d.address_line1, d.city, d.state, d.zip, false, 'history', true\n  FROM public.deliveries d\n WHERE d.customer_id IS NOT NULL;\n\nINSERT INTO public.customer_addresses\n  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)\nSELECT c.business_id, c.id, 'Billing', 'billing',\n       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),\n       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),\n       true, 'migrated:customers.billing_*', true\n  FROM public.customers c" },
+  { id: 'B4', target: CONTACT_MIGRATION,
+    why: '🔴 the seed still reads FROM customers but JOINS delivery history — a FROM-clause check alone would pass it',
+    from: "  FROM public.customers c\n WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR",
+    to:   "  FROM public.customers c\n  JOIN public.deliveries d ON d.customer_id = c.id\n WHERE (COALESCE(btrim(c.billing_line1), '') <> '' OR" },
+  { id: 'B5', target: CONTACT_MIGRATION,
+    why: '🔴 only the address is seeded — the sync then blanks every customer\'s PHONE on the first list write, the same defect one field over',
+    from: "INSERT INTO public.customer_phones\n  (business_id, customer_id, label, value, is_primary, source, active)\nSELECT",
+    to:   "-- the phone list is left for the import to fill\nSELECT" },
+  { id: 'B6', target: CONTACT_MIGRATION,
+    why: '🔴 the sync trigger is created BEFORE the seed — every seeded row recomputes the flat columns while the other two lists are still empty',
+    from: "INSERT INTO public.customer_addresses\n  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)\nSELECT c.business_id, c.id, 'Billing', 'billing',\n       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),\n       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),\n       true, 'migrated:customers.billing_*', true\n  FROM public.customers c",
+    to:   "CREATE TRIGGER trg_customer_phones_sync AFTER INSERT ON public.customer_phones\n  FOR EACH ROW EXECUTE FUNCTION public.trg_sync_customer_flat_contact();\n" + "INSERT INTO public.customer_addresses\n  (business_id, customer_id, label, kind, line1, city, state, zip, is_default, source, active)\nSELECT c.business_id, c.id, 'Billing', 'billing',\n       NULLIF(btrim(c.billing_line1), ''), NULLIF(btrim(c.billing_city), ''),\n       NULLIF(btrim(c.billing_state), ''), NULLIF(btrim(c.billing_zip),  ''),\n       true, 'migrated:customers.billing_*', true\n  FROM public.customers c" },
   { id: 'B2', target: LIB,
     why: 'the module starts reading `customers` — the first step towards deriving a book from history rather than from what somebody chose',
     from: "    .from('customer_addresses')\n    .select(CUSTOMER_ADDRESS_COLUMNS)",
@@ -125,10 +155,12 @@ const MUTANTS = [
     why: 'a duplicate LABEL reaches the database, so the person meets a Postgres unique-violation string instead of a sentence',
     from: "  const labelTaken = x.existing.some(s => s.active && s.label.trim().toLowerCase() === label.toLowerCase());",
     to:   '  const labelTaken = false;' },
-  { id: 'S5', target: CARD,
+  // ✏️ S5 and G3 RETARGETED 2026-09-16: #304/#308 moved the offer out of StopCard.tsx into
+  // useStopActions.tsx, and both mutants had reported ERROR — never applied — since then.
+  { id: 'S5', target: ACTIONS,
     why: '🔴 the offer appears on every card whether or not an address was saved — population stops being a by-product and becomes a nag',
-    from: '    if (canSaveSite) { setSiteNote(null); setSiteOffer({ label: \'\' }); }',
-    to:   '    if (canSaveSite) { setSiteNote(null); }' },
+    from: "    if (out.kind === 'saved') {\n      // Raised BEFORE the refresh",
+    to:   "    if (true) {\n      // Raised BEFORE the refresh" },
 
   // ══ THE WRITE IS PROVEN BY THE COUNT (R-12 / A8) ═══════════════════════════════════════════
   { id: 'W1', target: LIB,
@@ -157,10 +189,10 @@ const MUTANTS = [
     why: 'the gate widens to a string STAFF already hold, which reads like a gate and refuses nobody',
     from: "    if (!can('customers:create')) return { kind: 'refused', reason: requirementText('customers:create') };",
     to:   "    if (!can('customers:read')) return { kind: 'refused', reason: requirementText('customers:read') };" },
-  { id: 'G3', target: CARD,
+  { id: 'G3', target: ACTIONS,
     why: 'the card offers the button to somebody the action will refuse — a dead affordance, which is not a fix',
-    from: "  const canSaveSite = can('customers:create') && !!d.customer_id;",
-    to:   '  const canSaveSite = true;' },
+    from: "      if (can('customers:create') && d.customer_id) {",
+    to:   '      if (d.customer_id) {' },
   { id: 'G4', target: MIGRATION,
     why: '🔴 the SELECT policy drops its permission check — every active member of the tenant reads the book regardless of what they hold',
     from: "  USING (public.is_active_member(business_id) AND public.has_permission(business_id, 'customers:read'));",

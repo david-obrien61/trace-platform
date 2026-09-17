@@ -53,7 +53,7 @@ export interface StopRow {
   review_ask_outcome: string | null;
   customers: {
     first_name: string; last_name: string; phone: string | null; email: string | null;
-    address_line1: string | null; city: string | null; state: string | null; zip: string | null;
+    billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null;
   } | null;
 }
 
@@ -76,7 +76,10 @@ export interface StopRead {
 // The customer join is WIDE on purpose: the "Edit customer" affordance opens the full record, and the
 // billing columns tell the card nothing it should render as the ship-to (that is on the stop).
 const CUSTOMER_JOIN =
-  'customers ( first_name, last_name, phone, email, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip )';
+  // ✏️ THE LEGACY FOUR ARE GONE FROM THIS JOIN (ledger #335). They were carried beside the
+  // `billing_*` four so a reader could fall back; there is one column set now, so there is
+  // nothing to fall back to and nothing that could disagree.
+  'customers ( first_name, last_name, phone, email, billing_line1, billing_city, billing_state, billing_zip )';
 const STOP_COLS_CORE =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, ${CUSTOMER_JOIN}`;
 const STOP_COLS_FULL =

@@ -71,6 +71,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPushHeld } from './pushHold';
 import { pushPermitted } from '../business-logic/testMode';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { removeRunContactRows, runCustomersWithHandAddedContacts, writeContactRecords } from '../business-logic/contactWriter';
 import {
   CUSTOMER_IMPORT_SOURCE, type AddressResolutionTally, type AdaptedCustomer,
   type CustomerAdaptation, type DuplicateFlag,
@@ -141,6 +143,8 @@ export interface CustomerRunReport extends Omit<CustomerPlanReport, 'wrote' | 'o
   runId: string;
   created: number;
   reconciled: number;
+  /** The contact rows written for the CREATED customers, all tagged with this run (ledger #335). */
+  contacts: { phones: number; emails: number; addresses: number; notTaken: number };
   /** Re-read AFTER the write, so the number is observed rather than predicted. */
   customersAfter: number;
   stampedWithThisRun: number;
@@ -160,7 +164,7 @@ export interface CustomerUndoReport {
    * no silent damage. But RESTRICT ERRORS rather than degrading, so the undo has to expect it and
    * report it, not die on it.
    */
-  blocked: { customerId: string; displayName: string; orders: number }[];
+  blocked: { customerId: string; displayName: string; orders: number; handAddedContacts?: number }[];
   /**
    * ⚠️ THE OTHER FK BEHAVES DIFFERENTLY AND IT IS COUNTED RATHER THAN ASSUMED HARMLESS.
    * `deliveries.customer_id` is **ON DELETE SET NULL** (`20260620_deliveries.sql:28`), so a
@@ -182,9 +186,9 @@ export interface CustomerUndoReport {
 export const CUSTOMER_INSERT_COLUMNS = [
   'business_id', 'qb_customer_id', 'import_run_id', 'source',
   'display_name', 'customer_type', 'first_name', 'last_name', 'organization_name',
-  'email', 'phone',
-  'address_line1', 'city', 'state', 'zip',
-  'billing_line1', 'billing_city', 'billing_state', 'billing_zip',
+  // ✏️ THE LEGACY FOUR ARE GONE (ledger #335), AND SO ARE `email`, `phone` AND `billing_*`
+  // (2026-09-16): those are DERIVED from the contact lists and the database refuses a direct write.
+  // The import writes them as list rows — `writeContactRecords`, tagged with this run.
   'tax_exempt', 'tax_exempt_reason', 'tax_exempt_cert_ref',
   'notes',
 ] as const;
@@ -210,16 +214,6 @@ export function rowForCustomer(businessId: string, runId: string, c: AdaptedCust
     first_name: c.first_name,
     last_name: c.last_name,
     organization_name: c.organization_name,
-    email: c.email,
-    phone: c.phone,
-    address_line1: c.address_line1,
-    city: c.city,
-    state: c.state,
-    zip: c.zip,
-    billing_line1: c.address_line1,
-    billing_city: c.city,
-    billing_state: c.state,
-    billing_zip: c.zip,
     tax_exempt: c.tax_exempt,
     tax_exempt_reason: c.tax_exempt_reason,
     tax_exempt_cert_ref: c.tax_exempt_cert_ref,
@@ -331,12 +325,25 @@ export async function commitCustomerImport(
   const { create, reconcile } = partition(adaptation.customers, held);
 
   let created = 0;
+  const contactEntries: { customerId: string; record: AdaptedCustomer['contact'] }[] = [];
+  const byQbId = new Map(create.map(c => [c.qb_customer_id, c]));
   for (let i = 0; i < create.length; i += CUSTOMER_INSERT_BATCH) {
     const batch = create.slice(i, i + CUSTOMER_INSERT_BATCH).map(c => rowForCustomer(businessId, runId, c));
-    const { error } = await db.from('customers').insert(batch);
+    const { data, error } = await db.from('customers').insert(batch).select('id, qb_customer_id');
     if (error) throw new Error(`customer insert failed at row ${i}: ${error.message}`);
     created += batch.length;
+    for (const row of (data ?? []) as { id: string; qb_customer_id: string }[]) {
+      const c = byQbId.get(String(row.qb_customer_id));
+      if (c) contactEntries.push({ customerId: row.id, record: c.contact });
+    }
   }
+
+  // 🔴 #335: every phone, email and address of the NEW customers, as list rows tagged with this run
+  // so the undo takes them with their customer. Existing (reconciled) customers are not touched —
+  // an existing row receives the exemption and nothing else (header).
+  const contactOut = await writeContactRecords(db as unknown as SupabaseClient, businessId, contactEntries, runId);
+  if (!contactOut.ok) throw new Error(`contact details not saved: ${contactOut.error} — the customers were created; undo this run to remove them`);
+  const contacts = { ...contactOut.landed, notTaken: contactOut.notTaken.length };
 
   let reconciled = 0;
   for (const c of reconcile) {
@@ -368,7 +375,7 @@ export async function commitCustomerImport(
   // Observed, not predicted — the run re-reads what it claims to have done.
   const customersAfter = await countCustomers(db, businessId);
   const stampedWithThisRun = await countStamped(db, businessId, runId);
-  console.log('[TRACE:CUSTIMPORT] commit', { businessId, runId, created, reconciled, customersAfter, stampedWithThisRun });
+  console.log('[TRACE:CUSTIMPORT] commit', { businessId, runId, created, reconciled, customersAfter, stampedWithThisRun, contacts });
 
   // 🔴 `ok` IS COMPUTED FROM WHAT CAME BACK OUT OF THE TABLE, NEVER SPREAD IN FROM THE PLAN.
   // `stampedWithThisRun` was re-read after the write; `created` is what we believe we sent. If a
@@ -377,8 +384,8 @@ export async function commitCustomerImport(
   const { ok: _planOk, wrote: _planWrote, ...planRest } = plan;
   return {
     ...planRest,
-    ok: stampedWithThisRun === created,
-    wrote: true, runId, created, reconciled, customersAfter, stampedWithThisRun,
+    ok: stampedWithThisRun === created && contactEntries.length === created,
+    wrote: true, runId, created, reconciled, customersAfter, stampedWithThisRun, contacts,
   };
 }
 
@@ -560,10 +567,22 @@ export async function undoCustomerImport(
     deliveriesUnlinked += ((d.data ?? []) as unknown[]).length;
   }
 
+  // 🔴 #335: a contact row a PERSON added (no run tag) makes its customer live — the same rule as
+  // `undo_import_run` (20260916d). Such a customer is blocked and named, never silently emptied.
+  const hand = await runCustomersWithHandAddedContacts(db as unknown as SupabaseClient, businessId, runId, ids);
+  if (!hand.ok) throw new Error(`could not read contact rows: ${hand.error}`);
+
   // Skip the ones we already know Postgres will refuse — a delete we know will error is not worth
   // issuing. The per-row fallback below still catches any order that lands after this read.
-  const knownBlocked = new Set([...orderCount.keys()]);
+  const knownBlocked = new Set([...orderCount.keys(), ...hand.counts.keys()]);
   const attempt = ids.filter(id => !knownBlocked.has(id));
+
+  // The run's own contact rows go first: `customer_addresses` is ON DELETE RESTRICT.
+  // ⚠️ Not one transaction with the delete below (this route is PostgREST). An order landing between
+  // the read above and the delete leaves that customer with its contact rows removed — the
+  // books-undo route (`undo_import_run`, 20260916c/d) is the all-or-nothing path.
+  const removedContacts = await removeRunContactRows(db as unknown as SupabaseClient, businessId, runId, attempt);
+  if (!removedContacts.ok) throw new Error(`undo failed removing contact rows: ${removedContacts.error}`);
 
   const { deleted, refused } = await deleteCustomerIds(db, businessId, attempt);
   for (const id of refused) knownBlocked.add(id);
@@ -572,6 +591,7 @@ export async function undoCustomerImport(
     customerId: id,
     displayName: nameOf.get(id) ?? '(unnamed)',
     orders: orderCount.get(id) ?? 0,
+    handAddedContacts: hand.counts.get(id) ?? 0,
   }));
 
   // 🔴 THE RE-READ IS THE PROOF, NOT THE ROW COUNT. A PostgREST delete an RLS policy declines
@@ -590,10 +610,12 @@ export async function undoCustomerImport(
       ? (ok ? null : `The database declined the delete: ${remaining} rows still carry this run id `
           + 'and no foreign key explains it. Nothing further was attempted. This is a permissions '
           + 'refusal, not an empty undo.')
-      : `${blocked.length} customer(s) could not be removed because they carry orders — the `
-        + 'database refuses to delete a customer an order points at (ON DELETE RESTRICT), which is '
-        + 'the protection working, not a fault. Everything else this run created was removed. To '
-        + 'clear these, the orders have to go first, and that is a separate decision.',
+      : `${blocked.length} customer(s) could not be removed because they carry orders, or a phone, `
+        + 'email or address someone added after the import — the database refuses to delete a '
+        + 'customer an order points at (ON DELETE RESTRICT), and the undo will not delete what a '
+        + 'person typed. That is the protection working, not a fault. Everything else this run '
+        + 'created was removed. To clear these, the orders or hand-added details have to go first, '
+        + 'and that is a separate decision.',
   };
 }
 

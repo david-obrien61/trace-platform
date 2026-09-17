@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260916a — IN TEST MODE, NOTHING REACHES THE STOCK LEDGER · ledger #344
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it TONIGHT, as `postgres`, in the SQL EDITOR (§6 r17).
+-- ✅ APPLIED 2026-09-16 BY DAVID (V1: trigger enabled · V2: rows written = 0).
 --    STANDALONE: it depends on no unmerged branch and no other 20260916 file. Apply it on its own.
 --
 -- ── WHY ─────────────────────────────────────────────────────────────────────────────────────

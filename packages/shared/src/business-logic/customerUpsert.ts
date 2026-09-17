@@ -5,8 +5,9 @@
  *              business. Extracted from api/orders/submit.ts (cart checkout) so it can be
  *              called WITHOUT an order — e.g. when an OCR'd invoice surfaces a customer.
  * DEPENDENCIES A supabase client passed in (service-key admin in current callers); the
- *              `customers` table (business_id, first/last_name, email, phone, address_line1,
- *              city, state, zip, marketing_opt_in, source). No DB client constructed here.
+ *              `customers` table (business_id, first/last_name, marketing_opt_in, source, …) and,
+ *              for phone / email / billing address, `contactWriter.writeContactEdit` — those
+ *              three are list rows now (ledger #335). No DB client constructed here.
  * OUTPUTS      { customerId, created } — created:true = inserted, false = matched by email.
  * CALLERS      api/orders/submit.ts (source='qr-scan'), api/customers/create.ts ('ocr-invoice').
  */
@@ -29,6 +30,7 @@
 // invoice capture), mirroring the existing column convention.
 
 import { findOrCreatePerson } from './personUpsert';
+import { writeContactEdit, type ContactEdit } from './contactWriter';
 
 export interface CustomerInput {
   first_name: string;
@@ -36,10 +38,10 @@ export interface CustomerInput {
   customer_type?: 'person' | 'organization' | null; // default 'person'; 'organization' skips the people link
   email?: string | null;
   phone?: string | null;
-  address_line1?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
+  billing_line1?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  billing_zip?: string | null;
   marketing_opt_in?: boolean | null;
   /**
    * The id QuickBooks itself assigned to this customer. ADDED 2026-08-31 for the ShipDate
@@ -145,23 +147,27 @@ export async function findOrCreateCustomer(
   //       the capture path earning its keep. Overwriting a curated value is the failure.
   //       EXCEPTION, ONE FIELD, BY NAME (2026-08-25): `email` is SUPPLIED-WINS — see SUPPLIED_WINS
   //       below. A blank email still cannot clobber, because a blank never reaches the payload.
-  //   (c) CANONICAL + MIRROR — billing_* is the home; the legacy four are written alongside it,
-  //       exactly as the party editor does, so the two column sets cannot diverge at the source.
+  //   ✏️ (c) IS RETIRED (ledger #335). It read: *"CANONICAL + MIRROR — billing_* is the home; the
+  //       legacy four are written alongside it … so the two column sets cannot diverge at the
+  //       source."* There is now ONE column set. `billing_*` is derived from `customer_addresses`
+  //       by a database trigger, so it cannot diverge from anything, by construction rather than
+  //       by every writer remembering to write both.
   // ─────────────────────────────────────────────────────────────────────────────────────────────
   const given = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== '';
 
-  // legacy column → its canonical billing twin (D-41). Both are written, always together.
-  const CANONICAL: Record<string, string> = {
-    address_line1: 'billing_line1', city: 'billing_city', state: 'billing_state', zip: 'billing_zip',
-  };
+  // ✏️ THE `CANONICAL` MAP IS GONE (ledger #335), AND IT IS THE REASON THIS BUILD USED A TRIGGER.
+  // It mapped each legacy column to its `billing_*` twin so both could be written together — an
+  // application-level mirror, and it was the SECOND hand-maintained copy of that mapping: the
+  // first was `CUSTOMER_BILLING_MIRROR` in `customerFieldRegistry.ts`, pointing the other way.
+  // Two copies of one fact (STD-011), across four independent writers. The legacy columns are
+  // dropped and `billing_*` is derived from the address list by a database trigger, so there is
+  // one author and nothing to keep in step.
 
-  /** Only what the caller actually supplied — rule (a). Each address field carries its twin — (c). */
+  /** Only what the caller actually supplied — rule (a). */
   const supplied: Record<string, unknown> = {};
   const offer = (col: string, v: unknown) => {
     if (!given(v)) return;                       // (a) absent ≠ empty — omit, never null
     supplied[col] = typeof v === 'string' ? v.trim() : v;
-    const canon = CANONICAL[col];
-    if (canon) supplied[canon] = supplied[col];  // (c) canonical + mirror, written together
   };
   offer('first_name', customer.first_name);
   offer('last_name',  customer.last_name);
@@ -171,12 +177,29 @@ export async function findOrCreateCustomer(
   // EXISTING one never did. Measured: customer 0ee368fe (Diane Foster) — email '' after a checkout
   // that typed one and SENT the invoice to it, `updated_at` stamped the same second as the order,
   // `billing_*` filled correctly. The row was written; this one field was not in the payload.
-  offer('email',      customer.email);
-  offer('phone',      customer.phone);
-  offer('address_line1', customer.address_line1);
-  offer('city',  customer.city);
-  offer('state', customer.state);
-  offer('zip',   customer.zip);
+  // 🔴 LEDGER #335 — THE CONTACT FIELDS NO LONGER GO ON THE CUSTOMER ROW. `customers.phone`,
+  // `email` and `billing_*` are DERIVED from the contact lists, and the database refuses a direct
+  // write. They are gathered into `contactEdit` and written through `writeContactEdit` once the
+  // customer id is known — with THIS file's two rules carried over as POLICIES:
+  //   · phone and billing: FILL, NEVER CLOBBER → 'add' / 'fill'. A different phone from a counter
+  //     checkout is now KEPT as a second number rather than dropped; the one on file stays primary.
+  //   · email: SUPPLIED WINS → 'primary'. The typed address becomes the one invoices go to; the
+  //     old one stays on file, demoted, instead of being overwritten.
+  // A blank still never reaches the edit — `given()` is the same gate as before.
+  const contactEdit: ContactEdit = {};
+  if (given(customer.phone)) contactEdit.phone = String(customer.phone).trim();
+  if (given(customer.email)) contactEdit.email = String(customer.email).trim();
+  const billing: NonNullable<ContactEdit['billing']> = {};
+  if (given(customer.billing_line1)) billing.line1 = String(customer.billing_line1).trim();
+  if (given(customer.billing_city))  billing.city  = String(customer.billing_city).trim();
+  if (given(customer.billing_state)) billing.state = String(customer.billing_state).trim();
+  if (given(customer.billing_zip))   billing.zip   = String(customer.billing_zip).trim();
+  if (Object.keys(billing).length > 0) contactEdit.billing = billing;
+  const writeContacts = async (customerId: string) => {
+    const out = await writeContactEdit(db, businessId, customerId, contactEdit,
+      { phone: 'add', email: 'primary', billing: 'fill', source });
+    if (!out.ok) throw new Error(`Customer contact details not saved: ${out.error}`);
+  };
   offer('qb_customer_id', customer.qb_customer_id);
   if (customer.marketing_opt_in !== undefined) supplied.marketing_opt_in = customer.marketing_opt_in;
   if (personId) supplied.person_id = personId;
@@ -226,16 +249,16 @@ export async function findOrCreateCustomer(
     if (data && data.length > 0) existingId = data[0].id;
   } else if (!existingId && isOrg) {
     const nameKey = normalizeMatchKey(customer.first_name);       // org name lives in first_name
-    const billKey = normalizeMatchKey(customer.address_line1);    // BILLING address
+    const billKey = normalizeMatchKey(customer.billing_line1);    // BILLING address
     if (nameKey && billKey) {
       // Business-scoped org rows only. A column-absent error (pre-20260702 deploy window) simply
       // yields no data → no match → email/create fallthrough, never a throw (rule 6).
       const { data } = await db
-        .from('customers').select('id, first_name, address_line1')
+        .from('customers').select('id, first_name, billing_line1')
         .eq('business_id', businessId).eq('customer_type', 'organization');
       const match = (data ?? []).find((r: any) =>
         normalizeMatchKey(r.first_name) === nameKey &&
-        normalizeMatchKey(r.address_line1) === billKey);
+        normalizeMatchKey(r.billing_line1) === billKey);
       if (match) {
         existingId = match.id;
         console.log('[TRACE:PERSON] resolve: matched organization by name+billing', {
@@ -260,8 +283,7 @@ export async function findOrCreateCustomer(
   if (existingId) {
     // (b) FILL, NEVER CLOBBER — read the stored row and keep only the fields that are blank there.
     // A customer curated on /customers is never overwritten by a later counter checkout.
-    const FILLABLE = ['first_name', 'last_name', 'phone', 'address_line1', 'city', 'state', 'zip',
-                      'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in',
+    const FILLABLE = ['first_name', 'last_name', 'marketing_opt_in',
                       // FILL, NEVER CLOBBER applies to the QuickBooks link too: a customer already
                       // bound to a QBO id keeps that binding. Re-pointing an existing customer at a
                       // different QuickBooks record is how invoices start reaching the wrong person.
@@ -278,7 +300,9 @@ export async function findOrCreateCustomer(
     // ⚠️ THE SAFETY THIS DEPENDS ON IS `offer()`, NOT THIS LINE: a blank/whitespace email fails
     // `given()` and never reaches `fields`, so "supplied wins" can only ever be reached by a value
     // someone actually typed. EMPTY INPUT CANNOT BLANK A STORED EMAIL — omission, not a null write.
-    const SUPPLIED_WINS = ['email'];
+    // ✏️ #335: email's supplied-wins now lives in the contact edit's 'primary' policy (above). The
+    // list stays, empty, so the rule has a named home if a customer column ever needs it again.
+    const SUPPLIED_WINS: string[] = [];
     let stored: Record<string, unknown> = {};
     {
       const { data } = await db.from('customers').select(FILLABLE.join(',')).eq('id', existingId).maybeSingle();
@@ -293,6 +317,7 @@ export async function findOrCreateCustomer(
     }
     if (Object.keys(patch).length === 0) {
       console.log('[TRACE:PERSON] link: existing customer already complete — nothing to fill', { customerId: existingId, businessId, source });
+      await writeContacts(existingId);
       return { customerId: existingId, created: false };
     }
     const filled = Object.keys(patch).filter(k => k !== 'customer_type' && k !== 'person_id');
@@ -317,13 +342,15 @@ export async function findOrCreateCustomer(
     if (!updErr && updRows?.length !== 1) {
       throw new Error(`Customer: the fill did not affect exactly one row (${existingId}, matched ${updRows?.length ?? 0}).`);
     }
+    await writeContacts(existingId);
     console.log('[TRACE:PERSON] link: customer resolved to existing row', {
       customerId: existingId, personId, businessId, source, isOrg,
     });
     return { customerId: existingId, created: false };
   }
 
-  const insertRow = { business_id: businessId, email: customer.email ?? null, source, ...insertDefaults, ...fields };
+  // #335: no `email` here any more — the contact lists hold it, written just below.
+  const insertRow = { business_id: businessId, source, ...insertDefaults, ...fields };
   let { data: newCustomer, error: custErr } = await db
     .from('customers').insert(insertRow).select('id').single();
   if (custErr && isMissingCustomerTypeColumn(custErr)) {
@@ -333,6 +360,7 @@ export async function findOrCreateCustomer(
   }
 
   if (custErr) throw new Error(`Customer: ${custErr.message}`);
+  await writeContacts(newCustomer!.id);
   console.log('[TRACE:PERSON] link: new customer created', {
     customerId: newCustomer!.id, personId, businessId, source, isOrg,
   });

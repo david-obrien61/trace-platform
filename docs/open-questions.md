@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-16** (ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
+**Last updated: 2026-09-16** (ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -84,6 +84,25 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 ## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#342 — during testing nothing writes the record; practice orders go with their import (build + migrations written, none applied)**
+- ✅ **ANSWERED 2026-09-16 — THE DISCOVERY FILE WAS RUN** (read-only, by Thunder). 7c found zero seed rows, so `20260916_rehearsal_cleanup_lawns.sql` is **not applied** and removed; the targeted `20260916e` replaces it. Owner: ledger #342 row.
+- 🔴 **OPEN — ORDER `6a60a0ca` IS HELD.** What removes it, and its four ledger rows, waits on discovery 2a–2c and 7. Owner: ledger #342 Blocker.
+- 🟡 **OPEN — RULING ③: SNAPSHOT-AND-REATTACH OR KEEP-AND-REUSE?** The draft is `20260916b` (raises on apply). Owner: that file's header.
+- 🟡 **OPEN — WHO WRITES THE OPENING LINE AT SWITCH-ON?** Nothing does. Owner: tech-debt **#308**.
+- 🟡 **OPEN — RATIFY FIVE DECLARED WRITE PATHS** (the one-unit undo on orders, order_items, deliveries, compliance records, service selections; the test-mode seed on business_inventory). Owner: `scripts/verify-write-paths.mjs`.
+- 🟡 **OPEN — SHOULD AN OPEN TEST ORDER STILL LOWER *AVAILABLE*?** `fetchCommittedByLot` does not filter `order_kind`. Owner: `packages/cultivar-os/src/lib/inventoryStates.ts`.
+- 🟡 **OPEN — SIX NON-ORDER LEDGER WRITERS STILL WRITE IN TEST MODE** (desk edit/delete, count walk, reconcile, CSV import, discovery re-scan, d52 script). Reported, unchanged. Owner: ledger #342 §1g.
+- 🟡 **OPEN — PGlite AS A DEV DEPENDENCY**, so SQL functions run inside `verify`? Owner: `scripts/sql-harness/rehearsal-342.pglite.mjs` header.
+- ✏️ **CORRECTION TO CARRY — #337's GATE 2 WAS NEVER MERGED; `main` SAID IT WAS.** Owner: tech-debt **#304**.
+- ✏️ **DISCLOSED — YOUR UNCOMMITTED REVERSAL MIGRATION WAS NOT READ**; the cleanup matches it structurally.
+
+**#335 — the contact record: the customer as one identity with lists of phones, emails and addresses (build · HELD for CARD 4)**
+- 🔴 **OPEN — CARD 4, THEN THE MERGE.** The branch is held until CARD 4 shows the database trigger fills the customer's phone from the list. **The three migrations are applied BEFORE the merge, in this order:** ① `20260915_backfill_legacy_customer_address.sql` → ② `20260915_contact_record.sql` → ③ `20260915b_drop_legacy_customer_address.sql`. None is applied (measured live 2026-09-16). ② reads only `billing_*`, so a value still in the old columns when ② runs never reaches the list and ③ destroys it — hence ① first. → CLAUDE.md §3 #335
+- 🔴 **OPEN — YOUR CALL BEFORE THE MERGE: MAY THE IMPORT RETIRE A SEEDED ADDRESS?** **464 LAWNS customers have their phone number as their billing street** (measured live — not 5). ② copies that into a default "Billing" row. When QuickBooks now resolves a real street, the import marks that seeded row inactive (never deletes it) and makes the real street the default. Rows you or Lauren typed, and rows an earlier import wrote, are never touched. The alternative keeps the phone as the default street for all 464. → tech-debt **#306**
+- 🔴 **OPEN — WHO WIRES THE IMPORT TO THE CONTACT WRITER?** Nothing calls it today, so CARDS 7, 8, 9, 12 and the LAWNS import cannot be run through any screen. #306's fix is proven by tests only. → ledger #335
+- ✅ **ANSWERED BY MEASUREMENT, NOT BY CHOICE — HOW THE IMPORT SKIPS A NUMBER IT ALREADY HAS (#306).** The instruction was `onConflict` naming the real unique key. Measured on a real Postgres engine: that is refused on every call (42P10), because every unique key here is partial; the old write raised 23505 on a re-import. The writer now reads first and inserts only what is new; the indexes stay as the backstop. → tech-debt **#306**
+- 🟡 **OPEN — tech-debt #305:** the legacy-address guard is blind to a DISAGREEING pair (one Test Dave's row, ruled harmless). → tech-debt **#305**
 
 **#341 — the preview read asks QuickBooks for inactive records and five transaction types (build + projection)**
 - 🔴 **OPEN — PRESS PREVIEW YOUR BOOKS ON THE MERGED BUILD.** That press is step ②. Nothing local could run it: the root `.env.local` holds empty strings, a deny rule refused `packages/cultivar-os/.env.local`, and LAWNS's expired token meant any pull would write a rotated one. Then books-read CARDS 19 and 20. Owner: `docs/owner-tests/quickbooks-books-read-full-surface-test.md`.

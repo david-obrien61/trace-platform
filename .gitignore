@@ -56,3 +56,8 @@ data/grower-scan/*.csv
 # secrets-bearing directory is a rule somebody will widen by accident. The whole directory is
 # excluded; the rollback's content is reproduced in the close-out ledger row where it is needed.
 docs/snapshots/
+
+# Customer PERSONAL DATA — snapshots, restore and reload files for live tenants. NEVER COMMIT.
+# Added 2026-09-16 (#335, the LAWNS snapshot → migrate → reload). These files hold real
+# names, phones, emails and street addresses; the repo is read by family and by every clone.
+supabase/local-data/

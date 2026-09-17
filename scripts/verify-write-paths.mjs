@@ -139,6 +139,65 @@ const ALLOWED_DIVERGENCE = {
   // ⚠️ BOTH WRITES ARE REAL — they are not tech-debt #185's shape (a declared writer that writes
   //    nothing). `campaignLifecycle.test.ts` §F12 asserts both call `.maybeSingle()` and surface a
   //    'did not save' message, which is only meaningful because the writes exist.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // DECLARED 2026-09-15 (the contact record — the vCard shape, ledger #335). ONE table, ONE file.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 TWO GENUINELY DIFFERENT OPERATIONS, AND THE DIFFERENCE IS WHO IS STANDING THERE.
+  //    `customerAddresses.ts` is the INTERACTIVE save: one site, typed by a person, planned by
+  //    `planSaveSite`, which refuses a duplicate LABEL in a sentence written for Lauren ("This
+  //    customer already has a site called X. Pick another name.") and returns a `SavePlan` the UI
+  //    renders. `contactWriter.ts` is the BULK IMPORT: up to three rows per customer across ~1,900
+  //    customers, where a duplicate is not a refusal to show anybody — it is the correct outcome
+  //    of running the import twice, and must be SILENT SUCCESS.
+  //
+  // 🔴 FOLDING THEM WOULD BREAK THE IMPORT IN THE WAY THAT MATTERS: `planSaveSite` refuses on a
+  //    LABEL collision, and the import writes the label "Billing" for every customer it touches.
+  //    Routed through the interactive path, the second customer's billing address would be refused
+  //    as a duplicate label — the labels are per-customer unique, so it would in fact pass, but the
+  //    plan-then-insert shape costs a round trip per row and its refusal VOCABULARY is wrong for a
+  //    caller that is a loop rather than a person. The import reads what the customer holds and
+  //    inserts only what is new (`reconcileContactRows`), counting the rest as HELD.
+  //    ✏️ CORRECTED 2026-09-16 (tech-debt #306): this said the import got idempotence from
+  //    `ignoreDuplicates` against the partial unique index. MEASURED FALSE — PostgREST's conflict
+  //    target is the primary key, so a collision raised 23505. The read-then-write is #54's race,
+  //    accepted for a single-operator import; the indexes remain the backstop.
+  //
+  // ⚠️ §6 r8 SAYS REUSE BEFORE FORKING, SO THIS IS A DELIBERATE DIVERGENCE AND NOT AN OVERSIGHT.
+  //    What makes them separate is not the code, it is the CONTRACT: one returns human refusals,
+  //    the other returns counts and never refuses on a duplicate.
+  //
+  // ⚠️ THE COLUMN SETS CANNOT COLLIDE ON THE ROWS THAT MATTER. Both write the same table, but the
+  //    import only ever writes rows stamped `source LIKE 'quickbooks:%'`, and `customerAddresses.ts`
+  //    writes `source` NULL (it predates the column). So a hand-curated site and an imported one
+  //    are distinguishable in the data, which is what `20260911b` §4 actually cares about:
+  //    history's mistakes must stay tellable apart from curated entries.
+  //
+  // ⚠️ AND THE TWO NEW TABLES ARE NOT LISTED HERE BECAUSE THEY HAVE EXACTLY ONE WRITER EACH.
+  //    `customer_phones` and `customer_emails` are written only by `contactWriter.ts`, so they are
+  //    not a divergence at all. `contactRecord.test.ts` §G asserts that set in both directions and
+  //    fails the build on a second writer OR on a declared writer that has stopped writing.
+  // ✏️ 2026-09-16 (David: *"every writer … goes through contactWriter"*): the `customer_addresses`
+  // declaration that stood here is GONE because the divergence is. `customerAddresses.ts` keeps the
+  // interactive PLAN and its sentences for Lauren; its two statements now live in `contactWriter.ts`
+  // (`insertShipToSite` / `retireShipToSite`). All three contact tables have ONE writer FILE among the
+  // app's `.from()` writes — `contactRecord.test.ts` §G asserts that set in both directions.
+  // ✏️ SAME DAY, after merging #342: the one all-or-nothing undo (`undo_import_run`, now carrying
+  // 20260916d) is the second path on each list, by design. Declared, not baselined.
+  'customer_phones': {
+    reason: 'The contact lists have ONE app writer, contactWriter.ts, and ONE other path: the import UNDO, itemImportWriter.ts calling the undo_import_run RPC, which since 20260916d deletes the run\'s TAGGED contact rows before its customers inside the same transaction (customer_addresses is ON DELETE RESTRICT, so it must). The undo is not a writer of contact details — it removes a run whole, all-or-nothing, and refuses on any untagged (hand-added) row. Folding it into contactWriter would split one transaction into PostgREST calls, which is the defect 20260916c exists to remove (ledger #335/#342).',
+    paths: ['packages/shared/src/business-logic/contactWriter.ts',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
+  'customer_emails': {
+    reason: 'The contact lists have ONE app writer, contactWriter.ts, and ONE other path: the import UNDO, itemImportWriter.ts calling the undo_import_run RPC, which since 20260916d deletes the run\'s TAGGED contact rows before its customers inside the same transaction (customer_addresses is ON DELETE RESTRICT, so it must). The undo is not a writer of contact details — it removes a run whole, all-or-nothing, and refuses on any untagged (hand-added) row. Folding it into contactWriter would split one transaction into PostgREST calls, which is the defect 20260916c exists to remove (ledger #335/#342).',
+    paths: ['packages/shared/src/business-logic/contactWriter.ts',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
+  'customer_addresses': {
+    reason: 'The contact lists have ONE app writer, contactWriter.ts, and ONE other path: the import UNDO, itemImportWriter.ts calling the undo_import_run RPC, which since 20260916d deletes the run\'s TAGGED contact rows before its customers inside the same transaction (customer_addresses is ON DELETE RESTRICT, so it must). The undo is not a writer of contact details — it removes a run whole, all-or-nothing, and refuses on any untagged (hand-added) row. Folding it into contactWriter would split one transaction into PostgREST calls, which is the defect 20260916c exists to remove (ledger #335/#342).',
+    paths: ['packages/shared/src/business-logic/contactWriter.ts',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
   'campaigns': {
     reason: 'Edit (dates + focus, R-145) and cancel (R-146) are one-field owner UPDATEs issued from '
           + 'the campaign detail page under the CALLER\'S OWN session, so RLS enforces them: '
@@ -194,7 +253,16 @@ const ALLOWED_DIVERGENCE = {
             //    `ON DELETE SET NULL`, SET NULL is an UPDATE, and the append-only trigger refuses
             //    UPDATEs with no exemption). So the catalogue undo refuses on exactly the rows
             //    the seed touched. Tech-debt #304.
-            'packages/shared/src/components/OpeningStockSeed.tsx'],
+            'packages/shared/src/components/OpeningStockSeed.tsx',
+            // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION. THE TEST-MODE HALF
+            // OF THE SEED, AND IT IS THE PLAIN `UPDATE qty` THE PARAGRAPH ABOVE WARNS AGAINST — BY
+            // RULING, NOT BY ACCIDENT. David, 2026-09-16: *"we must never allow them to write to the
+            // actual record during testing"* — in test mode the seed sets qty ONLY on rows with
+            // import_run_id IS NOT NULL and writes NO ledger row. A provenance line in test mode would
+            // be permanent for a practice number. It touches only `qty` and `status`, and re-asserts
+            // at the database: tenant · ids · import_run_id NOT NULL · not retired · qty = 0 · a
+            // derived status. The opening line owed after the switch is tech-debt #308.
+            'packages/shared/src/quickbooks/openingStockTestWrite.ts'],
   },
   'customers': {
     reason: 'TWO import paths, declared together. (1) The catalogue import\'s UNDO issues a DELETE '
@@ -314,7 +382,15 @@ const ALLOWED_DIVERGENCE = {
             // date, address or customer — which is the ruling the ingest above turns on (Cultivar
             // owns the delivery date). `historyOrderWriter.test.ts` §C3 asserts the patch key set
             // is exactly ['order_id'], so the narrowness is measured rather than promised.
-            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
+            'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
+            // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
+            // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with
+            // their children, inside one transaction, after a pre-flight that refuses on any live
+            // record. It creates nothing and updates nothing here. It is David's ruling ④ made into a
+            // delete: removability is decided by origin. Routing it through submit.ts's handleDelete
+            // would be N HTTP calls and N transactions, which is precisely the half-run it replaces.
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
   },
   // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
   // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns
@@ -386,7 +462,15 @@ const ALLOWED_DIVERGENCE = {
           + 'is an OCR receipt handler keyed on a receipts row this door does not have.',
     paths: ['packages/cultivar-os/api/orders/submit.ts',
             'packages/cultivar-os/api/customers/create.ts',
-            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
+            'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
+            // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
+            // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with
+            // their children, inside one transaction, after a pre-flight that refuses on any live
+            // record. It creates nothing and updates nothing here. It is David's ruling ④ made into a
+            // delete: removability is decided by origin. Routing it through submit.ts's handleDelete
+            // would be N HTTP calls and N transactions, which is precisely the half-run it replaces.
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
   },
   'order_items': {
     reason: 'Same two acts as `orders`. A history line carries a transcribed description/sku and a '
@@ -397,7 +481,33 @@ const ALLOWED_DIVERGENCE = {
           + 'write (historyOrderWriter.test.ts A14) as well as in the type.',
     paths: ['packages/cultivar-os/api/orders/submit.ts',
             'packages/cultivar-os/api/customers/create.ts',
-            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
+            'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
+            // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
+            // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with
+            // their children, inside one transaction, after a pre-flight that refuses on any live
+            // record. It creates nothing and updates nothing here. It is David's ruling ④ made into a
+            // delete: removability is decided by origin. Routing it through submit.ts's handleDelete
+            // would be N HTTP calls and N transactions, which is precisely the half-run it replaces.
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
+  // The same one-unit undo removes a practice order's compliance records and service selections —
+  // the two children handleDelete also removes. Same reason, same ratification owed (ledger #342).
+  'order_compliance_records': {
+    reason: 'submit.ts records the compliance decision at checkout and removes it with its order; '
+          + 'undo_import_run (20260916c) removes a PRACTICE order\'s records with the run, in one '
+          + 'transaction. It never touches a record on a live or captured order. PENDING DAVID\'S '
+          + 'RATIFICATION (ledger #342).',
+    paths: ['packages/cultivar-os/api/orders/submit.ts',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
+  'order_service_selections': {
+    reason: 'submit.ts writes the selections at checkout and edit and removes them with their order; '
+          + 'undo_import_run (20260916c) removes a PRACTICE order\'s selections with the run, in one '
+          + 'transaction. It never touches a selection on a live or captured order. PENDING DAVID\'S '
+          + 'RATIFICATION (ledger #342).',
+    paths: ['packages/cultivar-os/api/orders/submit.ts',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
   },
   // DECLARED 2026-08-01 (ledger #181) — TWO ACTS, NOT TWO WRITERS OF ONE ACT.
   // `moduleState.ts` CHANGES an existing tenant's module state (enable / configure), gated

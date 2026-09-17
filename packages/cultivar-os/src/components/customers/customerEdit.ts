@@ -16,7 +16,12 @@
 //               comment out), with tax_id / credit_limit VALUE-MASKED (BENCH-C).
 // ============================================================
 import { supabase } from '../../lib/supabase';
-import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIELDS, CUSTOMER_BILLING_MIRROR } from './customerFieldRegistry';
+import { insertCustomerFields, updateCustomerFields } from '@trace/shared/business-logic/customerFieldWrite';
+
+// 🔴 LEDGER #335 — phone, email and the billing address are CONTACT-LIST rows, not customer columns
+// (the database derives the columns and refuses a direct write). The writes live in the shared
+// `customerFieldWrite` (editor policy: each touched field REPLACES what is shown).
+import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIELDS } from './customerFieldRegistry';
 
 // RESIDUAL of list 5 (E6): the runtime list is now derived from `customerFields.ts`; this UNION is
 // its compile-time half and is still written by hand. It collapses in phase B, when the form's
@@ -79,14 +84,9 @@ export async function persistCustomerPatch(params: {
 }): Promise<{ error: string | null }> {
   const { id, businessId, patch } = params;
   for (const [field, to] of Object.entries(patch)) traceEdit(id, field, undefined, to);
-  const { data, error } = await supabase
-    .from('customers')
-    .update(patch)
-    .eq('id', id)
-    .eq('business_id', businessId)
-    .select('id'); // A8 — see NOT_SAVED
-  if (error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), error.message); return { error: error.message }; }
-  if (!data?.length) {
+  const res = await updateCustomerFields(supabase, { id, businessId, patch });
+  if (res.error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), res.error); return { error: res.error }; }
+  if (res.zeroRows) {
     console.error('[TRACE:customers] patch AFFECTED ZERO ROWS — refused or missing', { customerId: id, fields: Object.keys(patch) });
     return { error: NOT_SAVED };
   }
@@ -109,13 +109,9 @@ export async function insertCustomer(params: {
     Object.entries(values).map(([k, v]) => [k, SENSITIVE_CUSTOMER_FIELDS.has(k) ? '(set)' : v]),
   );
   console.log('[TRACE:customers] insert', { businessId, fields: masked });
-  const { data, error } = await supabase
-    .from('customers')
-    .insert({ business_id: businessId, ...values })
-    .select('id')
-    .single();
-  if (error) { console.error('[TRACE:customers] insert error', error.message); return { error: error.message, id: null }; }
-  return { error: null, id: (data as { id: string }).id };
+  const res = await insertCustomerFields(supabase, { businessId, values });
+  if (res.error) console.error('[TRACE:customers] insert error', res.error);
+  return res;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,16 +156,15 @@ export function buildCustomerPatch(params: {
   // ── text fields, from the registry ──
   for (const field of CUSTOMER_TEXT_FIELDS) {
     if (field === 'tax_exempt_cert_ref') continue;             // owned by the tax block below
-    if (Object.values(CUSTOMER_BILLING_MIRROR).includes(field)) continue; // legacy mirrors are derived, never edited
     const raw = draft[field];
     if (raw === undefined) continue;
     const trimmed = String(raw ?? '').trim();
     const notNull = CUSTOMER_NOT_NULL_FIELDS.includes(field);
     const value = trimmed === '' ? (notNull ? '' : null) : trimmed;
     put(field, value);
-    // D-41 bridge: a canonical billing field carries its legacy twin with it.
-    const mirror = CUSTOMER_BILLING_MIRROR[field];
-    if (mirror && (creating ? value != null : value !== saved[mirror])) values[mirror] = value;
+    // ✏️ THE D-41 MIRROR WRITE IS GONE (ledger #335). A canonical `billing_*` field used to carry
+    // its legacy twin with it on every save. The legacy columns are dropped, and `billing_*` is
+    // now derived from the address list by a database trigger — one author, nothing to mirror.
   }
 
   // ── typed fields ──

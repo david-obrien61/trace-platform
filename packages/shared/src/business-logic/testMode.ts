@@ -9,7 +9,7 @@
 // DEPENDENCIES: ./orderKind (TEST_ORDER_KIND — imported, never re-spelled). Pure: no db, no
 //               env, no network. Every input is passed in, which is what makes the server and
 //               the banner incapable of reaching different conclusions.
-// OUTPUTS:      isTestMode · orderKindForMode · pushPermitted · TEST_MODE_BANNER ·
+// OUTPUTS:      isTestMode · orderKindForMode · mayWriteStockRecord · pushPermitted · TEST_MODE_BANNER ·
 //               TEST_MODE_STOCK_CAVEAT · testModeExplanation · writeSwitchConfirmation ·
 //               LIVE_MODE_CONFIRMED · TEST_ORDER_CONFIRMATION.
 //
@@ -62,6 +62,36 @@ export function isTestMode(qboWritesEnabled: boolean | null | undefined): boolea
  */
 export function orderKindForMode(qboWritesEnabled: boolean | null | undefined): string | null {
   return isTestMode(qboWritesEnabled) ? TEST_ORDER_KIND : null;
+}
+
+/**
+ * May this order write THE RECORD — change `business_inventory.qty`, or append a row to
+ * `business_inventory_ledger` — right now?
+ *
+ * 🔴 DAVID'S RULINGS, 2026-09-16, VERBATIM IN SUBSTANCE: ① *"A TEST ORDER NEVER CHANGES STOCK."*
+ * ② *"WE MUST NEVER ALLOW THEM TO WRITE TO THE ACTUAL RECORD DURING TESTING"* — so in test mode
+ * NO order of ANY origin moves qty or writes the ledger, checkout or captured, at any step
+ * including fulfilment. Status still moves; routing, delivery and the fulfilled tap work as before.
+ *
+ * TWO CLAUSES, OR-ED, AND EACH IS A DIFFERENT FACT:
+ *   · the BUSINESS is in test mode — ruling ②, whatever the order's origin;
+ *   · the ORDER is a test order — ruling ①, *forever*, including after the switch is turned on.
+ *     A practice order that never took stock must never RESTORE stock either (un-fulfil, edit,
+ *     delete after go-live), or it would invent units the lot never lost.
+ *
+ * 🔴 WHY THIS EXISTS: R-63 (2026-09-02) put *"your tree counts do not change"* on every screen and
+ * nothing in the order path enforced it. Order `6a60a0ca` (LAWNS, 2026-09-09, a test walk-in) took
+ * 2 units off an imported lot and wrote four ledger rows. The banner was a claim; this is the rule.
+ *
+ * ⚠️ AN UNREAD SWITCH MEANS DO NOT WRITE — `isTestMode(undefined)` is true. The unrecoverable
+ * direction is an append-only row that should not exist; a sale whose stock move was skipped is
+ * visible, explained in the trail, and correctable.
+ */
+export function mayWriteStockRecord(x: {
+  writesEnabled: boolean | null | undefined;
+  orderKind: string | null | undefined;
+}): boolean {
+  return !isTestMode(x.writesEnabled) && x.orderKind !== TEST_ORDER_KIND;
 }
 
 /**

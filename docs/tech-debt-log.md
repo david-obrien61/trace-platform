@@ -3677,6 +3677,15 @@ whose owner needs to name their own unit.**
 
 ## #304 — 🟡 **PARTIAL 2026-09-15 (ledger #337): THE HALF-WIPE IS FIXED, THE MEANING IS STILL DAVID'S — AND THE PREMISE WAS WRONG IN THE DIRECTION THAT MATTERS.**
 
+✏️ **CORRECTED 2026-09-16 (ledger #342) — "FIXED" WAS TRUE ON A BRANCH, NOT ON `main`.** Ledger #337's GATE 2
+(`a9968e8`) sat on `origin/fix/undo-refuses-before-deleting` and **was never merged**; this entry reached `main`
+through #333's docs (`2a96bc4`), so `main` carried *"the half-wipe is fixed"* over code that still half-ran.
+[[R-26]]'s shape, one more time. **#342 carries #337's GATE 2 code verbatim (`f67d30d`) and replaces the write
+half with ONE plpgsql transaction** (`undo_import_run`, `20260916c`, NOT APPLIED) that refuses on any live record
+and removes the run's practice orders with it — so the half-run is closed **once 20260916c is applied**, and
+until then the undo refuses outright rather than falling back. **#337's DOCS (owner-role CARD 17, catalogue CARD
+12b) are still only on its branch.**
+
 🔴 **IT DID NOT NEED THE SEED. IT WAS ALREADY LIVE ON LAWNS, AND THIS ROW SAID THE OPPOSITE.**
 The row below reads *"WHY IT HAS NOT BITTEN YET — the imported rows have no ledger history at all
 … The seed is the first thing that gives them any."* **Measured 2026-09-15: order
@@ -3784,4 +3793,159 @@ nothing in the repository settles which one it is, because the path has never be
 **NOT FIXED IN THIS PASS, DELIBERATELY.** Re-shaping the import's undo inside a build that adds a
 starting number is the scope creep that makes a diff unreviewable — and every option above is a
 decision about what the undo MEANS, which is David's.
+
+
+## #305 — 🟡 THE LEGACY-ADDRESS GUARD IS BLIND TO A DISAGREEING PAIR: BOTH COLUMNS POPULATED, DIFFERENT VALUES, AND THE DROP DISCARDS ONE SILENTLY (NEW 2026-09-16, ledger #335)
+
+**The defect.** `20260915b` §1 refuses to drop `customers.address_line1/city/state/zip` while any row
+holds a legacy value that `billing_*` does not. Its predicate — and owner-test CARD 1, which is the
+same predicate as a list — is *legacy non-empty **AND** billing **EMPTY***. A row where **both**
+columns hold a value and they **disagree** passes the guard, is not listed by CARD 1, and loses its
+legacy value when the column is dropped. Nothing names it, nothing counts it, nothing refuses.
+
+**Why billing wins, and why that is not the whole answer.** D-41 made `billing_*` canonical and the
+legacy four a mirror, so keeping billing is the ruled outcome. But the guard's stated purpose is
+*"refuse if dropping the column would destroy a value"* — and in a disagreeing pair it does destroy
+one. **The guard asserts less than its own sentence claims.**
+
+**Measured 2026-09-15 (David): ONE such row, on Test Dave's, both addresses fabricated. Ruled: nothing
+to fix.** So this is not a live data loss — it is a guard that would have let one through without a
+word, and the next destructive migration written from it inherits the blind spot.
+
+**Surfaced, not guarded.** `20260915_backfill_legacy_customer_address.sql` §3 now COUNTS disagreeing
+pairs in a NOTICE and its V3 lists them; CARD 1 names the blind spot in words. Neither refuses.
+
+**Fix (not taken — the guard's shape is David's).** A second clause in `20260915b` §1 that either
+refuses on a disagreeing pair or requires each one to be DECLARED (id + which side wins). ⚠️ A refusal
+would have blocked on the one ruled-harmless Test Dave's row, which is the argument for a declaration
+over a bare refusal (#73: a check that is red on arrival gets switched off).
+
+
+## #306 — 🔴 THE CONTACT WRITER'S `ignoreDuplicates` TARGETS THE PRIMARY KEY, SO A COLLISION ON `value_norm` OR ON THE ONE-PRIMARY INDEX ERRORS INSTEAD OF BEING SKIPPED — AND THE SEED MOVES THAT FROM THE SECOND IMPORT RUN TO THE FIRST (NEW 2026-09-16, ledger #335)
+
+**The claim in the code.** `contactWriter.ts` says the import is *"IDEMPOTENT BY CONSTRUCTION"*: it
+calls `.upsert(rows, { ignoreDuplicates: true })` and relies on the partial unique indexes on
+`(business_id, customer_id, value_norm)` to turn a re-imported number into a silent no-op.
+
+**What the two systems document.** PostgREST (`docs.postgrest.org`, tables & views → upsert): *"By
+default, upsert operates based on the primary key columns."* No `onConflict` is passed, so the
+conflict target is `id`. Postgres (`INSERT` → `ON CONFLICT`): with a conflict target, the inferred
+**arbiter** indexes are the ones handled; only when the target is **omitted** does `DO NOTHING` cover
+*"all usable constraints (and unique indexes)."* The rows carry no `id`, so they never collide on the
+arbiter — and a collision on `customer_phones_one_per_value` or `customer_phones_one_primary` is
+**raised (23505)**, not absorbed. `writeContactRecord` then returns `ok: false`.
+
+⚠️ **PROVENANCE: INFERRED FROM THE TWO DOCUMENTS, NOT MEASURED.** No live PostgREST request was made.
+The proof is owner-test CARD 12 (a second import run) — which the board now says not to run yet.
+
+**Why the suite is green.** `contactWriter.test.ts`'s double returns *"SUCCESS WITH ZERO ROWS AND NO
+ERROR"* for ANY collision in `dup` mode and calls it *"the real PostgREST behaviour"* — it never asks
+WHICH index collided or what conflict target was requested. **Tech-debt #138's class exactly: a double
+more forgiving than the real system** (§6 r19 (a)).
+
+**Why it matters NOW (ledger #335, 2026-09-16).** `20260915` §5b seeds every customer's existing phone
+and email as an active PRIMARY row. The import then plans a primary for the same customer:
+  · same number → collides on `one_per_value`;
+  · different number → collides on `one_primary`.
+**Either way the FIRST import run errors for most customers.** Without the seed the same defect waited
+for the SECOND run (CARD 12). The seed is still right — without it the first list write blanks every
+customer's address, phone and email — but it makes this blocking.
+
+**Blocks:** owner-test CARDS 7, 8 and 12, and the LAWNS import (CARD 14).
+
+**Options (David's call — none taken):**
+1. **An RPC** doing `INSERT … ON CONFLICT DO NOTHING` with the target OMITTED — covers every unique
+   index. Costs a migration and moves the write into SQL; the 12-function ceiling is unaffected (an RPC
+   is not an `api/` file).
+2. **Pass `onConflict: 'business_id,customer_id,value_norm'`** — ⚠️ PostgREST cannot express the
+   partial index's `WHERE` predicate, so Postgres will not infer a PARTIAL index from it; this likely
+   fails outright unless the index is made non-partial. Does nothing for `one_primary`.
+3. **Plan `is_primary` from what exists**: read the customer's current rows first, never plan a second
+   primary. ⚠️ A read-then-write — tech-debt #54's race — acceptable only because the import is a
+   single-operator run.
+**Whatever is chosen, the double must learn to refuse:** model the arbiter, and make a non-arbiter
+collision return 23505.
+
+🟡 **FIXED ON `feat/contact-record`, 2026-09-16 — NOT YET MERGED. Option 3 taken; options 1 and 2 were MEASURED, not inferred.**
+**The measurement (PGlite — a real Postgres engine — run in a scratch directory, not the repo):**
+  · the old write (`upsert`, `ignoreDuplicates`, conflict target = primary key) on a re-import →
+    **23505 `customer_phones_one_primary`** — this entry's claim, now measured;
+  · **option 2** (`onConflict: 'business_id,customer_id,value_norm'`) → **42P10, on EVERY call** —
+    Postgres infers a partial index only when its predicate is restated, and PostgREST cannot send one.
+    **It would have broken the FIRST import, not just the second;**
+  · option 1's shape (`ON CONFLICT DO NOTHING`, target omitted) → absorbs a genuinely new primary
+    number **silently — data loss**, so it would have needed option 3's primary logic anyway.
+**The fix.** `reconcileContactRows` (pure) plans against what the customer already holds, and the writer
+**INSERTs** only what is new: a held value is counted `held`; a new number is added non-primary if a
+primary exists. **Addresses:** an identical one is held; a billing row that disagrees with a
+**`migrated:` seed** retires the seed (`active = false`, R-133) and takes the default; any other clash
+leaves hand-entered and earlier-import rows untouched (a taken default → the import lands non-default;
+a taken label → reported in `notTaken`). The indexes stay the backstop, so a lost race is a loud 23505.
+🔴 **WHY THE SEED RULE WAS NEEDED — MEASURED LIVE: 464 LAWNS customers have their PHONE as their billing
+street** (the old importer never read `BillAddr.Line2`, #254). The seed copies that into a default
+"Billing" row, and every one of them would have collided with the import's real street.
+**The double now refuses what Postgres refuses** — every unique index from `20260911b` + `20260915`,
+with predicates, derived-and-compared against the migrations (§I) — and its negative controls
+reproduce both measured errors (F8, F9). **Red-first: 28 failures on the old writer, all #306's error.
+64/64 after. 7 mutants, 7 caught.**
+⚠️ **NOT PROVEN LIVE, AND IT CANNOT BE YET: `writeContactRecord` HAS NO CALLER** — no import screen
+reaches it (measured 2026-09-16). CARDS 7, 8, 9, 12 wait on that wiring, not on this fix.
+
+## #308 — 🟡 A TEST-MODE STARTING NUMBER HAS NO OPENING LEDGER LINE, AND NOTHING WRITES ONE AFTER THE SWITCH (NEW 2026-09-16, ledger #342)
+
+**What.** David's ruling ② (2026-09-16): in test mode the opening-stock seed sets qty **only** on rows the
+QuickBooks import created and writes **no** ledger row — *"the opening ledger entry is written once, after the
+switch."* #342 built the first half (`openingStockTestWrite.ts`). **The second half does not exist.** After
+QuickBooks writes are switched on, a test-seeded lot holds `qty = N` with `SUM(delta) = 0`, and the LIVE seed
+skips it as *"already holds stock"*.
+
+**Why it is not a one-liner.** No RPC can write it. `adjust_inventory_manual` takes an ABSOLUTE qty and writes
+the difference — `N → N` is a no-op that writes nothing, and `N → 0 → N` writes two rows summing to zero, which
+leaves the book and the ledger exactly as far apart as before. The row that is owed is a single
+`+N opening_stock_seed` with **no qty change**, and only `emit_inventory_movement` (service_role only) can write
+that. So the fix is a new SECURITY DEFINER function — *write an opening line for a lot that holds stock and has
+no ledger history* — called once, at switch-on, by `QboWriteSwitch` or the switch's own server path. **A
+migration, and a switch-on flow — neither is this build's.**
+
+**Blast radius, stated rather than guessed.** Until it is built, the reconcile screen reads a test-seeded lot in
+`baseline` mode (no prior count, no seed row — `reconcileMath.ts`), so the book is treated as correct and the
+first count stamps the whole difference as one `count_reconcile`. Visible and correctable, not silent. And
+`scripts/rls/inventory-ledger-replay.rls.mjs` (NOT in `npm run verify`) asserts `SUM(delta) = qty` for every
+lot — it will name every one of these rows.
+
+**Blocks:** switch-on for any tenant that seeded in test mode (LAWNS: 554 seeded rows, per the prompt of
+2026-09-16). **Owner:** David — the shape of the switch-on moment.
+
+## #311 — 🟡 NOTHING TELLS THE OWNER THAT QUICKBOOKS WRITES ARE STILL OFF — AND SIX CHECKOUT/PLANT SCREENS SHOW NO TEST-MODE BANNER (NEW 2026-09-16, ledger #335)
+
+**What.** Risk check asked by David (his 2026-09-04 ask): *is there anything that alerts the owner that
+writes are still off?* **No.** The only signal is the amber `TestModeBanner`, mounted once in
+`AppLayout.tsx:62`. Nothing reminds, nags, emails or counts days in test mode.
+
+**And the banner is not on every screen that changes stock.** Routes outside `AppLayout`
+(`router.tsx:99–105`) render no banner: `/plant/:tagId`, `/plant/:tagId/addons`, `/checkout/addons`,
+`/checkout/customer`, `/checkout/review`, `/checkout/confirm`. Checkout decrements stock
+(`api/orders/submit.ts`); the confirmation screen carries its own test-mode sentence
+(`Confirmation.tsx`), the steps before it do not.
+
+**Also, stated:** the banner says *"your tree counts do not change"*. Under ledger #344 the COUNT on a
+desk edit, count or delete DOES change (only the permanent history line is not written), so the
+sentence is now inaccurate for those. Not reworded here.
+
+**Fix (not built, on instruction):** a reminder for the owner while writes are off (wording and
+cadence are David's), the banner on the checkout routes, and a corrected banner sentence.
+**Owner:** David.
+
+## #312 — 🟡 A MEMBER WHO CAN UPDATE CUSTOMERS BUT NOT CREATE THEM CANNOT ADD A PHONE, EMAIL OR ADDRESS (NEW 2026-09-16, ledger #335)
+
+**What.** The contact lists' INSERT policies require `customers:create`
+(`20260915_contact_record.sql` §3, and `20260911b` for addresses). Changing a customer's phone in the
+editor is an UPDATE of the customer, but it becomes an INSERT into `customer_phones`. A role holding
+`customers:update` without `customers:create` is refused — loudly; nothing is lost.
+
+**Measured 2026-09-16:** no LAWNS member is in that position (MANAGER and both OWNERs hold both).
+
+**Fix:** the list INSERT policies accept `customers:create OR customers:update`, or the editor's contact
+writes go through a SECURITY DEFINER path gated on `customers:update`. A permission-model decision —
+David's. **Not a go-live item** (David, 2026-09-16).
 
