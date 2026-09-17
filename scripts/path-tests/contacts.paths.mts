@@ -58,9 +58,9 @@ async function path(id: string, what: string, body: (check: (ok: boolean, detail
 }
 
 async function freshDb() {
-  // 20260917c is WRITTEN, not applied (ledger #349 · tech-debt #317's ruling): the staff-add path
+  // 20260917d is WRITTEN, not applied (ledger #349 · tech-debt #317's ruling): the staff-add path
   // is driven against the policy as this branch defines it, so the test fails until it is applied.
-  const db: any = await openLiveDb({ migrations: ['20260917c_staff_may_add_a_phone_or_email.sql'] });
+  const db: any = await openLiveDb({ migrations: ['20260917d_staff_may_add_a_phone_or_email.sql'] });
   installSupabaseShim(db);
   (globalThis as any).__ACT_AS__ = null;
   await db.exec(`

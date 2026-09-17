@@ -663,7 +663,7 @@ LAST-PROVEN: —
 DEVICE: phone
 COVERS: ledger #349 · tech-debt #317 · [[R-162]]
 
-⚠️ Needs a STAFF login on Test Dave's, and `20260917c` applied.
+⚠️ Needs a STAFF login on Test Dave's, and `20260917d` applied.
 
 1. Signed in as the STAFF member, open **Customers** → a customer → their page.
 2. In **Phones**, tap **+ Add a phone**, type a number, tap **Save**.

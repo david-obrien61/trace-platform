@@ -13,7 +13,7 @@
 // DEPENDENCIES: contactWriter (readContactLists · addContactRow · editContactRow · makeContactMain ·
 //               retireContact — the ONE writer, registered in writer-registry.json) · the browser
 //               supabase client (RLS: reading needs `customers:read`; ADDING a phone or an email is
-//               an INSERT that `20260917c` opens to any member who may READ the customer — David's
+//               an INSERT that `20260917d` opens to any member who may READ the customer — David's
 //               ruling on tech-debt #317; adding an ADDRESS stays `customers:create`; Edit / Make
 //               main / Remove are UPDATEs on `customers:update`) ·
 //               useBusinessContext (`can`, so a reader is not offered a button the database refuses) ·
@@ -58,7 +58,7 @@ export function ContactListsPanel({ businessId, customerId, onChanged }: {
   // 🔴 tech-debt #317, RULED by David 2026-09-17: a STAFF member may ADD a phone or an email —
   // adding cannot destroy anything, and refusing it means the person at the counter cannot write
   // down a new mobile at all. `customers:read` is what this page already requires, so anyone who
-  // can see the customer is offered Add (20260917c matches the INSERT policy to it). An ADDRESS is
+  // can see the customer is offered Add (20260917d matches the INSERT policy to it). An ADDRESS is
   // the delivery and billing destination and stays on `customers:create`.
   const mayAddValue = can('customers:read') || can('customers:create') || can('customers:update');
   const mayAddAddress = can('customers:create') || can('customers:update');

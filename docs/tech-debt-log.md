@@ -4013,7 +4013,7 @@ already does that properly).
 
 **✅ DAVID'S RULING (2026-09-17):** *"STAFF MAY ADD a phone or email — never Edit, Make main or Remove.
 Adding cannot destroy anything, and refusing it means a counter staff member cannot write down a new
-mobile at all."* **Built on `fix/contact-list-edit-add` (ledger #349):** `20260917c` (WRITTEN, not
+mobile at all."* **Built on `fix/contact-list-edit-add` (ledger #349):** `20260917d` (WRITTEN, not
 applied) opens the phone and email INSERT policies to any member who may READ the customer; the address
 list stays `customers:create`; every UPDATE policy is untouched. The customer page offers Add to a
 reader and withholds Edit / Make main / Remove. Path test `customer-page.add`, red-first without the

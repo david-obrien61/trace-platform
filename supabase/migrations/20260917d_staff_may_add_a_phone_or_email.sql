@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 20260917c — A STAFF MEMBER MAY ADD A PHONE OR AN EMAIL · ledger #349 · tech-debt #317 · [[R-162]]
+-- 20260917d — A STAFF MEMBER MAY ADD A PHONE OR AN EMAIL · ledger #349 · tech-debt #317 · [[R-162]]
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
 --

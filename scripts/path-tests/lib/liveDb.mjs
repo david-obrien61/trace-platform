@@ -66,7 +66,7 @@ const cachedDumps = new Map();
 export async function openLiveDb({ fixture, migrations = [] } = {}) {
   const file = fixture ? `${FIXTURE_DIR}/${fixture}` : FIXTURE;
   // `migrations` are repo migrations APPLIED ON TOP of the snapshot — what a test needs when the
-  // behaviour it drives is not live yet (ledger #349: 20260917c's INSERT policy). The cache key
+  // behaviour it drives is not live yet (ledger #349: 20260917d's INSERT policy). The cache key
   // carries them, so a run with and without them cannot share a dump.
   const key = [file, ...migrations].join('|');
   const cachedDump = cachedDumps.get(key) ?? null;
