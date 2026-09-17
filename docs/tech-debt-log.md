@@ -4147,3 +4147,39 @@ choosing it inside a checkout handler would answer a question David has not been
 (a) that proxy (`installTPostsPerTree > 0`); (b) a boolean column on the rung; (c) a threshold
 volume in Operations config — which the 2026-09-16 ruling forbids. **The server path would also
 need its own ladder read, and a failed read must never block an order (§6 r6).**
+
+## #324 — 🟡 CLAUDE.md IS OVER ITS OWN BUDGET, AND THREE INVENTORY DOCS ARE THREE MONTHS STALE (NEW 2026-09-17, ledger #347 — David: file for after Saturday)
+
+**What.** `CLAUDE.md` is **678 lines** against its own ~600-line budget (§CONTEXT BUDGET CHECK), and it
+is loaded every session, so the excess is a tax paid before any work begins. Separately,
+`docs/inventory-functions.md`, `docs/inventory-env.md` and `docs/inventory-ai.md` all still read
+`Last updated: 2026-06-13` — three months behind the code they index, and §10 step 5 says to FLAG
+them as stale before answering "what functions / vars / AI routes do we have?" from them.
+
+**Why it is filed rather than fixed.** David, 2026-09-17: after Saturday. The trim is the still-open
+§4 item *"Lean CLAUDE.md to rules + state + pointers only"* (the structural residual OP-13 left: §2's
+infra tables ~155 lines, §6's coding rules, §9's standing instructions). Doing it inside a pilot build
+is the drift the gates exist to catch, and a half-trim that loses a rule is worse than the tax.
+⚠️ The OP-13 amendment is still open too: the budget counts LINES, and line 3 was once ONE line and
+~1,400 tokens — so a character budget (`wc -c`) is the honest metric. David rules.
+
+## #325 — 🟡 THE CREW PAGE IS ENGLISH ONLY, AND ITS READERS ARE THE PEOPLE R-151 IS ABOUT (NEW 2026-09-17, ledger #347)
+
+**What.** `CrewDay.tsx` ships the first crew-facing surface built since [[R-151]] (*the person chooses
+their own language, and they choose it on the invitation; translate the interface, never the data*),
+and every string in it is inline English. David accepted English **for the pilot** and asked that
+Spanish be filed as the next step against R-151. The wording was cut to a few words per control
+(`Maps` · `Call` · `Start` · `Done` · `Undo` · `Note` · `OK`) so a translation layer has little to
+carry and a non-reader has icons beside each one.
+
+**Why it matters here and not in the abstract.** The crew are exactly R-151's population: David,
+2026-08-31 — *"Cuto lives on site at LAWNS and does the maintenance. He does not speak English. The
+install crews' English is not reliable either."* A link with no login is the first screen they will
+ever hold, and it has no language control of any kind.
+
+**The next step (not this build).** R-151's own clause: the choice belongs to the PERSON and is made
+on the invitation. A crew link has no invitation and no person record — so the honest smallest form is
+a two-word switch on the page itself (`English · Español`, both always visible, never a flag or a
+globe), remembered per device beside the name. That is a decision for David, because it is the first
+place the platform would store a language without a person to attach it to. ⚠️ R-151 also warns the
+string layer must exist first or inline strings bypass it invisibly — so the layer, then this page.
