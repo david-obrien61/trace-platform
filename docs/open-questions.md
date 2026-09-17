@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-17** (ledger #343 — the container ladder is the one source for sizes; apply its migration BEFORE merging. Previous: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
+**Last updated: 2026-09-17** (ledger #350 — the load list prints an allow-list, NOT merged. Before that: ledger #343 — the container ladder is the one source for sizes; apply its migration BEFORE merging. Previous: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
 
 > 🔴 **THIS FILE IS AN INDEX, NEVER A SECOND COPY.** Each entry gives the question, enough of its own
@@ -97,6 +97,14 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — THE QUICKBOOKS IMPORT KEEPS AN EXISTING CUSTOMER'S CONTACT DETAILS AS THEY ARE.** Lean: keep the MAIN value; ADD a different QuickBooks value as additional through contactWriter. Confirm → RULINGS + registered path. Owner: tech-debt #318.
 - 🔴 **GO-LIVE — FINISHING A STOP DOES NOT FULFIL ITS ORDER** (automatic SPM consumption depends on it). Owner: tech-debt #319.
 - 🟡 **OPEN — WHICH DOMAIN IS REGISTERED NEXT.** Proposed: orders → delivery stops → stock movements. Owner: `writer-registry.json` → `proposed`.
+
+**#350 — the load list prints an allow-list (build, NOT MERGED)**
+- 🔴 **OPEN — MERGE IT?** You did not ask; CARD 19 is Friday. `npm run verify` exit 0, Saturday's totals unchanged.
+- 🔴 **OPEN — SHOULD GOODS PRINT?** Fertiliser, fungicide, perlite and the like (12 historical LAWNS lines) are not on your list, so they now print nowhere. None is on Saturday 09-19. Owner: `loadList.ts` `NON_LOAD_LINES`.
+- 🔴 **OPEN — THE "Flat fee"/"Late fee" CONTRADICTION.** Change 1 says Late fee never prints; change 2 keeps the dated Flat fee line in the refusal section, and its SKU is `Late fee`. I kept it printing. One line to reverse. Owner: same file.
+- 🟡 **OPEN — WHEN THE PER-ITEM LABEL EXISTS**, the name list is deleted and the label read (*"we will have these labeled in the future in our system"*). Owner: `NON_LOAD_LINES`.
+- ⚠️ **NOT A QUESTION — THE 81 ROWS ON `/settings/services` ARE NOT THERE.** LAWNS has four `service_offerings` rows, without Trunk Protection or Deer Fencing; the match list is measured from the order lines instead.
+- ⚠️ **UNCOVERED BY INSTRUCTION — the billed `Tree Bubbler` line no longer prints**, so billed-vs-computed bubblers cannot be compared on this sheet.
 
 **#343 — the container ladder is the one source for sizes (build + migration WRITTEN, not applied)**
 - ✅ **ANSWERED 2026-09-17 — APPLIED (V1–V4 pass) AND MERGED (`56107ee`).** WAS: 🔴 **OPEN — APPLY `supabase/migrations/20260916_container_ladder_install_t_posts.sql` (✏️ 2026-09-17: it now also adds `is_large` and the read-only `get_planting_materials`; a byte-identical copy is in David's checkout), RUN V1–V4, THEN MERGE — NEVER THE OTHER WAY ROUND. Target: live by Friday 2026-09-18.** The ladder read asks for the new column; merged first, every ladder read fails. SQL editor, `postgres`, then V1–V4. Owner: the migration file.
