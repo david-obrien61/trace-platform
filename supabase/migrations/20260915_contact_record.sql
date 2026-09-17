@@ -472,17 +472,41 @@ BEGIN
   END IF;
 END $$;
 
--- The BILLING address: one row, kind 'billing', flagged default — which is exactly what
+-- A label no ACTIVE row of this customer already uses ('Billing', else 'Billing 2', 'Billing 3' …) —
+-- `customer_addresses_one_label` is unique per customer. Same rule as `planContactEdit`.
+CREATE OR REPLACE FUNCTION pg_temp.free_billing_label(p_customer_id uuid)
+RETURNS text
+LANGUAGE plpgsql AS $f$
+DECLARE n int := 1; l text := 'Billing';
+BEGIN
+  WHILE EXISTS (SELECT 1 FROM public.customer_addresses a
+                 WHERE a.customer_id = p_customer_id AND a.active AND lower(a.label) = lower(l)) LOOP
+    n := n + 1; l := 'Billing ' || n;
+  END LOOP;
+  RETURN l;
+END
+$f$;
+
+-- The BILLING address: one row, kind 'billing' — which is exactly what
 -- `sync_customer_flat_contact` reads back (`kind IN ('billing','both') ORDER BY is_default DESC`).
+-- ✏️ 2026-09-17 (the live apply REFUSED, correctly): this used to skip a customer who held ANY active
+-- address row. On Test Dave's one customer already had a saved SHIP-TO site (created 2026-09-12,
+-- kind 'shipping' by §2's default), so its billing street and city/state/ZIP never reached the list
+-- and §5c refused. Now: skipped only when a BILLING/BOTH row already exists; the new row is the
+-- default only if the customer has no default yet (`customer_addresses_one_default`), and takes a
+-- free label (`customer_addresses_one_label`). The existing site is not touched.
 INSERT INTO public.customer_addresses
   (business_id, customer_id, label, kind, line1, line2, city, state, zip, is_default, source, active)
-SELECT c.business_id, c.id, 'Billing', 'billing', s.line1, s.line2, s.city, s.state, s.zip,
-       true, 'migrated:customers.billing_*', true
+SELECT c.business_id, c.id, pg_temp.free_billing_label(c.id), 'billing',
+       s.line1, s.line2, s.city, s.state, s.zip,
+       NOT EXISTS (SELECT 1 FROM public.customer_addresses d
+                    WHERE d.customer_id = c.id AND d.active AND d.is_default),
+       'migrated:customers.billing_*', true
   FROM public.customers c
  CROSS JOIN LATERAL pg_temp.seed_address(c.billing_line1, c.billing_line2, c.address_line1,
                                          c.billing_city, c.billing_state, c.billing_zip) s
  WHERE NOT EXISTS (SELECT 1 FROM public.customer_addresses a
-                    WHERE a.customer_id = c.id AND a.active);
+                    WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both'));
 
 -- The phones: the phone field as written (primary), then every number from a street field.
 INSERT INTO public.customer_phones
@@ -512,7 +536,7 @@ SELECT c.business_id, c.id, 'main', e.email, e.ord = 1, 'migrated:customers.emai
 --   · and NO seeded address row whose street is phone-bearing.
 DO $$
 DECLARE
-  n_phone int; n_email int; n_street int; n_place int; n_addr_phone int;
+  n_phone int; n_email int; n_street int; n_place int; n_addr_phone int; n_cust int;
   n_addr int; n_street_phones int; n_split int; n_notes int;
 BEGIN
   SELECT count(*) INTO n_phone FROM (
@@ -555,11 +579,20 @@ BEGIN
        OR EXISTS (SELECT 1 FROM pg_temp.phones_in_text(a.line2)));
 
   IF n_phone > 0 OR n_email > 0 OR n_street > 0 OR n_place > 0 OR n_addr_phone > 0 THEN
+    -- ✏️ 2026-09-17: the first number is now DISTINCT CUSTOMERS. It used to add the street and
+    -- city/state/ZIP counts, so one customer missing both read as "2 customer(s)".
+    SELECT count(DISTINCT c.id) INTO n_cust FROM public.customers c
+     WHERE NOT EXISTS (SELECT 1 FROM public.customer_addresses a
+                        WHERE a.customer_id = c.id AND a.active AND a.kind IN ('billing', 'both'))
+       AND (pg_temp.clean_text(c.billing_city) IS NOT NULL OR pg_temp.clean_text(c.billing_state) IS NOT NULL
+            OR pg_temp.clean_text(c.billing_zip) IS NOT NULL
+            OR (pg_temp.clean_text(c.billing_line1) IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_temp.phones_in_text(c.billing_line1)))
+            OR (pg_temp.clean_text(c.billing_line2) IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_temp.phones_in_text(c.billing_line2))));
     RAISE EXCEPTION
-      'REFUSED: % customer(s) hold a billing address value (% street, % city/state/ZIP), % a phone '
-      'and % an email with NO list row to derive it from, and % seeded address row(s) still hold a '
-      'phone as their street. Nothing has been changed.',
-      n_street + n_place, n_street, n_place, n_phone, n_email, n_addr_phone;
+      'REFUSED: % customer(s) hold a billing address value with NO list row to derive it from '
+      '(% street value(s), % city/state/ZIP set(s)); % phone(s) and % email(s) have no list row; '
+      '% seeded address row(s) still hold a phone as their street. Nothing has been changed.',
+      n_cust, n_street, n_place, n_phone, n_email, n_addr_phone;
   END IF;
 
   SELECT count(*) INTO n_addr FROM public.customer_addresses WHERE source = 'migrated:customers.billing_*';

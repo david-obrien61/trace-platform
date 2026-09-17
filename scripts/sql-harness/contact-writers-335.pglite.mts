@@ -124,7 +124,7 @@ function rest(db: any) {
   return { from: (t: string) => new Query(t) };
 }
 
-async function fresh() {
+async function fresh(preSeed?: (db: any) => Promise<void>, contactRecordSql?: string) {
   const db = new PGlite();
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
@@ -159,7 +159,8 @@ async function fresh() {
   await db.exec(M('20260911b_customer_addresses.sql'));
   await db.exec(C16);
   await db.exec(M('20260915_backfill_legacy_customer_address.sql'));
-  await db.exec(M('20260915_contact_record.sql'));
+  if (preSeed) await preSeed(db);
+  await db.exec(contactRecordSql ?? M('20260915_contact_record.sql'));
   await db.exec(M('20260916d_contact_rows_leave_with_their_run.sql'));
   return db;
 }
@@ -265,6 +266,42 @@ if (fieldWrite) {
   const r2 = await api.from('customers').insert({ business_id: B, first_name: 'X', email: 'x@example.com' }).select('id');
   ok(r2.error?.code === 'P0001', 'W8 …and a direct insert carrying an email');
   ok((await flat(db, c.customerId)).phone === '(512) 555-0808', 'W8 …and nothing changed');
+}
+
+// W9 — the 2026-09-17 live refusal: a customer who ALREADY had a ship-to site before the migration.
+// Red-first: SEED_FILE=<old file> makes these fail (the seed skipped such a customer entirely).
+{
+  const preSeed = async (db: any) => {
+    await db.exec(`
+      INSERT INTO customers (id, business_id, first_name, billing_line1, billing_city, billing_state, billing_zip) VALUES
+        ('e0000000-0000-0000-0000-000000000001', '${B}', 'Street and site', '400 Honeycomb Mesa', 'Leander', 'TX', '78641'),
+        ('e0000000-0000-0000-0000-000000000002', '${B}', 'Town only and site', NULL, 'Liberty Hill', 'TX', NULL),
+        ('e0000000-0000-0000-0000-000000000003', '${B}', 'Site called Billing', '9 Oak St', 'Austin', 'TX', '78701');
+      INSERT INTO customer_addresses (business_id, customer_id, label, line1, city, zip, is_default) VALUES
+        ('${B}', 'e0000000-0000-0000-0000-000000000001', 'Test Site 770', '1 Site Rd', 'Leander', '78641', true),
+        ('${B}', 'e0000000-0000-0000-0000-000000000002', 'Yard', '2 Yard Rd', 'Liberty Hill', '78642', true),
+        ('${B}', 'e0000000-0000-0000-0000-000000000003', 'Billing', '3 Other Rd', 'Austin', '78702', false);`);
+  };
+  const seedFile = process.env.SEED_FILE ? readFileSync(process.env.SEED_FILE, 'utf8') : undefined;
+  let db: any = null, err: string | null = null;
+  try { db = await fresh(preSeed, seedFile); } catch (e: any) { err = String(e.message).slice(0, 160); }
+  ok(err === null, `W9a the contact migration applies when customers already have ship-to sites ${err ?? ''}`);
+  if (db) {
+    const addr = async (id: string) => (await db.query(`select label, kind, line1, city, state, zip, is_default, active from customer_addresses where customer_id = $1 order by kind, label`, [id])).rows;
+    const a1 = await addr('e0000000-0000-0000-0000-000000000001');
+    ok(a1.length === 2 && a1.some((r: any) => r.kind === 'billing' && r.line1 === '400 Honeycomb Mesa' && r.zip === '78641' && r.is_default === false)
+       && a1.some((r: any) => r.label === 'Test Site 770' && r.kind === 'shipping' && r.is_default === true && r.active === true),
+       'W9b 🔴 a real street becomes a billing address beside the site; the site keeps its default');
+    const a2 = await addr('e0000000-0000-0000-0000-000000000002');
+    ok(a2.some((r: any) => r.kind === 'billing' && r.line1 === null && r.city === 'Liberty Hill' && r.state === 'TX'),
+       'W9c 🔴 a city/state-only value becomes an address with no street');
+    const a3 = await addr('e0000000-0000-0000-0000-000000000003');
+    ok(a3.some((r: any) => r.kind === 'billing' && r.label === 'Billing 2' && r.line1 === '9 Oak St' && r.is_default === true)
+       && a3.some((r: any) => r.kind === 'shipping' && r.label === 'Billing'),
+       'W9d a taken "Billing" label gets "Billing 2"; with no default on file the billing row takes it');
+    const f1 = (await flat(db, 'e0000000-0000-0000-0000-000000000001'));
+    ok(f1.billing_line1 === '400 Honeycomb Mesa', 'W9e the derived billing street is the billing address, not the ship-to site');
+  }
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS'); process.exit(fails ? 1 : 0);

@@ -166,9 +166,12 @@ SELECT label, kind, line1, city, state, zip, is_default, source
  WHERE customer_id = '58e9e0f9-6ac6-49c5-a954-0061f201d134';
 ```
 
-**PASS:** one row — `20401 Gilbert Cove`, `Lago Vista`, **`TX`**, **a ZIP**, `kind = billing`,
-`is_default = true`. 🔴 **A blank state or ZIP here means ② ran before ①** — and ③ would then destroy
-the only copy. Stop before CARD 5.
+**PASS:** one row — `20401 Gilbert Cove`, `Lago Vista`, **`TX`**, **no ZIP**, `kind = billing`,
+`is_default = true`.
+✏️ **CORRECTED 2026-09-17: Paul has NO ZIP and never had one** — the 2026-09-16 snapshot shows his ZIP
+empty in both the legacy and the billing column. Only his STATE was legacy-only, and the backfill
+moved it (verified live 2026-09-17: `billing_state = TX`, `billing_zip` empty). An empty ZIP here is
+correct. 🔴 **A blank STATE here means ② ran before ①** — stop before CARD 5.
 
 ---
 
