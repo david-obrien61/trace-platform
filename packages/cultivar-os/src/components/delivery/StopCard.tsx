@@ -309,7 +309,12 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
                       behave the same. The writer refuses when a review was already asked, or when the
                       stop was completed outside these taps (an imported history stop) — and says which,
                       so a refusal is never a silent no-op. */}
-                  {isDeliveryFulfilled(d.status) && canEditStop && (
+                  {/* ⚠️ OFFERED ONLY WHERE IT CAN SUCCEED. The writer reopens a Done only while no
+                      review has been asked AND the stop was completed through one of the two doors
+                      (`completed_by_name` set). A stop that arrived fulfilled from the QuickBooks
+                      history import has neither, so showing Undo on it would be a control that
+                      always refuses — a dead affordance (§1.6 item 5), not an explanation owed. */}
+                  {isDeliveryFulfilled(d.status) && canEditStop && d.completed_by_name && !d.review_ask_outcome && (
                     <button
                       onClick={() => { void actions.markStop(d, 'undo'); }}
                       disabled={busy}

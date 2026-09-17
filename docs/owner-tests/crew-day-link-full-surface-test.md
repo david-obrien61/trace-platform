@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 8 covered** (8 `owed`). ✏️ **CARD F added 2026-09-17** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 0 of 9 covered** (9 `owed`). ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -56,6 +56,19 @@ SELECT p.proname,
 - `stop_progress_apply` (the one completion writer) reads `false · false · true` as well: nobody calls it directly, only the two doors above.
 
 **FAIL:** fewer than six rows (the update is not applied), or any `true` in the **anon** column, or `crew_day_read` / `crew_stop_act` / `stop_progress_apply` showing `true` under logged_in.
+
+---
+
+## CARD 0b — 🔴 the office door still works, and it behaves the new way
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+David asked for this card BEFORE the crew cards, and it is the right order: **Mark done is an existing feature**, and [[R-161]] changed how it works. Run it on **Test Dave's** delivery schedule, on a stop you do not mind moving.
+1. Open **Delivery → Schedule**. Pick a stop that is **not** done. Tap **Start this stop**, then **Mark done**.
+2. Watch the screen for a review prompt. **There must not be one.**
+3. The card shows the green **Done** chip with a red **Undo done** beside it. Tap **Undo done**.
+
+**PASS:** no review prompt at any point; after step 1 the card reads **Done** and a grey box appears — **From the crew link — Started <time> · <your member name>** and **Done <time> · <your member name> · review ask held, not sent**; after step 3 the chip is back to **Scheduled** and the Done line is gone from that box. The customer receives nothing.
+**FAIL:** a review prompt opens (the ask was spent); **Mark done** errors — if it says *"needs the database update (20260917c)"* then the migration was not applied, so stop and apply it; there is no **Undo done** control; or the grey box names nobody.
+⚠️ **On a stop that was already `fulfilled` before today** (the QuickBooks history import), there is deliberately **no Undo done** control — neither door will reopen it, so none is offered.
 
 ---
 
