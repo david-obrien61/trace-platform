@@ -106,8 +106,7 @@ const ALLOWED_DIVERGENCE = {
           + 'for a question that needs three. A projection is not a restatement (tech-debt #120).',
     paths: ['packages/shared/src/components/OpeningStockSeed.tsx'],
   },
-  // ⚠️ DECLARED 2026-09-17 (ledger #347) — PENDING DAVID'S RATIFICATION, same standing as the
-  // entries around it. Both tables were created by THIS build and each has exactly ONE reader, so
+  // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). Both tables were created by THIS build and each has exactly ONE reader, so
   // the ratchet is flagging a first list, not a divergence — and neither list is a record shape:
   //   · crew_day_links — the schedule's panel needs the link's METADATA and must NOT select
   //     `token_hash`. Selecting the record shape here would pull the hash to a browser for no

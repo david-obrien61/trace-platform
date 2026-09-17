@@ -4073,7 +4073,7 @@ were scheduled, not a planned route"*. The driver still picks the order, as toda
 day-route row), and have `crew_day_stops` order by it. Not built in #347: the Saturday pilot is about capture,
 and the route screen's own save path is its own change.
 
-## #321 — 🟡 TWO WAYS TO MARK A STOP DONE, ONLY ONE REGISTERED (NEW 2026-09-17, ledger #347)
+## #321 — ✅ RESOLVED 2026-09-17 IN THE BUILD THAT FILED IT (ledger #347, [[R-161]]) — WAS: 🟡 TWO WAYS TO MARK A STOP DONE, ONLY ONE REGISTERED
 
 **What.** The crew link's Done (`crew_stop_act`) is registered in `writer-registry.json` → `stop-progress`,
 records the typed name, HOLDS the review ask, and can be undone the same day. The in-app **Mark done**
@@ -4081,11 +4081,22 @@ records the typed name, HOLDS the review ask, and can be undone the same day. Th
 RLS, records no name beyond the session, shows the review prompt at once, and cannot be undone. One fact, two
 writers (§6 r8), and the second is outside the registry.
 
-**The fix.** Move the in-app tap onto one database function (the crew function minus the token) and register it
-as a path of `stop-progress`. Decide first, with David, whether the in-app tap should also HOLD the review ask
-rather than prompt — the held-ask build (agreed 2026-09-17, not built) is where that is settled. Until then,
-the undo refuses a Done the office made (*"Ask Lauren to reopen this stop"*), so the crew cannot reopen a stop
-whose review was already asked.
+**FIXED, and the decision it was waiting on was made rather than assumed.** David ruled the same day
+([[R-161]]): *"the office's Mark done must behave like the crew's Done — HOLD the review ask (never spend it)
+and be undoable — so both doors do the same thing. One completion writer, registered with its path tests."*
+So `stop_progress_apply` (20260917c §4b) is now the one writer; `crew_stop_act` (token) and the new `stop_act`
+(a logged-in member with `deliveries:update`) are its two doors. Same columns, same event row, same audit row,
+one undo rule. `useStopActions.markStop` no longer writes `deliveries` at all — it calls `stopAct`, and the
+review prompt no longer opens there.
+
+**Registered:** `office.start` · `office.done` · `office.undo-done`, each with an end-to-end test, plus the
+guard `crew.both-doors-agree` (the two doors' rows compared, with a negative control that they are genuinely
+different callers). Five new mutants: spending the ask, undoing after an ask, day-scoping the office door,
+dropping the permission check, recording nobody — all caught.
+
+⚠️ **RESIDUAL, NAMED:** `stopWrites.ts` still writes the same ROW for a different operation (the date move and
+the ship-to edit). That is not a completion write and is not part of this domain yet; the `delivery-stops`
+domain in `writer-registry.json` → `proposed` is where it lands.
 ## #309 — ✅ RESOLVED 2026-09-17, LIVE (ledger #343 — migration applied, merged `56107ee`) — WAS: 🟡 A STAFF LOGIN PRINTS THE LOAD LIST WITH THE STANDARD FIGURES, NOT THE NURSERY'S — BECAUSE IT CANNOT READ THEM (NEW 2026-09-16, ledger #343)
 
 ✅ **RULED AND BUILT 2026-09-17.** David: *"staff may READ the four planting figures (read-only)."* Option (a)'s intent, in a narrower form than a second table policy: a READ-ONLY function `get_planting_materials(business_id)` (§3 of the migration) returns ONLY the planting keys — plus the gallons-per-cubic-yard figure the same page converts with — to any ACTIVE member, NULL to anyone else, and nothing else from the row. anon cannot execute it. The load list reads it for every login; a refusal (NULL) and "nothing saved" ({}) print different sentences. **Executed on PGlite** (`scripts/sql-harness/ladder-install-posts-343.pglite.mjs` P7–P10, mutant M1 caught).

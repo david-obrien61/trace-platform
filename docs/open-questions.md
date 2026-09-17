@@ -87,11 +87,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#347 — the crew day link, Saturday 2026-09-19 LAWNS pilot (build, NOT MERGED, migration NOT APPLIED)**
-- 🔴 **OPEN — MERGE AND APPLY BY FRIDAY AFTERNOON.** Merge `feat/crew-day-link`, apply `20260917c` in the SQL editor, run CARD 0 and CARDS A–E. Owner: ledger #347.
+- 🔴 **OPEN — APPLY `20260917c` AND RUN THE CARDS.** The ladder gate is satisfied and `origin/main` is merged in; apply the migration (one paste), run the V-block, then CARD 0 and CARDS A–F. Owner: ledger #347.
 - 🟡 **OPEN — STOP ORDER.** The page lists stops in schedule order; no route order is saved. Lean: save the sequence when Lauren routes a day. Owner: tech-debt #320.
-- 🟡 **OPEN — TWO WAYS TO MARK A STOP DONE.** The in-app Mark done shows the review prompt and cannot be undone; the crew link holds the ask and can. Which should the office tap do? Owner: tech-debt #321.
-- 🟡 **OPEN — THE PHONE IS TEXT, NOT A CALL BUTTON.** Read "no customer contact from this page" strictly. Say if the driver should get tap-to-call. Owner: ledger #347.
-- 🟡 **OPEN — THE CREW PAGE IS ENGLISH ONLY.** R-151 (the person chooses their language) is OPEN; the install crews' English is not reliable. Owner: `RULINGS.md` R-151.
+- ✅ **ANSWERED 2026-09-17 — [[R-161]]: ONE COMPLETION WRITER, TWO DOORS.** Both hold the review ask, both undo. Built the same day; tech-debt #321 closed.
+- ✅ **ANSWERED 2026-09-17 — YES to tap-to-call**, number still readable as text. Built.
+- ✅ **ANSWERED 2026-09-17 — ENGLISH ACCEPTED FOR THE PILOT**, wording cut to a few words. 🟡 **Spanish is now the next step against R-151** — owner: tech-debt #325 (the string layer first, then a two-word switch on the page; where a language lives for a person with no login is David's call).
+- 🟡 **OPEN — CLAUDE.md IS OVER ITS BUDGET AND THREE INVENTORY DOCS ARE STALE.** 678 lines vs ~600; `inventory-functions/env/ai` read 2026-06-13. David: after Saturday. Owner: tech-debt #324.
 **#346 — no phone note is lost when the old street column is dropped (migrations written, NOT APPLIED)**
 - ✅ **ANSWERED 2026-09-17 — APPLIED** (`20260917a` then `20260915b`; CARD 6 covered). ✅ **MERGED** (`0ff9499`). 🔴 **OPEN — GO-LIVE RELOAD before 12:00 Friday** (checklist in `docs/go-live/`). Owner: ledger #346.
 - 🟡 **OPEN — `5fa0c32e`'s main phone value holds the number and words** — a cleanup for Lauren (the words are now also a note). Owner: ledger #346.

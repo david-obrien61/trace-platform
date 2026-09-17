@@ -12,11 +12,12 @@
 > ⚠️ **The crew page (`/crew`) shows the same stamp at the foot.** Check it on the phone too.
 
 **Capability:** 3.5 (delivery / routing) · 3.4 (scheduling)
-**Story:** `user_stories.md` → *Lauren does the job twice, every delivery day* (PIECES `crew_route_send`, `crew_day_link`)
+**Story:** `user_stories.md` → *Lauren does the job twice, every delivery day* (PIECES `crew_route_send`, `crew_day_link`) · the tap: *The stop is done — one tap* (`fulfilment_tap`)
+**Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 7 covered** (7 `owed`).
-**Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all six paths and seven security guards through the real endpoint on the live schema; 17 of 17 deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
+**Board: 0 of 8 covered** (8 `owed`). ✏️ **CARD F added 2026-09-17** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
 > **All cards: your own login, on Test Dave's Tree Nest, plus your phone.** No console is needed on the phone.
@@ -37,12 +38,17 @@ SELECT p.proname,
        has_function_privilege('service_role', p.oid, 'EXECUTE')  AS server
   FROM pg_proc p
  WHERE p.pronamespace = 'public'::regnamespace
-   AND p.proname IN ('crew_day_read', 'crew_stop_act', 'create_crew_day_link', 'revoke_crew_day_link')
+   AND p.proname IN ('crew_day_read', 'crew_stop_act', 'stop_progress_apply', 'stop_act',
+                     'create_crew_day_link', 'revoke_crew_day_link')
  ORDER BY 1;
 ```
 
-**PASS:** the results grid shows four rows: `create_crew_day_link` and `revoke_crew_day_link` read `false · true · true`; `crew_day_read` and `crew_stop_act` read `false · false · true`.
-**FAIL:** fewer than four rows (the update is not applied), or `crew_day_read` / `crew_stop_act` shows `true` under anon or logged_in.
+**PASS:** the results grid shows **six** rows.
+- `create_crew_day_link`, `revoke_crew_day_link` and `stop_act` (the office door) read `false · true · true` — a logged-in person may call them, the public key may not.
+- `crew_day_read` and `crew_stop_act` read `false · false · true` — only the server, because the token is checked inside them.
+- `stop_progress_apply` (the one completion writer) reads `false · false · true` as well: nobody calls it directly, only the two doors above.
+
+**FAIL:** fewer than six rows (the update is not applied), or any `true` in the **anon** column, or `crew_day_read` / `crew_stop_act` / `stop_progress_apply` showing `true` under logged_in.
 
 ---
 
@@ -52,9 +58,9 @@ SELECT p.proname,
 2. On today's (or tomorrow's) day heading, tap **Crew link**. A panel opens: *Crew link for this day*.
 3. Tap **Make link**. A green box appears with the link and **Copy link** (and **Share…** on a phone).
 4. Tap **Copy link**, paste it into a text to yourself, and open it on your phone.
-5. The phone asks **Who is using this phone?** Type a name (e.g. *Dave test*) and tap **Continue**.
+5. The phone asks **Your name?** Type a name (e.g. *Dave test*) and tap **OK**.
 
-**PASS:** on the schedule, the panel reads **Link is on · made … · works until … 6:00 AM**; on the phone, the page shows the business name, the day, **Dave test · not you?**, and one card per stop with **STOP 1**, the address, **Open in Maps**, the customer name and phone, **ON THIS ORDER** with quantities and items, and **Start** / **Done** buttons.
+**PASS:** on the schedule, the panel reads **Link is on · made … · works until … 6:00 AM**; on the phone, the page shows the business name, the day, **Dave test · not you?**, and one card per stop with **STOP 1**, the address, a **Maps** button, the customer's name, their number as readable text with a **Call** button under it, **ON THIS ORDER** with quantities and items, and **Start** / **Done** buttons. Tapping **Call** opens your phone's dialler with that number (hang up — this is Test Dave's synthetic data, but check the number matches).
 **FAIL:** the panel shows an error, the phone page says the link does not work, a stop from another day appears, or a stop card is missing its address or items.
 
 ---
@@ -65,15 +71,15 @@ SELECT p.proname,
 2. Tap **Done**.
 3. On your computer, refresh **Delivery → Schedule** and find that stop.
 
-**PASS:** on the phone, STOP 1's top line reads **DONE <time> · Dave test** and an **Undo Done** button appears; on the schedule, that stop card shows the green **Done** chip and a grey box **From the crew link** with **Started <time> · Dave test** and **Done <time> · Dave test · review ask held, not sent**; the order screen for that stop still shows the order as not fulfilled.
+**PASS:** on the phone, STOP 1's top line reads **DONE <time> · Dave test** and an **Undo** button appears; on the schedule, that stop card shows the green **Done** chip and a grey box **From the crew link** with **Started <time> · Dave test** and **Done <time> · Dave test · review ask held, not sent**; the order screen for that stop still shows the order as not fulfilled.
 **FAIL:** the schedule shows no crew box or the wrong name, the order moved to fulfilled, a review prompt appeared anywhere, or the customer received anything.
 
 ---
 
 ## CARD B2 — an accidental Done is undone from the phone, and a note is kept
 **STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
-1. On the phone, on the stop from CARD B, tap **Undo Done**.
-2. Tap **Add a note**, type *gate was locked*, tap **Save note**.
+1. On the phone, on the stop from CARD B, tap **Undo**.
+2. Tap **Note**, type *gate was locked*, tap **Save**.
 3. Refresh the schedule on your computer.
 
 **PASS:** on the phone, the stop's top line reads **STARTED <time>** again with **Done** showing, and **CREW NOTES** lists *gate was locked* with your name; on the schedule, the crew box shows **Started**, no Done line, and **Note <time> · Dave test: gate was locked**, and the status chip is back to scheduled.
@@ -112,7 +118,21 @@ SELECT p.proname,
 
 ---
 
+## CARD F — 🔴 the office's own Mark done behaves the same: it holds the ask, and it can be undone
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery → Schedule** and pick a stop that is **not** done (use a different stop from CARD B).
+1. On the stop card, tap **Start this stop**, then tap **Mark done**.
+2. Watch for a review prompt. **There must not be one.**
+3. The card now shows the green **Done** chip and, beside it, a red **Undo done** control. Tap it.
+4. Open the same stop's card again and tap **Mark done** once more.
+
+**PASS:** no review prompt appears at any point; after step 1 the card shows **Done** plus **From the crew link — Started … Done … · <your member name> · review ask held, not sent**; after step 3 the chip is back to **Scheduled** and the crew box no longer shows a Done line; step 4 marks it done again. The customer receives nothing at any point.
+**FAIL:** a review prompt opens (the ask was spent), there is no **Undo done** control, Undo errors, or the stop's crew box names nobody.
+
+---
+
 ## WHAT THIS BOARD DOES NOT COVER
 - **Expiry at 6:00 AM the next day** — proven by the builder test `crew.expired`, not by a card: waiting overnight is not a useful owner test. If you want to see it, open Monday a link made for Saturday.
 - **The rate limit** (60 calls a minute per phone) — builder test `crew.rate-limit`.
-- **Spanish** — the page is English only. The language story (*Give it to me in my language*) applies and is not built here.
+- **Spanish** — the page is English only, by David's call for the pilot; the crew wording was cut to a few words per control. Filed as the next step against [[R-151]]: tech-debt **#325**.
+- **A stop completed before this build** (an imported history stop, [[R-37]]) — neither door will reopen it, and it says why. Proven by `office.undo-done` and `crew.undo-done`, not by a card: making one would mean marking a real imported stop.

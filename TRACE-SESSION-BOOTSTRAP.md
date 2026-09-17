@@ -81,10 +81,10 @@
 
 ### 🟡 BUILT, NOT MERGED — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
 
-- 🟡 **BUILDER-COMPLETE · migration `20260917c` WRITTEN, NOT APPLIED · waiting on David's merge word.** Must be merged, applied and live by **Friday 2026-09-18 afternoon.**
-  Lauren makes a one-day link on the schedule → driver's phone shows the day's 7 LAWNS stops (addresses, Maps, name + phone, items, no prices) → Start / Done / Undo / Note with the typed name. Done holds a review ask; the order and stock do not move.
-  Registry `stop-progress` (6 paths · 7 guards, 17/17 mutants caught). Board: `crew-day-link-full-surface-test.md` 0/7. Debt: #320 (no saved route order) · #321 (two Done writers).
-- 🔴 **Friday order:** merge → apply `20260917c` in the SQL editor → CARD 0 → CARDS A–E on Test Dave's → make LAWNS's Saturday link.
+- 🟡 **BUILDER-COMPLETE · migration `20260917c` WRITTEN, NOT APPLIED.** Ready to merge: **the ladder gate is satisfied** (#343 `56107ee` is in `main`, its migration applied live) and `origin/main` is merged into this branch.
+  Lauren makes a one-day link on the schedule → driver's phone shows the day's 7 LAWNS stops (address + Maps, name + number + Call, items, **no prices**) → Start / Done / Undo / Note with the typed name. Done holds a review ask; the order and stock do not move.
+- ✅ **[[R-161]] ONE COMPLETION WRITER, TWO DOORS** — the office's Mark done now holds the ask too (no prompt at a desk) and is undoable from the stop card. Registry `stop-progress`: **9 paths · 8 guards · 22/22 mutants**. Board 0/8 (CARD F is the office door). Debt: #320 open · **#321 resolved** · #324, #325 filed.
+- 🔴 **Friday order:** merge → apply `20260917c` (one paste) → V-block → CARD 0 → CARDS A–F on Test Dave's → make LAWNS's Saturday link and text it to the driver.
 ### ✅ MERGED 2026-09-17 (`0ff9499`, production 17:20 UTC) — #346 (`fix/346-notes-before-drop`) — **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED**
 
 - ✅ **APPLIED 2026-09-17 by David:** `20260917a` then `20260915b` — step j done; CARD 6 covered (on a corrected pass line). Checked live: only the four `customers` columns went.
