@@ -3443,6 +3443,7 @@ intent — and (6) is guarded only by `RULINGS.md`'s shape. **Neither cap closes
 > - An **off-ladder size** is UNRESOLVED, named, and COUNTED (tree count and bubblers include it). A **rung with no volume** is counted, named, and its mix not invented.
 > - The page reads both through `lib/loadListSettingsRead.ts`, has its own **could not read sizes** / **no sizes set up** states, prints **Figures used**, and a staff login is told the figures are the standard ones (tech-debt #309).
 > - **Saturday 2026-08-29:** 5 yd of mix (was 2.5) · 24 posts · 96 ft rope · 11 bubblers.
+> - ✏️ **2026-09-17:** the figures are read through the read-only `get_planting_materials` for EVERY login (staff included — tech-debt #309 resolved); the figures used and the deer-fence rule print ONCE, AT THE TOP, and no stop is listed as unresolved for fence. **Saturday 2026-09-19:** 7 yd (was 3.5) · 27 trees · 54 posts · 216 ft rope · 27 bubblers.
 > - **PROOF:** `loadList.test.ts` 137 · `loadListPage.test.ts` 50 · load-list mutants **51/52** (P1 is the reach control, caught by the page suite).
 
 **What it is.** `/load-list?date=YYYY-MM-DD` — a printable sheet for the person loading the trailer.

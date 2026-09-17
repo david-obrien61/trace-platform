@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 18.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 19.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
@@ -107,8 +107,8 @@ COVERS: *"the page must never silently omit something it could not compute"*
 SIGNAL: `unresolved: 1`
 
 Same page. Find the red **COULD NOT WORK OUT** block.
-**PASS:** its heading reads **(7)** — ✏️ *(was 1: it now also carries one line for deer fence, "6 stops
-with trees", CARD 5)* — and it lists **1 line — `Military Discount 5%`** — with the sentence *"We could not read "5%"
+**PASS:** its heading reads **(1)** and it lists **1 line — `Military Discount 5%`** — ✏️ *(2026-09-17: no
+deer-fence line here any more; the fence rule is printed once at the top, CARD 5)* — with the sentence *"We could not read "5%"
 as a size. Check the invoice."*, and the page states that nothing in it is counted in the totals
 above. **Leroy & Lila Ludemann**'s stop line ends **· 1 line could not be read**.
 **🔴 FAIL if** the block is absent or empty. A tidy page here is the failure, not the pass.
@@ -145,8 +145,10 @@ from Settings → Operations)*, and **each tree row says how many stake posts it
 says fence material is **by the roll, measured as the circumference of the ring**.
 ✏️ **CHANGED 2026-09-16 (ledger #343):** the *"95 gallon and above — 4 more, or reuse?"* sentence is
 **GONE**: the rule's own words (*"4 T-posts per tree **in total**"*) settle it — a 95 gallon tree
-already has 4 and takes none. **PASS also:** the COULD NOT WORK OUT block carries **"Deer fence — 6
-stops with trees"**, because nothing records which of them need it.
+already has 4 and takes none.
+✏️ **CHANGED 2026-09-17 (David):** the deer-fence block is printed **ONCE, AT THE TOP** — above
+*1 · Special mix* — and **no stop is listed for fence** anywhere (not in COULD NOT WORK OUT, not on a
+stop's line). **FAIL if** a "Deer fence — N stops" line appears in the red block.
 **PASS also — new:** the ring rule is stated (*grows with the square root of container gallons —
 5 ft at 15 gallon, 12 ft at 95 gallon*), and **every tree size on the day carries its own figure**:
 a ring diameter in feet, feet of fence for one tree, and feet if every tree of that size were
@@ -208,6 +210,40 @@ Open `/load-list?date=` on a date with no stops (any Sunday well in the past).
 **PASS:** the page reads **"No stops are scheduled for this day."**, the **Print button is
 disabled**, and a note beside it says why.
 **FAIL if** it offers to print a blank sheet.
+
+---
+
+# 🔴 FRIDAY 2026-09-18 — BEFORE SATURDAY'S TRAILER
+
+### CARD 19 — 🔴 SATURDAY 2026-09-19 PRINTS THE MIX AT 2 × THE CONTAINER, WITH ITS FIGURES AT THE TOP
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #343 — the go-live target for Saturday 2026-09-19
+SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYards: 7, tPosts: 54}`
+
+**Before you start:** the stamp at the foot of the screen must end **`· prod`** and show the SHA I give you
+after the merge.
+
+1. Open **Delivery → Load list** and pick **Saturday, September 19, 2026** (or go to
+   `/load-list?date=2026-09-19`).
+2. **At the very top**, find **Figures used for this list**. **PASS:** it reads
+   **Special mix per gallon of container — 2 gal** · **Rope per T-post — 4 ft** · **Bubblers per tree — 1** ·
+   **T-posts on a deer-fenced tree, in total — 4** · then **45 gal · 30 gal · 15 gal**, each **2 T-posts**
+   *(LAWNS, David 2026-09-12)* · and **Gallons in a cubic yard — 201.974**. It also says **"No figures have
+   been saved for this nursery — these are the standard ones."** — correct: LAWNS has saved none (measured
+   2026-09-17), and the standard mix IS 2.
+3. Just below it, the **Deer fence — add by hand** rule, once.
+4. **Section 1 · Special mix.** **PASS:** it reads **7 yards special mix**, and the sentence says
+   **"2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons"** with **1350 gallons**.
+   *(The old page would have said 3½ yards and 675 gallons.)*
+5. **Section 2 · Trees — 27 in total.** Each tree row shows its own gallons of mix — e.g.
+   **Eagleston Holly (Tree Form) 45 Gallon × 5 — 10 T-posts · 450 gal mix**.
+6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope · 27 bubblers**.
+7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"*.
+
+**FAIL if** the mix reads 3½ yards or 675 gallons (the old 1.0), if "Figures used" is missing or sits below
+the totals, or if the page says **"Could not read container sizes"** (the migration is not applied).
 
 ---
 
@@ -317,7 +353,7 @@ DEVICE: desktop
 COVERS: ledger #343 — *"The page states the values it used."*
 SIGNAL: the **Figures used for this list** block
 
-Saturday 2026-08-29.
+Saturday 2026-08-29. ✏️ **2026-09-17: the block is at the TOP of the page, above *1 · Special mix*.**
 **PASS:** the block lists **special mix 2 gal · rope 4 ft · bubblers 1 · deer-fenced tree 4 posts in total ·
 201.974 gallons in a cubic yard**, then one row per size on the day — **200 gal (200 gal container) 4 T-posts
 · 45 gal 2 · 15 gal 2** — each with *(LAWNS, David 2026-09-12)* once the migration's backfill has run.
@@ -358,17 +394,19 @@ a 100 gallon tree is on **95/100** with 4 posts.
 
 # NEEDS A SECOND LOGIN
 
-### CARD 18 — ⚠️ A STAFF LOGIN IS TOLD THE FIGURES ARE THE STANDARD ONES
+### CARD 18 — 🔴 A STAFF LOGIN READS THE NURSERY'S OWN FIGURES
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: either
-COVERS: tech-debt #309
-SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'defaults_withheld'}`
+COVERS: tech-debt #309 (✏️ resolved 2026-09-17 — David: staff may READ the planting figures)
+SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'stored'}` for the STAFF login
 
-As a **STAFF** member with `deliveries:read` (no `settings:read`), open Saturday 2026-08-29.
-**PASS:** the "Figures used" block carries **"These are the standard figures — this login cannot read the
-nursery's own settings. Ask the owner to confirm them."**
-**FAIL if** a staff login sees no such line — then a changed figure would print wrong with nothing saying so.
+✏️ **CHANGED 2026-09-17.** Staff now read the four figures through `get_planting_materials`.
+1. As the **OWNER**, set *Special mix per gallon of container* to **2.5** in Settings → Operations and Save.
+2. As a **STAFF** member (no settings access), open Saturday's load list.
+**PASS:** "Figures used" shows **2.5 gal**, and no "standard figures" warning appears.
+**FAIL if** the staff login shows 2 or a warning — it is still being refused.
+3. As the OWNER, **set it back to 2** and Save.
 
 ---
 
