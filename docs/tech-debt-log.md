@@ -4061,3 +4061,21 @@ never called. So a truck run completed in the app leaves every order open.
 **Automatic SPM consumption depends on it**: stock (and the per-order consumption it will record) moves on
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
+
+## #322 — 🔴 GO-LIVE: AFTER A RELOAD, CAPTURED ORDERS DO NOT RE-ATTACH TO THE RE-IMPORTED CUSTOMER (NEW 2026-09-17, ledger #348)
+
+**What.** A reload deletes the imported customers and imports them again, and they come back with NEW
+ids. A captured order (`order_kind = 'history'`, from an OCR invoice or the QuickBooks history ingest)
+points at the OLD id, so after a reload it either blocks the undo or is left pointing at a customer
+that is gone. David, 2026-09-16: **captured records are never removed — they must RE-ATTACH by
+`qb_customer_id` after a reload.**
+
+**Why it is a go-live item.** It is what stands between "test freely, reload whenever" and "the reload
+refuses once training starts" — the undo refuses today while any captured order sits on an imported
+customer (measured live 2026-09-17: 0, which is why tonight's reload is clear). After Friday's training
+there will be some.
+
+**Shape of the fix (not built).** The import already matches on `qb_customer_id`. Either (a) the undo
+detaches a captured order's `customer_id` (keeping the QuickBooks id on the order) and the import
+re-attaches it, or (b) orders carry `qb_customer_id` and the link is derived rather than stored. Both
+need a ruling on what a captured order shows while it is detached. **Owner:** David.

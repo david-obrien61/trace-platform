@@ -743,6 +743,36 @@ export function planContactEdit(
   return plan;
 }
 
+/**
+ * 🔴 THE RUN TAG FOR A ROW TYPED DURING TESTING (ledger #348 · David, 2026-09-16, restated 09-17:
+ * *"the wipe must work regardless of what users entered or changed during testing"*).
+ *
+ * While a business is in TEST MODE, a phone, email or address added to a customer that CAME FROM AN
+ * IMPORT is stamped with that import's run id, so the import's undo takes it back with the customer
+ * it belongs to. `20260917b` also makes the undo remove such rows whether or not they carry the tag —
+ * the two together mean a test-mode edit can never block a wipe, and never survive one either.
+ *
+ * With writes ON, nothing is stamped: the row is a real customer's real contact detail, the undo
+ * refuses on it, and that refusal is the protection.
+ *
+ * Degrades to `null` (no tag) on any read failure — a contact save must not fail over provenance.
+ */
+export async function testModeRunTag(
+  db: SupabaseClient, businessId: string, customerId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await db.from('customers')
+      .select('import_run_id, businesses(qbo_writes_enabled)')
+      .eq('id', customerId).eq('business_id', businessId).maybeSingle();
+    if (error || !data) return null;
+    const row = data as unknown as { import_run_id: string | null; businesses: { qbo_writes_enabled: boolean | null } | null };
+    if (row.businesses?.qbo_writes_enabled !== false) return null;   // writes on, or unknown → no tag
+    return row.import_run_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export type ContactEditOutcome =
   | { ok: true; wrote: number; results: ContactValueResult[]; audited: boolean; auditError?: string }
   | { ok: false; error: string; results: ContactValueResult[]; audited: boolean; auditError?: string };
@@ -822,11 +852,13 @@ export async function writeContactEdit(
       .eq('business_id', businessId).eq('customer_id', customerId).eq('active', true)
       .order('is_default', { ascending: false }).order('created_at', { ascending: true }),
   ]);
+  // #348: in test mode a row typed onto an imported customer carries that import's run id.
+  const runTag = policy.importRunId ?? await testModeRunTag(db, businessId, customerId);
   const plan = planContactEdit({
     phones: (hp.data ?? []) as unknown as HeldValue[],
     emails: (he.data ?? []) as unknown as HeldValue[],
     addresses: (ha.data ?? []) as unknown as HeldAddress[],
-  }, edit, policy, { businessId, customerId });
+  }, edit, { ...policy, importRunId: runTag }, { businessId, customerId });
   const log = (results: ContactValueResult[]) => logContactChanges(db, businessId, customerId, results, policy);
 
   for (const [table, res] of [['customer_phones', hp], ['customer_emails', he], ['customer_addresses', ha]] as const) {
@@ -1099,7 +1131,13 @@ export async function retireContact(db: SupabaseClient, x: ListActionInput): Pro
 export async function insertShipToSite(
   db: SupabaseClient, row: Omit<CustomerAddress, 'id'>, columns: string,
 ): Promise<{ rows: CustomerAddress[]; error: { code?: string; message: string } | null }> {
-  const { data, error } = await db.from('customer_addresses').insert(row).select(columns);
+  // #348: a site saved during testing rides the customer's import run, so the undo takes it back.
+  const tagged = { ...row } as Record<string, unknown>;
+  if (tagged.import_run_id === undefined || tagged.import_run_id === null) {
+    const tag = await testModeRunTag(db, row.business_id, row.customer_id);
+    if (tag) tagged.import_run_id = tag;
+  }
+  const { data, error } = await db.from('customer_addresses').insert(tagged).select(columns);
   // A8 / R-12: the caller checks `rows.length === 1` and says so in words.
   return { rows: (data ?? []) as unknown as CustomerAddress[], error: error as { code?: string; message: string } | null };
 }
