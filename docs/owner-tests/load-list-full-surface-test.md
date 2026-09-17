@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 19.** Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 19.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
@@ -126,42 +126,24 @@ be read* — **not** as a tree size. Then open **`/load-list?date=`** on a day w
 **FAIL if** the floor warning fires on every day — a warning that always fires is ignored — **or**
 if it blames a tree size, which is a state that no longer exists.
 
-### CARD 5 — DEER FENCE SAYS IT IS NOT RECORDED
+### CARD 5 — 🔴 DEER FENCE PRINTS NOTHING UNLESS A STOP RECORDS IT
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: the capture gap, measured 2026-09-12 · [[R-156]] the ring figures, 2026-09-14
-SIGNAL: a **ft ring · ft fence per tree** figure against each tree size in the deer-fence block
+COVERS: David, 2026-09-17 — *"print nothing … unless a stop records that it needs fence"*
+SIGNAL: no deer-fence block on the sheet
 
-✏️ **THIS CARD CHANGED ON 2026-09-14 AND ITS PROOF RESET WITH IT ([[R-156]], OP-14 clause 3).** It
-used to ask only that the page print the RULE. The page now prints the **FEET**, per tree size, so
-the hand-add is read off rather than worked out on a trailer.
+✏️ **REWRITTEN 2026-09-17, AND ITS PROOF RESET (OP-14 clause 3).** This card used to require the RULE,
+the ring rule and a per-tree fence figure on every sheet. David ran it and ruled the opposite: on a day
+where nothing is marked, the sheet says nothing at all about deer fence.
 
-Same page.
-**PASS:** a block reads **DEER FENCE — nothing recorded**, states that nothing in the system marks
-which stops need it, gives the hand rule — ✏️ *a fenced tree carries **4 T-posts in total** (the figure
-from Settings → Operations)*, and **each tree row says how many stake posts it already has** — and
-says fence material is **by the roll, measured as the circumference of the ring**.
-✏️ **CHANGED 2026-09-16 (ledger #343):** the *"95 gallon and above — 4 more, or reuse?"* sentence is
-**GONE**: the rule's own words (*"4 T-posts per tree **in total**"*) settle it — a 95 gallon tree
-already has 4 and takes none.
-✏️ **CHANGED 2026-09-17 (David):** the deer-fence block is printed **ONCE, AT THE TOP** — above
-*1 · Special mix* — and **no stop is listed for fence** anywhere (not in COULD NOT WORK OUT, not on a
-stop's line). **FAIL if** a "Deer fence — N stops" line appears in the red block.
-**PASS also — new:** the ring rule is stated (*grows with the square root of container gallons —
-5 ft at 15 gallon, 12 ft at 95 gallon*), and **every tree size on the day carries its own figure**:
-a ring diameter in feet, feet of fence for one tree, and feet if every tree of that size were
-fenced. On Saturday 2026-08-29 that means the **200 gallon Live Oak reads about 17.2 ft ring and
-55 ft of fence** — not a blank, not a zero, not a hand-work note.
-**🔴 FAIL if** the page is silent about deer fence. Silence on a printout reads as *none needed*.
-**🔴 FAIL if** any tree size shows a blank or a **0** where a fence figure should be — that is the
-exact failure [[R-156]] exists to prevent (*"rope is a quantity so a missing one reads as zero"*),
-and it is the T-post table's defect one quantity over.
-**FAIL if** a DAY TOTAL for fence appears. There must not be one: nothing records which trees are
-fenced, so a day total would be a fabricated quantity.
-⚠️ Measured across the whole LAWNS tenant: **zero** order lines and **zero** stop notes mention
-deer, fence, T-post or stake. `DF` — *Deer Fencing* — exists only as a QuickBooks **catalogue**
-item nothing points at.
+Saturday 2026-08-29 (and 2026-09-19 — no stop on either records fence).
+**PASS:** **nowhere** on the page do the words *deer fence*, *ring* or *fence per tree* appear. The
+hardware section shows T-posts, rope and bubblers only.
+**🔴 FAIL if** the rule, the ring rule, or any per-tree ring/fence footage prints.
+⚠️ **The arithmetic is still there and still tested** — a stop that says it needs fence brings each tree
+to 4 T-posts IN TOTAL, and the block prints then. Measured across the whole LAWNS book 2026-09-17:
+**not one order line has ever said Deer Fencing**, so no card can exercise a real fenced stop yet.
 
 ### CARD 6 — 🔴 THE PRINTED PAGE (this is the deliverable, not the screen)
 STATUS: owed
@@ -225,23 +207,34 @@ SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYar
 
 1. Open **Delivery → Load list** and pick **Saturday, September 19, 2026** (or go to
    `/load-list?date=2026-09-19`).
-2. **At the very top**, find **Figures used for this list**. **PASS:** it reads
+2. **On the LAST page**, find **Figures used for this list** — ✏️ *(2026-09-17: reference, not load
+   instructions, so it prints on its own page at the back, not at the top)*. **PASS:** it reads
    **Special mix per gallon of container — 2 gal** · **Rope per T-post — 4 ft** · **Bubblers per tree — 1** ·
    **T-posts on a deer-fenced tree, in total — 4** · then **45 gal · 30 gal · 15 gal**, each **2 T-posts**
    *(LAWNS, David 2026-09-12)* · and **Gallons in a cubic yard — 201.974**. It also says **"No figures have
    been saved for this nursery — these are the standard ones."** — correct: LAWNS has saved none (measured
    2026-09-17), and the standard mix IS 2.
-3. Just below it, the **Deer fence — add by hand** rule, once.
+3. ✏️ **Deer fence: nothing prints** — no rule, no ring, no footage. Nothing records which stops need
+   fence, and a stop that says so is the only thing that brings it back (2026-09-17).
 4. **Section 1 · Special mix.** **PASS:** it reads **7 yards special mix**, and the sentence says
    **"2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons"** with **1350 gallons**.
    *(The old page would have said 3½ yards and 675 gallons.)*
 5. **Section 2 · Trees — 27 in total.** Each tree row shows its own gallons of mix — e.g.
    **Eagleston Holly (Tree Form) 45 Gallon × 5 — 10 T-posts · 450 gal mix**.
 6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope · 27 bubblers**.
-7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"*.
+7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"* — and nothing else.
+8. ✏️ **NOTHING ELSE PRINTS (2026-09-17).** No Trip Charge (5 of them), no Customer Discount, no
+   "15% Off - Tree Sale", and **no "Also on these orders" block at all.**
+9. ✏️ **Trunk protection:** hardware shows **2 trunk protection**, and it appears on the stop that
+   carries it.
+10. 🔴 ✏️ **THE LAST STOP (Chris Dubec, 8 Eagleston Holly):** a flagged line reads **"plus 1 tree to
+   plant on site (Plant Your Tree) — size unknown; add mix and T-posts by hand."** The day's tree count
+   stays **27** (it is not one of them) and the FLOOR warning fires because of it.
 
-**FAIL if** the mix reads 3½ yards or 675 gallons (the old 1.0), if "Figures used" is missing or sits below
-the totals, or if the page says **"Could not read container sizes"** (the migration is not applied).
+**FAIL if** the mix reads 3½ yards or 675 gallons (the old 1.0); if any charge, discount or "also on these
+orders" line prints; if the deer-fence rule prints on a day nobody marked; if "Figures used" is missing or
+sits at the top instead of its own page at the back; if Chris Dubec's ninth tree is silent or is counted as
+a tree; or if the page says **"Could not read container sizes"**.
 
 ---
 
@@ -300,8 +293,9 @@ SIGNAL: —
 Open `/load-list?date=` on a day carrying one of these known lines — e.g. an order containing
 **"Cedar Elm - 30 gallon Install & Warranty"** or **"Chinkapin Oak - 45 gallon (Buy One Get One
 Half Off) Install & Warranty"**.
-**PASS:** the line appears under **"Also on these orders — no container size"** or under **COULD
-NOT WORK OUT** — i.e. it is VISIBLE and not counted as a tree.
+✏️ **CHANGED 2026-09-17:** the "Also on these orders" block is gone, so the ONLY place such a line can
+appear is **COULD NOT WORK OUT**. **PASS:** the line appears there — VISIBLE, and not counted as a tree.
+🔴 **FAIL if it is absent altogether** — a tree we cannot size must never be dropped with the charges.
 **🔴 This card passes on a page that is INCOMPLETE, and that is deliberate.** Measured 2026-09-12
 over all 130 LAWNS order lines: **9 real trees state a gallon size in plain text that the resolver
 cannot reach**, because a remark trails *after* the size without brackets. The page is honest about
@@ -351,7 +345,8 @@ DEVICE: desktop
 COVERS: ledger #343 — *"The page states the values it used."*
 SIGNAL: the **Figures used for this list** block
 
-Saturday 2026-08-29. ✏️ **2026-09-17: the block is at the TOP of the page, above *1 · Special mix*.**
+Saturday 2026-08-29. ✏️ **2026-09-17: the block is on its OWN PAGE, at the BACK** — reference, not load
+instructions (David, after running it live).
 **PASS:** the block lists **special mix 2 gal · rope 4 ft · bubblers 1 · deer-fenced tree 4 posts in total ·
 201.974 gallons in a cubic yard**, then one row per size on the day — **200 gal (200 gal container) 4 T-posts
 · 45 gal 2 · 15 gal 2** — each with *(LAWNS, David 2026-09-12)* once the migration's backfill has run.
@@ -422,5 +417,7 @@ SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'stored'}` for the STAFF login
   differ by up to ~6% away from the anchors. **Exact at 15 and 95 either way**, so no card on real
   LAWNS sizes can tell the readings apart — it needs a sentence from David, not a test.
 - **Whether the computed bubbler count matches an invoice that bills bubblers.** The page prints
-  both — the computed count in section 3, the billed `TB` line under *"Also on these orders"* — and
-  deliberately does not reconcile them, because a word-matching rule is what R-144 forbids.
+  the computed count in section 3 and **no longer prints the billed `TB` line at all** (2026-09-17: a
+  Tree Bubbler line is recognised and left off). Nothing reconciles the two — the billed line is now
+  invisible on this sheet, so a mismatch between what was billed and what the sheet says to load is
+  **uncovered here**, by David's own instruction.

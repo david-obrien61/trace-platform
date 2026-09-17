@@ -4194,3 +4194,31 @@ a two-word switch on the page itself (`English · Español`, both always visible
 globe), remembered per device beside the name. That is a decision for David, because it is the first
 place the platform would store a language without a person to attach it to. ⚠️ R-151 also warns the
 string layer must exist first or inline strings bypass it invisibly — so the layer, then this page.
+
+## #326 — 🟡 NOTHING COMPARES A BILLED MATERIAL WITH WHAT THE SHEET SAYS TO LOAD (NEW 2026-09-17, ledger #350)
+
+**Filed on David's instruction — "file, do not build".**
+
+**What.** The load list computes the install materials from the trees: one bubbler per tree, T-posts off
+each size, rope off the posts, mix off the container volume. The ORDER may also carry a BILLED line for
+the same object — `Tree Bubbler` (`TB`) is the live case: **5 lines across LAWNS's book.** The sheet
+prints the computed count and, since ledger #350, does **not** print the billed line, because printing
+both would read as a demand for two bubblers where one is wanted.
+
+🔴 **So nothing compares the two, and a disagreement is invisible in both directions.** A customer billed
+for 4 bubblers on a 2-tree order gets 2 on the sheet; a 10-tree order with no bubbler line still says 10.
+Neither is flagged. The same shape applies to any future billed material that is also computed.
+
+⚠️ **This is a DELIBERATE exception inside a rule that says the opposite.** David, 2026-09-17: *"anything
+physical that a customer bought is loaded on the truck, so it prints."* A billed bubbler IS physical. It
+is the one physical thing kept off the sheet, and `loadList.ts` says so at the line (`NON_LOAD_LINES`),
+with mutant **C15** holding the exception in place: delete it and the billed line prints again.
+
+**Why it is not built here.** Reconciling billed-vs-computed is a RULE nobody has given: which one wins,
+what a mismatch does to the printed sheet, and whether it belongs on this page at all or on the order.
+Measured: it cannot be done from `service_offerings` either — LAWNS has four rows there and `Tree Bubbler`
+is one of them, but nothing links an order line to a computed quantity.
+
+**Owner:** David — the ruling. **Fix, when ruled:** compare the billed quantity for each computed material
+against the computed total per stop, and surface a disagreement as a line in *"could not work out"* rather
+than silently preferring either number.

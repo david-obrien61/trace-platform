@@ -51,7 +51,10 @@ function ok(cond: boolean, msg: string): void {
 {
   ok(/export function LoadList/.test(src), 'A0: the page was READ and is the file it claims to be');
 
-  for (const bucket of ['model.unresolved', 'model.noSizeStated', 'model.otherGoods', 'model.stops', 'model.trees']) {
+  // ✏️ 2026-09-17: `model.noSizeStated` and `model.otherGoods` are GONE — the sheet is an allow-list,
+  // and a recognised non-load line prints nowhere (David: "additional information to yard crew is too
+  // confusing"). What must still be rendered is every bucket that CAN go on the trailer.
+  for (const bucket of ['model.unresolved', 'model.stops', 'model.trees', 'model.otherGoods']) {
     ok(src.includes(`${bucket}.map(`),
       `🔴 A: the page RENDERS ${bucket} — a bucket the model fills and the page ignores is the same omission, one layer out`);
   }
@@ -70,14 +73,20 @@ function ok(cond: boolean, msg: string): void {
   ok(/deerFenceGap/.test(src) && /deerFenceTotal\(/.test(src),
     '🔴 A9: the deer-fence gap AND the in-total fence figure are both on the page');
   ok(!/deerFence95Open/.test(code), 'A9b (negative): the settled 95 gallon question is no longer printed as open');
-  // ✏️ A10 CHANGED 2026-09-17 (David): the deer-fence rule prints ONCE, AT THE TOP — above section 1 —
-  // and the unresolved block no longer lists stops for fence.
-  ok(code.indexOf('Deer fence — add by hand') > 0 && code.indexOf('Deer fence — add by hand') < code.indexOf('1 · Special mix'),
-    '🔴 A10: the deer-fence rule is printed once, ABOVE the special mix');
+  // ✏️ A10 CHANGED AGAIN 2026-09-17, AFTER DAVID RAN IT: deer fence prints NOTHING unless a stop
+  // records that it needs fence. No rule, no ring, no footage on an ordinary day.
+  ok(/model\.stops\.some\(st => st\.deerFence === 'yes'\) \?/.test(code),
+    '🔴 A10: the whole deer-fence block is behind "a stop says it is fenced"');
+  ok(code.indexOf("st.deerFence === 'yes'") < code.indexOf('Deer fence — add by hand'),
+    '🔴 A10a: …the gate comes FIRST — the rule cannot print on a day nobody marked');
   ok(!/model\.deerFenceUnknownStops > 0/.test(code) && !/deer fence not recorded/.test(code),
     '🔴 A10b (negative): no per-stop fence line and no fence entry in the unresolved block');
-  ok(code.indexOf('LOAD_LIST_COPY.valuesHeading') > 0 && code.indexOf('LOAD_LIST_COPY.valuesHeading') < code.indexOf('1 · Special mix'),
-    '🔴 A10c: the figures used are printed at the TOP, above the special mix');
+  // ✏️ A10c REVERSED 2026-09-17 (David): the figures are REFERENCE, not load instructions — their own
+  // page, at the back, not the top of the sheet.
+  ok(code.indexOf('LOAD_LIST_COPY.valuesHeading') > code.indexOf('1 · Special mix'),
+    '🔴 A10c: the figures used come AFTER the load itself');
+  ok(/ll-figures \{ page-break-before: always; \}/.test(src) && /className="ll-block ll-figures"/.test(code),
+    '🔴 A10d: …and on their OWN PAGE — a print page-break, so they never crowd the load');
   ok(/model\.offLadderTreeCount > 0 \?/.test(src) && /model\.noVolumeTrees\.length > 0 \?/.test(src),
     '🔴 A11: off-ladder trees and sizes with no volume are both printed — counted, never silently dropped');
 }
@@ -111,8 +120,17 @@ function ok(cond: boolean, msg: string): void {
 {
   ok(/s\.problem \?/.test(src),
     '🔴 B1: a stop that could not be read prints WHY, rather than as an ordinary stop with no items');
-  ok(/s\.items\.map\(/.test(src),
-    'B2: every stop prints its own lines — the per-stop breakdown is what you need when a stop gets dropped');
+  ok(/s\.items\.filter\(i => i\.kind !== 'not_loaded' && i\.kind !== 'plant_on_site'\)/.test(src),
+    '🔴 B2: a stop prints its own lines — MINUS the ones we recognise as not going on the trailer');
+  ok(/s\.plantOnSite\.length > 0 \?/.test(src) && /LOAD_LIST_COPY\.plantOnSite/.test(src),
+    '🔴 B2b: …and a tree already on site to plant is printed on its stop (David, 2026-09-17)');
+  ok(/model\.trunkProtection > 0 \?/.test(src) && /trunkProtectionLine/.test(src),
+    'B2c: trunk protection is on the list, so the day total prints it');
+  // ✏️ 2026-09-17 second pass: goods print in their own section (David: anything physical prints).
+  ok(/model\.otherGoods\.length > 0 \?/.test(src) && /alsoOnTruckHeading/.test(src) && /alsoOnTruckWhy/.test(src),
+    '🔴 B2d: "Also on the truck" prints every physical good, with the sentence saying money lines are nowhere');
+  ok(code.indexOf('alsoOnTruckHeading') > code.indexOf('3 · Hardware'),
+    'B2e: …after the load itself, not above it');
   ok(/s\.unresolvedCount > 0/.test(src),
     'B3: a stop carrying a line nobody could read says so on its OWN row, not only in the day total');
   // B3b (negative) — the out-of-ladder concept is GONE from the page too, not just from the model.
