@@ -178,39 +178,31 @@ LAST-PROVEN: —
 DEVICE: desktop
 COVERS: ledger #335
 
-Run it whole. **It rolls itself back and writes nothing.**
-
-✏️ **CHANGED 2026-09-16, after the seed.** The first version inserted a second PRIMARY phone for the
-oldest customer; once ② seeds that customer's existing phone as primary, that insert hits the
-one-primary index and **errors**. This version demotes the existing primary first (inside the same
-rolled-back transaction), picks a customer who HAS an address, and reads the address back — so it
-proves the seed as well as the trigger.
+Run it whole. **It always ends in an error on purpose — that error IS the result, and it undoes
+everything, so nothing is kept.** ✏️ 2026-09-17: was `BEGIN … ROLLBACK`, which keeps the change if the
+`ROLLBACK` line is not run.
 
 ```sql
-BEGIN;
-  UPDATE public.customer_phones SET is_primary = false
-   WHERE customer_id = (SELECT id FROM public.customers
-                         WHERE COALESCE(btrim(billing_line1),'') <> ''
-                         ORDER BY created_at, id LIMIT 1);
+DO $$
+DECLARE v_id uuid; v_flat text; v_list text; v_norm text; v_street text;
+BEGIN
+  SELECT id INTO v_id FROM public.customers
+   WHERE COALESCE(btrim(billing_line1),'') <> '' ORDER BY created_at, id LIMIT 1;
+  UPDATE public.customer_phones SET is_primary = false WHERE customer_id = v_id;
   INSERT INTO public.customer_phones (business_id, customer_id, label, value, is_primary, source)
-  SELECT business_id, id, 'mobile', '(512) 555-0142', true, 'v-block'
-    FROM public.customers
-   WHERE COALESCE(btrim(billing_line1),'') <> ''
-   ORDER BY created_at, id LIMIT 1;
-  SELECT c.id, c.phone AS derived_flat_column, p.value AS list_value, p.value_norm,
-         c.billing_line1 AS address_after_the_write
-    FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id
-   WHERE p.source = 'v-block';
-ROLLBACK;
+  SELECT business_id, id, 'mobile', '(512) 555-0142', true, 'v-block' FROM public.customers WHERE id = v_id;
+  SELECT c.phone, p.value, p.value_norm, c.billing_line1 INTO v_flat, v_list, v_norm, v_street
+    FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id AND p.source = 'v-block'
+   WHERE c.id = v_id;
+  RAISE EXCEPTION 'CARD 4 (nothing kept): flat phone = % · list value = % · value_norm = % · street after = %',
+    v_flat, v_list, v_norm, v_street;
+END $$;
 ```
 
-**PASS:** exactly **one** row · `derived_flat_column` = `(512) 555-0142` · `value_norm` = `5125550142` ·
-**`address_after_the_write` is a street, not NULL.**
-🔴 **A NULL `address_after_the_write` is the defect the seed exists to prevent** — the phone write
-recomputed the address from an empty list. Stop and report it.
-🔴 **If `derived_flat_column` is NULL or the old value, the trigger is not firing** — and the whole
-"the list is the truth, the columns are a view" claim is false. Stop and report it.
-
+**PASS:** the message reads `flat phone = (512) 555-0142 · list value = (512) 555-0142 · value_norm =
+5125550142 · street after = <a street, not NULL>`.
+🔴 **A NULL street after the write is the defect the seed exists to prevent.** Stop and report it.
+🔴 **If the flat phone is NULL or the old value, the trigger is not firing.** Stop and report it.
 ---
 
 ### CARD 4b — 🔴 A DIRECT WRITE IS REFUSED (the guard)
@@ -219,18 +211,20 @@ LAST-PROVEN: —
 DEVICE: desktop
 COVERS: ledger #335
 
-Run it whole. **It rolls itself back.**
+Run it whole. **It always ends in an error, which undoes everything.**
 
 ```sql
-BEGIN;
+DO $$
+BEGIN
   UPDATE public.customers SET phone = '(512) 555-0199'
    WHERE id = (SELECT id FROM public.customers ORDER BY created_at LIMIT 1);
-ROLLBACK;
+  RAISE EXCEPTION 'GUARD MISSING — the direct write was ACCEPTED (and has been undone by this error).';
+END $$;
 ```
 
 **PASS:** it stops with **`Not saved: a customer's phone, email and billing address are kept in their
 contact lists, not on the customer row. Nothing was changed.`**
-🔴 **If it says `UPDATE 1` instead, the guard is not installed** — an old writer could then set a phone
+🔴 **If it says `GUARD MISSING` instead, the guard is not installed** — an old writer could then set a phone
 that the next list write silently throws away. Stop and report it.
 
 ---

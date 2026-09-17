@@ -818,26 +818,33 @@ COMMIT;
 --  WHERE active AND (line1 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$'
 --                 OR line2 ~ '^\s*(\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\s*$');
 
--- V5c · the guard REFUSES a direct write. Run it whole; it rolls itself back.
--- BEGIN;
+-- V5c · the guard REFUSES a direct write. Run it whole. It ALWAYS ends in an error, which undoes
+-- everything — so nothing is kept even if the guard were missing (✏️ 2026-09-17: was BEGIN … ROLLBACK).
+-- DO $$
+-- BEGIN
 --   UPDATE public.customers SET phone = '(512) 555-0199'
 --    WHERE id = (SELECT id FROM public.customers ORDER BY created_at LIMIT 1);
--- ROLLBACK;
+--   RAISE EXCEPTION 'GUARD MISSING — the direct write was ACCEPTED (and has been undone by this error).';
+-- END $$;
 -- EXPECT: ERROR  Not saved: a customer's phone, email and billing address are kept in their contact lists …
 
 -- V6 · 🔴 THE TRIGGER ACTUALLY DERIVES — the one V that proves the mechanism rather than its
--- presence. Run it whole; it rolls itself back and writes nothing.
--- BEGIN;
---   INSERT INTO public.customer_phones (business_id, customer_id, label, value, is_primary, source)
---   SELECT c.business_id, c.id, 'mobile', '(512) 555-0142', true, 'v-block'
---     FROM public.customers c
+-- presence. Run it whole. It ALWAYS ends in an error, which undoes the test row (✏️ 2026-09-17:
+-- was BEGIN … ROLLBACK, which keeps the row if the ROLLBACK line is not run).
+-- DO $$
+-- DECLARE v_id uuid; v_flat text; v_norm text;
+-- BEGIN
+--   SELECT c.id INTO v_id FROM public.customers c
 --    WHERE NOT EXISTS (SELECT 1 FROM public.customer_phones p WHERE p.customer_id = c.id AND p.active)
 --    ORDER BY c.created_at LIMIT 1;   -- a customer with no phone yet, so the new one is the primary
---   SELECT c.id, c.phone AS derived_flat_column, p.value AS list_value, p.value_norm
---     FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id
---    WHERE p.source = 'v-block';
---   -- EXPECT: derived_flat_column = '(512) 555-0142'  ·  value_norm = '5125550142'
--- ROLLBACK;
+--   INSERT INTO public.customer_phones (business_id, customer_id, label, value, is_primary, source)
+--   SELECT business_id, id, 'mobile', '(512) 555-0142', true, 'v-block' FROM public.customers WHERE id = v_id;
+--   SELECT c.phone, p.value_norm INTO v_flat, v_norm
+--     FROM public.customers c JOIN public.customer_phones p ON p.customer_id = c.id AND p.source = 'v-block'
+--    WHERE c.id = v_id;
+--   RAISE EXCEPTION 'DERIVE CHECK (nothing kept): flat phone = % · value_norm = %', v_flat, v_norm;
+-- END $$;
+-- EXPECT: DERIVE CHECK (nothing kept): flat phone = (512) 555-0142 · value_norm = 5125550142
 
 -- V7 · `customers` gained NO shipping_* column and `deliveries` gained nothing. D-41's surviving
 -- redline, asserted rather than assumed. Expect ZERO rows.

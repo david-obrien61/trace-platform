@@ -1,7 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260916e — LAWNS: REMOVE THE STOCK-LEDGER ROWS TESTING WROTE · ledgers #335 / #342
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it, as `postgres`, in the SQL EDITOR (§6 r17).
+-- ✅ APPLIED 2026-09-17 13:33:53 UTC BY DAVID (5 rows removed, LAWNS ledger 475 → 470). Do NOT re-run —
+--    its checks would refuse anyway (the total is no longer 475).
 --    ORDER: 20260916a (the test-mode ledger guard, standalone) → 20260916c → THIS FILE.
 --    It REPLACES `20260916_rehearsal_cleanup_lawns.sql`, which was NOT applied: discovery
 --    2026-09-16 (query 7c) found zero seed rows, so it would have deleted nothing.

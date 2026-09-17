@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260916c — PRACTICE ORDERS CARRY THEIR RUN · THE IMPORT UNDO RUNS AS ONE UNIT · ledger #342
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it, as `postgres`, in the SQL EDITOR (§6 r17).
+-- ✅ APPLIED 2026-09-17 BY DAVID (SQL editor; the undo check refused as expected). Comment-only edits below.
 --    ✏️ 2026-09-16: the cleanup this file used to follow was NOT applied (discovery 7c found zero seed
 --    rows). Order now: 20260916a (the standalone test-mode ledger guard, ledger #344) → THIS FILE →
 --    20260916e (the targeted LAWNS removal of test-mode ledger rows).
@@ -239,14 +239,18 @@ COMMIT;
 --     FROM pg_proc p WHERE p.proname = 'undo_import_run';
 --   EXPECT 1 row: prosecdef=true, pronargs=2, authed=false, anon=false, service=true.
 --
--- V3 on LAWNS today the undo REFUSES and WRITES NOTHING (run in a transaction you roll back):
---   BEGIN;
---   SELECT public.undo_import_run('ed2e5933-45dc-4b9b-a331-ddfd125e7a74',
---     (SELECT import_run_id FROM public.business_inventory
---       WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id IS NOT NULL
---       ORDER BY created_at DESC LIMIT 1));
---   ROLLBACK;
---   EXPECT {"refused": true, ...} with held_lots >= 1 (the 6a60a0ca lot) — see the discovery file.
+-- V3 · THE UNDO, AS A DRY RUN THAT CAN NEVER KEEP ANYTHING.
+--   ✏️ 2026-09-17: this check used to call the undo inside BEGIN … ROLLBACK. Since 20260916e the undo
+--   no longer refuses on LAWNS — a plain call, or a BEGIN block run without its ROLLBACK, would WIPE
+--   the import. It is now a DO block that always ends in an error, which undoes everything it did.
+--   Run it whole. EXPECT the message  UNDO CHECK (nothing kept): {...}  —
+--   before 20260916e: "refused": true · after it: "refused": false (and still nothing deleted).
+--   DO $$
+--   DECLARE r jsonb;
+--   BEGIN
+--     r := public.undo_import_run('ed2e5933-45dc-4b9b-a331-ddfd125e7a74', 'eab7fbd2-04cd-45e5-b771-cbb07f662f6f');
+--     RAISE EXCEPTION 'UNDO CHECK (nothing kept): %', r;
+--   END $$;
 --
 -- V4 the index:
 --   SELECT indexname FROM pg_indexes WHERE tablename='orders' AND indexname='idx_orders_import_run';
