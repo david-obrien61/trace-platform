@@ -1,8 +1,17 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260917c — THE CREW DAY LINK · ledger #347
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- ⏳ NOT APPLIED. STANDALONE: it depends on no unmerged branch. Apply it on its own, then run the
---    V-block at the foot and paste the output back. ONE FILE, ONE PASTE.
+-- ✅ APPLIED 2026-09-17 BY DAVID, and the V-block came back clean (his paste, plus an independent
+--    live catalog read by Thunder before the merge — because his paste listed seven functions and the
+--    two that the office door needs, `stop_act` and `stop_progress_apply`, were not among them):
+--      V1  crew_day_links rls=true 1 policy · crew_link_rate rls=true 0 policies · delivery_stop_events rls=true 1 policy
+--      V2  completed_by_name + review_ask_held_at present on deliveries (both nullable)
+--      V3  create_crew_day_link · revoke_crew_day_link · stop_act → anon f · authed t · service t
+--          crew_day_read · crew_stop_act · crew_day_stops · crew_link_hit · crew_link_resolve ·
+--          stop_progress_apply → anon f · authed f · service t
+--      V4  crew_day_read with a bad token → {"ok": false, "code": "invalid"} — and the refusal WAS
+--          counted: crew_link_rate held exactly 1 row afterwards, which is the rate limiter working.
+--    STANDALONE: it depended on no unmerged branch. ONE FILE, ONE PASTE.
 -- ✏️ AMENDED 2026-09-17, BEFORE ANY APPLY, on David's ruling that both completion doors behave the
 --    same (§4b). Amending rather than appending keeps Friday to a single paste, and §6 r1 guards
 --    APPLIED migrations — this one has never run anywhere (the #335 precedent). If you have already

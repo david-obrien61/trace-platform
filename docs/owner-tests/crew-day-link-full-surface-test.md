@@ -24,6 +24,10 @@
 > **Never on LAWNS until Saturday:** a tap on LAWNS stamps a real customer's job.
 > **Run CARD 0 first** — it is the SQL check that the database update is in, and it writes nothing.
 >
+> ✅ **DONE, IN THAT ORDER: David applied `20260917c` on 2026-09-17 and the V-block came back clean
+> (independently re-read live before the merge); the code merged after. The paragraph below is kept
+> because it is the reason the order was reversed.**
+>
 > 🔴 **APPLY THE MIGRATION BEFORE THIS CODE IS MERGED TO `main`, not after.** Marking a stop done is an
 > EXISTING feature, and under [[R-161]] it now goes through `stop_act` — a function that only exists once
 > `20260917c` is applied. Between a merge and an apply, **Mark done on the schedule would refuse**; it says

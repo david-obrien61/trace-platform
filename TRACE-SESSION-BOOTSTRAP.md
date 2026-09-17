@@ -79,9 +79,9 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
-### 🟡 BUILT, NOT MERGED — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
+### ✅ APPLIED + MERGED 2026-09-17 — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
 
-- 🟡 **BUILDER-COMPLETE · migration `20260917c` WRITTEN, NOT APPLIED.** Ready to merge: **the ladder gate is satisfied** (#343 `56107ee` is in `main`, its migration applied live) and `origin/main` is merged into this branch.
+- 🟡 **BUILDER-COMPLETE · migration `20260917c` APPLIED 2026-09-17 (V1–V4, re-read live) · MERGED to `main` · OWNER-PROOF OWED (board 0/9).** The ladder gate was satisfied first (#343 `56107ee` is in `main`, its migration applied live) and `origin/main` is merged into this branch.
   Lauren makes a one-day link on the schedule → driver's phone shows the day's 7 LAWNS stops (address + Maps, name + number + Call, items, **no prices**) → Start / Done / Undo / Note with the typed name. Done holds a review ask; the order and stock do not move.
 - ✅ **[[R-161]] ONE COMPLETION WRITER, TWO DOORS** — the office's Mark done now holds the ask too (no prompt at a desk) and is undoable from the stop card. Registry `stop-progress`: **9 paths · 8 guards · 22/22 mutants**. Board 0/8 (CARD F is the office door). Debt: #320 open · **#321 resolved** · #324, #325 filed.
 - 🔴 **Friday order:** merge → apply `20260917c` (one paste) → V-block → CARD 0 → CARDS A–F on Test Dave's → make LAWNS's Saturday link and text it to the driver.
