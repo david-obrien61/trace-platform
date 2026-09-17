@@ -441,7 +441,7 @@ SELECT c.id, c.billing_line1 AS flat, a.line1 AS list
 ---
 
 ### CARD 15 — Test Dave's, checkout: a second phone is KEPT, the first stays shown
-STATUS: owed
+STATUS: needs-test
 LAST-PROVEN: —
 DEVICE: phone
 COVERS: ledger #335
@@ -450,8 +450,19 @@ COVERS: ledger #335
 2. On the customer step, type a **different** phone number. Finish the order.
 3. Open that customer on /customers.
 
-**PASS:** the customer still shows the **original** phone; the new number is on file as a second
-phone. The order went through with no error.
+**PASS:** the original stays the main number, and the new number appears in the customer's phone list.
+The order went through with no error.
+
+⚠️ **WHY `needs-test`, NOT `owed` (2026-09-17) — THIS CARD CANNOT PASS ON TODAY'S BUILD, FOR TWO REASONS:**
+1. **When the customer is PICKED from the list, checkout never saves typed contact changes.** The order
+   carries the picked customer's id, and `api/orders/submit.ts:565` uses that row as it is — the typed
+   phone is dropped (measured live: order `CLV-20260917-1769` for john smith on Test Dave's, 14:29 UTC,
+   on the new server code; `222-333-8080` is written nowhere). Only a NEW customer, or one matched by the
+   server rather than picked, reaches `writeContactEdit`.
+2. **No screen shows the phone list.** Every surface (customer detail, editor, checkout, order page,
+   delivery stop, route) shows `customers.phone` — the derived primary only. A kept second number is
+   visible nowhere a user would look.
+The first run (9:29 CT) is VOID: the page was opened before the 14:15 UTC flip (footer `2a2f862`).
 
 ---
 

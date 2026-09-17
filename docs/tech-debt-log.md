@@ -3949,3 +3949,21 @@ editor is an UPDATE of the customer, but it becomes an INSERT into `customer_pho
 writes go through a SECURITY DEFINER path gated on `customers:update`. A permission-model decision —
 David's. **Not a go-live item** (David, 2026-09-16).
 
+## #313 — 🟡 A PAGE LEFT OPEN ACROSS A DEPLOY KEEPS RUNNING THE OLD CODE, AND NOTHING TELLS THE PERSON (NEW 2026-09-17, ledger #335)
+
+**What.** The app has no new-build check. The build id is only DISPLAYED (`VersionStamp.tsx:92`);
+nothing compares it with the deployed one, prompts, or reloads. Measured 2026-09-17: David's phone kept
+serving `2a2f862` after production flipped to `6bdcf15` at 14:15 UTC, until he reloaded by hand.
+
+**Why it matters now.** Before ledger #335, a stale page's customer save silently succeeded. Since
+`20260915_contact_record`'s guard, an OLD page that writes `customers.phone` / `email` / `billing_*`
+directly (the old customer editor) is REFUSED — the save fails with "Not saved…" instead. That is the
+safe direction, but the person sees a failure they cannot explain. Checked live: between 14:00 and
+14:40 UTC no app write was refused on any tenant (the two refusals in the log were David's SQL-editor
+checks). Also a lazy-loaded screen whose chunk was replaced by the deploy fails to open on an old page.
+
+**Fix (not built):** on focus / navigation, fetch the deployed build id (e.g. a tiny `/version.json`
+emitted at build — a static file, not an api function, so 12/12 holds) and, when it differs, show
+"A new version is ready — reload" (or reload on the next navigation). **Owner:** David — prompt or
+force.
+
