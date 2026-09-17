@@ -4009,7 +4009,20 @@ already does that properly).
 **LIGHTNING'S LEAN (2026-09-17, recorded — David decides):** save it as a ship-to through `contactWriter`
 (a typed value not saved is a defect under §6 r21); at minimum, label the box **"not saved"**.
 
-## #317 — 🟡 STAFF AT CHECKOUT CANNOT ADD A PHONE OR EMAIL TO A PICKED CUSTOMER (NEW 2026-09-17, ledger #345 — decision pending David)
+## #317 — ✅ RULED 2026-09-17 BY DAVID ([[R-162]]) — STAFF MAY ADD, NEVER EDIT / MAKE MAIN / REMOVE (NEW 2026-09-17, ledger #345)
+
+**✅ DAVID'S RULING (2026-09-17):** *"STAFF MAY ADD a phone or email — never Edit, Make main or Remove.
+Adding cannot destroy anything, and refusing it means a counter staff member cannot write down a new
+mobile at all."* **Built on `fix/contact-list-edit-add` (ledger #349):** `20260917c` (WRITTEN, not
+applied) opens the phone and email INSERT policies to any member who may READ the customer; the address
+list stays `customers:create`; every UPDATE policy is untouched. The customer page offers Add to a
+reader and withholds Edit / Make main / Remove. Path test `customer-page.add`, red-first without the
+migration. ⚠️ **Checkout is a separate surface and is NOT changed by this:** typing over a picked
+customer's phone there still needs `customers:update` and is reported NOT SAVED otherwise, because at
+checkout the typed value REPLACES what is shown rather than adding a row. Say if that should follow
+the same rule.
+
+**WAS:**
 
 **What.** Ledger #345 saves typed contact details for a picked customer only when the caller holds
 `customers:update` (or is the owner). A STAFF member who types a new number gets **NOT SAVED** in red; the
@@ -4190,6 +4203,15 @@ resolver is written), 6 columns + a status on `customer_addresses` and `deliveri
 and a cap (half a day — the recon notes `customerAddresses.test.ts` §G is pinned to one migration file
 and must be repointed), the unverified marker on the two screens and the save copy (half a day), the
 ring lookup (half a day, and it needs the ring map as data — not yet anywhere).
+
+🔴 **LIBERTY HILL IS THE REQUIREMENT, NOT AN OBJECTION (David, 2026-09-17).** The census geocoder misses
+**35.3% of Liberty Hill** — Lauren's own town, because its streets are new. So *"we can't find this
+address — saved anyway, marked unverified"* **is the behaviour to build**, not a reason to wait for a
+better geocoder: a third of her home town's addresses will take that path on day one and must still save.
+
+⚠️ **THE TRIP-CHARGE HALF WAITS ON DATA THAT DOES NOT EXIST.** The ring map (the $3.50 loaded mile,
+David 2026-09-12) is not in the database, in a migration, or in any file — so "which ring is it in"
+cannot be built until the rings exist as data. The geocode-and-mark half does not wait on it.
 
 **Open, David's:** the service choice (**tech-debt #327-e**, Google vs self-hosted) and where the
 coordinates live (**#327-c**). The recons' recommendation is Census first — free, batched, 85% — with

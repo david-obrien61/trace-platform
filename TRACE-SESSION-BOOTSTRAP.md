@@ -97,7 +97,8 @@
 ### 🟡 PUSHED, NOT MERGED — #349 (`fix/contact-list-edit-add`, 2026-09-17) — **EDIT AND ADD ON EVERY CONTACT LIST**
 
 - 🟡 **BUILDER-COMPLETE.** Edit on every row (value, label, every address field), Add on every list, through `contactWriter`; two new registered paths, 21/21 green; the Edit customer form gains one line + link to the lists. CARD 15 ✅ **covered** (David, `249b772`); cards 26–29 owed.
-- 🔴 **Carries #348.** Merge waits on David.
+- ✅ **tech-debt #317 RULED ([[R-162]]) and built:** staff may ADD a phone or email — `20260917c` WRITTEN, NOT APPLIED.
+- 🔴 **Carries #348** (`20260917b`, in David's folder, unapplied). Merge waits on David.
 - 🔴 **FILED, NOT BUILT: tech-debt #323 — the address check on save** (geocode → ring, or "we can't find this address" + unverified marker). Sized ~1½–2 days off David's 2026-09-15 recons; service choice #327-e and coordinate home #327-c are his.
 
 ### 🟡 PUSHED, NOT MERGED — #348 (`fix/undo-test-edits`, 2026-09-17) — **A TEST-MODE EDIT NEVER BLOCKS THE WIPE**

@@ -657,6 +657,22 @@ COVERS: ledger #349
 
 ---
 
+### CARD 30 — Test Dave's, as STAFF: add a number, and nothing else
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #349 · tech-debt #317 · [[R-162]]
+
+⚠️ Needs a STAFF login on Test Dave's, and `20260917c` applied.
+
+1. Signed in as the STAFF member, open **Customers** → a customer → their page.
+2. In **Phones**, tap **+ Add a phone**, type a number, tap **Save**.
+3. Look at the buttons on the rows, and at **Addresses**.
+
+**PASS:** the number is added and shows in the Phones list. **No row offers Edit, Make main or Remove**, and **Addresses has no Add** — with one line saying a staff member can see these details and add a phone or an email, and that changing one needs permission to edit customers.
+
+---
+
 ### CARD 14 — 🔴 LAWNS, AND ONLY AFTER EVERY CARD ABOVE IS GREEN
 STATUS: needs-test
 LAST-PROVEN: —
@@ -671,6 +687,6 @@ nobody has designed yet**, which is the thing OP-14's `needs-test` state exists 
 
 ---
 
-> **COVERAGE: 2 of 33.** Thunder may never mark a card `covered` — only David's live run flips one,
-> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–29 need the
+> **COVERAGE: 2 of 34.** Thunder may never mark a card `covered` — only David's live run flips one,
+> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–30 need the
 > build in front of you, and GATE 0 is what settles which build that is.**

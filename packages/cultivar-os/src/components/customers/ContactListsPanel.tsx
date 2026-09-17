@@ -12,8 +12,10 @@
 //               main one has **Make main**.
 // DEPENDENCIES: contactWriter (readContactLists · addContactRow · editContactRow · makeContactMain ·
 //               retireContact — the ONE writer, registered in writer-registry.json) · the browser
-//               supabase client (RLS: reading needs `customers:read`; Add is an INSERT
-//               (`customers:create`) and Edit / Make main / Remove are UPDATEs (`customers:update`)) ·
+//               supabase client (RLS: reading needs `customers:read`; ADDING a phone or an email is
+//               an INSERT that `20260917c` opens to any member who may READ the customer — David's
+//               ruling on tech-debt #317; adding an ADDRESS stays `customers:create`; Edit / Make
+//               main / Remove are UPDATEs on `customers:update`) ·
 //               useBusinessContext (`can`, so a reader is not offered a button the database refuses) ·
 //               ContactResultList (every outcome in one voice, NOT SAVED in red).
 // OUTPUTS:      <ContactListsPanel businessId customerId onChanged /> — `onChanged` fires after every
@@ -53,7 +55,14 @@ export function ContactListsPanel({ businessId, customerId, onChanged }: {
 }) {
   const { can } = useBusinessContext();
   const mayChange = can('customers:update');
-  const mayAdd = can('customers:create');
+  // 🔴 tech-debt #317, RULED by David 2026-09-17: a STAFF member may ADD a phone or an email —
+  // adding cannot destroy anything, and refusing it means the person at the counter cannot write
+  // down a new mobile at all. `customers:read` is what this page already requires, so anyone who
+  // can see the customer is offered Add (20260917c matches the INSERT policy to it). An ADDRESS is
+  // the delivery and billing destination and stays on `customers:create`.
+  const mayAddValue = can('customers:read') || can('customers:create') || can('customers:update');
+  const mayAddAddress = can('customers:create') || can('customers:update');
+  const mayAddTo = (list: ContactList) => (list === 'addresses' ? mayAddAddress : mayAddValue);
   const [lists, setLists] = useState<CustomerContactLists | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -187,7 +196,7 @@ export function ContactListsPanel({ businessId, customerId, onChanged }: {
                 </div>
               );
             })}
-            {mayAdd && (draft?.kind === 'add' && draft.list === list
+            {mayAddTo(list) && (draft?.kind === 'add' && draft.list === list
               ? form(draft)
               : (
                 <div style={{ padding: '10px 0' }}>
@@ -200,7 +209,12 @@ export function ContactListsPanel({ businessId, customerId, onChanged }: {
           </div>
         </section>
       ))}
-      {!mayChange && <p style={muted}>You can see these details; changing them needs permission to edit customers.</p>}
+      {!mayChange && (
+        <p style={muted}>
+          You can see these details and <strong>add</strong> a phone or an email. Changing or removing
+          one — and adding an address — needs permission to edit customers.
+        </p>
+      )}
     </div>
   );
 }

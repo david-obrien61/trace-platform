@@ -58,7 +58,9 @@ async function path(id: string, what: string, body: (check: (ok: boolean, detail
 }
 
 async function freshDb() {
-  const db: any = await openLiveDb();
+  // 20260917c is WRITTEN, not applied (ledger #349 · tech-debt #317's ruling): the staff-add path
+  // is driven against the policy as this branch defines it, so the test fails until it is applied.
+  const db: any = await openLiveDb({ migrations: ['20260917c_staff_may_add_a_phone_or_email.sql'] });
   installSupabaseShim(db);
   (globalThis as any).__ACT_AS__ = null;
   await db.exec(`
@@ -328,8 +330,23 @@ await path('customer-page.add', 'customer page → Add: a typed phone, email and
   const dup = await addContactRow(api, { businessId: B, customerId: id, list: 'phones', actorUserId: MANAGER, patch: { value: '512.555.1500' } });
   check(!dup.ok && /already on this customer/.test(dup.result.reason ?? ''), `the same number again is refused in words: ${JSON.stringify(dup.result)}`);
   check((await auditRows(db, id)).some((a: any) => a.action === 'contact.add' && a.actor_user_id === MANAGER), 'no change-log row for the add');
-  const staff = await addContactRow(restClient(db, { uid: STAFF }) as any, { businessId: B, customerId: id, list: 'phones', actorUserId: STAFF, patch: { value: '(512) 555-1599' } });
-  check(!staff.ok && staff.result.outcome === 'not_saved', `a member who may only read customers cannot add: ${JSON.stringify(staff.result)}`);
+  // 🔴 tech-debt #317, RULED by David 2026-09-17: STAFF MAY ADD a phone or an email — adding cannot
+  // destroy anything, and refusing it means a counter staff member cannot write down a new mobile.
+  const staffApi = restClient(db, { uid: STAFF }) as any;
+  const sPhone = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'phones', actorUserId: STAFF, patch: { value: '(512) 555-1599' } });
+  check(sPhone.ok && sPhone.result.outcome === 'kept_additional', `staff can ADD a phone: ${JSON.stringify(sPhone.result)}`);
+  const sEmail = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'emails', actorUserId: STAFF, patch: { value: 'staff@example.com' } });
+  check(sEmail.ok, `staff can ADD an email: ${JSON.stringify(sEmail.result)}`);
+  check((await lists(db, id)).phones.some(x => x.value === '(512) 555-1599'), 'the number staff added is in the Phones list');
+  // …and no further. An ADDRESS is the delivery and billing destination and stays on customers:create.
+  const sAddr = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'addresses', actorUserId: STAFF, patch: { kind: 'shipping', line1: '1 Staff Rd', city: 'Leander' } });
+  check(!sAddr.ok && sAddr.result.outcome === 'not_saved', `staff cannot add an ADDRESS: ${JSON.stringify(sAddr.result)}`);
+  const mainRow = (await lists(db, id)).phones.find(x => x.is_main)!;
+  const sMain = await makeContactMain(staffApi, { businessId: B, customerId: id, list: 'phones', rowId: sPhone.result.value ? (await lists(db, id)).phones.find(x => x.value === '(512) 555-1599')!.id : mainRow.id, actorUserId: STAFF });
+  check(!sMain.ok, `staff cannot Make main: ${JSON.stringify(sMain.result)}`);
+  const sRemove = await retireContact(staffApi, { businessId: B, customerId: id, list: 'phones', rowId: mainRow.id, actorUserId: STAFF });
+  check(!sRemove.ok, `staff cannot Remove: ${JSON.stringify(sRemove.result)}`);
+  check((await lists(db, id)).phones.find(x => x.is_main)?.value === '(512) 555-1500', 'and the main number is untouched by staff');
 });
 
 await path('customer-page.edit', 'customer page → Edit: a typo is corrected in place — the row keeps its place, and an address can have every field changed', async (check) => {
@@ -351,8 +368,9 @@ await path('customer-page.edit', 'customer page → Edit: a typo is corrected in
   check((await auditRows(db, id)).filter((a: any) => a.action === 'contact.edit').length === 2, 'each edit writes a change-log row');
   const blank = await editContactRow(api, { businessId: B, customerId: id, list: 'phones', rowId: after.phones[0].id, actorUserId: MANAGER, patch: { value: '   ' } });
   check(!blank.ok && /use Remove/.test(blank.result.reason ?? ''), `a blank is refused in words, not saved: ${JSON.stringify(blank.result)}`);
+  // #317's ruling is ADD-only: a staff member may never EDIT what is there.
   const staff = await editContactRow(restClient(db, { uid: STAFF }) as any, { businessId: B, customerId: id, list: 'phones', rowId: after.phones[0].id, actorUserId: STAFF, patch: { value: '(512) 555-1699' } });
-  check(!staff.ok, `a member who may only read customers cannot edit: ${JSON.stringify(staff.result)}`);
+  check(!staff.ok, `staff cannot edit: ${JSON.stringify(staff.result)}`);
   check((await lists(db, id)).phones[0].value === '(512) 555-1601', 'and nothing changed');
 });
 

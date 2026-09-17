@@ -88,7 +88,8 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 **#349 — Edit and Add on every contact list (build, NOT MERGED)**
 - 🔴 **OPEN — MERGE #349** (it carries #348). Owner: ledger #349.
 - 🔴 **OPEN — THE ADDRESS CHECK ON SAVE (tech-debt #323), sized ~1½–2 days, not built.** Which service (#327-e: Census free/batched/84.9% vs Google +3.3 points, no batch, 30-day refetch) and where coordinates live (#327-c). The ring map does not exist as data yet.
-- 🟡 **OPEN — ADD is gated on `customers:create`, EDIT on `customers:update`** (the list INSERT policies ask for create — #312's shape). Staff see neither button; confirm or change with #317's lean.
+- ✅ **ANSWERED 2026-09-17 — [[R-162]]: staff may ADD a phone or email, never Edit / Make main / Remove.** `20260917c` written, NOT APPLIED. Owner: tech-debt #317.
+- 🟡 **OPEN — does the ruling extend to CHECKOUT?** There a typed phone REPLACES the main value, so it still needs `customers:update`. Owner: ledger #349.
 
 **#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
 - 🟡 **OPEN — APPLY `20260917b`** when convenient; not a blocker for tonight's reload (0 typed rows live). Owner: ledger #348.
