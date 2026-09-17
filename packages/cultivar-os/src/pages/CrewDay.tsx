@@ -148,7 +148,7 @@ export function CrewDay() {
       )}
       {day && day.stops.length > 0 && (
         <p style={{ margin: '12px 0 0', fontSize: '0.8125rem', color: GRAY }}>
-          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} · scheduled order, not a planned route
+          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} · <strong>Not the planned route — follow the order in Lauren’s text.</strong>
         </p>
       )}
       {day?.stops.map((s, i) => (
