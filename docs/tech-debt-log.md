@@ -4061,3 +4061,28 @@ never called. So a truck run completed in the app leaves every order open.
 **Automatic SPM consumption depends on it**: stock (and the per-order consumption it will record) moves on
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
+
+## #320 — 🟡 NO ROUTE ORDER IS SAVED, SO THE CREW LINK LISTS STOPS IN SCHEDULE ORDER (NEW 2026-09-17, ledger #347)
+
+**What.** The route screen (`DeliveryRoute.tsx`) works out the stop sequence on screen each time and keeps it
+nowhere — no column, no table. So the crew day link (`crew_day_stops`, migration `20260917c`) lists a day's
+stops in the schedule's order (date, then when each stop was made) and SAYS so on the page: *"in the order they
+were scheduled, not a planned route"*. The driver still picks the order, as today.
+
+**The fix.** Store the chosen sequence when Lauren routes a day (a `route_position` on the stop, or a small
+day-route row), and have `crew_day_stops` order by it. Not built in #347: the Saturday pilot is about capture,
+and the route screen's own save path is its own change.
+
+## #321 — 🟡 TWO WAYS TO MARK A STOP DONE, ONLY ONE REGISTERED (NEW 2026-09-17, ledger #347)
+
+**What.** The crew link's Done (`crew_stop_act`) is registered in `writer-registry.json` → `stop-progress`,
+records the typed name, HOLDS the review ask, and can be undone the same day. The in-app **Mark done**
+(`useStopActions` → `fulfilmentPatch`) writes the same `status` / `started_at` / `completed_at` columns through
+RLS, records no name beyond the session, shows the review prompt at once, and cannot be undone. One fact, two
+writers (§6 r8), and the second is outside the registry.
+
+**The fix.** Move the in-app tap onto one database function (the crew function minus the token) and register it
+as a path of `stop-progress`. Decide first, with David, whether the in-app tap should also HOLD the review ask
+rather than prompt — the held-ask build (agreed 2026-09-17, not built) is where that is settled. Until then,
+the undo refuses a Done the office made (*"Ask Lauren to reopen this stop"*), so the crew cannot reopen a stop
+whose review was already asked.

@@ -343,6 +343,155 @@
           "reason": "this check itself: its --self-test plants violations as strings (a phone input, a table write) to prove each check goes red"
         }
       ]
+    },
+    {
+      "id": "stop-progress",
+      "title": "What the crew did at a stop — Start, Done, Undo, Note — and the day link that lets them (ledger #347)",
+      "writer": {
+        "name": "handleCrewDay → crew_stop_act (database)",
+        "at": "packages/cultivar-os/api/members/crewDay.ts#export async function handleCrewDay"
+      },
+      "writerFiles": [
+        "packages/cultivar-os/api/members/crewDay.ts",
+        "packages/cultivar-os/src/lib/crewDayLink.ts"
+      ],
+      "tables": [
+        "crew_day_links",
+        "delivery_stop_events"
+      ],
+      "guardedColumns": {
+        "table": "deliveries",
+        "columns": [
+          "completed_by_name",
+          "review_ask_held_at"
+        ],
+        "databaseGuard": "Set only inside crew_stop_act (20260917c). NOT a trigger: the in-app Mark done (useStopActions → fulfilmentPatch) writes status / started_at / completed_at on the same row through RLS, and is not part of this domain yet."
+      },
+      "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role — the endpoint.",
+      "inputSignal": {
+        "fileMentions": "crewStopAction|createCrewDayLink|revokeCrewDayLink",
+        "props": "note|name|token|link"
+      },
+      "entryFunctions": [
+        "handleCrewDay",
+        "crewStopAction",
+        "createCrewDayLink",
+        "revokeCrewDayLink"
+      ],
+      "tests": "scripts/path-tests/crew-day.paths.mts",
+      "paths": [
+        {
+          "id": "crew.link-create",
+          "what": "Schedule → a day's Crew link → Make link / Make a new link",
+          "at": "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx#async function make",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx",
+            "packages/cultivar-os/src/pages/DeliverySchedule.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts"
+          ],
+          "chain": "CrewLinkPanel.make → createCrewDayLink → rpc create_crew_day_link (deliveries:update checked inside)",
+          "shown": "Schedule → Crew link panel: the new link with Copy / Share, then 'Link is on · made … · works until 6:00 AM'"
+        },
+        {
+          "id": "crew.link-revoke",
+          "what": "Schedule → a day's Crew link → Turn off link",
+          "at": "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx#async function turnOff",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx",
+            "packages/cultivar-os/src/pages/DeliverySchedule.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts"
+          ],
+          "chain": "CrewLinkPanel.turnOff → revokeCrewDayLink → rpc revoke_crew_day_link",
+          "shown": "Schedule → Crew link panel: 'No link for this day'; the crew page: 'This link has been turned off. Ask Lauren for today's link.'"
+        },
+        {
+          "id": "crew.start",
+          "what": "Crew page → a stop → Start",
+          "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
+          "files": [
+            "packages/cultivar-os/src/pages/CrewDay.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts",
+            "packages/cultivar-os/api/members/invite.ts",
+            "packages/cultivar-os/api/members/crewDay.ts",
+            "api/members/invite.ts"
+          ],
+          "chain": "CrewDay.tap('start') → crewStopAction → POST /api/crew/day → members/invite → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
+        },
+        {
+          "id": "crew.done",
+          "what": "Crew page → a stop → Done (holds a review ask; the order and stock are untouched)",
+          "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
+          "files": [
+            "packages/cultivar-os/src/pages/CrewDay.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts",
+            "packages/cultivar-os/api/members/invite.ts",
+            "packages/cultivar-os/api/members/crewDay.ts",
+            "api/members/invite.ts"
+          ],
+          "chain": "CrewDay.tap('done') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block; the schedule's status badge reads Done"
+        },
+        {
+          "id": "crew.undo-done",
+          "what": "Crew page → a stop the crew marked done → Undo Done",
+          "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
+          "files": [
+            "packages/cultivar-os/src/pages/CrewDay.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts",
+            "packages/cultivar-os/api/members/invite.ts",
+            "packages/cultivar-os/api/members/crewDay.ts",
+            "api/members/invite.ts"
+          ],
+          "chain": "CrewDay.tap('undo_done') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
+        },
+        {
+          "id": "crew.note",
+          "what": "Crew page → a stop → Add a note → Save note",
+          "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
+          "files": [
+            "packages/cultivar-os/src/pages/CrewDay.tsx",
+            "packages/cultivar-os/src/lib/crewDayLink.ts",
+            "packages/cultivar-os/api/members/invite.ts",
+            "packages/cultivar-os/api/members/crewDay.ts",
+            "api/members/invite.ts"
+          ],
+          "chain": "CrewDay.tap('note') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
+        }
+      ],
+      "guards": [
+        {
+          "id": "crew.expired",
+          "what": "an expired link reads nothing and changes nothing (410)"
+        },
+        {
+          "id": "crew.revoked",
+          "what": "a turned-off or unknown link reads nothing and changes nothing (410 / 404)"
+        },
+        {
+          "id": "crew.other-day",
+          "what": "a link for day X shows nothing from day Y and cannot act on it"
+        },
+        {
+          "id": "crew.other-business",
+          "what": "a link for one business shows nothing of another; anon / a login cannot call the crew functions directly"
+        },
+        {
+          "id": "crew.no-prices",
+          "what": "no response carries a price, total, discount or cost — as a key or as a value"
+        },
+        {
+          "id": "crew.rate-limit",
+          "what": "over 60 calls a minute from one client → 429, guesses counted; another client unaffected"
+        },
+        {
+          "id": "crew.no-stock-or-order",
+          "what": "test mode and live mode: nothing writes the stock ledger, stock, or the order"
+        }
+      ],
+      "declared": []
     }
   ],
   "proposed": [
@@ -354,7 +503,7 @@
     {
       "domain": "delivery-stops",
       "order": 2,
-      "why": "get it on a truck: three independent `deliveries` insert copies, and an order's date change never reaches its stop"
+      "why": "get it on a truck: three independent `deliveries` insert copies, and an order's date change never reaches its stop ⚠️ The crew link's Start / Done / Note on a stop is registered separately as `stop-progress` (ledger #347); this entry is the stop INSERTS and date changes, still unregistered."
     },
     {
       "domain": "stock-movements",

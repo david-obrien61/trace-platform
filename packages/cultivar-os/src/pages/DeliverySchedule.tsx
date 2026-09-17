@@ -11,7 +11,8 @@
  *              no idea what was on the truck (David, 2026-09-09 09:42, DeliveryDayIssue9Sep0943hrsL.pdf).
  * DEPENDENCIES ../lib/stopRead · ../components/delivery/StopCard · ../components/delivery/useStopActions
  *              · ../lib/deliveryWindow (the date bound) · ../lib/stopWrites (shipToLine) ·
- *              CaptureInvoiceLauncher. Reached from the dashboard delivery_routing tile
+ *              CaptureInvoiceLauncher · ../components/delivery/CrewLinkPanel + ../lib/crewDayLink
+ *              (the crew day link and what it recorded — ledger #347). Reached from the dashboard delivery_routing tile
  *              (→ /delivery-schedule) and mounted under the operations calendar with `filterDate`.
  *              Routes a day via /deliveries?date=YYYY-MM-DD (DeliveryRoute).
  * OUTPUTS      Day-grouped stop cards; navigation to the route map per day.
@@ -34,6 +35,9 @@ import { readStops, type StopRead, type StopRow } from '../lib/stopRead';
 import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
+import { CrewLinkPanel } from '../components/delivery/CrewLinkPanel';
+import { readStopEvents, stopActivity, type StopEvent } from '../lib/crewDayLink';
+import { ymd } from '../lib/dashboardWindows';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -65,6 +69,9 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   const [read, setRead]       = useState<StopRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  // The crew link's record per stop. `null` = could not be read; `undefined` = not applied yet.
+  const [crewEvents, setCrewEvents] = useState<Map<string, StopEvent[]> | null | undefined>(undefined);
+  const [crewPanelDay, setCrewPanelDay] = useState<string | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -88,6 +95,9 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
     );
     if (!res.ok) { setError(res.error); setLoading(false); return; }
     setError(null);
+    const ev = await readStopEvents(supabase, businessId!, res.value.stops.map(x => x.id));
+    setCrewEvents(ev.ok ? ev.byStop : ev.absent ? undefined : null);
+    if (TRACE_DELIVERY && !ev.ok) console.log('[TRACE:DELIVERY] crew link events', ev.absent ? 'table absent (20260917c not applied)' : `read FAILED — ${ev.message}`);
     setRead(res.value);
     setLoading(false);
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', res.value.stops.length, 'stops · fulfilment columns', res.value.fulfilmentColumns ? 'present' : 'ABSENT (20260831d not applied)');
@@ -178,7 +188,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
           return (
             <div key={group.date ?? 'undated'} style={{ marginBottom: 24 }}>
               {/* Day header — this page's own axis */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Calendar size={16} color={GREEN} />
                   <span style={{ fontWeight: 800, fontSize: '0.9375rem', color: DARK }}>{formatDay(group.date)}</span>
@@ -186,6 +196,20 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                     · {group.items.length} stop{group.items.length !== 1 ? 's' : ''}
                   </span>
                 </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                {/* Crew link: today or later, for the people who may change deliveries. */}
+                {group.date && group.date >= ymd(new Date()) && can('deliveries:update') && (
+                  <button
+                    onClick={() => setCrewPanelDay(crewPanelDay === group.date ? null : group.date)}
+                    aria-expanded={crewPanelDay === group.date}
+                    style={{
+                      padding: '7px 12px', minHeight: 40, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`,
+                      borderRadius: 8, fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                    }}
+                  >
+                    Crew link
+                  </button>
+                )}
                 {group.date && dayAddrs.length > 0 && (
                   <button
                     onClick={() => {
@@ -201,11 +225,16 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                     <Navigation size={14} /> Route this day
                   </button>
                 )}
+                </div>
               </div>
+              {group.date && crewPanelDay === group.date && businessId && (
+                <CrewLinkPanel businessId={businessId} date={group.date} />
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {group.items.map(d => (
-                  <StopCard key={d.id} stop={d} read={read} actions={actions} />
+                  <StopCard key={d.id} stop={d} read={read} actions={actions}
+                    crewActivity={crewEvents === undefined ? undefined : crewEvents === null ? null : stopActivity(crewEvents.get(d.id) ?? [])} />
                 ))}
               </div>
             </div>

@@ -10,7 +10,8 @@
  *              ../../lib/stopLoad (what the order block says) · ../../lib/stopWrites (the ship-to
  *              form) · ../../lib/deliveryFulfilment (crewStopModel, openOrderNotice) ·
  *              @trace/shared/components/OrderLineList (the ONE line renderer) · SurfaceState.
- * OUTPUTS      <StopCard stop read actions leading? selected? />
+ *              ../../lib/crewDayLink (stopActivity — what the crew link recorded, ledger #347).
+ * OUTPUTS      <StopCard stop read actions leading? selected? crewActivity? />
  *
  * 🔴 THE SHIP-TO EDIT WRITES THE STOP, NEVER THE CUSTOMER. D-41 L1: billing lives on the customer; the
  * ship-to is snapshotted per order onto the stop. Changing where THIS load goes must not move the
@@ -27,6 +28,7 @@ import { LOAD_COPY, type StopLoad } from '../../lib/stopLoad';
 import { stopLoadOf, orderStatusOf, type StopRead, type StopRow } from '../../lib/stopRead';
 import { shipToLine, shipToFormOf, SHIP_TO_FIELDS, type ShipToForm } from '../../lib/stopWrites';
 import type { StopActions } from './useStopActions';
+import type { StopActivity } from '../../lib/crewDayLink';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -51,6 +53,33 @@ const inputStyle = {
   width: '100%', boxSizing: 'border-box', minHeight: 44, border: '1px solid #d1d5db', borderRadius: 8,
   padding: '8px 10px', fontSize: '0.875rem', color: DARK, outline: 'none',
 } as const;
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+/**
+ * What the crew day link recorded at this stop (ledger #347): who tapped Start and Done, when, and
+ * their notes. `undefined` = this screen did not read it (the route and the order screen); `null` =
+ * it could not be read, and the card says so rather than showing "nothing happened".
+ */
+function CrewActivityBlock({ activity, reviewAsked }: { activity: StopActivity | null; reviewAsked: boolean }) {
+  if (activity === null) {
+    return <div style={{ marginTop: 8, fontSize: '0.75rem', color: GRAY }}>Crew link activity could not be read.</div>;
+  }
+  const { started, done, notes } = activity;
+  if (!started && !done && notes.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#F3F4F6', fontSize: '0.75rem', color: DARK, lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 700, color: GRAY, marginBottom: 2 }}>From the crew link</div>
+      {started && <div>Started {clock(started.at)} · {started.by}</div>}
+      {done && <div>Done {clock(done.at)} · {done.by}{!reviewAsked && <span style={{ color: GRAY }}> · review ask held, not sent</span>}</div>}
+      {notes.map((n, i) => (
+        <div key={i} style={{ marginTop: 2 }}>
+          <span style={{ color: GRAY }}>Note {clock(n.at)} · {n.by}:</span> {n.note}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** What is on the order — every state says something in words; none is a blank. */
 function OrderBlock({ load }: { load: StopLoad }) {
@@ -78,8 +107,10 @@ function OrderBlock({ load }: { load: StopLoad }) {
   );
 }
 
-export function StopCard({ stop: d, read, actions, leading, selected = true }: {
+export function StopCard({ stop: d, read, actions, leading, selected = true, crewActivity }: {
   stop: StopRow;
+  /** The crew link's record for this stop (the schedule passes it; see CrewActivityBlock). */
+  crewActivity?: StopActivity | null;
   read: StopRead;
   actions: StopActions;
   /** The route's sequence control. The schedule and the order screen pass nothing. */
@@ -289,6 +320,8 @@ export function StopCard({ stop: d, read, actions, leading, selected = true }: {
               )}
             </div>
           )}
+
+          {crewActivity !== undefined && <CrewActivityBlock activity={crewActivity} reviewAsked={!!d.review_ask_outcome} />}
 
           {/* ── Move this stop to another day (data kept). ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
