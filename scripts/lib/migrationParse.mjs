@@ -88,8 +88,9 @@ const onAlter = (m, clause, build) => {
 const RULES = [
   // ── CREATE side ───────────────────────────────────────────────────────────────────────
   { kind: 'table',
-    re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:UNLOGGED\s+|TEMP\s+|TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${qident})`, 'gi'),
-    map: (m) => ({ schema: schemaOf(m[1]), table: bare(m[1]), name: bare(m[1]) }) },
+    re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:UNLOGGED\s+|(TEMP|TEMPORARY)\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${qident})`, 'gi'),
+    // A TEMP table lives in the session's pg_temp schema and is gone when the session ends.
+    map: (m) => ({ schema: m[1] ? 'pg_temp' : schemaOf(m[2]), table: bare(m[2]), name: bare(m[2]) }) },
   { kind: 'column', re: ALTER_TABLE(),
     expand: (m) => onAlter(m, String.raw`\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ident})`, (a) => ({ name: bare(a[1]) })) },
   { kind: 'policy',
@@ -178,7 +179,10 @@ export function parseFile(sql, file) {
       const rows = rule.expand ? rule.expand(m) : [rule.map(m)];
       // `pos` is the statement's offset in the file. Order WITHIN one file is certain; order BETWEEN
       // two files is not (see migrationHistory.mjs), which is why position is kept per file.
-      for (const r of rows) if (r.name) objects.push({ kind: rule.kind, ...r, file, pos: m.index });
+      // ✏️ ledger #346: objects in `pg_temp` (temp tables, `pg_temp.fn` helpers) never persist, so the
+      // catalog can never show them — tracking them made every migration that uses a session helper
+      // read as NOT APPLIED (20260915_contact_record, 20260915b, 20260917a).
+      for (const r of rows) if (r.name && r.schema !== 'pg_temp') objects.push({ kind: rule.kind, ...r, file, pos: m.index });
     }
   }
   const dynamic = (body.match(DYNAMIC) || []).length;

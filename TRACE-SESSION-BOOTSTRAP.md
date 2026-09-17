@@ -79,6 +79,11 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 PUSHED — #346 (`fix/346-notes-before-drop`, 2026-09-17) — **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED**
+
+- ✅ **APPLIED 2026-09-17 by David:** `20260917a` then `20260915b` — step j done; CARD 6 covered (on a corrected pass line). Checked live: only the four `customers` columns went.
+- 🔴 **Merge waits on David.**
+
 ### ✅ MERGED 2026-09-17 (`9d9214b`, production 16:27 UTC) — #345 (`fix/contact-card-visible`) — **THE WRITER REGISTRY; A TYPED PHONE IS NEVER DROPPED**
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROVE OWED** — customer-contact-record CARDS 15 and 18–24 (25 is `needs-test`, reason stated).
