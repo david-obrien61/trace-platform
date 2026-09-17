@@ -80,8 +80,8 @@ const all = async (db: any, sql: string, p: unknown[] = []) => (await db.query(s
 
 /** A customer made the way the app makes one (no contact columns on the row), with contact through the writer. */
 async function customer(db: any, first: string, contact: { phone?: string; email?: string; billing?: Record<string, string> }, extra: Record<string, unknown> = {}) {
-  const row = await one(db, `INSERT INTO public.customers (business_id, first_name, last_name, source, customer_type, person_id)
-    VALUES ($1, $2, 'Smith', 'test', 'person', $3) RETURNING id`, [B, first, extra.person_id ?? null]);
+  const row = await one(db, `INSERT INTO public.customers (business_id, first_name, last_name, source, customer_type, person_id, import_run_id)
+    VALUES ($1, $2, 'Smith', 'test', 'person', $3, $4) RETURNING id`, [B, first, extra.person_id ?? null, extra.import_run_id ?? null]);
   const out = await writeContactEdit(service(db) as any, B, row.id, contact, { phone: 'replace', email: 'replace', billing: 'replace', source: 'test' });
   if (!out.ok) throw new Error(`fixture contact: ${out.error}`);
   return row.id as string;
@@ -145,9 +145,12 @@ await path('checkout.new-customer', 'checkout, a new customer: typed phone, emai
   check(outcomes === 'addresses:kept_main,emails:kept_main,phones:kept_main', `confirmation results: ${outcomes}`);
 });
 
+const RUN = 'e1000000-0000-4000-8000-00000000000e';   // #348: an import run, for the tagging checks
+
 await path('checkout.attached-customer', '🔴 CLV-20260917-1769 — checkout with a customer attached (ScanOrder) and a DIFFERENT phone typed: the new number is in the Phones list, the original stays main', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'john', { phone: '(512) 555-1111', email: 'john@example.com' });
+  // An IMPORTED customer (#348): this tenant is in test mode, so what is typed here rides the run.
+  const id = await customer(db, 'john', { phone: '(512) 555-1111', email: 'john@example.com' }, { import_run_id: RUN });
   const res = await submit(orderBody({ first_name: 'john', last_name: 'Smith', email: 'john@example.com', phone: '(222) 333-8080' }, id), MANAGER);
   check(res.statusCode === 200 && !!res.body?.orderId, `order not created: ${res.statusCode} ${JSON.stringify(res.body)?.slice(0, 200)}`);
   const order = await one(db, `SELECT customer_id FROM public.orders WHERE id = $1`, [res.body?.orderId]);
@@ -164,6 +167,9 @@ await path('checkout.attached-customer', '🔴 CLV-20260917-1769 — checkout wi
   check(log.some((a: any) => a.action === 'contact.add' && a.actor_user_id === MANAGER && a.detail.value === '(222) 333-8080'),
     `no change-log row for the added number: ${JSON.stringify(log)}`);
   check((await one(db, `SELECT count(*)::int n FROM public.customers`)).n === 1, 'a second customer was created');
+  // #348 — the typed number carries the customer's import run, so the import's undo takes it back.
+  const tag = await one(db, `SELECT import_run_id FROM public.customer_phones WHERE customer_id = $1 AND value = '(222) 333-8080'`, [id]);
+  check(tag?.import_run_id === RUN, `the typed phone does not carry the import run (${tag?.import_run_id ?? 'null'}) — a test-mode edit must never survive the wipe`);
 });
 
 await path('checkout.picked-customer', 'checkout, a customer picked in the checkout search (no person link, as every imported customer): the order and the typed phone go to THAT customer, no duplicate', async (check) => {
@@ -258,7 +264,7 @@ await path('ocr.existing-customer', 'invoice capture for a customer already on f
 
 await path('editor.update', 'customer editor, Save with a changed phone, email and street: the new values are main, the old ones retired (kept), the change log names the editor', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'Eddie', { phone: '(512) 555-0700', email: 'old@example.com', billing: { line1: '1 Old St', city: 'Leander' } });
+  const id = await customer(db, 'Eddie', { phone: '(512) 555-0700', email: 'old@example.com', billing: { line1: '1 Old St', city: 'Leander' } }, { import_run_id: RUN });
   (globalThis as any).__ACT_AS__ = MANAGER;
   const out = await persistCustomerPatch({ id, businessId: B, patch: { phone: '(512) 555-0777', email: 'new@example.com', billing_line1: '2 New St' } });
   check(out.error === null, `save error: ${out.error}`);
@@ -271,6 +277,9 @@ await path('editor.update', 'customer editor, Save with a changed phone, email a
   check(out.contact.some(r => r.list === 'phones' && r.outcome === 'removed') && out.contact.some(r => r.list === 'phones' && r.outcome === 'kept_main'), `results: ${JSON.stringify(out.contact)}`);
   const log = await auditRows(db, id);
   check(log.filter((a: any) => a.actor_user_id === MANAGER).length >= 3, `change log: ${JSON.stringify(log)}`);
+  // #348 — the editor's new rows ride the customer's import run while the business is in test mode.
+  const tags = await all(db, `SELECT import_run_id FROM public.customer_phones WHERE customer_id = $1 AND active`, [id]);
+  check(tags.every((t: any) => t.import_run_id === RUN), `an edited phone is untagged (${JSON.stringify(tags)})`);
 });
 
 await path('editor.create', 'customer editor, Add Customer with a phone and email: both kept and shown', async (check) => {
@@ -345,7 +354,7 @@ await path('customer-page.no-permission', 'customer page read by someone who may
 
 await path('stop.save-site', 'delivery stop → Save as a site: the site is in the Addresses list, and the phone, email and billing street are unchanged', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'Sid', { phone: '(512) 555-1200', email: 'sid@example.com', billing: { line1: '1 Bill St', city: 'Leander' } });
+  const id = await customer(db, 'Sid', { phone: '(512) 555-1200', email: 'sid@example.com', billing: { line1: '1 Bill St', city: 'Leander' } }, { import_run_id: RUN });
   const api = restClient(db, { uid: MANAGER }) as any;
   const book = await readCustomerAddresses(api, B, id);
   const out = await saveCustomerAddress(api, { businessId: B, customerId: id, label: 'Job site', address: { line1: '9 Site Rd', city: 'Austin', zip: '78701' }, existing: book.ok ? book.sites : [] });
@@ -354,6 +363,9 @@ await path('stop.save-site', 'delivery stop → Save as a site: the site is in t
   check(l.addresses.some(a => a.value.startsWith('9 Site Rd') && !a.is_main), `Addresses: ${JSON.stringify(l.addresses)}`);
   const f = await flat(db, id);
   check(f.phone === '(512) 555-1200' && f.email === 'sid@example.com' && f.billing_line1 === '1 Bill St', `customer row: ${JSON.stringify(f)}`);
+  // #348 — a site saved during testing rides the import run too.
+  const site = await one(db, `SELECT import_run_id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '9 Site Rd'`, [id]);
+  check(site?.import_run_id === RUN, `the saved site does not carry the import run (${site?.import_run_id ?? 'null'})`);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════

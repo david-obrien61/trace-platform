@@ -85,6 +85,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
+- 🟡 **OPEN — APPLY `20260917b`** when convenient; not a blocker for tonight's reload (0 typed rows live). Owner: ledger #348.
+- 🔴 **OPEN — NEXT GO-LIVE ITEM: a captured order does not re-attach after a reload.** Re-attach by `qb_customer_id`; needs a ruling on what a detached capture shows. Owner: tech-debt #322.
+
 **#346 — no phone note is lost when the old street column is dropped (migrations written, NOT APPLIED)**
 - ✅ **ANSWERED 2026-09-17 — APPLIED** (`20260917a` then `20260915b`; CARD 6 covered). ✅ **MERGED** (`0ff9499`). 🔴 **OPEN — GO-LIVE RELOAD before 12:00 Friday** (checklist in `docs/go-live/`). Owner: ledger #346.
 - 🟡 **OPEN — `5fa0c32e`'s main phone value holds the number and words** — a cleanup for Lauren (the words are now also a note). Owner: ledger #346.

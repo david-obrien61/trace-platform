@@ -171,9 +171,15 @@ async function main(): Promise<void> {
     const { db, calls } = recordingDb();
     const out = await saveCustomerAddress(db, { businessId: BIZ, customerId: CUST, label: 'Job site A', address: site(), existing: [] });
     ok(out.kind === 'saved', 'C1 a permitted save reports saved');
-    ok(calls.length === 1 && calls[0].table === 'customer_addresses' && calls[0].op === 'insert',
-      `C2 exactly ONE table is written, and it is the book (got ${calls.map(c => `${c.table}.${c.op}`).join(',')})`);
-    ok(!calls.some(c => c.table === 'customers'), 'C3 🔴 the save NEVER writes `customers` — D-41 L1');
+    // ✏️ #348: the save now READS `customers` once, for the import-run tag a row typed during
+    // testing must carry (David, 2026-09-16 — a test-mode edit never survives the wipe). The
+    // D-41 L1 line is about WRITING, and that is what C2/C3 hold: one table is written, the book.
+    const writes = calls.filter(c => c.op !== 'select');
+    ok(writes.length === 1 && writes[0].table === 'customer_addresses' && writes[0].op === 'insert',
+      `C2 exactly ONE table is WRITTEN, and it is the book (got ${calls.map(c => `${c.table}.${c.op}`).join(',')})`);
+    ok(!calls.some(c => c.table === 'customers' && c.op !== 'select'), 'C3 🔴 the save NEVER writes `customers` — D-41 L1');
+    ok(calls.filter(c => c.table === 'customers').every(c => c.op === 'select'),
+      'C3b …and the only thing it does to `customers` is READ the import run for the tag (#348)');
     ok(!calls.some(c => c.table === 'deliveries'), 'C4 🔴 the save NEVER writes `deliveries` — the snapshot is the record');
     ok(!Object.keys(calls[0].payload).some(k => k.startsWith('shipping')), 'C5 no `shipping_*` key is ever composed');
   }
@@ -225,9 +231,13 @@ async function main(): Promise<void> {
     await saveCustomerAddress(db, { businessId: BIZ, customerId: CUST, label: 'A', address: site(), existing: [] });
     await retireCustomerAddress(db, BIZ, 'site-1');
     await readCustomerAddresses(db, BIZ, CUST);
-    const tables = [...new Set(calls.map(c => c.table))];
-    ok(tables.length === 1 && tables[0] === 'customer_addresses',
-      `E1 🔴 EVERY operation this module offers touches ONE table — the book (got ${tables.join(',')})`);
+    const written = [...new Set(calls.filter(c => c.op !== 'select').map(c => c.table))];
+    ok(written.length === 1 && written[0] === 'customer_addresses',
+      `E1 🔴 EVERY operation this module offers WRITES ONE table — the book (got ${written.join(',')})`);
+    // ✏️ #348: reads may also touch `customers` (the import-run tag) and nothing else.
+    const read = [...new Set(calls.filter(c => c.op === 'select').map(c => c.table))].sort();
+    ok(read.every(t => t === 'customer_addresses' || t === 'customers'),
+      `E1b …and it READS only the book and the customer's import run (got ${read.join(',')})`);
     ok(!calls.some(c => c.table === 'deliveries'),
       'E2 🔴 no operation writes `deliveries` — so a saved site cannot rewrite where a past load went');
   }
