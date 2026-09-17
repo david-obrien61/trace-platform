@@ -30,6 +30,12 @@
  *   E  a path has no test in the domain's test file, or the test file tests an unregistered id
  *   F  a path's test did not PASS (ALL registered path tests run on every verify, so any change to
  *      a writer re-runs every path that feeds it)
+ *   G  a domain's `guards` (security rules, ledger #347) — each must have an `await guard('<id>'`
+ *      in the test file and PASS; a guard test for an unregistered id is red too.
+ *
+ * The `input` signal above is the CONTACTS one. A domain may declare its own as
+ * `inputSignal: { fileMentions, props }` (two regex sources): a .tsx/.jsx file matching
+ * `fileMentions` that renders an <input>/<textarea> whose props match `props` (ledger #347).
  *
  * DEPENDENCIES: writer-registry.json · esbuild · @electric-sql/pglite (dev) · the path tests.
  * OUTPUTS:      exit 0/1. `--self-test` plants a violation for each check and proves it goes red.
@@ -50,7 +56,11 @@ const HELPER = /\binput\(\s*'(phone|email|billing_\w+)'/;
 export function scanFile(path, source, domain) {
   const s = stripComments(source);
   const hits = new Set();
-  if (/\.(tsx|jsx)$/.test(path) && /customer/i.test(s) && (INPUT.test(s) || HELPER.test(s))) hits.add('input');
+  const own = domain.inputSignal;
+  if (own) {
+    const tag = new RegExp(`<(input|textarea)\\b(?:=>|[^>])*?(${own.props})(?:=>|[^>])*>`, 'is');
+    if (/\.(tsx|jsx)$/.test(path) && new RegExp(own.fileMentions).test(s) && tag.test(s)) hits.add('input');
+  } else if (/\.(tsx|jsx)$/.test(path) && /customer/i.test(s) && (INPUT.test(s) || HELPER.test(s))) hits.add('input');
   const entry = new RegExp(`\\b(${domain.entryFunctions.join('|')})\\s*\\(`, 'g');
   for (const m of s.matchAll(entry)) {
     const before = s.slice(Math.max(0, m.index - 24), m.index);
@@ -121,6 +131,14 @@ export function evaluate(files, registry, testResults /* Map<domainId, Map<pathI
       const ids = new Set([...testSrc.matchAll(/await path\(\s*'([^']+)'/g)].map(m => m[1]));
       for (const p of d.paths) if (!ids.has(p.id)) problems.push(`E [${d.id}] path ${p.id} has no test in ${d.tests}`);
       for (const id of ids) if (!d.paths.some(p => p.id === id)) problems.push(`E [${d.id}] ${d.tests} tests '${id}', which is not a registered path`);
+      const gids = new Set([...testSrc.matchAll(/await guard\(\s*'([^']+)'/g)].map(m => m[1]));
+      for (const g of d.guards ?? []) if (!gids.has(g.id)) problems.push(`G [${d.id}] guard ${g.id} has no test in ${d.tests}`);
+      for (const id of gids) if (!(d.guards ?? []).some(g => g.id === id)) problems.push(`G [${d.id}] ${d.tests} tests guard '${id}', which is not registered`);
+    }
+    for (const g of d.guards ?? []) {
+      const r = testResults?.get(d.id)?.get(`guard:${g.id}`) ?? (testResults ? 'MISSING' : 'not run');
+      lines.push(`  ${r === 'PASS' ? '🛡️ ' : r === 'not run' ? '··' : '❌'} guard ${g.id} — ${g.what}`);
+      if (testResults && r !== 'PASS') problems.push(`G [${d.id}] guard ${g.id}: test ${r === 'MISSING' ? 'did not report' : r}`);
     }
     // F — the tests passed
     if (testResults) {
@@ -161,9 +179,9 @@ async function runPathTests(registry) {
       try {
         text = execSync(`node "${out}"`, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH_TEST_ROOT: ROOT }, maxBuffer: 64 * 1024 * 1024 });
       } catch (e) { text = String(e.stdout ?? ''); }
-      for (const m of text.matchAll(/^PATH (\S+) (PASS|FAIL)(.*)$/gm)) {
-        got.set(m[1], m[2]);
-        if (m[2] === 'FAIL') console.log(`  ❌ ${m[1]}${m[3]}`);
+      for (const m of text.matchAll(/^(PATH|GUARD) (\S+) (PASS|FAIL)(.*)$/gm)) {
+        got.set(m[1] === 'GUARD' ? `guard:${m[2]}` : m[2], m[3]);
+        if (m[3] === 'FAIL') console.log(`  ❌ ${m[1].toLowerCase()} ${m[2]}${m[4]}`);
       }
     } catch (e) {
       console.log(`  ❌ ${d.id}: the path tests did not build — ${String(e.message).split('\n')[0]}`);
@@ -212,6 +230,19 @@ function selfTest() {
   { const f = base(); f.set('t.paths.mts', "await path('p1', 'x', async () => {});\nawait path('p9', 'y', async () => {});"); expect('E: a test for an unregistered id is red', f, reg(), pass, 'E'); }
   expect('F: a failing path test is red', base(), reg(), new Map([['t', new Map([['p1', 'FAIL']])]]), 'F');
   expect('F: a path test that never reported is red', base(), reg(), new Map([['t', new Map()]]), 'F');
+  { const r = reg(); r.domains[0].guards = [{ id: 'g1', what: 'x' }]; const f = base(); f.set('t.paths.mts', "await path('p1', 'x', async () => {});\nawait guard('g1', 'x', async () => {});");
+    expect('G: negative control — a registered, passing guard is green', f, r, new Map([['t', new Map([['p1', 'PASS'], ['guard:g1', 'PASS']])]]), null);
+    expect('G: a registered guard with no test is red', base(), r, new Map([['t', new Map([['p1', 'PASS'], ['guard:g1', 'PASS']])]]), 'G');
+    expect('G: a failing guard is red', f, r, new Map([['t', new Map([['p1', 'PASS'], ['guard:g1', 'FAIL']])]]), 'G');
+    expect('G: a guard that never reported is red', f, r, pass, 'G');
+    const f2 = base(); f2.set('t.paths.mts', "await path('p1', 'x', async () => {});\nawait guard('g9', 'x', async () => {});");
+    expect('G: a guard test for an unregistered id is red', f2, reg(), pass, 'G'); }
+  { const r = reg(); r.domains[0].inputSignal = { fileMentions: 'crewStopAction', props: 'note' }; r.domains[0].declared = [];
+    const f = base(); f.delete('search.tsx');
+    f.set('crew.tsx', "import { crewStopAction } from 'x';\nconst el = <textarea value={note} onChange={e => setNote(e.target.value)} />;");
+    expect('A: a domain\'s own input signal sees its own form', f, r, pass, 'A');
+    const g = base(); g.delete('search.tsx'); g.set('crew.tsx', "import { crewStopAction } from 'x';\nconst el = <input value={phone} />;");
+    expect('A: a domain\'s own input signal ignores a contact field it does not own', g, r, pass, null); }
   { const f = base(); f.set('arrow.tsx', "const customerStep = 1;\nconst el = <input onChange={e => set(e.target.value)} value={form.email} />;"); expect('A: an input whose props contain an arrow function is still seen', f, reg(), pass, 'A'); }
   const failed = probes.filter(p => !p).length;
   console.log(failed ? `\n❌ writer-registry self-test: ${failed} of ${probes.length} probes failed` : `\n✅ writer-registry self-test: ${probes.length}/${probes.length} probes, both directions`);

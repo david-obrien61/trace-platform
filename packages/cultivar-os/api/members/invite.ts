@@ -1,13 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 import { previewInvitation, acceptInvitation } from '../../../shared/src/auth/acceptInvitation';
 import { exchangeDeviceHandoff } from '../../../shared/src/auth/deviceHandoff';
+import { handleCrewDay } from './crewDay';
 
-const serviceSupabase = createClient(
-  process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-);
+// Made per request, not at import — so a path test can install its database first (ledger #347).
+function serviceClient() {
+  return createClient(
+    process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  );
+}
 
 export default async function handler(req: any, res: any) {
+  const serviceSupabase = serviceClient();
+  // The crew day link rides this endpoint (12/12 ceiling — no new function). `/api/crew/day` is
+  // rewritten here with `_route=crew-day` (vercel.json). Ledger #347.
+  if (req.query?._route === 'crew-day') return handleCrewDay(req, res, serviceSupabase);
   if (req.method === 'GET') {
     const { token } = req.query;
     if (!token || typeof token !== 'string') {

@@ -51,6 +51,12 @@ export interface StopRow {
   completed_at: string | null;
   review_asked_at: string | null;
   review_ask_outcome: string | null;
+  /** Who tapped Done, if it was tapped through one of the two completion doors ([[R-161]]). NULL on a
+   *  stop that arrived fulfilled from the QuickBooks history import (R-37) — which is precisely the
+   *  stop neither door will reopen, so the Undo control must not be offered on it.
+   *  OPTIONAL on purpose: when the pre-20260917c fallback (`STOP_COLS_CORE`) runs, the column is not
+   *  read at all, and `undefined` says that honestly where `null` would claim "nobody". */
+  completed_by_name?: string | null;
   customers: {
     first_name: string; last_name: string; phone: string | null; email: string | null;
     billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null;
@@ -83,7 +89,7 @@ const CUSTOMER_JOIN =
 const STOP_COLS_CORE =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, ${CUSTOMER_JOIN}`;
 const STOP_COLS_FULL =
-  `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, started_at, completed_at, review_asked_at, review_ask_outcome, ${CUSTOMER_JOIN}`;
+  `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, started_at, completed_at, review_asked_at, review_ask_outcome, completed_by_name, ${CUSTOMER_JOIN}`;
 const STOP_LINE_COLS =
   'order_id, quantity, description, sku, business_inventory_id, business_inventory ( name, size )';
 

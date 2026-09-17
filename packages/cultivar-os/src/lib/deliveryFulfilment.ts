@@ -475,6 +475,10 @@ type ReviewAskSuppression =
   | 'already_asked'   // this stop has already been through the prompt
   | 'asked_recently'; // this customer was asked within REVIEW_ASK_WINDOW_DAYS
 
+/**
+ * @public — consumed by `ReviewAskSheet`, which is kept unmounted for the held-ask build (ledger
+ * #347). The tag is what stops a dead-code count from arguing for deleting the ask's policy code.
+ */
 export interface ReviewAskOffer {
   url: string;
   /** The customer-facing lines, in order. Assembled here so no `.tsx` invents copy. */

@@ -319,10 +319,19 @@ const ALLOWED_DIVERGENCE = {
           + 'THIRD (2026-09-17, ledger #345): contactWriter.logContactChanges records every contact '
           + 'add / make-main / remove (David: "who, when, customer, list, value, outcome") AFTER the '
           + 'list write lands; a failed log is reported as audited:false and never undoes the change. '
-          + 'Both client inserts prove themselves by COUNT — a manager cannot read audit_log (#315).',
+          + 'Both client inserts prove themselves by COUNT — a manager cannot read audit_log (#315). '
+          + 'FOURTH + FIFTH (2026-09-17, ledger #347, RATIFIED BY DAVID the same day): the crew day link. '
+          + 'Both write the row INSIDE the audited action — create_crew_day_link / revoke_crew_day_link '
+          + '(crewDayLink.ts, Lauren\'s session) and crew_stop_act (crewDay.ts, service key) — so the '
+          + 'manifest\'s own rule holds: no separate client insert, nothing to half-land.',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx',
             'packages/cultivar-os/src/lib/stopWrites.ts',
-            'packages/shared/src/business-logic/contactWriter.ts'],
+            'packages/shared/src/business-logic/contactWriter.ts',
+            'packages/cultivar-os/src/lib/crewDayLink.ts',
+            'packages/cultivar-os/api/members/crewDay.ts',
+            // The office door onto the SAME function ([[R-161]]): `stop_act` → `stop_progress_apply`
+            // writes the audit row inside the action, exactly as the token door does.
+            'packages/cultivar-os/src/lib/stopProgress.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
@@ -395,7 +404,40 @@ const ALLOWED_DIVERGENCE = {
             // record. It creates nothing and updates nothing here. It is David's ruling ④ made into a
             // delete: removability is decided by origin. Routing it through submit.ts's handleDelete
             // would be N HTTP calls and N transactions, which is precisely the half-run it replaces.
-            'packages/shared/src/quickbooks/itemImportWriter.ts'],
+            'packages/shared/src/quickbooks/itemImportWriter.ts',
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). The CREW DAY LINK — and, since
+            // [[R-161]], the OFFICE door too: one function, two callers, so this is one path and not two:
+            // `crew_stop_act` (20260917c), reached only through the endpoint's service key, sets
+            // status / started_at / completed_at on a stop of the link's own business and day, plus
+            // the two columns only it writes (completed_by_name, review_ask_held_at). It creates no
+            // stop and changes no date, address, customer or order. It overlaps stopWrites.ts on the
+            // Done columns by design — the second Done writer is tech-debt #321.
+            'packages/cultivar-os/api/members/crewDay.ts',
+            // ✅ [[R-161]], David 2026-09-17: the OFFICE door is the same writer reached from Lauren's
+            // session — `stop_act` checks `deliveries:update` and calls `stop_progress_apply`. One
+            // function, two callers, so the completion columns still have exactly ONE author.
+            'packages/cultivar-os/src/lib/stopProgress.ts'],
+  },
+  // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). ONE WRITER, TWO CALLERS ([[R-161]]):
+  // every Start / Done / Undo / Note row is written by `stop_progress_apply`; the two files below are
+  // the two ways in (the crew link's endpoint, and Lauren's own session). Neither writes the table
+  // itself — no client holds INSERT on it, the migration revokes it.
+  'delivery_stop_events': {
+    reason: 'One database function (stop_progress_apply) writes every row; the two declared files are '
+          + 'its two callers — the token endpoint and the office session. No client privilege exists.',
+    paths: ['packages/cultivar-os/api/members/crewDay.ts',
+            'packages/cultivar-os/src/lib/stopProgress.ts'],
+  },
+  // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). A NEW TABLE BORN WITH TWO
+  // PATHS, and both are one set of database functions: Lauren's session makes and turns off links
+  // (crewDayLink.ts → create_crew_day_link / revoke_crew_day_link); the endpoint only stamps
+  // last_used_at on the link it just validated (crewDay.ts → crew_day_read / crew_stop_act). No client
+  // has an INSERT, UPDATE or DELETE privilege on the table — the migration revokes them.
+  'crew_day_links': {
+    reason: 'One migration\'s functions own every write: create/revoke from Lauren\'s session, and '
+          + 'last_used_at from the two endpoint functions. No table privilege for anon or authenticated.',
+    paths: ['packages/cultivar-os/src/lib/crewDayLink.ts',
+            'packages/cultivar-os/api/members/crewDay.ts'],
   },
   // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
   // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns

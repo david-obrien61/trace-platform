@@ -4075,6 +4075,41 @@ never called. So a truck run completed in the app leaves every order open.
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
 
+## #320 — 🟡 NO ROUTE ORDER IS SAVED, SO THE CREW LINK LISTS STOPS IN SCHEDULE ORDER (NEW 2026-09-17, ledger #347)
+
+**What.** The route screen (`DeliveryRoute.tsx`) works out the stop sequence on screen each time and keeps it
+nowhere — no column, no table. So the crew day link (`crew_day_stops`, migration `20260917c`) lists a day's
+stops in the schedule's order (date, then when each stop was made) and SAYS so on the page: *"in the order they
+were scheduled, not a planned route"*. The driver still picks the order, as today.
+
+**The fix.** Store the chosen sequence when Lauren routes a day (a `route_position` on the stop, or a small
+day-route row), and have `crew_day_stops` order by it. Not built in #347: the Saturday pilot is about capture,
+and the route screen's own save path is its own change.
+
+## #321 — ✅ RESOLVED 2026-09-17 IN THE BUILD THAT FILED IT (ledger #347, [[R-161]]) — WAS: 🟡 TWO WAYS TO MARK A STOP DONE, ONLY ONE REGISTERED
+
+**What.** The crew link's Done (`crew_stop_act`) is registered in `writer-registry.json` → `stop-progress`,
+records the typed name, HOLDS the review ask, and can be undone the same day. The in-app **Mark done**
+(`useStopActions` → `fulfilmentPatch`) writes the same `status` / `started_at` / `completed_at` columns through
+RLS, records no name beyond the session, shows the review prompt at once, and cannot be undone. One fact, two
+writers (§6 r8), and the second is outside the registry.
+
+**FIXED, and the decision it was waiting on was made rather than assumed.** David ruled the same day
+([[R-161]]): *"the office's Mark done must behave like the crew's Done — HOLD the review ask (never spend it)
+and be undoable — so both doors do the same thing. One completion writer, registered with its path tests."*
+So `stop_progress_apply` (20260917c §4b) is now the one writer; `crew_stop_act` (token) and the new `stop_act`
+(a logged-in member with `deliveries:update`) are its two doors. Same columns, same event row, same audit row,
+one undo rule. `useStopActions.markStop` no longer writes `deliveries` at all — it calls `stopAct`, and the
+review prompt no longer opens there.
+
+**Registered:** `office.start` · `office.done` · `office.undo-done`, each with an end-to-end test, plus the
+guard `crew.both-doors-agree` (the two doors' rows compared, with a negative control that they are genuinely
+different callers). Five new mutants: spending the ask, undoing after an ask, day-scoping the office door,
+dropping the permission check, recording nobody — all caught.
+
+⚠️ **RESIDUAL, NAMED:** `stopWrites.ts` still writes the same ROW for a different operation (the date move and
+the ship-to edit). That is not a completion write and is not part of this domain yet; the `delivery-stops`
+domain in `writer-registry.json` → `proposed` is where it lands.
 ## #309 — ✅ RESOLVED 2026-09-17, LIVE (ledger #343 — migration applied, merged `56107ee`) — WAS: 🟡 A STAFF LOGIN PRINTS THE LOAD LIST WITH THE STANDARD FIGURES, NOT THE NURSERY'S — BECAUSE IT CANNOT READ THEM (NEW 2026-09-16, ledger #343)
 
 ✅ **RULED AND BUILT 2026-09-17.** David: *"staff may READ the four planting figures (read-only)."* Option (a)'s intent, in a narrower form than a second table policy: a READ-ONLY function `get_planting_materials(business_id)` (§3 of the migration) returns ONLY the planting keys — plus the gallons-per-cubic-yard figure the same page converts with — to any ACTIVE member, NULL to anyone else, and nothing else from the row. anon cannot execute it. The load list reads it for every login; a refusal (NULL) and "nothing saved" ({}) print different sentences. **Executed on PGlite** (`scripts/sql-harness/ladder-install-posts-343.pglite.mjs` P7–P10, mutant M1 caught).
@@ -4216,3 +4251,39 @@ cannot be built until the rings exist as data. The geocode-and-mark half does no
 **Open, David's:** the service choice (**tech-debt #327-e**, Google vs self-hosted) and where the
 coordinates live (**#327-c**). The recons' recommendation is Census first — free, batched, 85% — with
 the misses shown as unverified rather than guessed at. **Nothing is built and nothing is chosen here.**
+
+## #324 — 🟡 CLAUDE.md IS OVER ITS OWN BUDGET, AND THREE INVENTORY DOCS ARE THREE MONTHS STALE (NEW 2026-09-17, ledger #347 — David: file for after Saturday)
+
+**What.** `CLAUDE.md` is **678 lines** against its own ~600-line budget (§CONTEXT BUDGET CHECK), and it
+is loaded every session, so the excess is a tax paid before any work begins. Separately,
+`docs/inventory-functions.md`, `docs/inventory-env.md` and `docs/inventory-ai.md` all still read
+`Last updated: 2026-06-13` — three months behind the code they index, and §10 step 5 says to FLAG
+them as stale before answering "what functions / vars / AI routes do we have?" from them.
+
+**Why it is filed rather than fixed.** David, 2026-09-17: after Saturday. The trim is the still-open
+§4 item *"Lean CLAUDE.md to rules + state + pointers only"* (the structural residual OP-13 left: §2's
+infra tables ~155 lines, §6's coding rules, §9's standing instructions). Doing it inside a pilot build
+is the drift the gates exist to catch, and a half-trim that loses a rule is worse than the tax.
+⚠️ The OP-13 amendment is still open too: the budget counts LINES, and line 3 was once ONE line and
+~1,400 tokens — so a character budget (`wc -c`) is the honest metric. David rules.
+
+## #325 — 🟡 THE CREW PAGE IS ENGLISH ONLY, AND ITS READERS ARE THE PEOPLE R-151 IS ABOUT (NEW 2026-09-17, ledger #347)
+
+**What.** `CrewDay.tsx` ships the first crew-facing surface built since [[R-151]] (*the person chooses
+their own language, and they choose it on the invitation; translate the interface, never the data*),
+and every string in it is inline English. David accepted English **for the pilot** and asked that
+Spanish be filed as the next step against R-151. The wording was cut to a few words per control
+(`Maps` · `Call` · `Start` · `Done` · `Undo` · `Note` · `OK`) so a translation layer has little to
+carry and a non-reader has icons beside each one.
+
+**Why it matters here and not in the abstract.** The crew are exactly R-151's population: David,
+2026-08-31 — *"Cuto lives on site at LAWNS and does the maintenance. He does not speak English. The
+install crews' English is not reliable either."* A link with no login is the first screen they will
+ever hold, and it has no language control of any kind.
+
+**The next step (not this build).** R-151's own clause: the choice belongs to the PERSON and is made
+on the invitation. A crew link has no invitation and no person record — so the honest smallest form is
+a two-word switch on the page itself (`English · Español`, both always visible, never a flag or a
+globe), remembered per device beside the name. That is a decision for David, because it is the first
+place the platform would store a language without a person to attach it to. ⚠️ R-151 also warns the
+string layer must exist first or inline strings bypass it invisibly — so the layer, then this page.

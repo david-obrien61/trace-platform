@@ -109,6 +109,10 @@ const hostCode   = code(readFileSync('packages/cultivar-os/src/pages/Settings.ts
 // the shared `useStopActions` hook, so the schedule, the route and the order screen all run the same one.
 // The assertions below are unchanged; only the file they read followed the code.
 const crewCode   = code(readFileSync('packages/cultivar-os/src/components/delivery/useStopActions.tsx', 'utf8'));
+// The ONE completion writer itself (R-161): SQL, with its `--` comments stripped so a probe cannot
+// match the prose that describes the rule instead of the statement that enforces it (tech-debt #146).
+const migrationCode = readFileSync('supabase/migrations/20260917c_crew_day_link.sql', 'utf8')
+  .split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
 // The crew floor is 4,000, not 10,000: the hook holds only the actions, where the page it came from also held
 // the whole list. Still far above an empty or truncated read, which is all this guard is for.
 ok(sharedCode.length > 20_000 && hostCode.length > 10_000 && crewCode.length > 4_000,
@@ -128,9 +132,25 @@ ok(/<SharedSettings[\s\S]*\n\s*showReviewLink\n/.test(hostCode), 'E9 the cultiva
 ok(!/review_url/.test(hostCode),
    '🔴 E10 (negative) the module card no longer writes the link — ONE input for one field, "entered once"');
 ok(!/type="url"/.test(hostCode), 'E11 (negative) and no second URL input survives on it');
-ok(/\.eq\('module_key', REVIEW_LINK_MODULE_KEY\)/.test(crewCode), 'E12 the crew screen reads the same module-key constant');
+// ✏️ E12 and E14 REWRITTEN 2026-09-17 ([[R-161]], ledger #347), and the rewrite is the point rather
+// than a repair: they asserted that the TAP consults the follow-up module and hands it the stop date.
+// David ruled that a completion tap HOLDS the review ask instead of spending it — through both doors —
+// so the tap must NOT consult the module at all, and the old assertions were asserting the defect.
+// They now assert the new truth in the same place, in both directions.
+ok(!/REVIEW_LINK_MODULE_KEY/.test(crewCode),
+   '🔴 E12 the TAP does not consult the follow-up module — the ask is HELD by the writer, not decided at the tap (R-161)');
 ok(!/'followup_engine'/.test(crewCode + hostCode), 'E13 (negative) no hand-spelled module key remains at either reader');
-ok(/deliveryDate:\s+d\.delivery_date/.test(crewCode), 'E14 the crew screen hands the stop date to the ask decision');
+// ⚠️ MATCHED ON A CALL, NOT A MENTION. `code()` leaves block and JSX comments in place, and this file
+// now DESCRIBES the kept-but-unmounted sheet in two comments — a bare /reviewAskDecision/ matched that
+// prose and reported a defect that was not there (tech-debt #146's shape, caught by this probe failing).
+ok(!/reviewAskDecision\s*\(/.test(crewCode) && !/setAsking\s*\(/.test(crewCode) && !/deliveryDate:/.test(crewCode),
+   '🔴 E14 the tap asks nothing and offers nothing — no ask decision is CALLED and no prompt is opened from it (R-161)');
+ok(/stopAct\(supabase, businessId!, d\.id, action\)/.test(crewCode),
+   'E14b …because the tap goes through the ONE completion writer instead: stopAct → stop_act → stop_progress_apply');
+ok(/review_ask_held_at/.test(migrationCode) && /review_asked_at IS NULL THEN v_now/.test(migrationCode),
+   'E14c and the HELD ask is what the writer records — review_ask_held_at, set only when nothing was ever asked');
+ok(!/review_asked_at\s*=\s*v_now/.test(migrationCode),
+   '🔴 E14d (negative) the writer never SPENDS the ask — nothing in it sets review_asked_at');
 ok(/console\.log\('\[TRACE:REVIEWLINK\]/.test(sharedCode), 'E15 the load trail is an ACTIVE CALL, ON by default (STD-003)');
 
 console.log(`\n${passed} passed, ${failed} failed`);
