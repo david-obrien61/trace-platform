@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 9 covered** (9 `owed`). ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 1 of 9 covered** (CARD 0b — David, 2026-09-17 · 8 `owed`). ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -63,16 +63,34 @@ SELECT p.proname,
 
 ---
 
-## CARD 0b — 🔴 the office door still works, and it behaves the new way
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
-David asked for this card BEFORE the crew cards, and it is the right order: **Mark done is an existing feature**, and [[R-161]] changed how it works. Run it on **Test Dave's** delivery schedule, on a stop you do not mind moving.
-1. Open **Delivery → Schedule**. Pick a stop that is **not** done. Tap **Start this stop**, then **Mark done**.
-2. Watch the screen for a review prompt. **There must not be one.**
-3. The card shows the green **Done** chip with a red **Undo done** beside it. Tap **Undo done**.
+## CARD 0b — the office door still works, and it behaves the new way
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-17 (David · Test Dave's · `05f3061 · prod`)
 
-**PASS:** no review prompt at any point; after step 1 the card reads **Done** and a grey box appears — **From the crew link — Started <time> · <your member name>** and **Done <time> · <your member name> · review ask held, not sent**; after step 3 the chip is back to **Scheduled** and the Done line is gone from that box. The customer receives nothing.
-**FAIL:** a review prompt opens (the ask was spent); **Mark done** errors — if it says *"needs the database update (20260917c)"* then the migration was not applied, so stop and apply it; there is no **Undo done** control; or the grey box names nobody.
-⚠️ **On a stop that was already `fulfilled` before today** (the QuickBooks history import), there is deliberately **no Undo done** control — neither door will reopen it, so none is offered.
+✅ **RUN AND PASSED 2026-09-17.** The Wed Sep 2 stop (LEANDER AREA WHLS NRSY SPLY): **Start 2:34 PM → Mark done 2:37 PM, NO review prompt at any point.** The grey box read *"From the crew link · Started 2:34 PM · David OBrian · Done 2:37 PM · David OBrian · review ask held, not sent"*, with **3 min on site** beside the Done chip and the amber *"order is still open — stock has not been taken out yet"*. **Undo done** returned the stop and **kept the Started line**.
+
+✏️ **IT CORRECTED THIS CARD'S OWN PREDICTION, and that is why step 7 now reads as it does.** The card said **Start this stop** comes back after an undo. It does not: an undo keeps a REAL start time and only clears one the writer invented for a done-without-start, so what comes back is **Mark done**. David saw `Mark done`; the card had said `Start this stop`. The behaviour was right and the card was wrong.
+
+**Login:** your own (owner). **Device:** computer. **Tenant:** Test Dave's Tree Nest. **Writes:** yes — it marks one real stop done, then undoes it.
+
+1. Open **https://cultivar-os.app** and sign in. → the dashboard, a grid of coloured tiles.
+2. Look at the very bottom of the page. → small grey text **`built <time> · <sha> · prod`**. The SHA must be the one you mean to test and the last token must be **prod**; otherwise stop.
+3. Look at the top bar. → it must name **Test Dave's Tree Nest**. If it names LAWNS, stop and switch tenants first.
+4. Click the **hamburger menu** (three lines, top left). → a drawer: Dashboard · Delivery · Operating Costs · Social · PMI · Orders …
+5. Click **Delivery**. → a page headed **Operations calendar**, with **‹** / **›** arrows, a **This week** button, and four weeks of day cells.
+   ⚠️ **The menu item opens the CALENDAR, not a list of stops.** The day-by-day list is a drill-in that appears only after you click a day.
+6. Click **‹** once (left of the week heading). → the heading reads **Four weeks · 4 weeks back** and the grid covers mid-August to mid-September. *(Every Test Dave's stop is in the past, which is why you go back.)*
+7. Click the cell for the day holding a stop that is **not** done (Wed 2, September, for the original run). → the cell takes a green border and the page scrolls to a section headed with that date and **N stop(s) on this day**.
+   *Control missing:* no cell or no stop → you are in the wrong four weeks. Click **This week**, then **‹** once.
+8. On the stop card, find the full-width outlined button reading **Start this stop** (below the **On this order · N lines** block). Click it. → it becomes a green full-width **Mark done**.
+   *Control missing:* a green **Done** chip instead means this stop is already done — use another stop, or run step 10 first to reopen it.
+9. Wait about a minute (so the stamps differ), then click **Mark done**. → the buttons are replaced by a green **Done** chip; beside it **N min on site**; and a grey box headed **From the crew link** with **Started <time> · <your name>** and **Done <time> · <your name> · review ask held, not sent**. An amber line may read *"Marked done. The order is still open — stock has not been taken out yet"* — that is expected (tech-debt #319).
+10. **Watch the whole screen through steps 8–9 for a review prompt** (a sheet offering a QR code). → there must be **none**.
+11. Look right of the **Done** chip. → red text **Undo done**.
+    *Control missing:* the stop was `fulfilled` before this build (no recorded "who"), so it is deliberately not reopenable — use a stop you marked done yourself.
+12. Click **Undo done**. → the chip returns to **Scheduled**, the **Done** line leaves the grey box, the **Started** line stays, and the control reads **Mark done** (see the correction above).
+
+**PASS:** no review prompt at any point; after step 9 the stop reads **Done** with the grey **From the crew link** box naming you, both times, and **review ask held, not sent**; after step 12 it is **Scheduled** again with its Started line kept. The customer receives nothing.
+**FAIL:** a review prompt opens (the ask was spent — the whole point of the change); **Mark done** says *"Marking stops done needs the database update (20260917c) — it has not been applied yet"* (the code is live against a database without the migration — stop); no **Undo done** on a stop you just marked done; **Undo done** errors; or the grey box names nobody.
 
 ---
 
