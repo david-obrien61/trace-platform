@@ -11,19 +11,22 @@ Run from the repo root:  python3 scripts/sql-harness/crew-day-link-347.mutants.p
 """
 import subprocess, os, sys
 M='supabase/migrations/20260917c_crew_day_link.sql'
+E='supabase/migrations/20260917e_route_order_is_saved.sql'
+R='packages/cultivar-os/src/lib/routeOrder.ts'
+S='packages/cultivar-os/src/lib/stopRead.ts'
 H='packages/cultivar-os/api/members/crewDay.ts'
 mutants = [
  ('M1 expiry check removed', M, "IF now() >= link.expires_at THEN code := 'expired'; RETURN; END IF;", "", 'crew.expired'),
  ('M2 revoked check removed', M, "IF link.revoked_at IS NOT NULL THEN code := 'revoked'; RETURN; END IF;", "", 'crew.revoked'),
  ('M3 act ignores the day', M, "     AND (p_service_date IS NULL OR delivery_date = p_service_date)\n", "", 'crew.other-day'),
- ('M4 read ignores the day', M, "      AND d.delivery_date = p_service_date\n", "", 'crew.other-day'),
+ ('M4 read ignores the day', E, "      AND d.delivery_date = p_service_date\n", "", 'crew.other-day'),
  ('M5 act ignores the business', M, "   WHERE id = p_stop_id AND business_id = p_business_id\n", "   WHERE id = p_stop_id\n", 'crew.other-business'),
- ('M6 read ignores the business', M, "    WHERE d.business_id = p_business_id\n      AND", "    WHERE", 'crew.other-business'),
+ ('M6 read ignores the business', E, "    WHERE d.business_id = p_business_id\n      AND", "    WHERE", 'crew.other-business'),
  ('M7 anon may call the read', M, "GRANT EXECUTE ON FUNCTION public.crew_day_read(text, text)                         TO service_role;", "GRANT EXECUTE ON FUNCTION public.crew_day_read(text, text) TO service_role, anon;", 'crew.other-business'),
- ('M8 unit price in the line', M, "'quantity', oi.quantity)", "'quantity', oi.quantity, 'unit_price', oi.unit_price)", 'crew.no-prices'),
- ('M9 price hidden under an innocent key', M, "'size', bi.size,", "'size', bi.size || ' ' || oi.unit_price::text,", 'crew.no-prices'),
+ ('M8 unit price in the line', E, "'quantity', oi.quantity)", "'quantity', oi.quantity, 'unit_price', oi.unit_price)", 'crew.no-prices'),
+ ('M9 price hidden under an innocent key', E, "'size', bi.size,", "'size', bi.size || ' ' || oi.unit_price::text,", 'crew.no-prices'),
  ('M10 rate limit never refuses', M, "RETURN v_hits <= 60;", "RETURN true;", 'crew.rate-limit'),
- ('M11 rate limit counted after the token check', M, "  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;\n  SELECT * INTO r FROM public.crew_link_resolve(p_token);\n  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;\n  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = (r.link).id;",
+ ('M11 rate limit counted after the token check', E, "  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;\n  SELECT * INTO r FROM public.crew_link_resolve(p_token);\n  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;\n  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = (r.link).id;",
    "  SELECT * INTO r FROM public.crew_link_resolve(p_token);\n  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;\n  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;\n  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = (r.link).id;", 'crew.rate-limit'),
  ('M12 endpoint maps 429 to 200', H, "rate_limited: 429,", "rate_limited: 200,", 'crew.rate-limit'),
  ('M13 Done fulfils the order', M, "             review_ask_held_at = CASE WHEN review_asked_at IS NULL THEN v_now ELSE review_ask_held_at END\n       WHERE id = v_stop.id;",
@@ -47,6 +50,25 @@ mutants = [
    "'app-session', NULL, p_note, v_uid, v_role, NULL);", "'app-session', NULL, p_note, v_uid, v_role, current_date);", 'office.done'),
  ('M22 the office door records nobody', M,
    "'app-session', NULL, p_note, v_uid, v_role, NULL);", "'app-session', NULL, p_note, NULL, v_role, NULL);", 'office.start,crew.both-doors-agree'),
+ ('M23 the crew page ignores the saved route order', E,
+   "ORDER BY s.route_position NULLS LAST, s.created_at, s.id", "ORDER BY s.created_at, s.id", 'route.save'),
+ ('M24 the schedule and day sheet ignore the saved order', S,
+   "      .order('route_position', { ascending: true, nullsFirst: false })\n", "", 'route.save'),
+ ('M25 the writer does not check the stops are on this day', E,
+   "  IF v_valid <> v_n THEN", "  IF false THEN", 'route.only-this-day-and-business'),
+ ('M26 re-routing leaves a dropped stop its place', E,
+   "   WHERE d.business_id = p_business_id AND d.delivery_date = p_service_date\n     AND NOT (d.id = ANY(p_stop_ids)) AND d.route_position IS NOT NULL;",
+   "   WHERE false;", 'route.save'),
+ ('M27 the crew page is never told the day was planned', E,
+   "    'routed_at', (SELECT max(d.routed_at) FROM public.deliveries d", "    'routed_at', (SELECT NULL::timestamptz FROM public.deliveries d", 'route.save'),
+ ('M28 the route writer skips its permission check', E,
+   "  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)\n     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to save a route.');",
+   "  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to save a route.');", 'route.save'),
+ ('M29 an unrouted day claims a plan anyway', R,
+   "  if (!routedAt) return 'Not routed yet — follow the order in Lauren\u2019s text.';",
+   "  if (!routedAt) return 'route order · planned earlier';", 'route.no-unplanned-claim'),
+ ('M30 the saver accepts a duplicate stop', E,
+   "  IF v_n <> (SELECT count(DISTINCT x) FROM unnest(p_stop_ids) x) THEN", "  IF false THEN", 'route.only-this-day-and-business'),
  ('M17 create skips the permission check', M, "  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)\n     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');",
    "  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');", 'crew.link-create'),
 ]

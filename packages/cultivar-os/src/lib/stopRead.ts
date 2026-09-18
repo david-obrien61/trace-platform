@@ -57,6 +57,10 @@ export interface StopRow {
    *  OPTIONAL on purpose: when the pre-20260917c fallback (`STOP_COLS_CORE`) runs, the column is not
    *  read at all, and `undefined` says that honestly where `null` would claim "nobody". */
   completed_by_name?: string | null;
+  /** The stop's place in its day's SAVED route, 1..N (ledger #351). NULL = not in the plan. */
+  route_position?: number | null;
+  /** When that day was routed. Every stop in the plan carries the same stamp. */
+  routed_at?: string | null;
   customers: {
     first_name: string; last_name: string; phone: string | null; email: string | null;
     billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null;
@@ -89,7 +93,7 @@ const CUSTOMER_JOIN =
 const STOP_COLS_CORE =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, ${CUSTOMER_JOIN}`;
 const STOP_COLS_FULL =
-  `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, started_at, completed_at, review_asked_at, review_ask_outcome, completed_by_name, ${CUSTOMER_JOIN}`;
+  `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, started_at, completed_at, review_asked_at, review_ask_outcome, completed_by_name, route_position, routed_at, ${CUSTOMER_JOIN}`;
 const STOP_LINE_COLS =
   'order_id, quantity, description, sku, business_inventory_id, business_inventory ( name, size )';
 
@@ -103,7 +107,13 @@ export async function readStops(
     // `.gte` would silently drop a state the screen already handles.
     else if (scope.kind === 'window') b = b.or(`delivery_date.is.null,delivery_date.gte.${scope.from}`);
     else b = b.eq('order_id', scope.orderId);
+    // 🔴 THE SAVED ROUTE ORDER LEADS (ledger #351, David's ruling). This is the ONE read every
+    // delivery surface uses — the schedule, the route page's own list, the order screen AND the
+    // printed day sheet (`LoadList.tsx` calls it) — so ordering here is what makes the phone, the
+    // paper and Lauren's text agree. A day nobody routed has NULL positions and falls through to
+    // the order it always had; nothing pretends to be a plan.
     return b.order('delivery_date', { ascending: true, nullsFirst: false })
+      .order('route_position', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
       .limit(200);
   };

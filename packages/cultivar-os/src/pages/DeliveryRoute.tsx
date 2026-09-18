@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { orderItemName } from '../lib/orderItemName';
 import {
@@ -14,6 +14,7 @@ import { buildRouteHandoff, driverSmsBody, type HandoffStop } from '../lib/route
 // ?date= mode renders the ONE stop (ledger #301, STD-017): the same read, card and actions as the
 // schedule and the order screen. This page adds only its own axis — the selection and the sequence.
 import { readStops, type StopRead } from '../lib/stopRead';
+import { saveRouteOrder, routeOrderLine } from '../lib/routeOrder';
 import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
@@ -551,6 +552,45 @@ export function DeliveryRoute() {
   // else the built order. Keeps pins + list + route in agreement.
   const displayStops = routeSummary?.orderedStops ?? routeStops;
 
+  // ── THE ORDER IS SAVED, NOT JUST SHOWN (ledger #351) ────────────────────────────────────────
+  // David, 2026-09-17: *"If the driver follows the phone, he works against the order she planned."*
+  // The optimiser's answer used to live only in this component. It is now written to the day's stops
+  // the moment it resolves, so the crew page, the schedule and the printed day sheet read the SAME
+  // sequence through `readStops` — one location, many reads.
+  //
+  // 🔴 ONLY AN OPTIMISED ORDER IS EVER SAVED. `routeSummary.orderedStops` is null whenever Directions
+  //    did not run (no key, a geocode miss, more than 25 waypoints), and this effect does nothing —
+  //    the day stays "not routed" and every surface says so. A saved order is a claim that a plan was
+  //    made, and we do not make that claim for a list that was never planned.
+  // 🔴 AND ONLY IN `?date=` MODE. The legacy cart list identifies its candidates by ORDER id; those
+  //    ids must never reach a stop-position write. Every id is checked against THIS day's own read
+  //    before the call, and `save_route_order` refuses anything that is not this day's stop anyway.
+  const [routeSaved, setRouteSaved] = useState<{ at: string; n: number } | null>(null);
+  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
+  const savedKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    const ordered = routeSummary?.orderedStops;
+    if (!dateParam || !businessId || !ordered || ordered.length === 0) return;
+    const ids = ordered.map(x => x.id).filter((x): x is string => !!x);
+    const dayIds = new Set((stopData?.stops ?? []).map(x => x.id));
+    if (ids.length !== ordered.length || !ids.every(id => dayIds.has(id))) {
+      // Said, not swallowed: an order we cannot tie to this day's stops is not written, and the
+      // screen reports it rather than leaving Lauren believing the phone now matches her plan.
+      if (TRACE_DELIVERY) console.warn('[TRACE:ROUTE] optimised order not saved — ids do not match this day', { ordered: ordered.length, ids: ids.length });
+      setRouteSaveError('This route could not be matched to the day’s stops, so the order was not saved.');
+      return;
+    }
+    const key = `${dateParam}|${ids.join(',')}`;
+    if (savedKeyRef.current === key) return;   // the same order, already written — not written twice
+    savedKeyRef.current = key;
+    void (async () => {
+      const out = await saveRouteOrder(supabase, businessId, dateParam, ids);
+      if (out.ok) { setRouteSaved({ at: out.routedAt, n: out.saved }); setRouteSaveError(null); }
+      else { setRouteSaved(null); setRouteSaveError(out.message); savedKeyRef.current = ''; }
+    })();
+  }, [routeSummary, dateParam, businessId, stopData]);
+
   // 🔴 THE ONE DERIVATION. Link, SMS body, clipboard and the "Route ready — N stops" header all
   // read this object, and it is built from `displayStops` — the very array the numbered list below
   // renders. Optimised when Directions resolved, built order when it did not; either way the
@@ -793,6 +833,18 @@ export function DeliveryRoute() {
                 {routeSummary?.miles != null && routeSummary?.minutes != null && (
                   <p style={{ margin: '0 0 14px 26px', fontSize: '0.8125rem', color: GRAY, fontWeight: 600 }}>
                     {routeSummary.miles.toFixed(1)} miles · {formatDriveTime(routeSummary.minutes)} drive · optimized order
+                  </p>
+                )}
+                {/* What was SAVED, in the same words the crew's phone shows (ledger #351). */}
+                {dateParam && routeSaved && (
+                  <p style={{ margin: '0 0 14px 26px', fontSize: '0.8125rem', color: GREEN, fontWeight: 700 }}>
+                    Saved — {routeSaved.n} stop{routeSaved.n !== 1 ? 's' : ''} in this order · {routeOrderLine(routeSaved.at)}.
+                    The crew’s phone, the schedule and the day sheet now follow it.
+                  </p>
+                )}
+                {dateParam && routeSaveError && (
+                  <p role="alert" style={{ margin: '0 0 14px 26px', fontSize: '0.8125rem', color: '#A32D2D', fontWeight: 700 }}>
+                    {routeSaveError}
                   </p>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>

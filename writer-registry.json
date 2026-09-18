@@ -362,7 +362,8 @@
       "writerFiles": [
         "packages/cultivar-os/api/members/crewDay.ts",
         "packages/cultivar-os/src/lib/crewDayLink.ts",
-        "packages/cultivar-os/src/lib/stopProgress.ts"
+        "packages/cultivar-os/src/lib/stopProgress.ts",
+        "packages/cultivar-os/src/lib/routeOrder.ts"
       ],
       "tables": [
         "crew_day_links",
@@ -372,9 +373,12 @@
         "table": "deliveries",
         "columns": [
           "completed_by_name",
-          "review_ask_held_at"
+          "review_ask_held_at",
+          "route_position",
+          "routed_at",
+          "routed_by"
         ],
-        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation."
+        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation. The route columns (route_position / routed_at / routed_by) are written only by save_route_order (20260917e) — the one writer for the day's plan, ledger #351."
       },
       "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role — the endpoint.",
       "inputSignal": {
@@ -386,7 +390,8 @@
         "crewStopAction",
         "createCrewDayLink",
         "revokeCrewDayLink",
-        "stopAct"
+        "stopAct",
+        "saveRouteOrder"
       ],
       "tests": "scripts/path-tests/crew-day.paths.mts",
       "paths": [
@@ -505,6 +510,19 @@
           ],
           "chain": "StopCard → useStopActions.markStop('undo') → stopAct → rpc stop_act → stop_progress_apply",
           "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
+        },
+        {
+          "id": "route.save",
+          "what": "Route this day → the optimiser resolves → the day's sequence is saved (ledger #351)",
+          "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids);",
+          "files": [
+            "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
+            "packages/cultivar-os/src/lib/routeOrder.ts",
+            "packages/cultivar-os/src/lib/stopRead.ts",
+            "packages/cultivar-os/src/pages/CrewDay.tsx"
+          ],
+          "chain": "DeliveryRoute (?date=) → RouteMap reports the optimised order → saveRouteOrder → rpc save_route_order → deliveries.route_position/routed_at/routed_by",
+          "shown": "Route page: 'Saved — N stops in this order · route order · planned <time>'; crew page header: 'route order · planned <time>'; the schedule, the route list and the printed day sheet all list the stops in that order (one readStops)"
         }
       ],
       "guards": [
@@ -539,6 +557,14 @@
         {
           "id": "crew.both-doors-agree",
           "what": "the token door and the session door write the same columns, event and audit row for the same tap, and neither spends the review ask"
+        },
+        {
+          "id": "route.only-this-day-and-business",
+          "what": "a route naming another day's or another business's stop, a duplicate, or nothing at all is refused WHOLE — no partial plan is written"
+        },
+        {
+          "id": "route.no-unplanned-claim",
+          "what": "a day nobody routed never claims a plan: routed_at null, no positions, and the page says 'Not routed yet — follow the order in Lauren's text.'"
         }
       ],
       "declared": []

@@ -21,6 +21,7 @@ import {
 } from '../../packages/cultivar-os/src/lib/crewDayLink';
 import { readStops } from '../../packages/cultivar-os/src/lib/stopRead';
 import { stopAct } from '../../packages/cultivar-os/src/lib/stopProgress';
+import { saveRouteOrder, routeOrderLine } from '../../packages/cultivar-os/src/lib/routeOrder';
 import { readFileSync } from 'node:fs';
 
 process.env.SUPABASE_URL = 'http://pglite.test';
@@ -28,7 +29,9 @@ process.env.SUPABASE_SERVICE_KEY = 'service';
 process.env.VITE_SUPABASE_ANON_KEY = 'anon';
 
 const ROOT = process.env.PATH_TEST_ROOT ?? process.cwd();
-const MIGRATION = readFileSync(`${ROOT}/supabase/migrations/20260917c_crew_day_link.sql`, 'utf8');
+const MIGRATION = readFileSync(`${ROOT}/supabase/migrations/20260917c_crew_day_link.sql`, 'utf8')
+  // …and the route-order migration on top of it, in the order David applies them (ledger #351).
+  + '\n' + readFileSync(`${ROOT}/supabase/migrations/20260917e_route_order_is_saved.sql`, 'utf8');
 const ONLY = process.env.PATH_ONLY ? new Set(process.env.PATH_ONLY.split(',')) : null;
 
 const B = 'b0000000-0000-4000-8000-00000000000b';
@@ -394,6 +397,101 @@ await guard('crew.both-doors-agree', 'the crew link and the office write the sam
   const officeWho = await one(viaOffice, `SELECT link_id IS NOT NULL linked, actor_user_id IS NOT NULL who FROM public.delivery_stop_events WHERE delivery_id = $1`, [o.id]);
   check(crewWho.linked === true && crewWho.who === false && officeWho.linked === false && officeWho.who === true,
     `the doors are not distinguishable: ${JSON.stringify(crewWho)} vs ${JSON.stringify(officeWho)}`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// THE ROUTE ORDER — saved once, read by the phone, the schedule and the day sheet (ledger #351)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+await path('route.save', 'Route this day → the optimised order is saved, and every surface reads THAT order', async (check) => {
+  const db = await freshDb();
+  const a = await stop(db, B, DAY_X);      // created first
+  const b = await stop(db, B, DAY_X);      // second
+  const c = await stop(db, B, DAY_X);      // third
+  // The optimiser's answer is deliberately NOT the creation order — otherwise this test could pass
+  // on a read that ignores the saved sequence entirely.
+  const planned = [c.id, a.id, b.id];
+  const out = await saveRouteOrder(lauren(db), B, DAY_X, planned);
+  check(out.ok && out.saved === 3 && !!out.routedAt, `save: ${JSON.stringify(out)}`);
+
+  const rows = await all(db, `SELECT id, route_position, routed_at, routed_by FROM public.deliveries WHERE business_id = $1 AND delivery_date = $2 ORDER BY route_position`, [B, DAY_X]);
+  check(rows.map((r: any) => r.id).join() === planned.join(), `stored order ${JSON.stringify(rows.map((r: any) => r.route_position))}`);
+  check(rows.every((r: any) => r.routed_by === MANAGER && !!r.routed_at), 'who and when were not stamped on every stop');
+
+  // (a) the SCHEDULE and the printed day sheet — both read through this one function.
+  const sch = await schedule(db, DAY_X);
+  check(sch.stops.map(x => x.id).join() === planned.join(), `the schedule shows ${sch.stops.map(x => x.id.slice(0, 4)).join()}`);
+  check(sch.stops[0].route_position === 1 && sch.stops[2].route_position === 3, 'the schedule did not read the positions');
+
+  // (b) the CREW PAGE, through the real endpoint.
+  const l = await link(db);
+  const day = await readCrewDay(l.token);
+  check(day.ok && day.value.stops.map(x => x.id).join() === planned.join(), `the crew page shows ${day.ok ? day.value.stops.map(x => x.id.slice(0, 4)).join() : day.code}`);
+  check(day.ok && !!day.value.routed_at, 'the crew page was not told the day is planned');
+  check(day.ok && /^route order · planned /.test(routeOrderLine(day.value.routed_at)), `the crew page's line reads "${day.ok ? routeOrderLine(day.value.routed_at) : ''}"`);
+
+  const audit = await all(db, `SELECT action, actor_user_id, detail FROM public.audit_log WHERE target_type = 'delivery_day' AND target_id = $1`, [DAY_X]);
+  check(audit.length === 1 && audit[0].action === 'route.saved' && audit[0].actor_user_id === MANAGER && audit[0].detail.stops === 3, `audit ${JSON.stringify(audit)}`);
+
+  // RE-ROUTING REPLACES — a new order, a new stamp, and a stop dropped from the plan loses its place.
+  const firstStamp = rows[0].routed_at;
+  await new Promise(r => setTimeout(r, 5));
+  const again = await saveRouteOrder(lauren(db), B, DAY_X, [b.id, a.id]);
+  check(again.ok && again.saved === 2 && again.droppedFromPlan === 1, `re-route: ${JSON.stringify(again)}`);
+  const after = await all(db, `SELECT id, route_position, routed_at FROM public.deliveries WHERE business_id = $1 AND delivery_date = $2 ORDER BY route_position NULLS LAST, created_at`, [B, DAY_X]);
+  check(after[0].id === b.id && after[0].route_position === 1 && after[1].id === a.id && after[1].route_position === 2, `after re-route ${JSON.stringify(after.map((r: any) => r.route_position))}`);
+  check(after[2].id === c.id && after[2].route_position === null && after[2].routed_at === null, 'the dropped stop kept its place in the plan');
+  check(after[0].routed_at !== firstStamp, 'the re-route did not re-stamp when it was planned');
+  const sch2 = await schedule(db, DAY_X);
+  check(sch2.stops.map(x => x.id).join() === [b.id, a.id, c.id].join(), `the schedule did not follow the new plan: ${sch2.stops.map(x => x.id.slice(0, 4)).join()}`);
+
+  // Permission is checked SERVER-side, not by hiding a button.
+  const staff = await saveRouteOrder(restClient(db, { uid: STAFF }) as any, B, DAY_X, [a.id, b.id]);
+  check(!staff.ok && staff.code === 'not_permitted', `staff without deliveries:update: ${JSON.stringify(staff)}`);
+  const stillB = await one(db, `SELECT route_position FROM public.deliveries WHERE id = $1`, [b.id]);
+  check(stillB.route_position === 1, 'a refused save changed the plan');
+});
+
+await guard('route.only-this-day-and-business', 'a route naming another day\'s or another business\'s stop is refused whole', async (check) => {
+  const db = await freshDb();
+  const x1 = await stop(db, B, DAY_X);
+  const x2 = await stop(db, B, DAY_X);
+  const y = await stop(db, B, DAY_Y);           // another day
+  const theirs = await stop(db, B2, DAY_X);     // another business
+  await saveRouteOrder(lauren(db), B, DAY_X, [x1.id, x2.id]);
+
+  const otherDay = await saveRouteOrder(lauren(db), B, DAY_X, [x1.id, y.id]);
+  check(!otherDay.ok && otherDay.code === 'not_on_this_day', `another day's stop: ${JSON.stringify(otherDay)}`);
+  const otherBiz = await saveRouteOrder(lauren(db), B, DAY_X, [x1.id, theirs.id]);
+  check(!otherBiz.ok && otherBiz.code === 'not_on_this_day', `another business's stop: ${JSON.stringify(otherBiz)}`);
+  const dup = await saveRouteOrder(lauren(db), B, DAY_X, [x1.id, x1.id]);
+  check(!dup.ok && dup.code === 'duplicate_stop', `the same stop twice: ${JSON.stringify(dup)}`);
+  const none = await saveRouteOrder(lauren(db), B, DAY_X, []);
+  check(!none.ok && none.code === 'nothing_to_save', `an empty route: ${JSON.stringify(none)}`);
+
+  // NOTHING was written by any of the four refusals — the first plan still stands, untouched.
+  const rows = await all(db, `SELECT id, route_position FROM public.deliveries WHERE business_id = $1 AND delivery_date = $2 ORDER BY route_position NULLS LAST, created_at`, [B, DAY_X]);
+  check(rows[0].id === x1.id && rows[0].route_position === 1 && rows[1].route_position === 2, `the plan changed: ${JSON.stringify(rows.map((r: any) => r.route_position))}`);
+  const untouched = await one(db, `SELECT route_position, routed_at FROM public.deliveries WHERE id = $1`, [y.id]);
+  check(untouched.route_position === null && untouched.routed_at === null, 'another day\'s stop was written');
+  const notMine = await one(db, `SELECT route_position FROM public.deliveries WHERE id = $1`, [theirs.id]);
+  check(notMine.route_position === null, 'another business\'s stop was written');
+});
+
+await guard('route.no-unplanned-claim', 'a day nobody routed never claims a plan — on the phone or on the schedule', async (check) => {
+  const db = await freshDb();
+  const a = await stop(db, B, DAY_X);
+  const b = await stop(db, B, DAY_X);
+  const l = await link(db);
+  const day = await readCrewDay(l.token);
+  check(day.ok && (day.value.routed_at ?? null) === null, `an unrouted day reported routed_at ${day.ok ? day.value.routed_at : day.code}`);
+  check(day.ok && day.value.stops.map(x => x.id).join() === [a.id, b.id].join(), 'an unrouted day is not in creation order');
+  check(day.ok && day.value.stops.every(x => (x.route_position ?? null) === null), 'an unrouted stop carries a position');
+  check(routeOrderLine(null) === 'Not routed yet — follow the order in Lauren’s text.', `the not-routed line reads "${routeOrderLine(null)}"`);
+  check(/^route order · planned /.test(routeOrderLine('2026-09-18T14:12:00Z')), 'a planned day is not announced as planned');
+  // NEGATIVE CONTROL: the two sentences are genuinely different, so the assertion above is not
+  // comparing one string with itself.
+  check(routeOrderLine(null) !== routeOrderLine('2026-09-18T14:12:00Z'), 'the planned and unplanned lines are the same string');
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════

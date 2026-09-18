@@ -30,6 +30,7 @@ import {
   readCrewDay, crewStopAction, tokenFromHash, isDeadLink, crewDeviceId, rememberedCrewName,
   rememberCrewName, mapsUrl, type CrewDay as Day, type CrewStop, type CrewAction,
 } from '../lib/crewDayLink';
+import { routeOrderLine } from '../lib/routeOrder';
 
 const GREEN = '#27500A';
 const SAGE = '#EAF3DE';
@@ -148,7 +149,13 @@ export function CrewDay() {
       )}
       {day && day.stops.length > 0 && (
         <p style={{ margin: '12px 0 0', fontSize: '0.8125rem', color: GRAY }}>
-          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} · <strong>Not the planned route — follow the order in Lauren’s text.</strong>
+          {day.stops.length} stop{day.stops.length === 1 ? '' : 's'} ·{' '}
+          {/* 🔴 The day either WAS planned or it was not, and the page says which (ledger #351).
+              A saved order is Lauren's own optimised sequence, written when she pressed Route this
+              day; without one the driver is told plainly to follow her text. */}
+          {day.routed_at
+            ? <strong>{routeOrderLine(day.routed_at)}</strong>
+            : <strong>Not the planned route — follow the order in Lauren’s text.</strong>}
         </p>
       )}
       {day?.stops.map((s, i) => (
