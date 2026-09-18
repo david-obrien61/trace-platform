@@ -80,12 +80,14 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
-### 🔴 FILED 2026-09-18 — #353 (`docs/hold-list-validation`) — **HOLD LIST CHECKED; TWELVE FILINGS LIVE ONLY ON BRANCHES**
+### 🔴 FILED 2026-09-18 — #353 (`docs/hold-list-validation`) — **HOLD LIST CHECKED; FILINGS LIVE ONLY ON BRANCHES**
 
 - 🔴 **GO-LIVE, AFTER SATURDAY — tech-debt #342 / [[R-164]]:** the QuickBooks ingest infers install from the TC line; a delivery ↔ install control on the stop; every change recorded. Not built.
-- 🔴 **Twelve register ids on eight unmerged branches; `20260917b`/`d`/`e` are applied live and unmerged.** Proposed §6 r22 awaits David. Pointer: ledger #353.
+- 🔴 **Ten register ids on seven unmerged branches (twelve until #351 merged); `20260917b`/`d` are applied live and unmerged.** Proposed §6 r22 awaits David. Pointer: ledger #353.
 - ✅ **ShipAddr closed:** 730 LAWNS customers hold a ship-to after reload `bffc7713`. 🔴 That reload also seeded stock on fees again.
 - Filed from the hold list: tech-debt #327–#341 (#327 = the product import update, below).
+### 🟡 BUILT, NOT MERGED — #351 (`feat/route-order-saved`) — **THE ROUTE ORDER IS SAVED ([[R-163]])**
+- 🟡 **BUILDER-COMPLETE · `20260917e_route_order_is_saved.sql` NOT APPLIED.** Route this day saves Lauren's optimised order; the crew's phone, the schedule and the printed day sheet read it (one `readStops`). Never claims a plan the optimiser did not make. **Order: apply → merge → CARD G (Test Dave's) → CARD H (LAWNS, Saturday only).**
 
 ### ✅ APPLIED + MERGED 2026-09-17 — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
 

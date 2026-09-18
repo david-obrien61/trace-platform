@@ -331,7 +331,11 @@ const ALLOWED_DIVERGENCE = {
             'packages/cultivar-os/api/members/crewDay.ts',
             // The office door onto the SAME function ([[R-161]]): `stop_act` → `stop_progress_apply`
             // writes the audit row inside the action, exactly as the token door does.
-            'packages/cultivar-os/src/lib/stopProgress.ts'],
+            'packages/cultivar-os/src/lib/stopProgress.ts',
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-18 (ledger #351). `save_route_order`
+            // writes ONE `route.saved` row per plan, INSIDE the same function that writes the
+            // sequence — the manifest's rule for this table, no separate client insert.
+            'packages/cultivar-os/src/lib/routeOrder.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
@@ -416,7 +420,12 @@ const ALLOWED_DIVERGENCE = {
             // ✅ [[R-161]], David 2026-09-17: the OFFICE door is the same writer reached from Lauren's
             // session — `stop_act` checks `deliveries:update` and calls `stop_progress_apply`. One
             // function, two callers, so the completion columns still have exactly ONE author.
-            'packages/cultivar-os/src/lib/stopProgress.ts'],
+            'packages/cultivar-os/src/lib/stopProgress.ts',
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-18 (ledger #351). The SAVED ROUTE
+            // ORDER: `save_route_order` (20260917e) writes ONLY route_position / routed_at / routed_by —
+            // three columns nothing else writes — on stops it has checked are this business's, on this
+            // day. It creates no stop and changes no date, address, status or customer.
+            'packages/cultivar-os/src/lib/routeOrder.ts'],
   },
   // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). ONE WRITER, TWO CALLERS ([[R-161]]):
   // every Start / Done / Undo / Note row is written by `stop_progress_apply`; the two files below are

@@ -88,8 +88,8 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#353 — Lightning's hold list checked against the registers; the TC-line install ruling; the branch-only filings; ShipAddr measured (docs only)**
-- 🟡 **OPEN — ADOPT THE RULE: A FILING LANDS ON `main` THE SAME DAY, WHATEVER HAPPENS TO THE BUILD?** Twelve ids live only on eight unmerged branches, and three of those branches carry migrations that are ALREADY APPLIED live. Proposed text for CLAUDE.md §6 r22 is in the ledger row. Owner: ledger #353.
-- 🟡 **OPEN — PORT THE TWELVE BRANCH-ONLY FILINGS TO `main` NOW (a docs-only commit), OR MERGE THE BRANCHES?** `feat/route-order-saved` merges clean; the rest conflict in the shared docs. Owner: ledger #353.
+- 🟡 **OPEN — ADOPT THE RULE: A FILING LANDS ON `main` THE SAME DAY, WHATEVER HAPPENS TO THE BUILD?** Ten ids still live only on seven unmerged branches (twelve on eight until #351 merged mid-pass), and `20260917b`/`20260917d` are ALREADY APPLIED live on an unmerged branch. Proposed text for CLAUDE.md §6 r22 is in the ledger row. Owner: ledger #353.
+- 🟡 **OPEN — PORT THE TEN BRANCH-ONLY FILINGS TO `main` NOW (a docs-only commit), OR MERGE THE BRANCHES?** Every remaining branch conflicts in the shared docs. Owner: ledger #353.
 - 🔴 **OPEN — THE RELOAD SEEDED STOCK ON FEES AGAIN.** Run `bffc7713`: 631 of 631 rows hold qty, at least 12 are fees by name. The reversal (`20260916_reverse_seed…`, in your checkout only) targets the undone run `eab7fbd2` and now does nothing. The underlying gap is tech-debt id 307, which exists on a branch only. Owner: ledger #353.
 - ✅ **FILED 2026-09-18 — [[R-164]]: the QuickBooks ingest infers install from the TC line; Lauren gets a delivery ↔ install control; every change is recorded.** Not a question — a ruling awaiting its build (after Saturday). Owner: tech-debt #342.
 - 🟡 **OPEN — CREW ACCESS AFTER THE PILOT: keep the day link, or crew logins with a permission for Done?** Owner: tech-debt #329.
@@ -117,6 +117,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — THE QUICKBOOKS IMPORT KEEPS AN EXISTING CUSTOMER'S CONTACT DETAILS AS THEY ARE.** Lean: keep the MAIN value; ADD a different QuickBooks value as additional through contactWriter. Confirm → RULINGS + registered path. Owner: tech-debt #318.
 - 🔴 **GO-LIVE — FINISHING A STOP DOES NOT FULFIL ITS ORDER** (automatic SPM consumption depends on it). Owner: tech-debt #319.
 - 🟡 **OPEN — WHICH DOMAIN IS REGISTERED NEXT.** Proposed: orders → delivery stops → stock movements. Owner: `writer-registry.json` → `proposed`.
+
+**#351 — the route order is saved (build, NOT MERGED, `20260917e` NOT APPLIED)**
+- ✅ **ANSWERED 2026-09-18 — APPLIED, RATIFIED, and the wording ruled:** Lauren's screen *"Not routed yet — press Route this day."*; crew and sheet keep the text-order sentence. Owner: ledger #351.
+- 🔴 **OPEN — CARDS G AND H** (H on LAWNS, Saturday only). Owner: `crew-day-link-full-surface-test.md`.
+- ✅ **ANSWERED — ROUTE ORDER IS A GO-LIVE FEATURE, NOT A 🟡** (David, 2026-09-17). tech-debt #320 resolved by [[R-163]].
 
 **#352 — the bubbler is billed; the water monitor kit is per installed tree (build)**
 - 🟡 **OPEN — WHICH TREES GET THE BUBBLERS?** The billed line gives a COUNT only; one live line names them in free text. A capture question if the crew ever needs it. Owner: `loadList.ts` `BUBBLER_LINE`.

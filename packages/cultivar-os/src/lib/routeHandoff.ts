@@ -48,10 +48,23 @@
  * [TRACE:ROUTE] the caller emits on every derivation (STD-003, ON until owner-proven).
  */
 
-/** A stop as the route screen holds it: what to call it, and where it is. */
+/**
+ * A stop as the route screen holds it: what to call it, and where it is — and, since ledger #351,
+ * WHICH ROW IT IS.
+ *
+ * 🔴 `id` IS OPTIONAL, AND THE REASON IS NOT TIDINESS. The route screen has two modes and they
+ *    identify their candidates differently: `?date=` mode reads STOPS, so the id is a `deliveries`
+ *    row; the legacy cart mode reads ORDERS, so the id is an `orders` row. Saving a route order is
+ *    only ever done for a DAY of stops, so the saver takes the ids from the day's own read and
+ *    refuses anything that is not one of that day's stops (`save_route_order`, 20260917e). A single
+ *    required `id` here would invite the legacy mode's order ids into a stop-position write.
+ *    It exists at all because the optimised order — the value the map reports back — was previously
+ *    label + address only, so the sequence Lauren sees could not be written anywhere.
+ */
 export interface HandoffStop {
   label: string;
   address: string;
+  id?: string;
 }
 
 /**
