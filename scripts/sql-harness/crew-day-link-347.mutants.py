@@ -14,6 +14,7 @@ M='supabase/migrations/20260917c_crew_day_link.sql'
 E='supabase/migrations/20260917e_route_order_is_saved.sql'
 R='packages/cultivar-os/src/lib/routeOrder.ts'
 S='packages/cultivar-os/src/lib/stopRead.ts'
+C='packages/cultivar-os/src/lib/crewDayLink.ts'
 H='packages/cultivar-os/api/members/crewDay.ts'
 mutants = [
  ('M1 expiry check removed', M, "IF now() >= link.expires_at THEN code := 'expired'; RETURN; END IF;", "", 'crew.expired'),
@@ -69,6 +70,10 @@ mutants = [
    "      : 'route order · planned earlier';", 'route.no-unplanned-claim'),
  ('M30 the saver accepts a duplicate stop', E,
    "  IF v_n <> (SELECT count(DISTINCT x) FROM unnest(p_stop_ids) x) THEN", "  IF false THEN", 'route.only-this-day-and-business'),
+ ('M31 the schedule box restates a start the stop no longer has', C,
+   "  if (!stop.started_at) started = null;\n", "", 'crew.box-follows-stop'),
+ ('M32 the schedule box restates a Done the stop no longer has', C,
+   "  if (!isDeliveryFulfilled(stop.status)) done = null;\n", "", 'crew.box-follows-stop'),
  ('M17 create skips the permission check', M, "  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)\n     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');",
    "  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',\n      'message', 'You need permission to change deliveries to make a crew link.');", 'crew.link-create'),
 ]

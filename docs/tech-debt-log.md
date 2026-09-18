@@ -4368,6 +4368,21 @@ button**, and a Done would record ~23 and ~41 **hours** on site. Cleared once by
    let Start overwrite it. That would have made today's practice taps harmless by construction; it is a
    rule about what a timestamp MEANS, so it is David's call, not a default.
 
+**OPTION B, FILED HERE BY DAVID'S INSTRUCTION (2026-09-18) — A CORRECTION LAUREN CAN SEE.** `20260918b`
+recorded that the two taps typed "Mauro" at 10:10 were David testing — but it recorded it in `audit_log`,
+and 🔴 **managers cannot read `audit_log` (tech-debt #315)**, so Lauren, who reads the SCHEDULE, can never
+see it. The general fix is a small append-only corrections record her role CAN read (an event id, the
+actor it should be attributed to, a reason, who corrected it, when); the schedule's box then shows the
+corrected name with a marker — *"Started 10:10 · David test (typed as Mauro)"*. It needs a migration and
+a client read. ⚠️ **It is only useful once #315 is settled or deliberately routed around** — a correction
+that lives where Lauren's role cannot read it corrects nothing she sees. And ⚠️ **the undo-start above
+prevents most of these cases arising at all**: a practice Start that can be undone on the spot never
+reaches the record, so there is nothing to correct.
+**What was built instead, for Saturday (option A, 2026-09-18, ledger #351):** the schedule's box now
+FOLLOWS THE STOP — a Started line only while the stop is started, a Done line only while it is done — so a
+tap whose effect was cleared (like the two test starts `20260918a` removed) is no longer restated beside a
+stop that contradicts it. That removes the Saturday symptom; it does not relabel a tap that still stands.
+
 **What it changes for the event history.** Nothing is erased: `delivery_stop_events` stays append-only.
 The log would read *"started 10:10 — start undone 10:11"*, which is the truth; today it
 can only read *"started 10:10"* forever, which is not. Every derived value — `started_at`, the grey box,

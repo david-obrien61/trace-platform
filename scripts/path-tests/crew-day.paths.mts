@@ -165,7 +165,9 @@ async function schedule(db: any, date: string) {
 async function activity(db: any, stopId: string) {
   const r = await readStopEvents(lauren(db), B, [stopId]);
   if (!r.ok) throw new Error(`events read: ${r.message}`);
-  return stopActivity(r.byStop.get(stopId) ?? []);
+  // The box is given the stop's CURRENT state, exactly as the schedule passes it (David, 2026-09-18).
+  const st = await one(db, `SELECT started_at, status FROM public.deliveries WHERE id = $1`, [stopId]);
+  return stopActivity(r.byStop.get(stopId) ?? [], st);
 }
 const audit = (db: any, target: string) => all(db, `SELECT action, actor_user_id, actor_role, outcome, detail FROM public.audit_log WHERE target_id = $1 ORDER BY created_at, action`, [target]);
 
@@ -506,6 +508,30 @@ await guard('route.no-unplanned-claim', 'a day nobody routed never claims a plan
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // GUARDS — what the link must refuse
 // ════════════════════════════════════════════════════════════════════════════════════════════
+
+await guard('crew.box-follows-stop', 'the schedule never shows a Started or Done the stop no longer has — the tap stays in the log', async (check) => {
+  const db = await freshDb();
+  const s = await stop(db, B, DAY_X);
+  const l = await link(db);
+  await act(l.token, s.id, 'start');
+  check((await activity(db, s.id)).started?.by === 'Mike', 'a real start is not shown');
+  // What 20260918a did on LAWNS: a TEST start cleared by hand. The tap stays in the log …
+  await db.query(`UPDATE public.deliveries SET started_at = NULL WHERE id = $1`, [s.id]);
+  const events = await one(db, `SELECT count(*)::int n FROM public.delivery_stop_events WHERE delivery_id = $1 AND action = 'start'`, [s.id]);
+  check(events.n === 1, 'the tap log lost the start — it is append-only and must keep it');
+  // … and the box no longer restates it.
+  const after = await activity(db, s.id);
+  check(after.started === null, `the box still says Started beside a stop that is not started: ${JSON.stringify(after)}`);
+  // A Done the stop no longer has is not shown either (the office reopened it by hand).
+  await act(l.token, s.id, 'start');
+  await act(l.token, s.id, 'done');
+  check((await activity(db, s.id)).done?.by === 'Mike', 'a real Done is not shown');
+  await db.query(`UPDATE public.deliveries SET status = 'scheduled', completed_at = NULL WHERE id = $1`, [s.id]);
+  check((await activity(db, s.id)).done === null, 'the box still says Done beside a stop that is not done');
+  // NEGATIVE CONTROL: notes carry no state and are never hidden.
+  await act(l.token, s.id, 'note', 'Mike', 'gate code 42');
+  check((await activity(db, s.id)).notes.length === 1, 'a note was hidden');
+});
 
 await guard('crew.expired', 'an expired link reads nothing and changes nothing', async (check) => {
   const db = await freshDb();

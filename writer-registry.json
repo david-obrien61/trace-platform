@@ -592,6 +592,10 @@
         {
           "id": "route.no-unplanned-claim",
           "what": "a day nobody routed never claims a plan: routed_at null, no positions, and the page says 'Not routed yet — follow the order in Lauren's text.'"
+        },
+        {
+          "id": "crew.box-follows-stop",
+          "what": "the schedule never shows a Started or Done the stop no longer has — the tap stays in the append-only log, the box follows the stop (David, 2026-09-18)"
         }
       ],
       "declared": []

@@ -35,15 +35,26 @@ const T = 'ab'.repeat(32);
 {
   const ev = (action: StopEvent['action'], at: string, by = 'Mike', note: string | null = null): StopEvent =>
     ({ delivery_id: 's1', action, actor_name: by, note, occurred_at: at });
-  const none = stopActivity([]);
+  const S = { started_at: 'x', status: 'fulfilled' };   // a stop that IS started and done
+  const none = stopActivity([], S);
   ok(none.started === null && none.done === null && none.notes.length === 0, 'B1 no events, nothing printed');
-  const a = stopActivity([ev('start', '1'), ev('note', '2', 'Ana', 'gate locked'), ev('done', '3', 'Ana')]);
+  const a = stopActivity([ev('start', '1'), ev('note', '2', 'Ana', 'gate locked'), ev('done', '3', 'Ana')], S);
   ok(a.started?.by === 'Mike' && a.done?.by === 'Ana' && a.notes.length === 1 && a.notes[0].note === 'gate locked', 'B2 start, note, done');
-  const u = stopActivity([ev('done', '1'), ev('undo_done', '2')]);
+  const u = stopActivity([ev('done', '1'), ev('undo_done', '2')], S);
   ok(u.done === null, 'B3 🔴 an Undo cancels the Done — the schedule must not say done for a reopened stop');
-  const r = stopActivity([ev('done', '1'), ev('undo_done', '2'), ev('done', '3', 'Ana')]);
+  const r = stopActivity([ev('done', '1'), ev('undo_done', '2'), ev('done', '3', 'Ana')], S);
   ok(r.done?.by === 'Ana' && r.done.at === '3', 'B4 done again after an undo shows the latest');
-  ok(stopActivity([ev('note', '1', 'Mike', null)]).notes.length === 0, 'B5 a note event with no text prints nothing');
+  ok(stopActivity([ev('note', '1', 'Mike', null)], S).notes.length === 0, 'B5 a note event with no text prints nothing');
+  // 🔴 THE BOX FOLLOWS THE STOP (David, 2026-09-18) — the LAWNS Saturday case, exactly.
+  const cleared = stopActivity([ev('start', '1', 'Mauro')], { started_at: null, status: 'scheduled' });
+  ok(cleared.started === null, '🔴 B6 a start cleared on the stop is NOT restated — no "Started 10:10 · Mauro" beside "not started"');
+  const reopened = stopActivity([ev('start', '1'), ev('done', '2')], { started_at: 'x', status: 'scheduled' });
+  ok(reopened.done === null && reopened.started?.at === '1', 'B7 a Done the stop no longer has is hidden; its real start still shows');
+  const withNote = stopActivity([ev('start', '1'), ev('note', '2', 'Ana', 'gate')], { started_at: null, status: 'scheduled' });
+  ok(withNote.notes.length === 1, 'B8 notes carry no state and are never hidden');
+  ok(stopActivity([ev('start', '1')], { started_at: 'x', status: null }).started !== null
+     && stopActivity([ev('start', '1')], { started_at: null, status: null }).started === null,
+     'B9 NEGATIVE CONTROL — the same taps read differently only because the stop differs'); 
 }
 
 // ══ §C MAPS AND REFUSALS ════════════════════════════════════════════════════════════════════════

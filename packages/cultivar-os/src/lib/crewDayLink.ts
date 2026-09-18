@@ -15,6 +15,7 @@
 // AC-1: no vertical noun. A stop is a stop.
 // ============================================================
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isDeliveryFulfilled } from './deliveryFulfilment';
 
 const TRACE_CREW = true; // [TRACE:CREW] STD-003 — ON until David owner-proves
 
@@ -113,8 +114,23 @@ export interface StopActivity {
   notes: { at: string; by: string; note: string }[];
 }
 
-/** The schedule's summary: the latest start, the Done still standing (an undo cancels it), every note. */
-export function stopActivity(events: StopEvent[]): StopActivity {
+/**
+ * The schedule's summary: the latest start, the Done still standing (an undo cancels it), every note.
+ *
+ * 🔴 THE BOX FOLLOWS THE STOP, NOT THE LOG (David, 2026-09-18). `stop` is REQUIRED so no caller can
+ *    forget it. The tap log is append-only and keeps every tap forever — which is right — but a tap
+ *    whose EFFECT has since been cleared must not be restated as if it stood. Found on LAWNS's real
+ *    Saturday: `20260918a` cleared two TEST starts, and the box still read "Started 10:10 · Mauro"
+ *    beside a stop that said not started. David: *"a stop reading 'not started' beside a box reading
+ *    'Started 10:10 · Mauro' is what Lauren will see Saturday and stop trusting."*
+ *    So a **Started** line shows only while the stop IS started, and a **Done** line only while it IS
+ *    done. Notes always show — a note has no state to contradict. Relabelling a tap that still stands
+ *    (a wrong typed name) is the other half and is filed, not built (tech-debt #344, option B).
+ */
+export function stopActivity(
+  events: StopEvent[],
+  stop: { started_at?: string | null; status?: string | null },
+): StopActivity {
   let started: StopActivity['started'] = null;
   let done: StopActivity['done'] = null;
   const notes: StopActivity['notes'] = [];
@@ -124,6 +140,8 @@ export function stopActivity(events: StopEvent[]): StopActivity {
     else if (e.action === 'undo_done') done = null;
     else if (e.action === 'note' && e.note) notes.push({ at: e.occurred_at, by: e.actor_name, note: e.note });
   }
+  if (!stop.started_at) started = null;
+  if (!isDeliveryFulfilled(stop.status)) done = null;
   return { started, done, notes };
 }
 

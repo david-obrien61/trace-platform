@@ -237,7 +237,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {group.items.map(d => (
                   <StopCard key={d.id} stop={d} read={read} actions={actions}
-                    crewActivity={crewEvents === undefined ? undefined : crewEvents === null ? null : stopActivity(crewEvents.get(d.id) ?? [])} />
+                    crewActivity={crewEvents === undefined ? undefined : crewEvents === null ? null : stopActivity(crewEvents.get(d.id) ?? [], d)} />
                 ))}
               </div>
             </div>
