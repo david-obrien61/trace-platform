@@ -80,6 +80,9 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🟡 BUILT, NOT MERGED — #351 (`feat/route-order-saved`) — **THE ROUTE ORDER IS SAVED ([[R-163]])**
+- 🟡 **BUILDER-COMPLETE · `20260917e_route_order_is_saved.sql` NOT APPLIED.** Route this day saves Lauren's optimised order; the crew's phone, the schedule and the printed day sheet read it (one `readStops`). Never claims a plan the optimiser did not make. **Order: apply → merge → CARD G (Test Dave's) → CARD H (LAWNS, Saturday only).**
+
 ### ✅ APPLIED + MERGED 2026-09-17 — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
 
 - 🟡 **BUILDER-COMPLETE · migration `20260917c` APPLIED 2026-09-17 (V1–V4, re-read live) · MERGED to `main` · OWNER-PROOF OWED (board 0/9).** The ladder gate was satisfied first (#343 `56107ee` is in `main`, its migration applied live) and `origin/main` is merged into this branch.

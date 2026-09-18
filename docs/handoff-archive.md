@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #351 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds #351 · #350 · #347; #346 overflowed (oldest). entries-in == entries-out. -->
+
+### 2026-09-17 — THUNDER **NO PHONE NOTE IS LOST WHEN THE OLD STREET COLUMN IS DROPPED. #346.** 🔴 **`20260915b` WOULD HAVE DROPPED THE WORDS BESIDE A PHONE FOR FIVE LAWNS CUSTOMERS** — the street held the SAME number as their phone column, so the seed added no row and kept the words nowhere else; `20260915b`'s safety check looked at digits only. **`20260917a`** copies those words onto the matching phone row (exactly the five, empty notes only, refuses otherwise, idempotent). **`20260915b` §1b** now refuses while any phone-with-words text is held by no phone row (note or whole value). **Red-first on a LAWNS copy:** the old `20260915b` applies and loses them; the new one refuses; after `20260917a` it applies and all 10 texts survive. ✏️ **The 475 are exactly the snapshot's phone-in-street customers; "465/10" and "466/9" count different things** (10 = a different number in the street, 9 = words beside the number; they overlap on 4). **One of the five (`5fa0c32e`) already keeps its words in its phone VALUE**, so the refusal names four.
+
+**Type:** MIGRATION (1 new, 1 unapplied edited) + HARNESS, on `fix/346-notes-before-drop`, **own worktree (§6 r20)**, **one ledger id**. ✅ **BOTH APPLIED 2026-09-17 BY DAVID; CARD 6 covered; MERGED `0ff9499`.** No app code, `api/` 12/12. Next: the go-live reload checklist (`docs/go-live/2026-09-18-lawns-reload-checklist.md`).
+
+**FLAGGED FOR DAVID:** **(a)** ✅ **APPLIED in order; CARD 6's pass line was WRONG and is corrected** (`receipts`/`businesses` never had those column names). **(b)** 🟡 **`5fa0c32e`'s main phone value holds the number AND words** (the phone column itself did) — `20260917a` still copies the words as a note, so they now appear twice; the value is a data-quality cleanup for Lauren, not blocking. **(c)** ⚠️ **`20260915b` was edited while unapplied** (§6 r1 binds applied files only). **(d)** ⚠️ **the LAWNS copy used for the red-first run is `supabase/local-data/2026-09-17_lawns_contact_state.json`** — ignored by git; the committed harness runs synthetic data in `verify`.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-17 (ledger #350 close-out, after merging origin/main — OP-13 N=3) — verbatim, not summarized.
      §3 now holds #350 · #347 · #346; #345 overflowed (lowest ledger id). entries-in == entries-out. -->
 

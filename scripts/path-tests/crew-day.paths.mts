@@ -445,7 +445,15 @@ await path('route.save', 'Route this day → the optimised order is saved, and e
   const sch2 = await schedule(db, DAY_X);
   check(sch2.stops.map(x => x.id).join() === [b.id, a.id, c.id].join(), `the schedule did not follow the new plan: ${sch2.stops.map(x => x.id.slice(0, 4)).join()}`);
 
-  // Permission is checked SERVER-side, not by hiding a button.
+  // The SAME order routed again is a new plan: it is re-stamped, not skipped (David: re-routing
+  // records who and when). The page resets its de-dup on every fresh Route press to reach this.
+  const before = (await one(db, `SELECT routed_at FROM public.deliveries WHERE id = $1`, [b.id])).routed_at;
+  await new Promise(r => setTimeout(r, 5));
+  const same = await saveRouteOrder(lauren(db), B, DAY_X, [b.id, a.id]);
+  const afterSame = (await one(db, `SELECT routed_at, route_position FROM public.deliveries WHERE id = $1`, [b.id]));
+  check(same.ok && afterSame.route_position === 1 && afterSame.routed_at !== before, `an identical re-route did not re-stamp: ${before} → ${afterSame.routed_at}`);
+
+    // Permission is checked SERVER-side, not by hiding a button.
   const staff = await saveRouteOrder(restClient(db, { uid: STAFF }) as any, B, DAY_X, [a.id, b.id]);
   check(!staff.ok && staff.code === 'not_permitted', `staff without deliveries:update: ${JSON.stringify(staff)}`);
   const stillB = await one(db, `SELECT route_position FROM public.deliveries WHERE id = $1`, [b.id]);

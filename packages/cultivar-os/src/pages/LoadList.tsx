@@ -47,7 +47,8 @@ import { Printer, AlertTriangle } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { customerDisplayName } from '@trace/shared/utils/personName';
-import { readStops } from '../lib/stopRead';
+import { readStops, type StopRow } from '../lib/stopRead';
+import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
 import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
 import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem } from '../lib/loadList';
 import { readLoadListSettings, type LoadListSettingsRead } from '../lib/loadListSettingsRead';
@@ -130,6 +131,8 @@ export function LoadList() {
   const date = params.get('date') || todayYmd();
 
   const [model, setModel] = useState<LoadListModel | null>(null);
+  // The day's stops as read — kept only to say whether the day was planned (ledger #351).
+  const [stopsRead, setStopsRead] = useState<StopRow[] | null>(null);
   const [settingsRead, setSettingsRead] = useState<LoadListSettingsRead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +146,8 @@ export function LoadList() {
       readLoadListSettings(businessId),
     ]);
     setSettingsRead(sr);
-    if (!res.ok) { setError(res.error); setModel(null); setLoading(false); return; }
+    if (!res.ok) { setError(res.error); setModel(null); setStopsRead(null); setLoading(false); return; }
+    setStopsRead(res.value.stops);
 
     const built = buildLoadList(date, res.value.stops.map(s => ({
       stopId: s.id,
@@ -195,6 +199,9 @@ export function LoadList() {
 
       <div style={S.sheet} className="sheet">
         <h1 style={S.h1}>Load list — {longDate(date)}</h1>
+        {/* Stops print in the SAVED route order when there is one (ledger #351) — readStops orders
+            them — and the sheet says which, in the same words as the crew's phone. */}
+        {stopsRead && <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{routeOrderLine(dayRoutedAt(stopsRead))}</p>}
         <p style={{ margin: '.25rem 0 0', color: '#444' }}>
           {business?.name ?? 'This business'}
           {model ? <> · {model.stopCount} stop{model.stopCount === 1 ? '' : 's'}</> : null}

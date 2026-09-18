@@ -379,6 +379,14 @@ export function DeliveryRoute() {
   // renders the Directions route. Null until a route with a road path resolves.
   const [routeSummary, setRouteSummary] = useState<RouteResult | null>(null);
 
+  // What the last save wrote (ledger #351). `savedKeyRef` stops a RE-RENDER of the same result from
+  // writing twice; it is reset by clearRoute(), so every fresh press of Route re-saves and RE-STAMPS
+  // who and when — even when the optimiser returns the same order (David: re-routing records who and
+  // when). An identical plan re-planned at 7:40 is a 7:40 plan.
+  const [routeSaved, setRouteSaved] = useState<{ at: string; n: number } | null>(null);
+  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
+  const savedKeyRef = useRef<string>('');
+
   // ?date= mode: the stops for the day, read through the ONE stop read (ledger #301).
   const [stopData, setStopData] = useState<StopRead | null>(null);
   // Set when a stop changed while a route was on screen. The route and its Google Maps link are DERIVED
@@ -510,6 +518,10 @@ export function DeliveryRoute() {
     setRouteStops([]);
     setRouteOrigin('');
     setRouteSummary(null);
+    // A new route is a new plan: the next optimised result is saved and stamped afresh (#351).
+    savedKeyRef.current = '';
+    setRouteSaved(null);
+    setRouteSaveError(null);
   }
 
   function copyLink() {
@@ -565,10 +577,6 @@ export function DeliveryRoute() {
   // 🔴 AND ONLY IN `?date=` MODE. The legacy cart list identifies its candidates by ORDER id; those
   //    ids must never reach a stop-position write. Every id is checked against THIS day's own read
   //    before the call, and `save_route_order` refuses anything that is not this day's stop anyway.
-  const [routeSaved, setRouteSaved] = useState<{ at: string; n: number } | null>(null);
-  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
-  const savedKeyRef = useRef<string>('');
-
   useEffect(() => {
     const ordered = routeSummary?.orderedStops;
     if (!dateParam || !businessId || !ordered || ordered.length === 0) return;

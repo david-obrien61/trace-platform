@@ -9,7 +9,7 @@
 //               This is the one client call that writes it: `save_route_order` (20260917e) checks
 //               `deliveries:update` server-side and refuses any id that is not that day's stop.
 // DEPENDENCIES: a Supabase client (Lauren's own session).
-// OUTPUTS:      saveRouteOrder · routeOrderLine (what a reader is told about the plan)
+// OUTPUTS:      saveRouteOrder · routeOrderLine (what a reader is told about the plan) · dayRoutedAt
 //
 // 🔴 NEVER SAVE AN UN-OPTIMISED LIST. David's ruling, agreed 2026-09-17: a saved order is a claim
 //    that a plan was made. The caller passes the OPTIMISER's answer or nothing at all; a day where
@@ -20,7 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TRACE_ROUTE = true; // [TRACE:ROUTE] STD-003 — ON until David owner-proves
 
-export type SaveRouteOutcome =
+type SaveRouteOutcome =
   | { ok: true; saved: number; droppedFromPlan: number; routedAt: string }
   | { ok: false; code: string; message: string };
 
@@ -60,4 +60,18 @@ export function routeOrderLine(routedAt: string | null | undefined): string {
   if (!routedAt) return 'Not routed yet — follow the order in Lauren’s text.';
   const t = new Date(routedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   return `route order · planned ${t}`;
+}
+
+/**
+ * When a day was planned, from its own stops: the latest `routed_at` among the stops IN the plan.
+ * The crew page gets the same answer from the server (`crew_day_read`); the schedule and the printed
+ * day sheet compute it here from the ONE read they already hold, so the three agree by construction.
+ */
+export function dayRoutedAt(stops: { route_position?: number | null; routed_at?: string | null }[]): string | null {
+  let latest: string | null = null;
+  for (const s of stops) {
+    if (s.route_position == null || !s.routed_at) continue;
+    if (!latest || s.routed_at > latest) latest = s.routed_at;
+  }
+  return latest;
 }

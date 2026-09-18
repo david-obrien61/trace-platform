@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 9 covered** (CARD 0b — David, 2026-09-17 · 8 `owed`). ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 1 of 11 covered** (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -170,6 +170,51 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 
 **PASS:** no review prompt appears at any point; after step 1 the card shows **Done** plus **From the crew link — Started … Done … · <your member name> · review ask held, not sent**; after step 3 the chip is back to **Scheduled** and the crew box no longer shows a Done line; step 4 marks it done again. The customer receives nothing at any point.
 **FAIL:** a review prompt opens (the ask was spent), there is no **Undo done** control, Undo errors, or the stop's crew box names nobody.
+
+---
+
+## CARD G — the route order is saved and every surface follows it (Test Dave's)
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+**Build:** ledger #351 · [[R-163]]. **Needs:** `20260917e` applied and #351 merged. **Tenant:** Test Dave's. **Writes:** the route columns on today's two stops.
+⚠️ **Test Dave's addresses are partly synthetic** (*1234 no name lane*). If Google cannot place them, the optimiser does not run, **nothing is saved, and that is the correct result** — then CARD H on LAWNS is the proof of the saved order. Steps 4–5 tell you which happened.
+
+1. **Hamburger menu → Delivery → the TODAY cell (Fri 18)**. → *Friday, Sep 18, 2026 · 2 stops* — and after **· 2 stops** the heading now also reads **· Not routed yet — follow the order in Lauren's text.**
+2. In that heading row click **Route this day**. → the route page; both stops listed, each with a **green ticked box** top-left and a green number under it.
+3. Click the green **Route 2 Stops** button at the bottom. → a map, then **Route ready — 2 stops**.
+4. Read the lines under **Route ready**. → **either** (a) **N miles · N drive · optimized order** followed by a green **Saved — 2 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.** — **or** (b) neither line: Google could not route these addresses, nothing was saved.
+5. **If (b):** stop here — go to CARD H. **If (a):** write down which address the numbered list puts **first**.
+6. **Back → Delivery → Fri 18**. → the heading now reads **· route order · planned <time>**, and the two cards are in the **same order as the numbered list**.
+7. On the phone, open today's crew link and tap **Refresh**. → under the date: **2 stops · route order · planned <time>**, and **STOP 1** is the address you wrote down.
+8. **Hamburger menu → Delivery → Load list**, set the date box to **09/18/2026**. → *Load list — Friday, September 18, 2026*, the line **route order · planned <time>**, and the stops in the same order.
+
+**PASS (a):** the route page said **Saved**, and the schedule, the phone and the load list all show **the same first stop** and **route order · planned <time>**.
+**PASS (b):** no **Saved** line, and every surface still says **Not routed yet** / **Not the planned route** — no surface claims a plan that was not made.
+**FAIL:** a surface shows a different order from the route page; a surface says **route order · planned** when the route page never said **Saved**; or the route page shows *"Saving the route order needs the database update (20260917e)"* (the migration is not applied — stop).
+
+---
+
+## CARD H — 🔴 LAWNS, SATURDAY 2026-09-19 ONLY: Lauren's real day, routed, saved and re-routed
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+**APPROVED BY DAVID, 2026-09-17: testing on LAWNS, on Saturday 2026-09-19's stops ONLY** — Lauren's own day, seven stops, real addresses. **The only write is the route order on those seven stops, and re-routing replaces it.** Do not route, move or mark any other LAWNS date. This is also the plan the driver will follow on Saturday — so finish with all seven selected.
+
+1. Switch to **LAWNS Tree Farm** for this card only. Footer must read **… · prod**.
+2. **Hamburger menu → Delivery**. If Saturday is not visible, click **This week**. Click the **Sat 19** cell. → *Saturday, Sep 19, 2026 · 7 stops on this day*, heading ending **· Not routed yet — follow the order in Lauren's text.**
+3. In the day heading row click **Route this day**. → the route page, **seven** stops, each with a green ticked box.
+   *Fewer than seven ticked?* A stop with no address cannot be ticked — note which, and continue.
+4. Click **Route 7 Stops**. → map, **Route ready — 7 stops**, **N miles · N drive · optimized order**, and the green **Saved — 7 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.**
+   *No **Saved** line:* Google could not route the day — stop and tell me which line appeared instead.
+5. Write down the **first three names** of the numbered list.
+6. **Back → Delivery → Sat 19**. → heading **· 7 stops · route order · planned <time>**, cards in the order you wrote down.
+7. **Hamburger menu → Delivery → Load list**, date **09/19/2026**. → **route order · planned <time>** under the heading, stops in the same order. *(The 7 yards of special mix is unchanged — this build does not touch the materials.)*
+8. On the schedule, **Sat 19 → Crew link → Make link → Copy link**; open it on your phone. → **7 stops · route order · planned <time>**, STOP 1–3 are your three names.
+   ⚠️ This makes Saturday's real link. If you want Lauren to send a fresh one Saturday morning, **Make a new link** then kills this one — the saved order is unaffected.
+9. **Re-route (replaces the plan):** back on the route page, **untick** the green box on any **one** stop. → the route clears.
+10. Click **Route 6 Stops**. → **Saved — 6 stops in this order · route order · planned <a later time>**.
+11. On the phone tap **Refresh**. → the planned time moved to the new one, six stops in the new order, and the unticked stop listed **last** (it is still Saturday's stop, just not in the plan).
+12. **Put the real plan back:** tick that stop again → **Route 7 Stops** → **Saved — 7 stops …**. → the phone, after **Refresh**, shows all seven in plan order.
+
+**PASS:** the route page said **Saved**; the schedule, the load list and the phone all show the **same seven in the same order** with **route order · planned <time>**; re-routing replaced the order and moved the time; and the final state is all seven planned.
+**FAIL:** any surface disagrees on the order; the time does not move on a re-route; a stop dropped from the plan keeps a number; or anything on a LAWNS date other than Saturday changed.
 
 ---
 

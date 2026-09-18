@@ -38,6 +38,7 @@ import { useStopActions } from '../components/delivery/useStopActions';
 import { CrewLinkPanel } from '../components/delivery/CrewLinkPanel';
 import { readStopEvents, stopActivity, type StopEvent } from '../lib/crewDayLink';
 import { ymd } from '../lib/dashboardWindows';
+import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -194,6 +195,8 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                   <span style={{ fontWeight: 800, fontSize: '0.9375rem', color: DARK }}>{formatDay(group.date)}</span>
                   <span style={{ fontSize: '0.75rem', color: GRAY }}>
                     · {group.items.length} stop{group.items.length !== 1 ? 's' : ''}
+                    {/* The same sentence the crew's phone and the printed sheet show (ledger #351). */}
+                    {group.date && <> · {routeOrderLine(dayRoutedAt(group.items))}</>}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>

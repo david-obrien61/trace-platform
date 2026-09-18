@@ -4062,7 +4062,10 @@ never called. So a truck run completed in the app leaves every order open.
 ORDER fulfilment, so while a finished stop does not fulfil its order, nothing is consumed.
 Found in the #345 Part C census; the delivery-stops domain is second in the writer-registry proposal.
 
-## #320 — 🟡 NO ROUTE ORDER IS SAVED, SO THE CREW LINK LISTS STOPS IN SCHEDULE ORDER (NEW 2026-09-17, ledger #347)
+## #320 — ✅ RESOLVED 2026-09-18 (ledger #351, [[R-163]]) — WAS: 🟡 NO ROUTE ORDER IS SAVED, SO THE CREW LINK LISTS STOPS IN SCHEDULE ORDER
+
+**RESOLVED — and David corrected the priority of this item the same day it was filed.** It was filed as 🟡 and accepted as such; David, 2026-09-17: *"Your flag (b) / #320 undersold it … Lauren's ROUTE THIS DAY optimisation is a feature she values and uses every delivery day."* Fixed by `20260917e` + `saveRouteOrder`: the optimised order is saved on Route this day and the phone, the schedule and the printed sheet read it through one `readStops`. The original text follows.
+
 
 **What.** The route screen (`DeliveryRoute.tsx`) works out the stop sequence on screen each time and keeps it
 nowhere — no column, no table. So the crew day link (`crew_day_stops`, migration `20260917c`) lists a day's

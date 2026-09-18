@@ -87,6 +87,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#351 — the route order is saved (build, NOT MERGED, `20260917e` NOT APPLIED)**
+- 🔴 **OPEN — APPLY `20260917e`, THEN MERGE, THEN CARDS G AND H.** Owner: ledger #351.
+- 🟡 **OPEN — RATIFY TWO WRITE-PATH DECLARATIONS** (the route writer → `deliveries`, `audit_log`). Owner: `scripts/verify-write-paths.mjs`.
+- 🟡 **OPEN — ONE SENTENCE ON LAUREN'S OWN SCHEDULE TOO?** It reads *"Not routed yet — follow the order in Lauren's text"* there as well, by design. Owner: ledger #351.
+- ✅ **ANSWERED — ROUTE ORDER IS A GO-LIVE FEATURE, NOT A 🟡** (David, 2026-09-17). tech-debt #320 resolved by [[R-163]].
+
 **#347 — the crew day link, Saturday 2026-09-19 LAWNS pilot (build, NOT MERGED, migration NOT APPLIED)**
 - 🔴 **OPEN — APPLY `20260917c` AND RUN THE CARDS.** The ladder gate is satisfied and `origin/main` is merged in; apply the migration (one paste), run the V-block, then CARD 0 and CARDS A–F. Owner: ledger #347.
 - 🟡 **OPEN — STOP ORDER.** The page lists stops in schedule order; no route order is saved. Lean: save the sequence when Lauren routes a day. Owner: tech-debt #320.
