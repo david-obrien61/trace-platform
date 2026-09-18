@@ -95,7 +95,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - ✅ **ANSWERED 2026-09-18 — MERGE #349 approved by David**, after both migrations were applied and measured live. Owner: ledger #349.
 - 🔴 **OPEN — THE ADDRESS CHECK ON SAVE (tech-debt #323), sized ~1½–2 days, not built.** Which service (Census free/batched/84.9% vs Google +3.3 points, no batch, 30-day refetch) and where coordinates live (the coordinate-storage question). The ring map does not exist as data yet.
 - ✅ **ANSWERED 2026-09-17 — [[R-162]]: staff may ADD a phone or email, never Edit / Make main / Remove.** `20260917d` APPLIED 2026-09-18 (measured: `pg_policies`). Owner: tech-debt #317.
-- 🟡 **OPEN — MAY STAFF ADD AN ADDRESS?** [[R-162]] says phone or email; a counter hire taking a walk-in's delivery address cannot save it. Decide when LAWNS hires staff (it has none today). Owner: tech-debt #342.
+- 🟡 **OPEN — MAY STAFF ADD AN ADDRESS?** [[R-162]] says phone or email; a counter hire taking a walk-in's delivery address cannot save it. Decide when LAWNS hires staff (it has none today). Owner: tech-debt #343.
 - 🟡 **OPEN — does the ruling extend to CHECKOUT?** There a typed phone REPLACES the main value, so it still needs `customers:update`. Owner: ledger #349.
 
 **#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
