@@ -182,9 +182,15 @@ const ALLOWED_DIVERGENCE = {
           + 'are exactly the match fields and nothing else: source_document_number is the primary '
           + 'key, customer_id/sale_date/total_amount are David\'s three corroborating fields, and '
           + 'order_kind only labels the evidence for the reader. Splitting it into two reads of one '
-          + 'table for one decision would be the worse code.',
+          + 'table for one decision would be the worse code. '
+          + 'THIRD (ledger #352, 2026-09-18): stopRead reads 3 columns for the stops on a day — status '
+          + 'for the open-order notice, and transport_method because the load list must know which '
+          + 'trees LAWNS INSTALLS (every installed tree gets a water monitor kit, David 2026-09-18). '
+          + 'It was already a 2-column read of the same orders; the third column rides it rather '
+          + 'than a second query. Not the record shape.',
     paths: ['packages/cultivar-os/src/pages/Dashboard.tsx',
-            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
+            'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            'packages/cultivar-os/src/lib/stopRead.ts'],
   },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest) — ⚠️ PENDING DAVID'S RATIFICATION.
   // The SAME distinction as `customers` above: a 4-column projection answering one question, not a

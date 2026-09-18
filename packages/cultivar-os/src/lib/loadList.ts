@@ -153,6 +153,12 @@ export type LoadItemKind =
   | 'tree'
   /** Trunk protection — on the list, so it prints with its quantity, per stop and per day. */
   | 'trunk_protection'
+  /** 🔴 A BILLED BUBBLER — and it is the ONLY thing that says a tree gets one (David, 2026-09-18:
+   *  *"the bubbler is manufactured and added with a cost so not on every tree, only those
+   *  specified"*). The LINE carries the count; nothing says WHICH trees. */
+  | 'bubbler'
+  /** A billed water monitor kit — ON TOP of the one every installed tree gets. */
+  | 'water_monitor'
   /** A deer-fence line: the stop SAYING it needs fence. Nothing else in the data can say it. */
   | 'deer_fence'
   /** 🔴 PLANTING WORK ON THE SITE, NOT A FEE (David, 2026-09-17). At Chris Dubec, *"8 trees plus 1
@@ -230,6 +236,12 @@ export interface LoadStop {
   trees: TreeTally[];
   /** Trunk protection units on this stop — on the list, so it prints. */
   trunkProtection: number;
+  /** Bubblers SPECIFIED on this stop's order. 0 is a real answer and the page says so in words. */
+  bubblers: number;
+  /** Water monitor kits: one per tree LAWNS installs, plus any billed on the order. */
+  waterMonitors: number;
+  /** True when this stop's order is an INSTALL — every tree on it gets a water monitor kit. */
+  installs: boolean;
   /** Planting work on this stop: a tree already on site. Counted in no total (David, 2026-09-17). */
   plantOnSite: ResolvedLoadItem[];
   /** Every tree on the stop, INCLUDING the ones whose size is off the ladder. */
@@ -278,7 +290,14 @@ export interface LoadListModel {
   deerFencePosts: number;
   /** Feet of staking rope — staking posts × the configured feet per post. */
   ropeFeet: number;
+  /** 🔴 BUBBLERS ARE THE ONES BILLED, NOT ONE PER TREE (David, 2026-09-18). 0 when none is specified,
+   *  and the page prints "none specified on these orders" rather than a bare zero. */
   bubblers: number;
+  /** Water monitor kits — one per tree LAWNS installs, PLUS any billed line. Prebuilt and on the
+   *  shelf, so the sheet prints a COUNT only: never the PVC, the bamboo or the drilling. */
+  waterMonitors: number;
+  /** Trees on install stops — the part of `waterMonitors` the install rule produced. */
+  installTreeCount: number;
   /** Trunk protection for the day. */
   trunkProtection: number;
   /** Planting work across the day — trees already on site, size unknown. */
@@ -331,8 +350,6 @@ export interface LoadListModel {
  */
 const NON_LOAD_LINES: ReadonlyArray<{ re: RegExp; why: string }> = [
   { re: /^trip charge$|^TC$/i,            why: 'a delivery charge' },              // 31 lines
-  { re: /^tree bubblers?\b/i,             why: 'a bubbler line — bubblers are counted per tree above' }, // 5
-  { re: /^TB$/,                           why: 'a bubbler line — bubblers are counted per tree above' },
   { re: /discount/i,                      why: 'a discount' },                      // 7
   { re: /^\d+(\.\d+)?% off\b/i,          why: 'a discount' },
   { re: /surcharge|credit card fee/i,     why: 'a charge' },
@@ -345,6 +362,16 @@ const KNOWN_GOODS = /^tree tarp$|^stake kit$|^t-post stake kit$|^TSK\d*$/i;
 
 /** Lines that ARE on David's list, matched the same way. */
 const TRUNK_PROTECTION = /^trunk protection\b|^TP$/i;
+/** 🔴 THE BUBBLER MARKER, AND THERE IS NO OTHER ONE (measured 2026-09-18): the `Tree Bubbler` line.
+ *  `order_service_selections` is EMPTY for LAWNS, and no column on a line or a lot marks a tree. Five
+ *  such lines exist in the whole book — quantities 7, 2, 6, 8 and 3 — and the fifth is 3 bubblers
+ *  against 9 trees, which is David's ruling visible in the data. ✏️ This REPLACES ledger #350's
+ *  exception, where the billed line was left off because bubblers were computed one per tree. */
+const BUBBLER_LINE = /^tree bubblers?\b|^TB$/i;
+/** A billed water monitor kit — QuickBooks item 102, *"Augur Holes, and install water monitor pipe"*.
+ *  It ADDS to the count on top of the per-installed-tree rule: a customer can buy them for trees they
+ *  plant themselves. Measured 2026-09-18: the catalogue item exists and no order line has used it yet. */
+const WATER_MONITOR_LINE = /augur hole|water monitor/i;
 const DEER_FENCE_LINE  = /^deer fenc|^DF$/i;
 /** Planting WORK with no container size — the tree is already on site. Never a sized tree line. */
 const PLANT_ON_SITE    = /^plant your tree$|^PYT$|^tree install(ation)?$/i;
@@ -383,6 +410,8 @@ export function resolveLoadItem(item: StopOrderItem, ladder: Ladder): ResolvedLo
     const flat = { quantity, name: label || sku || 'Unnamed line', sizeText: null, sku,
                    rung: null, gallons: null, offLadder: false, unreadText: null } as const;
     if (matches(TRUNK_PROTECTION, label, sku)) return { ...flat, kind: 'trunk_protection', reason: null };
+    if (matches(BUBBLER_LINE, label, sku)) return { ...flat, kind: 'bubbler', reason: null };
+    if (matches(WATER_MONITOR_LINE, label, sku)) return { ...flat, kind: 'water_monitor', reason: null };
     if (matches(DEER_FENCE_LINE, label, sku))  return { ...flat, kind: 'deer_fence', reason: null };
     if (matches(PLANT_ON_SITE, label, sku)) {
       return { ...flat, kind: 'plant_on_site', reason: 'A tree already on site, to plant — size unknown; add its mix and T-posts by hand.' };
@@ -522,6 +551,9 @@ export interface LoadStopInput {
   /** The lines query ran and did not error. */
   linesRead: boolean;
   items: StopOrderItem[];
+  /** True when the linked order's `transport_method` is `install` — LAWNS plants these trees, and
+   *  every one of them gets a water monitor kit (David, 2026-09-18). */
+  installs?: boolean;
   /**
    * Whether this stop needs deer fence, if anything stored says so. `null` = the data cannot tell.
    * ⚠️ TODAY IT IS ALWAYS NULL: measured 2026-09-12 across the LAWNS tenant, zero order lines and
@@ -566,6 +598,13 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
       stopId: s.stopId, customerName: s.customerName, address: s.address,
       serviceType: s.serviceType, problem, items, trees,
       trunkProtection: items.filter(i => i.kind === 'trunk_protection').reduce((n, i) => n + i.quantity, 0),
+      // 🔴 THE BILLED LINE IS THE COUNT. `bubblersPerTree` is the multiplier per SPECIFIED tree — not
+      // a per-tree default any more (David, 2026-09-18).
+      bubblers: items.filter(i => i.kind === 'bubbler').reduce((n, i) => n + i.quantity, 0) * settings.ops.bubblersPerTree,
+      // One per tree LAWNS installs, PLUS any billed kit (a customer may buy them for trees they plant).
+      waterMonitors: (s.installs ? sums.treeCount : 0)
+        + items.filter(i => i.kind === 'water_monitor').reduce((n, i) => n + i.quantity, 0),
+      installs: !!s.installs,
       plantOnSite: items.filter(i => i.kind === 'plant_on_site'),
       treeCount: sums.treeCount,
       mixGallons: sums.mixGallons,
@@ -603,7 +642,9 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
     tPosts: day.tPosts,
     deerFencePosts,
     ropeFeet: day.tPosts * settings.ops.ropeFeetPerTPost,
-    bubblers: day.treeCount * settings.ops.bubblersPerTree,
+    bubblers: stops.reduce((n, st) => n + st.bubblers, 0),
+    waterMonitors: stops.reduce((n, st) => n + st.waterMonitors, 0),
+    installTreeCount: stops.filter(st => st.installs).reduce((n, st) => n + st.treeCount, 0),
     trunkProtection: stops.reduce((n, st) => n + st.trunkProtection, 0),
     plantOnSite,
     offLadderTreeCount: day.offLadderTreeCount,
@@ -635,7 +676,16 @@ export const LOAD_LIST_COPY = {
     `${ratio} gallons of mix per gallon of container — a 30 gallon tree takes ${30 * ratio} gallons. Container volumes are the ones set for each size.`,
   tPostRule: 'T-posts per tree are set for each container size — the figure is listed against each tree.',
   ropeRule: (feet: number) => `About ${feet} ft of rope per T-post.`,
-  bubblerRule: (n: number) => `${n} bubbler${n === 1 ? '' : 's'} per tree.`,
+  /** ✏️ 2026-09-18: bubblers are the ones BILLED, so the rule describes the marker, not a per-tree rate. */
+  bubblerRule: (n: number) => n === 1
+    ? 'One per tree the order specifies — the bubbler line on the order is the count.'
+    : `${n} per tree the order specifies — the bubbler line on the order is the count.`,
+  /** 🔴 NEVER A BARE ZERO (David, 2026-09-18). */
+  bubblersNoneSpecified: 'none specified on these orders',
+  /** Prebuilt and on the shelf: the crew count trees, count monitors, load them. A COUNT ONLY —
+   *  never the PVC, the bamboo or the drilling (David, 2026-09-18). */
+  waterMonitorRule: 'One for every tree we install, plus any bought on the order. Prebuilt — take them off the shelf.',
+  waterMonitorNone: 'none — no tree on this day is one we install, and none is on an order',
   noMulch: 'No mulch. Only the ingredients in the special mix.',
   /** The ring rule, in the yard person's words. The NUMBER is printed per tree row beside it. */
   ringRule: 'Ring diameter grows with the square root of container gallons — 5 ft at 15 gallon, 12 ft at 95 gallon, and a figure for every size above and between.',

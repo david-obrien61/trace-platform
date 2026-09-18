@@ -221,7 +221,7 @@ SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYar
    *(The old page would have said 3½ yards and 675 gallons.)*
 5. **Section 2 · Trees — 27 in total.** Each tree row shows its own gallons of mix — e.g.
    **Eagleston Holly (Tree Form) 45 Gallon × 5 — 10 T-posts · 450 gal mix**.
-6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope · 27 bubblers**.
+6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope** · ✏️ **Bubblers — none specified on these orders** *(2026-09-18: bubblers are the ones BILLED; no Saturday order carries a Tree Bubbler line — it used to say 27)* · **21 water monitor kits** *(one for every tree we install — 5 install stops, 21 trees — plus any bought on the order; none are)* · **2 trunk protection**. **FAIL if** bubblers read 27 or a bare 0, or if PVC, bamboo or drilling appears anywhere.
 7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"* — and nothing else.
 8. ✏️ **NOTHING ELSE PRINTS (2026-09-17).** No Trip Charge (5 of them), no Customer Discount, no
    "15% Off - Tree Sale", and **no "Also on these orders" block at all.**

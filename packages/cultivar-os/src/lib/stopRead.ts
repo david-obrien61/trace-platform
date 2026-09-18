@@ -77,6 +77,10 @@ export interface StopRead {
   /** False when 20260831d's four columns were absent and the core read ran instead. */
   fulfilmentColumns: boolean;
   orderStatusById: Map<string, string>;
+  /** order_id → `transport_method` ('install' | 'delivery' | 'self'). 🔴 The load list reads it to know
+   *  which trees LAWNS INSTALLS: every installed tree gets a water monitor kit (David, 2026-09-18).
+   *  An absent key means the read failed or the order has none — never assume "install". */
+  transportByOrderId: Map<string, string>;
   /** order_id → its lines. With `linesRead` true, an absent key means the order has none. */
   linesByOrderId: Map<string, StopOrderItem[]>;
   linesRead: boolean;
@@ -135,16 +139,20 @@ export async function readStops(
 
   const orderIds = [...new Set(stops.map(s => s.order_id).filter((x): x is string => !!x))];
   const orderStatusById = new Map<string, string>();
+  const transportByOrderId = new Map<string, string>();
   const linesByOrderId = new Map<string, StopOrderItem[]>();
   let linesRead = true;
 
   if (orderIds.length) {
-    const statuses = await db.from('orders').select('id, status').eq('business_id', businessId).in('id', orderIds);
+    const statuses = await db.from('orders').select('id, status, transport_method').eq('business_id', businessId).in('id', orderIds);
     if (statuses.error) {
       // Degrade to SILENCE, not to a guess: no status means no open-order notice, which is honest.
       if (TRACE_STOP) console.log('[TRACE:STOP] linked-order status read FAILED — notice suppressed, not guessed', { message: statuses.error.message });
     } else {
-      for (const o of (statuses.data ?? []) as { id: string; status: string | null }[]) if (o.status) orderStatusById.set(o.id, o.status);
+      for (const o of (statuses.data ?? []) as { id: string; status: string | null; transport_method: string | null }[]) {
+        if (o.status) orderStatusById.set(o.id, o.status);
+        if (o.transport_method) transportByOrderId.set(o.id, o.transport_method);
+      }
     }
 
     if (opts.readLines) {
@@ -167,7 +175,7 @@ export async function readStops(
   });
   return {
     ok: true,
-    value: { stops, fulfilmentColumns, orderStatusById, linesByOrderId, linesRead, canReadLines: opts.readLines },
+    value: { stops, fulfilmentColumns, orderStatusById, transportByOrderId, linesByOrderId, linesRead, canReadLines: opts.readLines },
   };
 }
 
