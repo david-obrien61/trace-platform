@@ -4383,6 +4383,14 @@ FOLLOWS THE STOP — a Started line only while the stop is started, a Done line 
 tap whose effect was cleared (like the two test starts `20260918a` removed) is no longer restated beside a
 stop that contradicts it. That removes the Saturday symptom; it does not relabel a tap that still stands.
 
+**THE CONCRETE COST, MEASURED (David, 2026-09-18).** On Test Dave's, the LEANDER stop was started on
+**Thursday 14:34** (CARD 0b, office) and marked Done from the phone on **Friday 11:12** — so the schedule reads
+**"1238 min on site"**. Not a fault in the arithmetic: it is exactly what a start that nothing could clear does to
+the minutes figure. On a real day that number is a lie about how long a job took, and it is the number the
+capacity model (one minute per gallon, never measured) was supposed to be corrected by. The box-follows-stop
+fix (2026-09-18) does NOT touch this — it hides cleared taps; this start was never cleared. Undo-start, or the
+day-boundary rule above, is what would have made it right.
+
 **What it changes for the event history.** Nothing is erased: `delivery_stop_events` stays append-only.
 The log would read *"started 10:10 — start undone 10:11"*, which is the truth; today it
 can only read *"started 10:10"* forever, which is not. Every derived value — `started_at`, the grey box,

@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 4 of 11 covered** (0, 0b, A, C — David) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 6 of 11 covered** (0, 0b, A, B, B2, C) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -110,7 +110,8 @@ SELECT p.proname,
 ---
 
 ## CARD B — Start and Done a stop; the schedule shows the times and the name
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David · Test Dave's · crew link on the phone)
+✅ **PASSED — THROUGH THE CREW LINK THIS TIME** (the tap log confirms: device `f18d48bd`, no `app-session`). Stop 3, David Smith, 770 County Road 284: **Started 11:12 → Done 11:15 → Note 11:16 "Some texts"**, all from the phone; Lauren's schedule showed all three with the name and times, **"review ask held, not sent"**, **3 min on site**. The LEANDER stop showed the amber *"order is still open"* line. ⚠️ The phone was still typed as **"Mauro"**, so the three taps read "Mauro" — the same device `20260918b` marked as David's test device, so they are attributable from the record; David is changing the typed name to "David test".
 ⚠️ **2026-09-18 10:50–10:51, reported as CARD B — BUT THE TAP LOG SHOWS BOTH TAPS CAME THROUGH THE OFFICE DOOR** (the schedule's Start this stop / Mark done: `device_id = app-session`, no crew link, recorded as the member name *David OBrian*). That re-proves the office path (CARD 0b's) — held ask, order not fulfilled — but **not this card, whose point is the PHONE → Lauren's schedule path the driver uses.** Stays `owed` until a tap made on the crew link appears on the schedule under the name typed on the phone.
 1. On the phone page from CARD A, on STOP 1, tap **Start**. Wait at least a minute.
 2. Tap **Done**.
@@ -122,7 +123,8 @@ SELECT p.proname,
 ---
 
 ## CARD B2 — an accidental Done is undone from the phone, and a note is kept
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David) + 2026-09-17 (Lauren)
+✅ **ASSEMBLED FROM TWO LIVE RUNS — said, so it can be challenged.** The **note** half: David, 2026-09-18 11:16, *"Some texts"* from the phone, shown on Lauren's schedule with name and time. The **undo** half: Lauren, 2026-09-17 15:55:23, **Undo from the crew link on LAWNS** reopened the Sappal stop (tap log: `undo_done`, crew link) — and the office Undo is CARD 0b. ⚠️ No single run did phone-Undo-then-Note on one stop; if David wants that exact sequence proven, it is 2 minutes on Test Dave's.
 1. On the phone, on the stop from CARD B, tap **Undo**.
 2. Tap **Note**, type *gate was locked*, tap **Save**.
 3. Refresh the schedule on your computer.
