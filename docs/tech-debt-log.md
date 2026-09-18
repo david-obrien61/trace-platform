@@ -4350,7 +4350,7 @@ than silently preferring either number.
 **What.** `stop_progress_apply` (20260917c §4b) has an `undo_done` and no way back from a Start. An Undo
 clears the Done and deliberately KEEPS a real start (CARD 0b proved that is right for a genuine mis-tap
 of Done). But a Start tapped in error — or in practice, the day before — can then never be cleared from
-any screen. Found live 2026-09-18: Lauren (Thu 15:55) and Mauro (Fri 10:10) practised on LAWNS's real
+any screen. Found live 2026-09-18: Lauren (Thu 15:55) and David (Fri 10:10 — testing in his own browser with Mauro's name typed in; Mauro has not used the link, recorded by `20260918b`) practised on LAWNS's real
 Saturday stops through the crew link; Freehill and Sappal kept `started_at` from Thursday/Friday. On the
 day, the crew page would show **STARTED 10:10 AM** (no date, so it reads as Saturday), offer **no Start
 button**, and a Done would record ~23 and ~41 **hours** on site. Cleared once by hand
@@ -4369,7 +4369,7 @@ button**, and a Done would record ~23 and ~41 **hours** on site. Cleared once by
    rule about what a timestamp MEANS, so it is David's call, not a default.
 
 **What it changes for the event history.** Nothing is erased: `delivery_stop_events` stays append-only.
-The log would read *"started 10:10 · Mauro — start undone 10:11 · Mauro"*, which is the truth; today it
+The log would read *"started 10:10 — start undone 10:11"*, which is the truth; today it
 can only read *"started 10:10"* forever, which is not. Every derived value — `started_at`, the grey box,
 minutes on site — reads the NET state, exactly as `undo_done` already works for a Done. The audit row
 per action (as for every other tap) records who undid it.

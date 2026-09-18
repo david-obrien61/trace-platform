@@ -9,8 +9,12 @@
 --
 -- WHAT THE TAP LOG SAYS (read live 2026-09-18, delivery_stop_events — append-only, untouched here):
 --    · Saurabh Sappal (pos 2)  — Lauren, crew link, Thu 15:55:20 start → 15:55:21 done → 15:55:23
---      undo → 15:56:22 done; then Mauro, crew link, Fri 10:10:55 undo. started_at = Thu 15:55.
---    · Chris Freehill (pos 1)  — Mauro, crew link, Fri 10:10:17 start. started_at = Fri 10:10.
+--      undo → 15:56:22 done; then "Mauro", crew link, Fri 10:10:55 undo. started_at = Thu 15:55.
+--    · Chris Freehill (pos 1)  — "Mauro", crew link, Fri 10:10:17 start. started_at = Fri 10:10.
+-- ✅ APPLIED 2026-09-18 BY DAVID; V-block after: 8 rows, positions 1–8, all scheduled, started /
+--    completed / done_by blank. ✏️ CORRECTED THE SAME DAY: the two "Mauro" taps at 10:10 were DAVID,
+--    testing in his own browser with Mauro's name typed in — Mauro has not used the link. The log
+--    keeps the typed name (append-only); 20260918b records the correction beside it.
 --
 -- SCOPE — EXACTLY these two stops, and nothing else on LAWNS:
 --    9244b11e-6047-46f1-944e-ea364c9f4298  Chris Freehill
