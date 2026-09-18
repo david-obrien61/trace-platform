@@ -223,5 +223,35 @@ function ok(cond: boolean, msg: string): void {
     'E4c (negative): it is not inside the `deliveries.route:read` block');
 }
 
+// ══ §F ONE SHEET PER CREW (ledger #354) ════════════════════════════════════════════
+// David, 2026-09-18: two crews Saturday, and the sheet could not be split. The model side is
+// `loadListSubset.test.ts`; these assert the PAGE feeds the model only the kept stops and says so.
+{
+  ok(/parseStopsParam\(stopsParam\)/.test(code) && /params\.get\('stops'\)/.test(code),
+    '🔴 F1: the page reads `stops=` from its own address');
+  ok(/buildLoadList\(date, pick\.kept\.map\(/.test(code),
+    '🔴 F2: ONLY the kept stops reach the model — every total on a crew\'s sheet is that crew\'s');
+  ok(!/buildLoadList\(date, (dayRead|res\.value)\.stops/.test(code),
+    '🔴 F2b (negative): the page never builds the sheet from the whole day\'s stops');
+  ok(/dayRoutedAt\(stopsRead\)/.test(code) && /const stopsRead: StopRow\[\] \| null = pick \? pick\.kept : null/.test(code),
+    '🔴 F3: the route-order line is worked out from the stops ON this sheet');
+  ok(/\{pick\?\.isSubset \? \(\s*<div style=\{S\.flag\} className="ll-flag">\s*<strong>\{LOAD_LIST_COPY\.subsetHeading\(/.test(code),
+    '🔴 F4: a partial sheet says it is partial ("carries N of the day\'s M stops")');
+  ok(/\{pick\.leftOff\.length > 0 \? \(/.test(code) && /pick\.leftOff\.map\(/.test(code) && /LOAD_LIST_COPY\.subsetLeftOffLabel/.test(code),
+    '🔴 F5: …and NAMES every stop it does not carry — the guard against a stop on no sheet at all');
+  ok(/pick\.unknown\.length > 0 \?/.test(code) && /LOAD_LIST_COPY\.subsetUnknown\(/.test(code),
+    '🔴 F6: an id from another day is named on the sheet, never silently dropped');
+  ok(/planNo\.get\(s\.stopId\)/.test(code),
+    'F7: on a partial sheet each stop carries its number in the day\'s plan, to match the phone');
+  ok(/stopsParamFor\(dayIds, ticked\)/.test(code) && /type="checkbox"/.test(code),
+    'F8: the tick boxes write the link, so a reload or a print keeps the choice');
+  const panel = code.indexOf('type="checkbox"');
+  const panelOpen = code.lastIndexOf('<div className="no-print"', panel);
+  ok(panel !== -1 && panelOpen !== -1 && code.lastIndexOf('className="sheet"', panel) < panelOpen,
+    '🔴 F9: the tick boxes sit in a `no-print` panel OUTSIDE the sheet — never on the paper');
+  ok(/model\.stopCount === 0 && !pick\?\.isSubset \? \(/.test(code) && /LOAD_LIST_COPY\.subsetNone/.test(code),
+    'F10: nothing ticked says "nothing ticked", not "no stops on this day"');
+}
+
 console.log(`\nloadListPage: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }

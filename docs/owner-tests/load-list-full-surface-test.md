@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 19.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 20.** ✏️ **2026-09-18 (ledger #354): CARD 20 added — one sheet per crew. The page changed, so CARDS 6 and 19, which David ran and PASSED on paper today on `f9f3b8a · prod`, are `owed` again; the whole-day sheet is built the same way and should read exactly as it did.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
@@ -241,6 +241,28 @@ a tree; or if the page says **"Could not read container sizes"**.
 # NEEDS A SECOND LOGIN OR A DESK VISIT
 
 *(You hold `owner_id`; these need someone who does not. Lauren or Joel, or a test member.)*
+
+### CARD 20 — 🔴 TWO CREWS, TWO SHEETS: EACH SHEET CARRIES ITS OWN STOPS AND ONLY THEIR TOTALS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #354 — David, 2026-09-18: two crews Saturday, and the sheet could not be split
+SIGNAL: `[TRACE:LOADLIST] stops ticked {date: '2026-09-19', ticked: 4, of: 8}` then `[TRACE:LOADLIST] built {… stops: 4, subset: true, dayStops: 8, leftOff: 4}`
+
+**Before you start:** the stamp at the foot of the screen must read the #354 merge (or newer) and end **`· prod`**. This card reads LAWNS's Saturday and writes nothing.
+
+1. **Delivery → Load list**, date **09/19/2026**. → Above the sheet, a white box **Stops on this sheet** lists the day's **8** stops, each with a ticked box and its number in Lauren's plan: **1. Chris Freehill · 2. Saurabh Sappal · 3. Ariel Thiry · 4. Angela Garzon · 5. Chris Dubec · 6. Kathy Gustafson · 7. Amanda Kossa · 8. Shailesh Raja**.
+2. **Untick 5, 6, 7 and 8.** → The sheet now reads, near the top, **LAWNS Tree Farm, LLC · 4 stops of 8 on this day**, and a boxed warning: **This sheet carries 4 of the day's 8 stops — it is not the whole day. · Every total on this sheet is for these stops only. · On another sheet: 5. Chris Dubec · 6. Kathy Gustafson · 7. Amanda Kossa · 8. Shailesh Raja**. The button reads **Print these 4 stops**.
+   **PASS:** the totals read **6.5 yards special mix · 36 T-posts · 144 ft rope · 11 water monitor kits · 2 trunk protection**, and **16 trees**. Each stop below starts with its plan number (**1. Chris Freehill** …). No "could not work out" box.
+3. **Print** (the preview is enough). → **PASS:** the white tick box is **not** on the paper; the boxed "carries 4 of the day's 8 stops" warning **is**.
+4. **Tick 5–8 and untick 1–4.** → **PASS:** **2.5 yards · 26 T-posts · 104 ft rope · 12 water monitor kits**, **13 trees**, no trunk protection, the **Flat fee** line under "could not work out", and **On another sheet: 1. Chris Freehill · 2. Saurabh Sappal · 3. Ariel Thiry · 4. Angela Garzon**.
+5. **The two halves are the day:** 6.5 + 2.5 = **9 yd**, 36 + 26 = **62 posts**, 11 + 12 = **23 kits**, 16 + 13 = **29 trees** — exactly CARD 19's whole day.
+   ⚠️ *Mix is rounded up to the next half yard on EACH sheet, so on another day two halves can add to half a yard more than the day. Today they add exactly.*
+6. **Reload the page** (Cmd-R). → **PASS:** the same four stops are still the only ones ticked — the choice is in the page's address.
+7. Click **Whole day**. → **PASS:** every box ticked, no warning box, **8 stops · 9 yards · 62 T-posts · 248 ft rope · 23 water monitor kits · 2 trunk protection** — CARD 19's sheet, unchanged, and the button reads **Print this day** again.
+8. **Untick every stop.** → **PASS:** the sheet says **No stops are ticked, so there is nothing on this sheet. Tick the stops this crew is taking.** — never "No stops are scheduled for this day".
+
+**FAIL:** a partial sheet shows the day's totals (9 yd / 62 posts) · the warning box or the "On another sheet" names are missing on paper · the tick boxes print · a reload returns to the whole day · two halves do not add to the day's posts, kits and trees.
 
 ### CARD 9 — 🔴 A WITHHELD ORDER SAYS WITHHELD, NEVER "NO ITEMS"
 STATUS: owed

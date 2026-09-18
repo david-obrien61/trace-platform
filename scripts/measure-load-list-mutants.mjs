@@ -33,6 +33,8 @@ const LIB   = 'packages/cultivar-os/src/lib/loadList.ts';
 const PAGE  = 'packages/cultivar-os/src/pages/LoadList.tsx';
 const SUITE = 'packages/cultivar-os/src/lib/loadList.test.ts';
 const PAGE_SUITE = 'packages/cultivar-os/src/lib/loadListPage.test.ts';
+const SUBSET = 'packages/cultivar-os/src/lib/loadListSubset.ts';
+const SUBSET_SUITE = 'packages/cultivar-os/src/lib/loadListSubset.test.ts';
 
 function suiteIsGreen(suite) {
   try {
@@ -315,6 +317,43 @@ const MUTANTS = [
     why: '🔴 every recognised charge and discount prints on its stop again — the "too confusing" sheet David sent back',
     from: "                {s.items.filter(i => i.kind !== 'not_loaded' && i.kind !== 'plant_on_site')",
     to:   '                {s.items.filter(() => true)' },
+  // ══ §F ONE SHEET PER CREW (ledger #354) — each of these prints a tidy sheet that is wrong on a trailer ══
+  { id: 'F1', target: PAGE, suite: PAGE_SUITE,
+    why: '🔴🔴 the crew sheet is built from the WHOLE day — every total on it is the day\'s, under a heading that says it is one crew\'s',
+    from: '    return buildLoadList(date, pick.kept.map(s => ({',
+    to:   '    return buildLoadList(date, dayRead.stops.map(s => ({' },
+  { id: 'F2', target: PAGE, suite: PAGE_SUITE,
+    why: '🔴 a partial sheet stops naming the stops it does not carry — a stop on NO sheet goes unseen',
+    from: '            {pick.leftOff.length > 0 ? (',
+    to:   '            {false ? (' },
+  { id: 'F3', target: PAGE, suite: PAGE_SUITE,
+    why: '🔴 a partial sheet stops saying it is partial — it reads as the whole day',
+    from: '        {pick?.isSubset ? (\n          <div style={S.flag} className="ll-flag">',
+    to:   '        {false ? (\n          <div style={S.flag} className="ll-flag">' },
+  { id: 'F4', target: PAGE, suite: PAGE_SUITE,
+    why: 'the route-order line is worked out from the whole day rather than the stops on this sheet',
+    from: '  const stopsRead: StopRow[] | null = pick ? pick.kept : null;',
+    to:   '  const stopsRead: StopRow[] | null = dayRead ? dayRead.stops : null;' },
+  { id: 'F5', target: SUBSET, suite: SUBSET_SUITE,
+    why: 'the kept stops print in the link\'s order instead of the saved route order',
+    from: '  const kept = day.filter(s => want.has(s.id));',
+    to:   '  const kept = requested.map(id => day.find(s => s.id === id)).filter((s): s is T => !!s);' },
+  { id: 'F6', target: SUBSET, suite: SUBSET_SUITE,
+    why: '🔴 an id from another day is silently dropped instead of named',
+    from: '  const unknown = requested.filter(id => !onDay.has(id));',
+    to:   '  const unknown: string[] = [];' },
+  { id: 'F7', target: SUBSET, suite: SUBSET_SUITE,
+    why: 'a link naming every stop plus a foreign one reads as the whole day',
+    from: '  const isSubset = leftOff.length > 0 || unknown.length > 0;',
+    to:   '  const isSubset = leftOff.length > 0;' },
+  { id: 'F8', target: SUBSET, suite: SUBSET_SUITE,
+    why: '🔴 nothing ticked falls back to the WHOLE day — a crew is handed every stop',
+    from: '  if (raw == null) return null;',
+    to:   '  if (!raw) return null;' },
+  { id: 'F9', target: SUBSET, suite: SUBSET_SUITE,
+    why: '"all ticked" and "the day" become two different links that could print differently',
+    from: '  if (kept.length === dayIds.length) return null;\n',
+    to:   '' },
   { id: 'P4', target: PAGE, suite: PAGE_SUITE,
     why: '🔴 the per-stop yards are re-typed in the page — the second conversion the model now owns',
     from: '                  {s.mixYards} yd mix ·{\' \'}',

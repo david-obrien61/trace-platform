@@ -1,5 +1,15 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #354 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #354 · #353 · #352; #351 overflowed (oldest).
+     entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **THE ROUTE ORDER IS SAVED — ROUTE THIS DAY WRITES LAUREN'S OPTIMISED SEQUENCE, AND THE CREW'S PHONE, THE SCHEDULE AND THE PRINTED DAY SHEET READ THAT ONE ORDER. #351. R-163. TECH-DEBT #320 (RESOLVED).** 🔴 **I said "starting on it now" on 2026-09-17 and did not start it; at 08:21 on 2026-09-18 the honest status was "nowhere".** David set 15:00 and kept the standard. The optimised order had no stop id (`HandoffStop` was label + address), so it could never be written — threaded first. **Saved on Route this day; never saved when the optimiser could not run** (the fallback sentence on main stands for that case). One ordering change in `readStops` carries the schedule, the route list, the order screen and the printed sheet.
+
+**Type:** BUILD + MIGRATION WRITTEN (NOT APPLIED), on `feat/route-order-saved`, own worktree, one ledger id. **Not merged.** `20260917e_route_order_is_saved.sql` (not `d` — taken by the contacts window). Registry `stop-progress`: path `route.save` + 2 guards; mutants 30/30 (and the harness caught five of its own mutants had lost their target when `e` re-created two crew functions). Proof narrative: ledger #351.
+
+**FLAGGED FOR DAVID:** **(a0)** ✅ **APPLIED (V1–V4, re-read live), declarations RATIFIED, CARD H approved as Saturday's real plan, and (e) RULED: Lauren's screen reads *"Not routed yet — press Route this day."*, crew and sheet keep the text-order sentence.** WAS: **(a)** 🔴 **APPLY `20260917e` FIRST, THEN MERGE** — the route page calls `save_route_order`, which only exists after the apply (R-161's order). **(b)** 🔴 **CARD H WRITES TO LAWNS** — Saturday 2026-09-19's seven stops only, route columns only, by your approval; it ends with all seven planned, which is Saturday's real plan. **(c)** 🟡 **Test Dave's addresses may not geocode** — if CARD G shows no **Saved** line, that is the correct result and CARD H is the proof. **(d)** 🟡 **Two write-path declarations await your ratification** (the route writer → `deliveries`, `audit_log`). **(e)** 🟡 **The schedule shows the crew's sentence on Lauren's own screen** — *"Not routed yet — follow the order in Lauren's text"* — one sentence everywhere by design; say if the office wording should differ.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #349 close-out, fourth pass — merging #351 from
      origin/main, OP-13 N=3) — verbatim, not summarized. §3 holds the newest three by ledger id:
      #352 · #351 · #350; #349 — this branch's own entry — overflowed as it merged. Both sides had

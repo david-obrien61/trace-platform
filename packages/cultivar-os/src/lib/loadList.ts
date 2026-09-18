@@ -715,4 +715,15 @@ export const LOAD_LIST_COPY = {
   sizesFailed: 'Could not read this nursery’s container sizes — no tree can be staked or mixed until they load. Reload before you load the trailer.',
   sizesNone: 'No container sizes are set up for this nursery, so no tree can be staked or mixed. Set them up in Settings → Container sizes.',
   emptyDay: 'No stops are scheduled for this day.',
+  // 🔴 ONE SHEET PER CREW (ledger #354). A partial sheet says it is partial, says its totals are its
+  // own, and names every stop of the day it does not carry.
+  subsetHowTo: 'Untick the stops another crew is taking, then print. Every total is for the ticked stops only.',
+  subsetOfDay: (dayStops: number) => `of ${dayStops} on this day`,
+  subsetHeading: (kept: number, dayStops: number) =>
+    `This sheet carries ${kept} of the day’s ${dayStops} stops — it is not the whole day.`,
+  subsetTotalsNote: 'Every total on this sheet is for these stops only.',
+  subsetLeftOffLabel: 'On another sheet:',
+  subsetUnknown: (n: number) =>
+    `${n} stop${n === 1 ? '' : 's'} in this link ${n === 1 ? 'is' : 'are'} not on this day and ${n === 1 ? 'was' : 'were'} left off. Open the load list from the day again.`,
+  subsetNone: 'No stops are ticked, so there is nothing on this sheet. Tick the stops this crew is taking.',
 };

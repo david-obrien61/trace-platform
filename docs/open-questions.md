@@ -87,6 +87,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#354 — one load sheet per crew (build, BUILDER-COMPLETE)**
+- 🟡 **OPEN — CARD 20** (read-only, LAWNS Saturday): tick 1–4 → 6.5 yd · 36 posts · 11 kits; 5–8 → 2.5 yd · 26 posts · 12 kits. Owner: `load-list-full-surface-test.md`.
+- ⚠️ **NOTED — the crew link is still one per day**; only the paper splits. Owner: tech-debt #345 (piece 4).
+
 **#353 — Lightning's hold list checked against the registers; the TC-line install ruling; the branch-only filings; ShipAddr measured (docs only)**
 - 🟡 **OPEN — ADOPT THE RULE: A FILING LANDS ON `main` THE SAME DAY, WHATEVER HAPPENS TO THE BUILD?** Ten ids still live only on seven unmerged branches (twelve on eight until #351 merged mid-pass), and `20260917b`/`20260917d` are ALREADY APPLIED live on an unmerged branch. Proposed text for CLAUDE.md §6 r22 is in the ledger row. Owner: ledger #353.
 - 🟡 **OPEN — PORT THE TEN BRANCH-ONLY FILINGS TO `main` NOW (a docs-only commit), OR MERGE THE BRANCHES?** Every remaining branch conflicts in the shared docs. Owner: ledger #353.

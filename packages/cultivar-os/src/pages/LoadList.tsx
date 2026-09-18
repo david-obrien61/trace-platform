@@ -41,13 +41,14 @@
  * which is fine for a SKU and not fine for customer names and typed addresses. Rendering through
  * React escapes by construction, adds no dependency, and print-to-PDF is the download.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Printer, AlertTriangle } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { customerDisplayName } from '@trace/shared/utils/personName';
-import { readStops, type StopRow } from '../lib/stopRead';
+import { readStops, type StopRow, type StopRead } from '../lib/stopRead';
+import { parseStopsParam, pickStops, stopsParamFor } from '../lib/loadListSubset';
 import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
 import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
 import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem } from '../lib/loadList';
@@ -129,10 +130,12 @@ export function LoadList() {
   const [params, setParams] = useSearchParams();
   const { businessId, business, can } = useBusinessContext();
   const date = params.get('date') || todayYmd();
+  // 🔴 ONE SHEET PER CREW (ledger #354). `stops=` absent = the whole day; present = only those stops.
+  const stopsParam = params.get('stops');
+  const requested = useMemo(() => parseStopsParam(stopsParam), [stopsParam]);
 
-  const [model, setModel] = useState<LoadListModel | null>(null);
-  // The day's stops as read — kept only to say whether the day was planned (ledger #351).
-  const [stopsRead, setStopsRead] = useState<StopRow[] | null>(null);
+  // The day as read — every stop on the date, whatever this sheet carries.
+  const [dayRead, setDayRead] = useState<StopRead | null>(null);
   const [settingsRead, setSettingsRead] = useState<LoadListSettingsRead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,40 +149,67 @@ export function LoadList() {
       readLoadListSettings(businessId),
     ]);
     setSettingsRead(sr);
-    if (!res.ok) { setError(res.error); setModel(null); setStopsRead(null); setLoading(false); return; }
-    setStopsRead(res.value.stops);
+    if (!res.ok) { setError(res.error); setDayRead(null); setLoading(false); return; }
+    setError(null);
+    setDayRead(res.value);
+    setLoading(false);
+  }, [businessId, date, can]);
 
-    const built = buildLoadList(date, res.value.stops.map(s => ({
+  useEffect(() => { void load(); }, [load]);
+
+  // Which of the day's stops this sheet carries. Ticking re-picks from the day already read — no re-fetch.
+  const pick = useMemo(() => (dayRead ? pickStops(dayRead.stops, requested) : null), [dayRead, requested]);
+  // The day's stops as read — kept only to say whether the stops on this sheet were planned (ledger #351).
+  const stopsRead: StopRow[] | null = pick ? pick.kept : null;
+
+  // 🔴 ONLY THE KEPT STOPS REACH THE MODEL. `buildLoadList` is pure over its input, so every total on
+  // a crew's sheet is for that crew's stops, and the day's totals are never computed for it.
+  const model = useMemo<LoadListModel | null>(() => {
+    if (!dayRead || !pick || !settingsRead) return null;
+    return buildLoadList(date, pick.kept.map(s => ({
       stopId: s.id,
       customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
       address: shipToLine(s) || shipToLine(billingAsShipTo(s.customers)),
       serviceType: s.service_type,
       orderId: s.order_id,
-      canReadLines: res.value.canReadLines,
-      linesRead: res.value.linesRead,
-      items: (s.order_id ? res.value.linesByOrderId.get(s.order_id) : undefined) ?? [],
+      canReadLines: dayRead.canReadLines,
+      linesRead: dayRead.linesRead,
+      items: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
       // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
       // `transport_method` is what says so; an absent value is never read as "install".
-      installs: s.order_id ? res.value.transportByOrderId.get(s.order_id) === 'install' : false,
+      installs: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
       // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
       deerFence: null,
-    })), sr.settings);
+    })), settingsRead.settings);
+  }, [dayRead, pick, settingsRead, date]);
 
-    setError(null);
-    setModel(built);
-    setLoading(false);
-    if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] built', {
-      date, stops: built.stopCount, trees: built.treeCount, mixYards: built.mixYards,
-      tPosts: built.tPosts, ropeFeet: built.ropeFeet, floors: built.totalsAreFloors,
-      bubblers: built.bubblers, waterMonitors: built.waterMonitors, installTrees: built.installTreeCount,
-      unresolved: built.unresolved.length, unreadStops: built.unreadStops,
-      offLadderTrees: built.offLadderTreeCount, noVolumeRows: built.noVolumeTrees.length,
-      deerFenceUnknownStops: built.deerFenceUnknownStops, sizes: sr.sizes, figures: sr.figures,
-      valuesUsed: built.valuesUsed,
+  useEffect(() => {
+    if (!TRACE_LOADLIST || !model || !pick || !settingsRead) return;
+    console.log('[TRACE:LOADLIST] built', {
+      date, stops: model.stopCount, trees: model.treeCount, mixYards: model.mixYards,
+      tPosts: model.tPosts, ropeFeet: model.ropeFeet, floors: model.totalsAreFloors,
+      bubblers: model.bubblers, waterMonitors: model.waterMonitors, installTrees: model.installTreeCount,
+      unresolved: model.unresolved.length, unreadStops: model.unreadStops,
+      offLadderTrees: model.offLadderTreeCount, noVolumeRows: model.noVolumeTrees.length,
+      deerFenceUnknownStops: model.deerFenceUnknownStops, sizes: settingsRead.sizes, figures: settingsRead.figures,
+      valuesUsed: model.valuesUsed,
+      subset: pick.isSubset, dayStops: pick.kept.length + pick.leftOff.length,
+      leftOff: pick.leftOff.length, unknownIds: pick.unknown.length,
     });
-  }, [businessId, date, can]);
+  }, [model, pick, settingsRead, date]);
 
-  useEffect(() => { void load(); }, [load]);
+  /** Tick or untick one stop. All ticked drops `stops=` — the whole day, the same sheet as before. */
+  function toggleStop(id: string) {
+    if (!dayRead) return;
+    const dayIds = dayRead.stops.map(s => s.id);
+    const ticked = new Set(pick ? pick.kept.map(s => s.id) : dayIds);
+    if (ticked.has(id)) ticked.delete(id); else ticked.add(id);
+    const value = stopsParamFor(dayIds, ticked);
+    if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] stops ticked', { date, ticked: ticked.size, of: dayIds.length });
+    setParams(value === null ? { date } : { date, stops: value });
+  }
+  const dayStopCount = pick ? pick.kept.length + pick.leftOff.length : 0;
+  const planNo = useMemo(() => new Map((pick?.kept ?? []).map(s => [s.id, s.route_position ?? null])), [pick]);
 
   return (
     <div style={S.page}>
@@ -194,12 +224,48 @@ export function LoadList() {
         </label>
         <button type="button" style={S.btn} onClick={() => window.print()}
           disabled={!model || model.stopCount === 0}>
-          <Printer size={18} /> Print this day
+          <Printer size={18} /> {pick?.isSubset
+            ? `Print these ${model?.stopCount ?? 0} stop${model?.stopCount === 1 ? '' : 's'}`
+            : 'Print this day'}
         </button>
-        {model && model.stopCount === 0
+        {model && model.stopCount === 0 && !pick?.isSubset
           ? <span style={{ color: '#666' }}>Nothing to print — no stops on this day.</span>
           : null}
       </div>
+
+      {/* 🔴 ONE SHEET PER CREW (ledger #354, David 2026-09-18: two crews Saturday). Tick the stops a
+          crew takes and print; tick the rest and print again. Screen only — never on the paper. */}
+      {dayRead && dayStopCount > 1 ? (
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 1rem', background: '#fff',
+          border: '1px solid #d6e3c4', borderRadius: 8, padding: '.75rem 1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+            <strong>Stops on this sheet</strong>
+            <span style={{ color: '#444', fontSize: '.9rem' }}>
+              {LOAD_LIST_COPY.subsetHowTo}
+            </span>
+            {pick?.isSubset ? (
+              <button type="button" style={{ ...S.btn, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}` }}
+                onClick={() => setParams({ date })}>
+                Whole day
+              </button>
+            ) : null}
+          </div>
+          {dayRead.stops.map(s => {
+            const on = pick ? pick.kept.some(k => k.id === s.id) : true;
+            return (
+              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', minHeight: 48,
+                borderTop: '1px solid #eee', cursor: 'pointer' }}>
+                <input type="checkbox" checked={on} onChange={() => toggleStop(s.id)}
+                  style={{ width: 24, height: 24 }} />
+                <span>
+                  {s.route_position != null ? <strong>{s.route_position}. </strong> : null}
+                  {customerDisplayName(s.customers ?? {}, 'Customer')}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div style={S.sheet} className="sheet">
         <h1 style={S.h1}>Load list — {longDate(date)}</h1>
@@ -209,7 +275,30 @@ export function LoadList() {
         <p style={{ margin: '.25rem 0 0', color: '#444' }}>
           {business?.name ?? 'This business'}
           {model ? <> · {model.stopCount} stop{model.stopCount === 1 ? '' : 's'}</> : null}
+          {model && pick?.isSubset ? <> {LOAD_LIST_COPY.subsetOfDay(dayStopCount)}</> : null}
         </p>
+
+        {/* 🔴 A PARTIAL SHEET SAYS SO, AND NAMES WHAT IT DOES NOT CARRY (ledger #354). Every total on it
+            is for these stops only; the stops listed here are on another sheet — or on none, which is
+            exactly what laying the crews' sheets side by side should show. */}
+        {pick?.isSubset ? (
+          <div style={S.flag} className="ll-flag">
+            <strong>{LOAD_LIST_COPY.subsetHeading(model?.stopCount ?? 0, dayStopCount)}</strong>
+            <div style={S.note}>{LOAD_LIST_COPY.subsetTotalsNote}</div>
+            {pick.leftOff.length > 0 ? (
+              <div style={S.note}>
+                <strong>{LOAD_LIST_COPY.subsetLeftOffLabel}</strong>{' '}
+                {pick.leftOff.map(s => `${s.route_position != null ? `${s.route_position}. ` : ''}${customerDisplayName(s.customers ?? {}, 'Customer')}`).join(' · ')}
+              </div>
+            ) : null}
+            {pick.unknown.length > 0 ? (
+              <div style={S.note}><strong>{LOAD_LIST_COPY.subsetUnknown(pick.unknown.length)}</strong></div>
+            ) : null}
+          </div>
+        ) : null}
+        {model && pick?.isSubset && model.stopCount === 0 ? (
+          <p style={{ marginTop: '1rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.subsetNone}</p>
+        ) : null}
 
         {loading ? <p style={{ marginTop: '2rem' }}>Loading the day…</p> : null}
 
@@ -236,7 +325,7 @@ export function LoadList() {
           </div>
         ) : null}
 
-        {model && !loading && model.stopCount === 0 ? (
+        {model && !loading && model.stopCount === 0 && !pick?.isSubset ? (
           <p style={{ marginTop: '2rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.emptyDay}</p>
         ) : null}
 
@@ -383,7 +472,11 @@ export function LoadList() {
             <h2 style={S.h2}>Per stop</h2>
             {model.stops.map(s => (
               <div key={s.stopId} style={{ margin: '0 0 1.25rem' }} className="ll-block ll-stop">
-                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>{s.customerName}</div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>
+                  {/* On a partial sheet each stop carries its number in the DAY's plan, so a crew can
+                      match its paper to the phone, which lists the whole day (ledger #354). */}
+                  {pick?.isSubset && planNo.get(s.stopId) != null ? `${planNo.get(s.stopId)}. ` : ''}{s.customerName}
+                </div>
                 <div style={{ color: '#444', fontSize: '.9rem' }}>{s.address || 'No address recorded'}</div>
                 <div style={S.note}>
                   {s.treeCount} tree{s.treeCount === 1 ? '' : 's'} ·{' '}
