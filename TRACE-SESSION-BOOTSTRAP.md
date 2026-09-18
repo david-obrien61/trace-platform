@@ -80,6 +80,13 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 FILED 2026-09-18 — #353 (`docs/hold-list-validation`) — **HOLD LIST CHECKED; TWELVE FILINGS LIVE ONLY ON BRANCHES**
+
+- 🔴 **GO-LIVE, AFTER SATURDAY — tech-debt #342 / [[R-164]]:** the QuickBooks ingest infers install from the TC line; a delivery ↔ install control on the stop; every change recorded. Not built.
+- 🔴 **Twelve register ids on eight unmerged branches; `20260917b`/`d`/`e` are applied live and unmerged.** Proposed §6 r22 awaits David. Pointer: ledger #353.
+- ✅ **ShipAddr closed:** 730 LAWNS customers hold a ship-to after reload `bffc7713`. 🔴 That reload also seeded stock on fees again.
+- Filed from the hold list: tech-debt #327–#341 (#327 = the product import update, below).
+
 ### ✅ APPLIED + MERGED 2026-09-17 — #347 (`feat/crew-day-link`) — **THE CREW DAY LINK — SATURDAY 2026-09-19 LAWNS PILOT**
 
 - 🟡 **BUILDER-COMPLETE · migration `20260917c` APPLIED 2026-09-17 (V1–V4, re-read live) · MERGED to `main` · OWNER-PROOF OWED (board 0/9).** The ladder gate was satisfied first (#343 `56107ee` is in `main`, its migration applied live) and `origin/main` is merged into this branch.
