@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 11 covered** (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 3 of 11 covered** (0, 0b, A — David) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -39,7 +39,8 @@
 ---
 
 ## CARD 0 — the database update is in
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)
+✅ David ran V3 on apply: create/revoke → anon f · authed t · service t; the five crew functions → anon f · authed f · service t. Re-read live by Thunder the same hour (all nine functions, incl. `stop_act` and `stop_progress_apply`). **No need to run it again.**
 In the Supabase **SQL editor**, paste and run:
 
 ```sql
@@ -95,7 +96,8 @@ SELECT p.proname,
 ---
 
 ## CARD A — make today's link, open it on your phone, enter a name
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-17 (David · Test Dave's · `05f3061 · prod`)
+✅ **PASSED:** the link opened with no login, asked the name once and remembered it; both stops showed address, Maps, Call where there is a number and "No phone on file" where there is not, the office note, item lists with quantities and the honest empty messages, Start / Done / Note, and **no prices anywhere**. ✏️ One wrong prediction in this card, corrected: the john smith stop has NO linked order, so it reads *"No order is linked to this stop"*, not *"no items listed"*. **And it exposed the regression David then ruled on — the page said "scheduled order, not a planned route" → [[R-163]], ledger #351.**
 1. On your computer, sign in, open **Delivery → Schedule** on Test Dave's.
 2. On today's (or tomorrow's) day heading, tap **Crew link**. A panel opens: *Crew link for this day*.
 3. Tap **Make link**. A green box appears with the link and **Copy link** (and **Share…** on a phone).
@@ -195,6 +197,7 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 
 ## CARD H — 🔴 LAWNS, SATURDAY 2026-09-19 ONLY: Lauren's real day, routed, saved and re-routed
 **STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+🔴 **2026-09-18 09:57:52 — LAUREN ROUTED SATURDAY HERSELF, three minutes after production flipped to `8a4af05`.** Eight stops (an eighth, *Angela Garzon*, was captured at 09:56), positions 1–8, `routed_by` = Lauren Bishop, one `route.saved` audit row (8 stops, 0 dropped) — measured live. **The save has therefore worked on real addresses, by the real user.** ⚠️ **SO THIS CARD IS NOW READ-ONLY: run steps 1, 2, 6, 7 and 8 only (see the ranked list), and DO NOT run steps 3–5 or 9–12** — pressing Route again, or re-routing, would REPLACE Lauren's own plan and re-stamp it as yours on the eve of the pilot. Re-routing is proven by `route.save` (replace, re-stamp, dropped stop) and needs no live repeat.
 **APPROVED BY DAVID, 2026-09-17: testing on LAWNS, on Saturday 2026-09-19's stops ONLY** — Lauren's own day, seven stops, real addresses. **The only write is the route order on those seven stops, and re-routing replaces it.** Do not route, move or mark any other LAWNS date. This is also the plan the driver will follow on Saturday — so finish with all seven selected.
 
 1. Switch to **LAWNS Tree Farm** for this card only. Footer must read **… · prod**.
