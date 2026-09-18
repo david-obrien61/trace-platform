@@ -1,7 +1,13 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260917e — THE ROUTE ORDER IS SAVED, AND EVERY SURFACE READS THE SAME ONE · ledger #351
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- ✅ CLEARED TO PASTE 2026-09-18 09:21 — `npm run verify` exit 0, zero net-new, 125/125 files ·
+-- ✅ APPLIED 2026-09-18 BY DAVID, V-block clean — and re-read live by Thunder before the merge:
+--      V1  route_position · routed_at · routed_by + index deliveries_route_order
+--      V2  save_route_order → anon false · logged_in true
+--      V3  stops with a saved position: 0 (nothing claims a plan before anyone routes)
+--      V4  crew_day_read with a bad token → {"ok": false, "code": "invalid"}
+--      live: crew_day_stops orders by route_position NULLS LAST; crew_day_read returns routed_at.
+-- (was) CLEARED TO PASTE 2026-09-18 09:21 — `npm run verify` exit 0, zero net-new, 125/125 files ·
 --    7,079 assertions; path `route.save` + guards `route.only-this-day-and-business` ·
 --    `route.no-unplanned-claim` all driven against THIS file; mutants 30/30. The SQL statements are
 --    unchanged since the 09:0x copy — only this banner changed.

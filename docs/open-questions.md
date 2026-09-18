@@ -88,9 +88,8 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#351 — the route order is saved (build, NOT MERGED, `20260917e` NOT APPLIED)**
-- 🔴 **OPEN — APPLY `20260917e`, THEN MERGE, THEN CARDS G AND H.** Owner: ledger #351.
-- 🟡 **OPEN — RATIFY TWO WRITE-PATH DECLARATIONS** (the route writer → `deliveries`, `audit_log`). Owner: `scripts/verify-write-paths.mjs`.
-- 🟡 **OPEN — ONE SENTENCE ON LAUREN'S OWN SCHEDULE TOO?** It reads *"Not routed yet — follow the order in Lauren's text"* there as well, by design. Owner: ledger #351.
+- ✅ **ANSWERED 2026-09-18 — APPLIED, RATIFIED, and the wording ruled:** Lauren's screen *"Not routed yet — press Route this day."*; crew and sheet keep the text-order sentence. Owner: ledger #351.
+- 🔴 **OPEN — CARDS G AND H** (H on LAWNS, Saturday only). Owner: `crew-day-link-full-surface-test.md`.
 - ✅ **ANSWERED — ROUTE ORDER IS A GO-LIVE FEATURE, NOT A 🟡** (David, 2026-09-17). tech-debt #320 resolved by [[R-163]].
 
 **#347 — the crew day link, Saturday 2026-09-19 LAWNS pilot (build, NOT MERGED, migration NOT APPLIED)**

@@ -428,7 +428,7 @@ await path('route.save', 'Route this day → the optimised order is saved, and e
   const day = await readCrewDay(l.token);
   check(day.ok && day.value.stops.map(x => x.id).join() === planned.join(), `the crew page shows ${day.ok ? day.value.stops.map(x => x.id.slice(0, 4)).join() : day.code}`);
   check(day.ok && !!day.value.routed_at, 'the crew page was not told the day is planned');
-  check(day.ok && /^route order · planned /.test(routeOrderLine(day.value.routed_at)), `the crew page's line reads "${day.ok ? routeOrderLine(day.value.routed_at) : ''}"`);
+  check(day.ok && /^route order · planned /.test(routeOrderLine(day.value.routed_at, 'crew')), `the crew page's line reads "${day.ok ? routeOrderLine(day.value.routed_at, 'crew') : ''}"`);
 
   const audit = await all(db, `SELECT action, actor_user_id, detail FROM public.audit_log WHERE target_type = 'delivery_day' AND target_id = $1`, [DAY_X]);
   check(audit.length === 1 && audit[0].action === 'route.saved' && audit[0].actor_user_id === MANAGER && audit[0].detail.stops === 3, `audit ${JSON.stringify(audit)}`);
@@ -495,11 +495,12 @@ await guard('route.no-unplanned-claim', 'a day nobody routed never claims a plan
   check(day.ok && (day.value.routed_at ?? null) === null, `an unrouted day reported routed_at ${day.ok ? day.value.routed_at : day.code}`);
   check(day.ok && day.value.stops.map(x => x.id).join() === [a.id, b.id].join(), 'an unrouted day is not in creation order');
   check(day.ok && day.value.stops.every(x => (x.route_position ?? null) === null), 'an unrouted stop carries a position');
-  check(routeOrderLine(null) === 'Not routed yet — follow the order in Lauren’s text.', `the not-routed line reads "${routeOrderLine(null)}"`);
-  check(/^route order · planned /.test(routeOrderLine('2026-09-18T14:12:00Z')), 'a planned day is not announced as planned');
-  // NEGATIVE CONTROL: the two sentences are genuinely different, so the assertion above is not
+  check(routeOrderLine(null, 'crew') === 'Not the planned route — follow the order in Lauren’s text.', `the crew's not-routed line reads "${routeOrderLine(null, 'crew')}"`);
+  check(routeOrderLine(null, 'office') === 'Not routed yet — press Route this day.', `Lauren's not-routed line reads "${routeOrderLine(null, 'office')}"`);
+  check(/^route order · planned /.test(routeOrderLine('2026-09-18T14:12:00Z', 'crew')), 'a planned day is not announced as planned');
+  // NEGATIVE CONTROL: the sentences are genuinely different, so the assertions above are not
   // comparing one string with itself.
-  check(routeOrderLine(null) !== routeOrderLine('2026-09-18T14:12:00Z'), 'the planned and unplanned lines are the same string');
+  check(routeOrderLine(null, 'crew') !== routeOrderLine('2026-09-18T14:12:00Z', 'crew'), 'the planned and unplanned lines are the same string');
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════

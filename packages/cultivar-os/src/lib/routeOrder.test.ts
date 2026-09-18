@@ -15,11 +15,13 @@ function ok(cond: boolean, msg: string): void {
 }
 
 // §A THE LINE
-ok(routeOrderLine(null) === 'Not routed yet — follow the order in Lauren’s text.', 'A1 an unplanned day says so, in the words on main');
-ok(routeOrderLine(undefined) === routeOrderLine(null), 'A2 undefined reads as unplanned, never as a plan');
-ok(routeOrderLine('') === routeOrderLine(null), 'A3 an empty stamp is not a plan');
-ok(/^route order · planned \d{1,2}:\d{2}\s?(AM|PM)$/.test(routeOrderLine('2026-09-19T12:12:00Z')), `A4 a planned day names the time — "${routeOrderLine('2026-09-19T12:12:00Z')}"`);
-ok(routeOrderLine(null) !== routeOrderLine('2026-09-19T12:12:00Z'), 'A5 NEGATIVE CONTROL — the two sentences differ');
+ok(routeOrderLine(null, 'crew') === 'Not the planned route — follow the order in Lauren’s text.', 'A1 the crew and the printed sheet keep the wording on main');
+ok(routeOrderLine(null, 'office') === 'Not routed yet — press Route this day.', '🔴 A2 Lauren\'s own screen names the action, because she can fix it (David, 2026-09-18)');
+ok(routeOrderLine(undefined, 'crew') === routeOrderLine(null, 'crew') && routeOrderLine('', 'office') === routeOrderLine(null, 'office'), 'A3 undefined and empty read as unplanned, never as a plan');
+ok(/^route order · planned \d{1,2}:\d{2}\s?(AM|PM)$/.test(routeOrderLine('2026-09-19T12:12:00Z', 'crew')), `A4 a planned day names the time — "${routeOrderLine('2026-09-19T12:12:00Z', 'crew')}"`);
+ok(routeOrderLine('2026-09-19T12:12:00Z', 'crew') === routeOrderLine('2026-09-19T12:12:00Z', 'office'), 'A5 a PLANNED day reads the same for every audience');
+ok(routeOrderLine(null, 'crew') !== routeOrderLine(null, 'office') && routeOrderLine(null, 'crew') !== routeOrderLine('2026-09-19T12:12:00Z', 'crew'),
+   'A6 NEGATIVE CONTROL — the three sentences genuinely differ'); 
 
 // §B WHEN WAS THE DAY PLANNED
 ok(dayRoutedAt([]) === null, 'B1 no stops, no plan');

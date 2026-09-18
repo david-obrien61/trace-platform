@@ -195,8 +195,8 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                   <span style={{ fontWeight: 800, fontSize: '0.9375rem', color: DARK }}>{formatDay(group.date)}</span>
                   <span style={{ fontSize: '0.75rem', color: GRAY }}>
                     · {group.items.length} stop{group.items.length !== 1 ? 's' : ''}
-                    {/* The same sentence the crew's phone and the printed sheet show (ledger #351). */}
-                    {group.date && <> · {routeOrderLine(dayRoutedAt(group.items))}</>}
+                    {/* Lauren's screen names the ACTION when a day is unplanned — she can fix it (David, 2026-09-18). */}
+                    {group.date && <> · {routeOrderLine(dayRoutedAt(group.items), 'office')}</>}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>

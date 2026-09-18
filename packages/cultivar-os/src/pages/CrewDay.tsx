@@ -153,9 +153,7 @@ export function CrewDay() {
           {/* 🔴 The day either WAS planned or it was not, and the page says which (ledger #351).
               A saved order is Lauren's own optimised sequence, written when she pressed Route this
               day; without one the driver is told plainly to follow her text. */}
-          {day.routed_at
-            ? <strong>{routeOrderLine(day.routed_at)}</strong>
-            : <strong>Not the planned route — follow the order in Lauren’s text.</strong>}
+          <strong>{routeOrderLine(day.routed_at, 'crew')}</strong>
         </p>
       )}
       {day?.stops.map((s, i) => (

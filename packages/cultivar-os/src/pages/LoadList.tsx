@@ -201,7 +201,7 @@ export function LoadList() {
         <h1 style={S.h1}>Load list — {longDate(date)}</h1>
         {/* Stops print in the SAVED route order when there is one (ledger #351) — readStops orders
             them — and the sheet says which, in the same words as the crew's phone. */}
-        {stopsRead && <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{routeOrderLine(dayRoutedAt(stopsRead))}</p>}
+        {stopsRead && <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{routeOrderLine(dayRoutedAt(stopsRead), 'crew')}</p>}
         <p style={{ margin: '.25rem 0 0', color: '#444' }}>
           {business?.name ?? 'This business'}
           {model ? <> · {model.stopCount} stop{model.stopCount === 1 ? '' : 's'}</> : null}

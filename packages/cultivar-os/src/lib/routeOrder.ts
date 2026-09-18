@@ -52,12 +52,20 @@ export async function saveRouteOrder(
 }
 
 /**
- * What a reader is told about the plan — the SAME sentence on the crew's phone, the schedule and the
- * printed day sheet, so the three cannot describe the day differently (STD-011).
- * `routedAt` null = never routed, and that is said plainly rather than by showing an unexplained order.
+ * What a reader is told about the plan. ONE function, so the surfaces cannot drift apart (STD-011) —
+ * but TWO audiences for the unplanned case, by David's ruling (2026-09-18):
+ *   · `crew`   — the crew's phone and the printed day sheet: *"Not the planned route — follow the
+ *                order in Lauren's text."* The reader cannot fix it; they are told what to follow.
+ *   · `office` — Lauren's own schedule: *"Not routed yet — press Route this day."* She is the one
+ *                person who CAN fix it, so her screen names the action rather than the workaround.
+ * A PLANNED day reads the same everywhere: "route order · planned 9:12 AM".
  */
-export function routeOrderLine(routedAt: string | null | undefined): string {
-  if (!routedAt) return 'Not routed yet — follow the order in Lauren’s text.';
+export function routeOrderLine(routedAt: string | null | undefined, audience: 'crew' | 'office'): string {
+  if (!routedAt) {
+    return audience === 'office'
+      ? 'Not routed yet — press Route this day.'
+      : 'Not the planned route — follow the order in Lauren’s text.';
+  }
   const t = new Date(routedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   return `route order · planned ${t}`;
 }

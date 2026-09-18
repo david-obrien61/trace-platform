@@ -178,7 +178,7 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 **Build:** ledger #351 · [[R-163]]. **Needs:** `20260917e` applied and #351 merged. **Tenant:** Test Dave's. **Writes:** the route columns on today's two stops.
 ⚠️ **Test Dave's addresses are partly synthetic** (*1234 no name lane*). If Google cannot place them, the optimiser does not run, **nothing is saved, and that is the correct result** — then CARD H on LAWNS is the proof of the saved order. Steps 4–5 tell you which happened.
 
-1. **Hamburger menu → Delivery → the TODAY cell (Fri 18)**. → *Friday, Sep 18, 2026 · 2 stops* — and after **· 2 stops** the heading now also reads **· Not routed yet — follow the order in Lauren's text.**
+1. **Hamburger menu → Delivery → the TODAY cell (Fri 18)**. → *Friday, Sep 18, 2026 · 2 stops* — and after **· 2 stops** the heading now also reads **· Not routed yet — press Route this day.** *(Lauren's screen names the action; the phone and the printed sheet say to follow her text — David, 2026-09-18.)*
 2. In that heading row click **Route this day**. → the route page; both stops listed, each with a **green ticked box** top-left and a green number under it.
 3. Click the green **Route 2 Stops** button at the bottom. → a map, then **Route ready — 2 stops**.
 4. Read the lines under **Route ready**. → **either** (a) **N miles · N drive · optimized order** followed by a green **Saved — 2 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.** — **or** (b) neither line: Google could not route these addresses, nothing was saved.
@@ -188,7 +188,7 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 8. **Hamburger menu → Delivery → Load list**, set the date box to **09/18/2026**. → *Load list — Friday, September 18, 2026*, the line **route order · planned <time>**, and the stops in the same order.
 
 **PASS (a):** the route page said **Saved**, and the schedule, the phone and the load list all show **the same first stop** and **route order · planned <time>**.
-**PASS (b):** no **Saved** line, and every surface still says **Not routed yet** / **Not the planned route** — no surface claims a plan that was not made.
+**PASS (b):** no **Saved** line; the schedule still says **Not routed yet — press Route this day.**, and the phone and the load list still say **Not the planned route — follow the order in Lauren's text.** No surface claims a plan that was not made.
 **FAIL:** a surface shows a different order from the route page; a surface says **route order · planned** when the route page never said **Saved**; or the route page shows *"Saving the route order needs the database update (20260917e)"* (the migration is not applied — stop).
 
 ---
@@ -198,7 +198,7 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 **APPROVED BY DAVID, 2026-09-17: testing on LAWNS, on Saturday 2026-09-19's stops ONLY** — Lauren's own day, seven stops, real addresses. **The only write is the route order on those seven stops, and re-routing replaces it.** Do not route, move or mark any other LAWNS date. This is also the plan the driver will follow on Saturday — so finish with all seven selected.
 
 1. Switch to **LAWNS Tree Farm** for this card only. Footer must read **… · prod**.
-2. **Hamburger menu → Delivery**. If Saturday is not visible, click **This week**. Click the **Sat 19** cell. → *Saturday, Sep 19, 2026 · 7 stops on this day*, heading ending **· Not routed yet — follow the order in Lauren's text.**
+2. **Hamburger menu → Delivery**. If Saturday is not visible, click **This week**. Click the **Sat 19** cell. → *Saturday, Sep 19, 2026 · 7 stops on this day*, heading ending **· Not routed yet — press Route this day.**
 3. In the day heading row click **Route this day**. → the route page, **seven** stops, each with a green ticked box.
    *Fewer than seven ticked?* A stop with no address cannot be ticked — note which, and continue.
 4. Click **Route 7 Stops**. → map, **Route ready — 7 stops**, **N miles · N drive · optimized order**, and the green **Saved — 7 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.**

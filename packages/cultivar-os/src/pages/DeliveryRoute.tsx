@@ -846,7 +846,7 @@ export function DeliveryRoute() {
                 {/* What was SAVED, in the same words the crew's phone shows (ledger #351). */}
                 {dateParam && routeSaved && (
                   <p style={{ margin: '0 0 14px 26px', fontSize: '0.8125rem', color: GREEN, fontWeight: 700 }}>
-                    Saved — {routeSaved.n} stop{routeSaved.n !== 1 ? 's' : ''} in this order · {routeOrderLine(routeSaved.at)}.
+                    Saved — {routeSaved.n} stop{routeSaved.n !== 1 ? 's' : ''} in this order · {routeOrderLine(routeSaved.at, 'office')}.
                     The crew’s phone, the schedule and the day sheet now follow it.
                   </p>
                 )}

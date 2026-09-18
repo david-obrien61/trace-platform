@@ -332,7 +332,7 @@ const ALLOWED_DIVERGENCE = {
             // The office door onto the SAME function ([[R-161]]): `stop_act` → `stop_progress_apply`
             // writes the audit row inside the action, exactly as the token door does.
             'packages/cultivar-os/src/lib/stopProgress.ts',
-            // ⚠️ DECLARED 2026-09-18 (ledger #351) — PENDING DAVID'S RATIFICATION. `save_route_order`
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-18 (ledger #351). `save_route_order`
             // writes ONE `route.saved` row per plan, INSIDE the same function that writes the
             // sequence — the manifest's rule for this table, no separate client insert.
             'packages/cultivar-os/src/lib/routeOrder.ts'],
@@ -421,7 +421,7 @@ const ALLOWED_DIVERGENCE = {
             // session — `stop_act` checks `deliveries:update` and calls `stop_progress_apply`. One
             // function, two callers, so the completion columns still have exactly ONE author.
             'packages/cultivar-os/src/lib/stopProgress.ts',
-            // ⚠️ DECLARED 2026-09-18 (ledger #351) — PENDING DAVID'S RATIFICATION. The SAVED ROUTE
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-18 (ledger #351). The SAVED ROUTE
             // ORDER: `save_route_order` (20260917e) writes ONLY route_position / routed_at / routed_by —
             // three columns nothing else writes — on stops it has checked are this business's, on this
             // day. It creates no stop and changes no date, address, status or customer.
