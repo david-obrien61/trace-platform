@@ -4344,3 +4344,32 @@ is one of them, but nothing links an order line to a computed quantity.
 **Owner:** David — the ruling. **Fix, when ruled:** compare the billed quantity for each computed material
 against the computed total per stop, and surface a disagreement as a line in *"could not work out"* rather
 than silently preferring either number.
+
+## #344 — 🔴 A START CAN NEVER BE UNDONE, SO A TEST TAP IS PERMANENT ON THE REAL DAY'S RECORD (NEW 2026-09-18, ledger #351)
+
+**What.** `stop_progress_apply` (20260917c §4b) has an `undo_done` and no way back from a Start. An Undo
+clears the Done and deliberately KEEPS a real start (CARD 0b proved that is right for a genuine mis-tap
+of Done). But a Start tapped in error — or in practice, the day before — can then never be cleared from
+any screen. Found live 2026-09-18: Lauren (Thu 15:55) and Mauro (Fri 10:10) practised on LAWNS's real
+Saturday stops through the crew link; Freehill and Sappal kept `started_at` from Thursday/Friday. On the
+day, the crew page would show **STARTED 10:10 AM** (no date, so it reads as Saturday), offer **no Start
+button**, and a Done would record ~23 and ~41 **hours** on site. Cleared once by hand
+(`20260918a_clear_two_test_starts_lawns_saturday.sql`) — the defect stays until this is built.
+
+**The fix (filed, not built).**
+1. **An `undo_start` action**, both doors ([[R-161]] — one writer), allowed only while the stop is NOT
+   done: clears `started_at`, appends an event. The crew page offers a small **Undo start** beside
+   **Done** on a started stop; the office card the same.
+2. **Widen the `delivery_stop_events.action` CHECK** to admit `undo_start` — a migration.
+3. **`stopActivity` treats `undo_start` like `undo_done`**: the latest start is cancelled by a later
+   undo_start.
+4. ⚠️ **Worth deciding with it — a day-boundary rule:** a `started_at` from a day EARLIER than the
+   stop's own date is not a start of that job. The crew page could show such a stop as NOT STARTED and
+   let Start overwrite it. That would have made today's practice taps harmless by construction; it is a
+   rule about what a timestamp MEANS, so it is David's call, not a default.
+
+**What it changes for the event history.** Nothing is erased: `delivery_stop_events` stays append-only.
+The log would read *"started 10:10 · Mauro — start undone 10:11 · Mauro"*, which is the truth; today it
+can only read *"started 10:10"* forever, which is not. Every derived value — `started_at`, the grey box,
+minutes on site — reads the NET state, exactly as `undo_done` already works for a Done. The audit row
+per action (as for every other tap) records who undid it.
