@@ -106,6 +106,9 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 **#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
 - ✅ **ANSWERED — `20260917b` IS APPLIED**, measured by reading the live function (test-mode clause present). Tonight's reload ran on it: new run `bffc7713-d275-436c-bf8c-1ff29f3d14b9`; `eab7fbd2` is gone. Owner: ledger #348.
 - 🔴 **OPEN — NEXT GO-LIVE ITEM: a captured order does not re-attach after a reload.** Re-attach by `qb_customer_id`; needs a ruling on what a detached capture shows. Owner: tech-debt #322.
+**Teams — filed 2026-09-18 (docs only, no ledger row; tech-debt #345)**
+- 🔴 **OPEN — THE 8-HOUR RULE'S WORDING.** Capacity per team (piece 3 of #345) is blocked until you rule the words; the question already sits in `RULINGS.md`'s OWED table (*"THE 8-HOUR RULE — WHAT EXACTLY WAS RULED?"*). Owner: tech-debt #345.
+- ✅ **ANSWERED 2026-09-18 — team list and a stop carrying its team first; a team may carry an optional vendor link (no pay side); members are names, not logins.** Owner: tech-debt #345.
 **Lightning's hold list, checked against the registers 2026-09-18 (docs only, no ledger row; filed tech-debt #327–#341)**
 - 🟡 **OPEN — CREW ACCESS AFTER THE PILOT: keep the day link, or crew logins with a permission for Done?** Owner: tech-debt #329.
 - 🟡 **OPEN — WHICH TILES A PHONE SHOWS, PER DEVICE AND ROLE, AND A BOTTOM NAV.** Your design call (§6 r7 reserves the desktop grid to you). Owner: tech-debt #340.

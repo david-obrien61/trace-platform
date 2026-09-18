@@ -4373,3 +4373,29 @@ The log would read *"started 10:10 — start undone 10:11"*, which is the truth;
 can only read *"started 10:10"* forever, which is not. Every derived value — `started_at`, the grey box,
 minutes on site — reads the NET state, exactly as `undo_done` already works for a Done. The audit row
 per action (as for every other tap) records who undid it.
+
+## #345 — 🔴 THERE ARE NO TEAMS: LAWNS RUNS TEAM 1, 2 AND 3 AND NOTHING CAN SEE OR SPLIT THEM (NEW 2026-09-18 — FILED, NOT BUILT, David's direction; no ledger row)
+
+**What.** LAWNS runs its installs and deliveries as Team 1, Team 2 and Team 3 (discovery §8.4: *"Team One is Mauro, Team Two is the in-house crew … a team can be a contractor vendor"*). The platform has no concept of a crew as named people with a truck. The "crew" work so far is a PERMISSION role, and `business_positions` is a job title that grants nothing (LAWNS has one: "Production Manager").
+
+✏️ **CORRECTS A PREMISE: `deliveries.team` DOES NOT EXIST.** The prompt that asked for this filing said it existed as free text with no picker and no reader. Measured live 2026-09-18, three ways: the live `deliveries` table has 24 columns and none is a team; no column anywhere in `public` has team, crew, driver or installer in its name; and no migration creates one and no code reads one. David accepted the correction.
+
+**What it costs Lauren on Saturday 2026-09-19, measured live 2026-09-18:**
+- **No stop carries a team**, because there is nowhere to store one. Which truck takes which of the 8 stops is decided by hand.
+- **One crew link shows all 8 stops to whoever opens it.** `crew_day_links_one_live_per_day` allows one live link per business per day, and making a new one kills the old one. Both drivers open the same link.
+- **Either driver can tap Done on any stop.** The name he typed is what the schedule shows.
+- **The load sheet totals the day, not the truck.** Each stop's own trees, mix and posts print, so the crews can split the load line by line, but the totals at the top are for the whole day.
+- **The saved route is one path through all 8 stops** (`deliveries.route_position` is one sequence per business per day), not one route per truck.
+
+**The six pieces, in the order David set (the first two first; everything else reads them):**
+
+| # | Piece | What it takes | Size |
+|---|---|---|---|
+| 1 | **A team list per business**, editable by Lauren: name, who is on it, active | New tables for teams and members, with access rules scoped to the business; a Settings screen; one writer registered in `writer-registry.json` with its end-to-end path tests (§6 r21). **Members are NAMES, not logins** (David: a 1099 crew comes and goes, which is why the crew link needs no login). **An optional vendor link from the start**, because a team can be a contractor (Mauro). **Do not build the pay side.** | ~1 day + a migration David applies |
+| 2 | **A stop carries its team**, set on the schedule or when routing | A team column on `deliveries`; a picker on the schedule and on the route page; the stop writer (next in `writer-registry.json`'s `proposed` list) | ~½ day + a migration |
+| 5 | **The load list prints a section per team**, because each truck loads separately | The load-list model groups by team, with totals per truck and for the day. ⚠️ Blocked by David's hold on load-list changes until he lifts it | ~½ day |
+| 4 | **The crew day link is per team**, so a driver sees only his own stops | The one-live-link-per-day index becomes per team per day; `crew_day_read` and `crew_stop_act` filter by team; the saved route order becomes per team. It rewrites functions proven by 30 of 30 caught mutants, so the harness is re-aimed with it | ~1 day + a migration |
+| 6 | **Lauren's schedule shows the day split by team** | Grouping on the schedule only | ~½ day |
+| 3 | **The 8-hour capacity rule applies per team, not per day** | 🔴 **BLOCKER: the rule has no wording.** `docs/RULINGS.md` holds it as owed — *"THE 8-HOUR RULE — WHAT EXACTLY WAS RULED? … A ruling cannot be numbered without its words."* It stays blocked until David rules its words. Not estimated. The input it will need is already being collected: `started_at` and `completed_at` are stamped on each stop | blocked, not sized |
+
+**Ranked against go-live (Lauren running more than one truck a day):** 1 and 2 are the foundation. Then 5 and 4, because each truck loads and drives on its own. Then 6, which is display only. 3 waits on the ruling.
