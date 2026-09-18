@@ -4432,3 +4432,39 @@ per action (as for every other tap) records who undid it.
 - the steps of CARDS 1, 6 and 19 rewritten where they name *"Section 1 / 2 / 3"*.
 
 **CARDS 6 and 19 go back to `owed` when the page changes** (accepted by David, 2026-09-18).
+
+## #347 — 🔴 A PUSH TO `main` CAN SIT UNBUILT FOR MINUTES OR HOURS, VERCEL REPORTS HEALTHY THROUGHOUT, AND NOTHING WE OWN NOTICES (NEW 2026-09-18, ledger #351 — the gap in #280, measured twice in two days)
+
+**What was seen, 2026-09-18 (times CT, from git and the app's own `/version.json`).** Production was built at
+**10:36** as `0bcb467`. Then four pushes to `main`: **10:42** `fb4f30e` · **10:45** `a9ec67f` (another window) ·
+**10:57** `429223b` (the box-follows-stop fix) · **11:13** `3cd3ac9`. **The first three produced no production
+build.** Production stayed on `0bcb467` for ~37 minutes and then deployed **`3cd3ac9` at 11:13 — by itself**, on
+the fourth push. **David checked the Vercel dashboard afterwards: all green — no queued, failed or paused
+builds, Git integration connected.** The stall left no trace anywhere a person would look.
+
+**It is the second instance in two days, same shape.** 2026-09-17 20:00Z → 2026-09-18 13:28Z: **~17 hours**, three
+pushes, no build, then a build on a later push (recorded on ledger #350's row). Both times the code built
+locally; both times the deploy resumed without anyone changing anything.
+
+**Why it matters — #280's gap, now measured, not hypothetical.** #280 says the close-out gates accept *pushed*
+as *shipped* and that **nothing we own reads Vercel**. This is what that costs: a fix can be merged, verified,
+green on `main`, and **not serving** — while the dashboard says healthy — and the only signal is someone reading
+the footer stamp and comparing it with `main` by hand. On 2026-09-18 the unserved fix was the one keeping
+*"Started 10:10 AM · Mauro"* off Lauren's schedule on the eve of the pilot.
+
+**🔴 AND THE OBVIOUS WATCHER IS A TRAP — learned the same morning.** Checking `/version.json` every 30 s from a
+script for ~40 minutes tripped **Vercel's bot protection**: every scripted request from the Mac then got a **403
+"Vercel Security Checkpoint"** page (`/version.json` and `/api/crew/day` alike), and the watcher read that page
+as a deploy because it only tested *"is it still the old SHA?"*. So any fix must (a) read rarely, (b) match the
+EXPECTED sha positively, and (c) stop on a non-200.
+
+**The fix (filed, not built).** A single check, run after a push, that answers the one question — *is production
+serving `origin/main`'s head, and if not, for how long has it been behind?* — without polling:
+1. Read `/version.json` **once**, a few minutes after the push; compare its `sha` with `origin/main`; report
+   *"production is N commits behind main; the oldest unserved push is M minutes old"*. **Positive match only;
+   a non-200 is reported as "could not read", never as a deploy.**
+2. Home it where the actor stands (#280 / OP-15): the owner-test GATE 0 already asks David to read the stamp;
+   this makes the comparison mechanical. A GitHub Action on push, or Vercel's deploy webhook, could run it
+   without anyone's machine polling — the webhook would also say *why* a build did not start, which nothing
+   we own can see today.
+3. ⚠️ The CAUSE is not known and is Vercel's to explain; the check does not fix it, it makes it visible.
