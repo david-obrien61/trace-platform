@@ -126,6 +126,16 @@ function ok(cond: boolean, msg: string): void {
     '🔴 B2b: …and a tree already on site to plant is printed on its stop (David, 2026-09-17)');
   ok(/model\.trunkProtection > 0 \?/.test(src) && /trunkProtectionLine/.test(src),
     'B2c: trunk protection is on the list, so the day total prints it');
+  // ✏️ 2026-09-18: bubblers are the ones BILLED, and zero prints in words; water monitor kits are one
+  // per installed tree plus any billed, and the sheet prints a COUNT only.
+  ok(/bubblersNoneSpecified/.test(src) && /model\.bubblers > 0 \?/.test(src),
+    '🔴 B2f: zero bubblers prints as "none specified on these orders", never a bare 0');
+  ok(/model\.waterMonitors > 0 \?/.test(src) && /waterMonitorRule/.test(src),
+    '🔴 B2g: the water monitor kits print in hardware, with their rule');
+  ok(!/pvc|bamboo|drill/i.test(code),
+    '🔴 B2h (negative): the page never prints the parts — prebuilt and on the shelf (David, 2026-09-18)');
+  ok(/transportByOrderId\.get\(s\.order_id\) === 'install'/.test(src),
+    '🔴 B2i: "a tree we install" comes from the ORDER\'s transport_method, never guessed from the stop');
   // ✏️ 2026-09-17 second pass: goods print in their own section (David: anything physical prints).
   ok(/model\.otherGoods\.length > 0 \?/.test(src) && /alsoOnTruckHeading/.test(src) && /alsoOnTruckWhy/.test(src),
     '🔴 B2d: "Also on the truck" prints every physical good, with the sentence saying money lines are nowhere');

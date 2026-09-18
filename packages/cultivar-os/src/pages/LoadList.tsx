@@ -154,6 +154,9 @@ export function LoadList() {
       canReadLines: res.value.canReadLines,
       linesRead: res.value.linesRead,
       items: (s.order_id ? res.value.linesByOrderId.get(s.order_id) : undefined) ?? [],
+      // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
+      // `transport_method` is what says so; an absent value is never read as "install".
+      installs: s.order_id ? res.value.transportByOrderId.get(s.order_id) === 'install' : false,
       // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
       deerFence: null,
     })), sr.settings);
@@ -164,6 +167,7 @@ export function LoadList() {
     if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] built', {
       date, stops: built.stopCount, trees: built.treeCount, mixYards: built.mixYards,
       tPosts: built.tPosts, ropeFeet: built.ropeFeet, floors: built.totalsAreFloors,
+      bubblers: built.bubblers, waterMonitors: built.waterMonitors, installTrees: built.installTreeCount,
       unresolved: built.unresolved.length, unreadStops: built.unreadStops,
       offLadderTrees: built.offLadderTreeCount, noVolumeRows: built.noVolumeTrees.length,
       deerFenceUnknownStops: built.deerFenceUnknownStops, sizes: sr.sizes, figures: sr.figures,
@@ -286,9 +290,22 @@ export function LoadList() {
                 <span style={S.big}>{model.ropeFeet} ft rope</span>
                 <span style={S.note}>{LOAD_LIST_COPY.ropeRule(model.valuesUsed.ropeFeetPerTPost)}</span>
               </div>
+              {/* 🔴 BUBBLERS ARE THE ONES BILLED (David, 2026-09-18) — and zero is printed in words,
+                  never as a bare 0, because a 0 in a quantity column reads as an omission. */}
               <div style={S.row} className="ll-row">
-                <span style={S.big}>{model.bubblers} bubblers</span>
+                <span style={S.big}>
+                  {model.bubblers > 0 ? `${model.bubblers} bubblers` : `Bubblers — ${LOAD_LIST_COPY.bubblersNoneSpecified}`}
+                </span>
                 <span style={S.note}>{LOAD_LIST_COPY.bubblerRule(model.valuesUsed.bubblersPerTree)}</span>
+              </div>
+              {/* Prebuilt, on the shelf: a COUNT only — never the parts. */}
+              <div style={S.row} className="ll-row">
+                <span style={S.big}>
+                  {model.waterMonitors > 0 ? `${model.waterMonitors} water monitor kits` : 'Water monitor kits — none'}
+                </span>
+                <span style={S.note}>
+                  {model.waterMonitors > 0 ? LOAD_LIST_COPY.waterMonitorRule : LOAD_LIST_COPY.waterMonitorNone}
+                </span>
               </div>
               {model.trunkProtection > 0 ? (
                 <div style={S.row} className="ll-row">
@@ -366,6 +383,8 @@ export function LoadList() {
                   {s.mixYards} yd mix ·{' '}
                   {s.tPosts} T-posts
                   {s.deerFencePosts > 0 ? ` (+${s.deerFencePosts} for deer fence)` : ''}
+                  {s.bubblers > 0 ? ` · ${s.bubblers} bubbler${s.bubblers === 1 ? '' : 's'}` : ''}
+                  {s.waterMonitors > 0 ? ` · ${s.waterMonitors} water monitor kit${s.waterMonitors === 1 ? '' : 's'}` : ''}
                   {s.offLadderTreeCount > 0 ? ` · ${s.offLadderTreeCount} tree${s.offLadderTreeCount === 1 ? '' : 's'} not a set-up size` : ''}
                   {s.unresolvedCount > 0
                     ? ` · ${s.unresolvedCount} line${s.unresolvedCount === 1 ? '' : 's'} could not be read`

@@ -4195,7 +4195,12 @@ globe), remembered per device beside the name. That is a decision for David, bec
 place the platform would store a language without a person to attach it to. ⚠️ R-151 also warns the
 string layer must exist first or inline strings bypass it invisibly — so the layer, then this page.
 
-## #326 — 🟡 NOTHING COMPARES A BILLED MATERIAL WITH WHAT THE SHEET SAYS TO LOAD (NEW 2026-09-17, ledger #350)
+## #326 — ✅ DISSOLVED 2026-09-18 BY RULING (ledger #352) — WAS: 🟡 NOTHING COMPARES A BILLED MATERIAL WITH WHAT THE SHEET SAYS TO LOAD (NEW 2026-09-17, ledger #350)
+
+✅ **THE QUESTION STOPPED EXISTING RATHER THAN BEING ANSWERED.** This row asked how a BILLED bubbler should be reconciled with the COMPUTED one-per-tree count. David, 2026-09-18: *"the bubbler is manufactured and added with a cost so not on every tree, only those specified"* — **there is no computed count any more.** The billed line IS the number, it prints, and the exception that kept it off the sheet is gone. Nothing is left to compare.
+⚠️ **WHAT REMAINS TRUE, AND IT IS SMALLER:** the line gives a COUNT, never WHICH trees. One live line carries that in free text (*"bubblers are for eaglestons and chinkapin oak only"*) and nothing structured holds it. If a crew ever needs to know which tree gets which bubbler, that is a capture question, not a reconciliation one.
+
+**AS FILED:**
 
 **Filed on David's instruction — "file, do not build".**
 

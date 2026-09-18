@@ -287,8 +287,8 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const withSeven = build('2026-09-01', [stop('s1', 'A', [line(1, 'Live Oak - 45 gallon', 'LO45'), line(2, 'Vitex - 7 gallon', 'VX7')])]);
   ok(withSeven.unresolved.length === 1 && withSeven.offLadderTreeCount === 2,
     '🔴 L3c: the off-ladder line is on the UNRESOLVED list and its 2 trees are COUNTED');
-  ok(withSeven.treeCount === 3 && withSeven.bubblers === 3,
-    '🔴 L3d: they are in the day’s tree count and take their bubblers — a bubbler does not depend on size');
+  ok(withSeven.treeCount === 3 && withSeven.bubblers === 0,
+    '🔴 L3d: they are in the day’s tree count — and take no bubbler, because none is billed (David, 2026-09-18)');
   ok(withSeven.mixGallons === 90 && withSeven.tPosts === 2 && withSeven.totalsAreFloors === true,
     '🔴 L3e: their mix and posts cannot be known, so those totals are FLOORS and say so');
   ok(withSeven.stops[0].offLadderTreeCount === 2, 'L3f: the stop carries its own off-ladder count');
@@ -355,7 +355,10 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const o = build('2026-09-01', [stop('s1', 'A', [line(2, 'Oak - 30 gallon', 'X')])], OVERRIDE);
   ok(o.mixGallons === 90, `🔴 M2: a STORED ratio overrides — 2 × 30 × 1.5 = 90 (got ${o.mixGallons})`);
   ok(o.ropeFeet === 20, `M3: rope = posts × the stored feet per post — 4 × 5 = 20 (got ${o.ropeFeet})`);
-  ok(o.bubblers === 4, `M4: bubblers = trees × the stored bubblers per tree — 2 × 2 = 4 (got ${o.bubblers})`);
+  // ✏️ M4 REWRITTEN 2026-09-18: `bubblersPerTree` multiplies the SPECIFIED trees, not every tree.
+  const oB = build('2026-09-01', [stop('s1', 'A', [line(2, 'Oak - 30 gallon', 'X'), line(2, 'Tree Bubbler', 'TB')])], OVERRIDE);
+  ok(oB.bubblers === 4, `M4: 2 bubblers specified × a stored 2 per specified tree = 4 (got ${oB.bubblers})`);
+  ok(o.bubblers === 0, 'M4b: …and an order that specifies none gets none, whatever the multiplier');
 
   // M5 — the yard conversion is the CONFIGURED figure.
   const yards = build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 200 gallon', 'X')])],
@@ -455,7 +458,11 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const bigOak = d.trees.find(t => t.rungLabel === '200 gal')!;
   ok(bigOak.tPosts === 4, `🔴 D9: the 200 gallon Live Oak carries FOUR T-posts, read off its rung (got ${bigOak.tPosts})`);
   ok(d.ropeFeet === 96, `🔴 D11: ninety-six feet of rope (24 posts × 4 ft) (got ${d.ropeFeet})`);
-  ok(d.bubblers === 11, `D12: eleven bubblers, one per tree (got ${d.bubblers})`);
+  // ✏️ D12 REVERSED 2026-09-18 ON DAVID'S CORRECTION. It asserted one bubbler per tree; he ruled the
+  // bubbler is manufactured and billed — *"not on every tree, only those specified"*. No stop on
+  // 08-29 carries a Tree Bubbler line, so the day specifies NONE.
+  ok(d.bubblers === 0, `🔴 D12: ZERO bubblers — none is specified on any of these orders (got ${d.bubblers})`);
+  ok(/none specified/i.test(LOAD_LIST_COPY.bubblersNoneSpecified), 'D12b: and the page says so in words, never a bare 0');
 
   // ✏️ D10 FLIPPED 2026-09-17: the day's only "unreadable" line was the Military Discount, which is
   // now recognised and not printed. Nothing on 08-29 is unreadable, so the day is NOT a floor — which
@@ -555,7 +562,7 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
     '✏️ N3b: …but GOODS have their own bucket ("Also on the truck") — David, second pass: anything physical prints');
 
   // N4 — every known non-load name, from the live LAWNS book (144 lines, 44 distinct non-tree rows).
-  for (const [d, sku] of [['Trip Charge', 'TC'], ['Tree Bubbler', 'TB'], ['Customer Discount', null],
+  for (const [d, sku] of [['Trip Charge', 'TC'], ['Customer Discount', null],
                           ['15% Off - Tree Sale', 'Customer Discount'], ['FUEL Surcharge', null],
                           ['Morning Delivery', null], ['Tailgate Delivery', null],
                           ['CREDIT CARD FEE PLEASE ADD 3.5% IF PAYING WITH A CREDIT CARD', null],
@@ -615,15 +622,67 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(/not counted as trees/i.test(LOAD_LIST_COPY.alsoOnTruckWhy) && /not shown anywhere/i.test(LOAD_LIST_COPY.alsoOnTruckWhy),
     'O5b: …and that charges and fees appear nowhere on the sheet');
 
-  // O6 — 🔴 THE ONE PHYSICAL THING THAT STILL DOES NOT PRINT, AND WHY. A billed Tree Bubbler is a
-  // real object, but bubblers are computed one per tree in the hardware total, so printing the billed
-  // line would read as a second demand for the same thing. Nothing compares the two — tech-debt #326.
-  ok(res(line(4, 'Tree Bubbler', 'TB')).kind === 'not_loaded',
-    '🔴 O6: a BILLED Tree Bubbler still does not print — bubblers are computed per tree (tech-debt #326)');
-  ok(/counted per tree/i.test(res(line(4, 'Tree Bubbler', 'TB')).reason ?? ''),
-    'O6b: …and the reason says exactly that, so the exception is legible');
+  // ✏️ O6 REVERSED 2026-09-18 — YESTERDAY'S EXCEPTION IS GONE. It kept the billed Tree Bubbler off the
+  // sheet because bubblers were computed per tree. David corrected the model: the billed line IS the
+  // number, so it prints and it is the count. **Tech-debt #326 dissolves with it.**
+  ok(res(line(4, 'Tree Bubbler', 'TB')).kind === 'bubbler',
+    '🔴 O6: a BILLED Tree Bubbler is the MARKER — it prints, and it carries the count');
   ok(res(line(1, 'Tree Tarp', null)).kind === 'other_goods',
     'O7: a Tree Tarp IS physical and prints — it was wrongly in the not-loaded list on the first pass');
+}
+
+// ══ §Q THE BUBBLER IS BILLED, AND THE WATER MONITOR IS PER INSTALLED TREE ══════════
+// David, 2026-09-18: *"the bubbler is manufactured and added with a cost so not on every tree, only
+// those specified"* · *"every tree LAWNS installs gets one [water monitor], and a customer can also
+// buy them… a billed line adds to the count on top of the install rule"* · *"the load list prints a
+// COUNT ONLY — never the parts, never the drilling."*
+{
+  // Q1 — the billed line is the count, and it is NOT the tree count.
+  const day = build('2026-09-01', [stop('s1', 'A', [
+    ...Array.from({ length: 9 }, () => line(1, 'Oak - 30 gallon', 'X')),
+    line(3, 'Tree Bubbler', 'TB'),
+  ])]);
+  ok(day.treeCount === 9 && day.bubblers === 3,
+    `🔴 Q1: nine trees, THREE bubblers — the billed line is the count (got ${day.treeCount}/${day.bubblers})`);
+  ok(day.stops[0].bubblers === 3, 'Q1b: and the stop carries its own, for when a stop is dropped');
+  ok(build('2026-09-01', [stop('s1', 'A', [line(9, 'Oak - 30 gallon', 'X')])]).bubblers === 0,
+    '🔴 Q2: an order that specifies none gets NONE — this is the correction, and the old model printed nine');
+  ok(/none specified on these orders/i.test(LOAD_LIST_COPY.bubblersNoneSpecified),
+    'Q2b: and zero is printed in words, never as a bare 0');
+
+  // Q3 — the line PRINTS now (yesterday's exception is gone).
+  ok(res(line(3, 'Tree Bubbler', 'TB')).kind === 'bubbler' && res(line(3, 'Tree Bubbler', 'TB')).quantity === 3,
+    '🔴 Q3: the billed bubbler line is its own kind, carrying its quantity — not a money line, not dropped');
+
+  // Q4 — WATER MONITORS: one per tree LAWNS installs.
+  const installed = build('2026-09-01', [
+    stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X')], { installs: true }),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y')]),
+  ]);
+  ok(installed.waterMonitors === 8 && installed.installTreeCount === 8,
+    `🔴 Q4: eight installed trees → eight kits; the five delivered trees get none (got ${installed.waterMonitors})`);
+  ok(installed.stops[0].waterMonitors === 8 && installed.stops[1].waterMonitors === 0,
+    'Q4b: per stop, the same split');
+  ok(installed.stops[0].installs === true && installed.stops[1].installs === false,
+    'Q4c: the stop says which it is — an install, or not');
+
+  // Q5 — a BILLED kit ADDS on top, including on a stop we do not install.
+  const bought = build('2026-09-01', [
+    stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X'), line(2, 'Augur Holes, and install water monitor pipe', null)], { installs: true }),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y'), line(3, 'Augur Holes, and install water monitor pipe', null)]),
+  ]);
+  ok(bought.waterMonitors === 13,
+    `🔴 Q5: 8 installed + 2 billed + 3 billed on a delivery stop = 13 (got ${bought.waterMonitors})`);
+  ok(bought.stops[1].waterMonitors === 3,
+    '🔴 Q5b: a customer planting their own trees can buy them — the delivery stop carries 3');
+
+  // Q6 (negative) — 🔴 A COUNT ONLY. The manufacturing spec belongs to the item, not this sheet.
+  ok(!/pvc|bamboo|drill/i.test(JSON.stringify(LOAD_LIST_COPY)),
+    '🔴 Q6 (negative): the sheet never says PVC, bamboo or drilling — they are prebuilt and on the shelf');
+  ok(!/pvcInches|bambooFeet/.test(code),
+    '🔴 Q6b (negative): and the model holds no parts figures — that is the parked recipe work');
+  ok(/prebuilt/i.test(LOAD_LIST_COPY.waterMonitorRule) && /install/i.test(LOAD_LIST_COPY.waterMonitorRule),
+    'Q6c: the printed rule says where they come from and who gets them');
 }
 
 // ══ §W PLANT YOUR TREE IS WORK, NOT A FEE (David, 2026-09-17) ══════════════════════
