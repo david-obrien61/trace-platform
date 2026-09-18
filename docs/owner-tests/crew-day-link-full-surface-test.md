@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 9 covered** (CARD 0b — David, 2026-09-17 · 8 `owed`). ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 3 of 11 covered** (0, 0b, A — David) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -39,7 +39,8 @@
 ---
 
 ## CARD 0 — the database update is in
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)
+✅ David ran V3 on apply: create/revoke → anon f · authed t · service t; the five crew functions → anon f · authed f · service t. Re-read live by Thunder the same hour (all nine functions, incl. `stop_act` and `stop_progress_apply`). **No need to run it again.**
 In the Supabase **SQL editor**, paste and run:
 
 ```sql
@@ -95,7 +96,8 @@ SELECT p.proname,
 ---
 
 ## CARD A — make today's link, open it on your phone, enter a name
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-17 (David · Test Dave's · `05f3061 · prod`)
+✅ **PASSED:** the link opened with no login, asked the name once and remembered it; both stops showed address, Maps, Call where there is a number and "No phone on file" where there is not, the office note, item lists with quantities and the honest empty messages, Start / Done / Note, and **no prices anywhere**. ✏️ One wrong prediction in this card, corrected: the john smith stop has NO linked order, so it reads *"No order is linked to this stop"*, not *"no items listed"*. **And it exposed the regression David then ruled on — the page said "scheduled order, not a planned route" → [[R-163]], ledger #351.**
 1. On your computer, sign in, open **Delivery → Schedule** on Test Dave's.
 2. On today's (or tomorrow's) day heading, tap **Crew link**. A panel opens: *Crew link for this day*.
 3. Tap **Make link**. A green box appears with the link and **Copy link** (and **Share…** on a phone).
@@ -173,6 +175,52 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 
 ---
 
+## CARD G — the route order is saved and every surface follows it (Test Dave's)
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+**Build:** ledger #351 · [[R-163]]. **Needs:** `20260917e` applied and #351 merged. **Tenant:** Test Dave's. **Writes:** the route columns on today's two stops.
+⚠️ **Test Dave's addresses are partly synthetic** (*1234 no name lane*). If Google cannot place them, the optimiser does not run, **nothing is saved, and that is the correct result** — then CARD H on LAWNS is the proof of the saved order. Steps 4–5 tell you which happened.
+
+1. **Hamburger menu → Delivery → the TODAY cell (Fri 18)**. → *Friday, Sep 18, 2026 · 2 stops* — and after **· 2 stops** the heading now also reads **· Not routed yet — press Route this day.** *(Lauren's screen names the action; the phone and the printed sheet say to follow her text — David, 2026-09-18.)*
+2. In that heading row click **Route this day**. → the route page; both stops listed, each with a **green ticked box** top-left and a green number under it.
+3. Click the green **Route 2 Stops** button at the bottom. → a map, then **Route ready — 2 stops**.
+4. Read the lines under **Route ready**. → **either** (a) **N miles · N drive · optimized order** followed by a green **Saved — 2 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.** — **or** (b) neither line: Google could not route these addresses, nothing was saved.
+5. **If (b):** stop here — go to CARD H. **If (a):** write down which address the numbered list puts **first**.
+6. **Back → Delivery → Fri 18**. → the heading now reads **· route order · planned <time>**, and the two cards are in the **same order as the numbered list**.
+7. On the phone, open today's crew link and tap **Refresh**. → under the date: **2 stops · route order · planned <time>**, and **STOP 1** is the address you wrote down.
+8. **Hamburger menu → Delivery → Load list**, set the date box to **09/18/2026**. → *Load list — Friday, September 18, 2026*, the line **route order · planned <time>**, and the stops in the same order.
+
+**PASS (a):** the route page said **Saved**, and the schedule, the phone and the load list all show **the same first stop** and **route order · planned <time>**.
+**PASS (b):** no **Saved** line; the schedule still says **Not routed yet — press Route this day.**, and the phone and the load list still say **Not the planned route — follow the order in Lauren's text.** No surface claims a plan that was not made.
+**FAIL:** a surface shows a different order from the route page; a surface says **route order · planned** when the route page never said **Saved**; or the route page shows *"Saving the route order needs the database update (20260917e)"* (the migration is not applied — stop).
+
+---
+
+## CARD H — 🔴 LAWNS, SATURDAY 2026-09-19 ONLY: Lauren's real day, routed, saved and re-routed
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+🔴 **2026-09-18 09:57:52 — LAUREN ROUTED SATURDAY HERSELF, three minutes after production flipped to `8a4af05`.** Eight stops (an eighth, *Angela Garzon*, was captured at 09:56), positions 1–8, `routed_by` = Lauren Bishop, one `route.saved` audit row (8 stops, 0 dropped) — measured live. **The save has therefore worked on real addresses, by the real user.** ⚠️ **SO THIS CARD IS NOW READ-ONLY: run steps 1, 2, 6, 7 and 8 only (see the ranked list), and DO NOT run steps 3–5 or 9–12** — pressing Route again, or re-routing, would REPLACE Lauren's own plan and re-stamp it as yours on the eve of the pilot. Re-routing is proven by `route.save` (replace, re-stamp, dropped stop) and needs no live repeat.
+**APPROVED BY DAVID, 2026-09-17: testing on LAWNS, on Saturday 2026-09-19's stops ONLY** — Lauren's own day, seven stops, real addresses. **The only write is the route order on those seven stops, and re-routing replaces it.** Do not route, move or mark any other LAWNS date. This is also the plan the driver will follow on Saturday — so finish with all seven selected.
+
+1. Switch to **LAWNS Tree Farm** for this card only. Footer must read **… · prod**.
+2. **Hamburger menu → Delivery**. If Saturday is not visible, click **This week**. Click the **Sat 19** cell. → *Saturday, Sep 19, 2026 · 7 stops on this day*, heading ending **· Not routed yet — press Route this day.**
+3. In the day heading row click **Route this day**. → the route page, **seven** stops, each with a green ticked box.
+   *Fewer than seven ticked?* A stop with no address cannot be ticked — note which, and continue.
+4. Click **Route 7 Stops**. → map, **Route ready — 7 stops**, **N miles · N drive · optimized order**, and the green **Saved — 7 stops in this order · route order · planned <time>. The crew's phone, the schedule and the day sheet now follow it.**
+   *No **Saved** line:* Google could not route the day — stop and tell me which line appeared instead.
+5. Write down the **first three names** of the numbered list.
+6. **Back → Delivery → Sat 19**. → heading **· 7 stops · route order · planned <time>**, cards in the order you wrote down.
+7. **Hamburger menu → Delivery → Load list**, date **09/19/2026**. → **route order · planned <time>** under the heading, stops in the same order. *(The 7 yards of special mix is unchanged — this build does not touch the materials.)*
+8. On the schedule, **Sat 19 → Crew link → Make link → Copy link**; open it on your phone. → **7 stops · route order · planned <time>**, STOP 1–3 are your three names.
+   ⚠️ This makes Saturday's real link. If you want Lauren to send a fresh one Saturday morning, **Make a new link** then kills this one — the saved order is unaffected.
+9. **Re-route (replaces the plan):** back on the route page, **untick** the green box on any **one** stop. → the route clears.
+10. Click **Route 6 Stops**. → **Saved — 6 stops in this order · route order · planned <a later time>**.
+11. On the phone tap **Refresh**. → the planned time moved to the new one, six stops in the new order, and the unticked stop listed **last** (it is still Saturday's stop, just not in the plan).
+12. **Put the real plan back:** tick that stop again → **Route 7 Stops** → **Saved — 7 stops …**. → the phone, after **Refresh**, shows all seven in plan order.
+
+**PASS:** the route page said **Saved**; the schedule, the load list and the phone all show the **same seven in the same order** with **route order · planned <time>**; re-routing replaced the order and moved the time; and the final state is all seven planned.
+**FAIL:** any surface disagrees on the order; the time does not move on a re-route; a stop dropped from the plan keeps a number; or anything on a LAWNS date other than Saturday changed.
+
+---
+
 ## THE NOTE DAVID FORWARDS TO LAUREN (not a card — kept here so it is not only in a chat)
 
 > For Saturday, run the paper day sheet exactly as you always do — the printed orders are still the crew's copy for the load. The only new thing: on the delivery schedule, on Saturday's heading, tap **Crew link**, then **Make link**, then **Copy link**, and paste it into the same text you already send the driver. He opens it on his phone — no login, no app, no password — types his name once, and then has the day's stops with the addresses, a Maps button, the customer's name and number (with a Call button), and what's on each order. No prices are on it. As he works he taps **Start** and **Done** on each stop, and can add a note ("gate was locked") that you'll see on your schedule with his name and the time.
@@ -180,10 +228,11 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 > **Send it on Saturday morning, not the night before** — a link covers that one day and stops working at 6 am Sunday.
 > **Anyone who has the link can use it** until then, so send it to the driver and nobody else; if you want it dead sooner, tap **Turn off link**.
 > **The link is shown only once.** If you lose it, tap **Make a new link** and re-send — that makes a new one and kills the old one, so the driver needs the new text.
-> **The load list now prints the right amount of special mix.** For Saturday that is **7 yards**, where the old page said 3½ — the old figure was half what it should have been.
+> **The load list now prints the right amount of special mix — read the figure off the printed sheet on Saturday morning, not from this note.** The old page printed half of what was needed. (It changes whenever a stop is added: with the eighth stop captured Friday morning it went from 7 yards to **9 yards**.)
 > If anything about the link misbehaves, ignore it and carry on with the paper; nothing about Saturday depends on it.
 
-⚠️ **The 7 yards is checked, not repeated:** Saturday's 7 LAWNS stops carry **27 trees — 14 × 15 gal, 8 × 30 gal, 5 × 45 gal = 675 container gallons**. At the corrected ratio (2 container volumes of mix per tree, [[R-155]] as amended 2026-09-15/16) that is 1,350 gallons ÷ 201.974 = 6.68, printed **7 yards** (rounded up to the next half yard, *"err large, do not skimp"*). At the old 1.0 ratio it was 3.34 → **3½**. The mix ratio is configuration now; LAWNS has no override, so the default of 2 applies.
+🔴 **CORRECTED 2026-09-18 ~10:05 — THE 7 YARDS BELOW WENT STALE WITHIN A DAY, AND THE NOTE NO LONGER CARRIES A NUMBER.** An eighth Saturday stop was captured at 09:56 (Angela Garzon — **2 × Natchez Crape Myrtle, 95 gallon**, +190 container gallons): 675 + 190 = 865 → ×2 = 1,730 gal ÷ 201.974 = 8.57 → **9 yards**. A figure copied into a message is a second home for a fact the sheet recomputes (STD-011), and it was wrong by the next morning. **The sheet is the answer; the note now says so.** The original arithmetic is kept below because it was right for seven stops.
+⚠️ **The 7 yards WAS checked, not repeated (for seven stops):** Saturday's 7 LAWNS stops carry **27 trees — 14 × 15 gal, 8 × 30 gal, 5 × 45 gal = 675 container gallons**. At the corrected ratio (2 container volumes of mix per tree, [[R-155]] as amended 2026-09-15/16) that is 1,350 gallons ÷ 201.974 = 6.68, printed **7 yards** (rounded up to the next half yard, *"err large, do not skimp"*). At the old 1.0 ratio it was 3.34 → **3½**. The mix ratio is configuration now; LAWNS has no override, so the default of 2 applies.
 
 ---
 

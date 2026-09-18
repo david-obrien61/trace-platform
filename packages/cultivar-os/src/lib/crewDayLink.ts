@@ -132,6 +132,8 @@ export function stopActivity(events: StopEvent[]): StopActivity {
 export interface CrewLine { item: string; size: string | null; quantity: number | null }
 export interface CrewStop {
   id: string;
+  /** Place in the day's saved route, 1..N — null when the day was never routed (ledger #351). */
+  route_position?: number | null;
   address_line1: string | null; city: string | null; state: string | null; zip: string | null;
   customer_name: string | null; customer_phone: string | null;
   instructions: string | null;
@@ -142,7 +144,12 @@ export interface CrewStop {
   lines: CrewLine[];
   notes: { note: string; by: string; at: string }[];
 }
-export interface CrewDay { business_name: string | null; service_date: string; expires_at: string; stops: CrewStop[] }
+export interface CrewDay {
+  business_name: string | null; service_date: string; expires_at: string;
+  /** When Lauren routed this day, or null if she has not. The page says which, in plain words. */
+  routed_at?: string | null;
+  stops: CrewStop[];
+}
 export type CrewAction = 'start' | 'done' | 'undo_done' | 'note';
 
 /** The token from `location.hash` — `#<64 hex>`. Anything else is not a token. */

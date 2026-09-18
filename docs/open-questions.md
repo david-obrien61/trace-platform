@@ -87,6 +87,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#351 — the route order is saved (build, NOT MERGED, `20260917e` NOT APPLIED)**
+- ✅ **ANSWERED 2026-09-18 — APPLIED, RATIFIED, and the wording ruled:** Lauren's screen *"Not routed yet — press Route this day."*; crew and sheet keep the text-order sentence. Owner: ledger #351.
+- 🔴 **OPEN — CARDS G AND H** (H on LAWNS, Saturday only). Owner: `crew-day-link-full-surface-test.md`.
+- ✅ **ANSWERED — ROUTE ORDER IS A GO-LIVE FEATURE, NOT A 🟡** (David, 2026-09-17). tech-debt #320 resolved by [[R-163]].
 **#349 — Edit and Add on every contact list (build, NOT MERGED)**
 - ✅ **ANSWERED 2026-09-18 — MERGE #349 approved by David**, after both migrations were applied and measured live. Owner: ledger #349.
 - 🔴 **OPEN — THE ADDRESS CHECK ON SAVE (tech-debt #323), sized ~1½–2 days, not built.** Which service (Census free/batched/84.9% vs Google +3.3 points, no batch, 30-day refetch) and where coordinates live (the coordinate-storage question). The ring map does not exist as data yet.
