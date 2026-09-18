@@ -1,10 +1,11 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260917e — THE ROUTE ORDER IS SAVED, AND EVERY SURFACE READS THE SAME ONE · ledger #351
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- ⏳ NOT APPLIED — AND NOT YET CLEARED TO PASTE (status 2026-09-18 09:0x): the tests that drive
---    `save_route_order` end to end are still being written. Thunder confirms by 12:00 when it is
---    green; paste only then. ⚠️ SAFE EITHER WAY: every statement is re-runnable (ADD COLUMN IF NOT
---    EXISTS / CREATE OR REPLACE), so if a test forces a change you paste the corrected file again.
+-- ✅ CLEARED TO PASTE 2026-09-18 09:21 — `npm run verify` exit 0, zero net-new, 125/125 files ·
+--    7,079 assertions; path `route.save` + guards `route.only-this-day-and-business` ·
+--    `route.no-unplanned-claim` all driven against THIS file; mutants 30/30. The SQL statements are
+--    unchanged since the 09:0x copy — only this banner changed.
+--    Every statement is re-runnable (ADD COLUMN IF NOT EXISTS / CREATE OR REPLACE / IF NOT EXISTS).
 -- ⏳ Apply on its own, then run the V-block at the foot and paste the output back.
 --    It depends on `20260917c` (applied 2026-09-17) and on nothing unmerged.
 --    ⚠️ NAMED `e`, NOT `d`: `20260917d_staff_may_add_a_phone_or_email.sql` is taken by the contacts
