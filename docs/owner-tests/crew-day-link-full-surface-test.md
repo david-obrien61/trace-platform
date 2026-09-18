@@ -228,10 +228,11 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 > **Send it on Saturday morning, not the night before** — a link covers that one day and stops working at 6 am Sunday.
 > **Anyone who has the link can use it** until then, so send it to the driver and nobody else; if you want it dead sooner, tap **Turn off link**.
 > **The link is shown only once.** If you lose it, tap **Make a new link** and re-send — that makes a new one and kills the old one, so the driver needs the new text.
-> **The load list now prints the right amount of special mix.** For Saturday that is **7 yards**, where the old page said 3½ — the old figure was half what it should have been.
+> **The load list now prints the right amount of special mix — read the figure off the printed sheet on Saturday morning, not from this note.** The old page printed half of what was needed. (It changes whenever a stop is added: with the eighth stop captured Friday morning it went from 7 yards to **9 yards**.)
 > If anything about the link misbehaves, ignore it and carry on with the paper; nothing about Saturday depends on it.
 
-⚠️ **The 7 yards is checked, not repeated:** Saturday's 7 LAWNS stops carry **27 trees — 14 × 15 gal, 8 × 30 gal, 5 × 45 gal = 675 container gallons**. At the corrected ratio (2 container volumes of mix per tree, [[R-155]] as amended 2026-09-15/16) that is 1,350 gallons ÷ 201.974 = 6.68, printed **7 yards** (rounded up to the next half yard, *"err large, do not skimp"*). At the old 1.0 ratio it was 3.34 → **3½**. The mix ratio is configuration now; LAWNS has no override, so the default of 2 applies.
+🔴 **CORRECTED 2026-09-18 ~10:05 — THE 7 YARDS BELOW WENT STALE WITHIN A DAY, AND THE NOTE NO LONGER CARRIES A NUMBER.** An eighth Saturday stop was captured at 09:56 (Angela Garzon — **2 × Natchez Crape Myrtle, 95 gallon**, +190 container gallons): 675 + 190 = 865 → ×2 = 1,730 gal ÷ 201.974 = 8.57 → **9 yards**. A figure copied into a message is a second home for a fact the sheet recomputes (STD-011), and it was wrong by the next morning. **The sheet is the answer; the note now says so.** The original arithmetic is kept below because it was right for seven stops.
+⚠️ **The 7 yards WAS checked, not repeated (for seven stops):** Saturday's 7 LAWNS stops carry **27 trees — 14 × 15 gal, 8 × 30 gal, 5 × 45 gal = 675 container gallons**. At the corrected ratio (2 container volumes of mix per tree, [[R-155]] as amended 2026-09-15/16) that is 1,350 gallons ÷ 201.974 = 6.68, printed **7 yards** (rounded up to the next half yard, *"err large, do not skimp"*). At the old 1.0 ratio it was 3.34 → **3½**. The mix ratio is configuration now; LAWNS has no override, so the default of 2 applies.
 
 ---
 
