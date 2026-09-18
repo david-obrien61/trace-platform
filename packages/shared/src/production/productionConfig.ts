@@ -142,7 +142,9 @@ export interface OperationsConfig {
   installMixContainerVolumesPerTree: number;
   /** Feet of staking rope per T-post. */
   ropeFeetPerTPost: number;
-  /** Bubblers per planted tree. */
+  /** Bubblers per tree the ORDER SPECIFIES — the billed Tree Bubbler line is the count, and this
+   *  multiplies it. ✏️ NOT a per-tree default any more: David, 2026-09-18, *"not on every tree, only
+   *  those specified"* (superseding his 2026-09-12 "one bubbler per tree"). */
   bubblersPerTree: number;
   /** T-posts a deer-fenced tree carries IN TOTAL — a tree already staked with 2 needs 2 more. */
   deerFenceTPostsPerTree: number;
@@ -207,7 +209,7 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   seasonalStaffLastDay:    { basis: 'fact',       because: 'when the seasonal staff leave' },
   installMixContainerVolumesPerTree: { basis: 'fact', because: "LAWNS, David 2026-09-15; corrects an earlier 1.0 that was Lightning's" },
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
-  bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
+  bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
 };
 
@@ -215,7 +217,7 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
 export const PLANTING_MATERIAL_LABELS: Record<typeof PLANTING_MATERIAL_KEYS[number], string> = {
   installMixContainerVolumesPerTree: 'Special mix per gallon of container, when planting (gallons)',
   ropeFeetPerTPost: 'Rope per T-post (feet)',
-  bubblersPerTree: 'Bubblers per planted tree',
+  bubblersPerTree: 'Bubblers per tree the order specifies',
   deerFenceTPostsPerTree: 'T-posts on a deer-fenced tree, in total',
 };
 

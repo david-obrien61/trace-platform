@@ -65,6 +65,8 @@ const PRINT_CSS = `
   .sheet { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
   .ll-block { page-break-inside: avoid; }
   .ll-headline { page-break-after: always; }
+  /* The figures are REFERENCE, not load instructions — their own page, at the back (David, 2026-09-17). */
+  .ll-figures { page-break-before: always; }
   .ll-row, .ll-stop { color: #000 !important; background: #fff !important; }
   .ll-flag { border: 2px solid #000 !important; background: #fff !important; }
 }
@@ -152,6 +154,9 @@ export function LoadList() {
       canReadLines: res.value.canReadLines,
       linesRead: res.value.linesRead,
       items: (s.order_id ? res.value.linesByOrderId.get(s.order_id) : undefined) ?? [],
+      // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
+      // `transport_method` is what says so; an absent value is never read as "install".
+      installs: s.order_id ? res.value.transportByOrderId.get(s.order_id) === 'install' : false,
       // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
       deerFence: null,
     })), sr.settings);
@@ -162,6 +167,7 @@ export function LoadList() {
     if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] built', {
       date, stops: built.stopCount, trees: built.treeCount, mixYards: built.mixYards,
       tPosts: built.tPosts, ropeFeet: built.ropeFeet, floors: built.totalsAreFloors,
+      bubblers: built.bubblers, waterMonitors: built.waterMonitors, installTrees: built.installTreeCount,
       unresolved: built.unresolved.length, unreadStops: built.unreadStops,
       offLadderTrees: built.offLadderTreeCount, noVolumeRows: built.noVolumeTrees.length,
       deerFenceUnknownStops: built.deerFenceUnknownStops, sizes: sr.sizes, figures: sr.figures,
@@ -241,59 +247,6 @@ export function LoadList() {
                 </div>
               ) : null}
 
-              {/* 🔴 AT THE TOP, ONCE (David, 2026-09-17): the figures this list multiplied by, then the
-                  deer-fence rule. Deer fence is a RULE for the person loading, printed once — not an
-                  unresolved line per stop. The in-total arithmetic stays in the model for the day a
-                  stop can say it is fenced. */}
-              {/* 🔴 THE FIGURES USED (ledger #343) — every number the totals below multiplied by,
-                  printed, so nobody has to trust a figure they cannot see. */}
-              <div className="ll-block">
-                <h2 style={S.h2}>{LOAD_LIST_COPY.valuesHeading}</h2>
-                {settingsRead && settingsRead.figures !== 'stored' ? (
-                  <div style={S.flag} className="ll-flag">
-                    <strong>
-                      {settingsRead.figures === 'defaults_withheld'
-                        ? 'These are the standard figures — the nursery’s own settings were refused for this login. Ask the owner to check your access.'
-                        : settingsRead.figures === 'defaults_read_failed'
-                          ? 'Could not read the nursery’s settings — these are the standard figures. Reload before you load.'
-                          : 'No figures have been saved for this nursery — these are the standard ones.'}
-                    </strong>
-                  </div>
-                ) : null}
-                <div style={S.row} className="ll-row"><span>Special mix per gallon of container</span><strong>{model.valuesUsed.installMixContainerVolumesPerTree} gal</strong></div>
-                <div style={S.row} className="ll-row"><span>Rope per T-post</span><strong>{model.valuesUsed.ropeFeetPerTPost} ft</strong></div>
-                <div style={S.row} className="ll-row"><span>Bubblers per tree</span><strong>{model.valuesUsed.bubblersPerTree}</strong></div>
-                <div style={S.row} className="ll-row"><span>T-posts on a deer-fenced tree, in total</span><strong>{model.valuesUsed.deerFenceTPostsPerTree}</strong></div>
-                <div style={S.row} className="ll-row"><span>Gallons in a cubic yard</span><strong>{model.valuesUsed.gallonsPerCubicYard.toFixed(3)}</strong></div>
-                {model.valuesUsed.rungs.map(r => (
-                  <div key={`rung|${r.label}`} style={S.row} className="ll-row">
-                    <span>{r.label} — {r.volumeGallons == null ? 'no volume set' : `${r.volumeGallons} gal container`}</span>
-                    <span style={{ whiteSpace: 'nowrap' }}><strong>{r.tPosts} T-post{r.tPosts === 1 ? '' : 's'}</strong> <span style={S.note}>({r.tPostsBecause})</span></span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={S.flag} className="ll-flag">
-                <strong>Deer fence — add by hand</strong>
-                <div style={S.note}>{LOAD_LIST_COPY.deerFenceGap}</div>
-                <div style={S.note}>{LOAD_LIST_COPY.ringRule}</div>
-                {/* 🔴 R-156: the FEET, per size, so the hand-add is read off rather than worked
-                    out on a trailer. Every figure comes from the model — `ringDiameterFeet` is
-                    total, so a size we have never sold still prints a number here. */}
-                <div style={S.note}><strong>{LOAD_LIST_COPY.deerFenceTotal(model.valuesUsed.deerFenceTPostsPerTree)}</strong></div>
-                {model.trees.map(t => (
-                  <div key={`fence|${t.name}|${t.rungLabel}`} style={S.row} className="ll-row">
-                    <span>{t.name} {t.sizeText} × {t.quantity} · has {t.tPosts} stake post{t.tPosts === 1 ? '' : 's'}</span>
-                    <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
-                      {t.ringDiameterFeet == null || t.fenceFeetPerTree == null
-                        ? 'no volume set — ring not known'
-                        : <>{t.ringDiameterFeet.toFixed(1)} ft ring · {Math.ceil(t.fenceFeetPerTree)} ft fence per tree
-                          {' · '}{Math.ceil(t.fenceFeetPerTree) * t.quantity} ft if all {t.quantity} fenced</>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
               <h2 style={S.h2}>1 · Special mix — loads first</h2>
               <div style={S.big}>
                 {model.mixYards} yard{model.mixYards === 1 ? '' : 's'} special mix
@@ -337,10 +290,29 @@ export function LoadList() {
                 <span style={S.big}>{model.ropeFeet} ft rope</span>
                 <span style={S.note}>{LOAD_LIST_COPY.ropeRule(model.valuesUsed.ropeFeetPerTPost)}</span>
               </div>
+              {/* 🔴 BUBBLERS ARE THE ONES BILLED (David, 2026-09-18) — and zero is printed in words,
+                  never as a bare 0, because a 0 in a quantity column reads as an omission. */}
               <div style={S.row} className="ll-row">
-                <span style={S.big}>{model.bubblers} bubblers</span>
+                <span style={S.big}>
+                  {model.bubblers > 0 ? `${model.bubblers} bubblers` : `Bubblers — ${LOAD_LIST_COPY.bubblersNoneSpecified}`}
+                </span>
                 <span style={S.note}>{LOAD_LIST_COPY.bubblerRule(model.valuesUsed.bubblersPerTree)}</span>
               </div>
+              {/* Prebuilt, on the shelf: a COUNT only — never the parts. */}
+              <div style={S.row} className="ll-row">
+                <span style={S.big}>
+                  {model.waterMonitors > 0 ? `${model.waterMonitors} water monitor kits` : 'Water monitor kits — none'}
+                </span>
+                <span style={S.note}>
+                  {model.waterMonitors > 0 ? LOAD_LIST_COPY.waterMonitorRule : LOAD_LIST_COPY.waterMonitorNone}
+                </span>
+              </div>
+              {model.trunkProtection > 0 ? (
+                <div style={S.row} className="ll-row">
+                  <span style={S.big}>{LOAD_LIST_COPY.trunkProtectionLine(model.trunkProtection)}</span>
+                  <span style={S.note}>On the orders below — it goes on the trailer.</span>
+                </div>
+              ) : null}
               {model.deerFencePosts > 0 ? (
                 <div style={S.row} className="ll-row">
                   <span style={S.big}>+{model.deerFencePosts} T-posts for deer fence</span>
@@ -371,6 +343,33 @@ export function LoadList() {
                 </div>
               ) : null}
 
+              {/* 🔴 DEER FENCE PRINTS NOTHING UNLESS A STOP RECORDS IT (David, 2026-09-17). Until then
+                  there is no rule, no ring and no footage on the sheet — the arithmetic is built and
+                  tested for the day a stop can say so, and `deerFenceUnknownStops` keeps the count in
+                  the trace. */}
+              {model.stops.some(st => st.deerFence === 'yes') ? (
+              <div style={S.flag} className="ll-flag">
+                <strong>Deer fence — add by hand</strong>
+                <div style={S.note}>{LOAD_LIST_COPY.deerFenceGap}</div>
+                <div style={S.note}>{LOAD_LIST_COPY.ringRule}</div>
+                {/* 🔴 R-156: the FEET, per size, so the hand-add is read off rather than worked
+                    out on a trailer. Every figure comes from the model — `ringDiameterFeet` is
+                    total, so a size we have never sold still prints a number here. */}
+                <div style={S.note}><strong>{LOAD_LIST_COPY.deerFenceTotal(model.valuesUsed.deerFenceTPostsPerTree)}</strong></div>
+                {model.trees.map(t => (
+                  <div key={`fence|${t.name}|${t.rungLabel}`} style={S.row} className="ll-row">
+                    <span>{t.name} {t.sizeText} × {t.quantity} · has {t.tPosts} stake post{t.tPosts === 1 ? '' : 's'}</span>
+                    <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
+                      {t.ringDiameterFeet == null || t.fenceFeetPerTree == null
+                        ? 'no volume set — ring not known'
+                        : <>{t.ringDiameterFeet.toFixed(1)} ft ring · {Math.ceil(t.fenceFeetPerTree)} ft fence per tree
+                          {' · '}{Math.ceil(t.fenceFeetPerTree) * t.quantity} ft if all {t.quantity} fenced</>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              ) : null}
+
             </div>
 
             {/* ── PER-STOP. What you need when a stop gets dropped. ───────────────────── */}
@@ -384,6 +383,8 @@ export function LoadList() {
                   {s.mixYards} yd mix ·{' '}
                   {s.tPosts} T-posts
                   {s.deerFencePosts > 0 ? ` (+${s.deerFencePosts} for deer fence)` : ''}
+                  {s.bubblers > 0 ? ` · ${s.bubblers} bubbler${s.bubblers === 1 ? '' : 's'}` : ''}
+                  {s.waterMonitors > 0 ? ` · ${s.waterMonitors} water monitor kit${s.waterMonitors === 1 ? '' : 's'}` : ''}
                   {s.offLadderTreeCount > 0 ? ` · ${s.offLadderTreeCount} tree${s.offLadderTreeCount === 1 ? '' : 's'} not a set-up size` : ''}
                   {s.unresolvedCount > 0
                     ? ` · ${s.unresolvedCount} line${s.unresolvedCount === 1 ? '' : 's'} could not be read`
@@ -392,24 +393,61 @@ export function LoadList() {
                 {s.problem ? (
                   <div style={S.flag} className="ll-flag"><strong>{s.problem}</strong></div>
                 ) : null}
-                {s.items.map((i, n) => <ItemRow key={n} item={i} />)}
+                {/* 🔴 PLANTING WORK ON THIS STOP — a tree already there. David, 2026-09-17: at Chris
+                    Dubec it is "8 trees plus 1 extra on site which is (PYT)" — the crew plants NINE. */}
+                {s.plantOnSite.length > 0 ? (
+                  <div style={S.flag} className="ll-flag">
+                    <strong>{LOAD_LIST_COPY.plantOnSite
+                      .replace('%n', String(s.plantOnSite.reduce((n, i) => n + i.quantity, 0)))
+                      .replace('%s', s.plantOnSite.reduce((n, i) => n + i.quantity, 0) === 1 ? '' : 's')}</strong>
+                  </div>
+                ) : null}
+                {/* Only what this sheet carries. A line we recognise as a charge, a discount or a
+                    delivery option prints NOWHERE (David: "too confusing"). */}
+                {s.items.filter(i => i.kind !== 'not_loaded' && i.kind !== 'plant_on_site')
+                        .map((i, n) => <ItemRow key={n} item={i} />)}
               </div>
             ))}
 
+              {/* 🔴 THE FIGURES USED (ledger #343) — every number the totals below multiplied by,
+                printed, so nobody has to trust a figure they cannot see. */}
+            {/* 🔴 ALSO ON THE TRUCK (David, 2026-09-17, second pass): anything physical the customer
+                bought is loaded, so it prints — with its quantity, in no tree, mix or post total.
+                Money lines still print nowhere. */}
             {model.otherGoods.length > 0 ? (
-              <>
-                <h2 style={S.h2}>{LOAD_LIST_COPY.otherGoodsHeading}</h2>
+              <div className="ll-block">
+                <h2 style={S.h2}>{LOAD_LIST_COPY.alsoOnTruckHeading}</h2>
+                <p style={S.note}>{LOAD_LIST_COPY.alsoOnTruckWhy}</p>
                 {model.otherGoods.map((i, n) => <ItemRow key={n} item={i} />)}
-              </>
+              </div>
             ) : null}
 
-            {model.noSizeStated.length > 0 ? (
-              <>
-                <h2 style={S.h2}>{LOAD_LIST_COPY.noSizeHeading}</h2>
-                <p style={S.note}>{LOAD_LIST_COPY.noSizeWhy}</p>
-                {model.noSizeStated.map((i, n) => <ItemRow key={n} item={i} />)}
-              </>
-            ) : null}
+            <div className="ll-block ll-figures">
+              <h2 style={S.h2}>{LOAD_LIST_COPY.valuesHeading}</h2>
+              {settingsRead && settingsRead.figures !== 'stored' ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>
+                    {settingsRead.figures === 'defaults_withheld'
+                      ? 'These are the standard figures — the nursery’s own settings were refused for this login. Ask the owner to check your access.'
+                      : settingsRead.figures === 'defaults_read_failed'
+                        ? 'Could not read the nursery’s settings — these are the standard figures. Reload before you load.'
+                        : 'No figures have been saved for this nursery — these are the standard ones.'}
+                  </strong>
+                </div>
+              ) : null}
+              <div style={S.row} className="ll-row"><span>Special mix per gallon of container</span><strong>{model.valuesUsed.installMixContainerVolumesPerTree} gal</strong></div>
+              <div style={S.row} className="ll-row"><span>Rope per T-post</span><strong>{model.valuesUsed.ropeFeetPerTPost} ft</strong></div>
+              <div style={S.row} className="ll-row"><span>Bubblers per tree</span><strong>{model.valuesUsed.bubblersPerTree}</strong></div>
+              <div style={S.row} className="ll-row"><span>T-posts on a deer-fenced tree, in total</span><strong>{model.valuesUsed.deerFenceTPostsPerTree}</strong></div>
+              <div style={S.row} className="ll-row"><span>Gallons in a cubic yard</span><strong>{model.valuesUsed.gallonsPerCubicYard.toFixed(3)}</strong></div>
+              {model.valuesUsed.rungs.map(r => (
+                <div key={`rung|${r.label}`} style={S.row} className="ll-row">
+                  <span>{r.label} — {r.volumeGallons == null ? 'no volume set' : `${r.volumeGallons} gal container`}</span>
+                  <span style={{ whiteSpace: 'nowrap' }}><strong>{r.tPosts} T-post{r.tPosts === 1 ? '' : 's'}</strong> <span style={S.note}>({r.tPostsBecause})</span></span>
+                </div>
+              ))}
+            </div>
+
           </>
         ) : null}
       </div>

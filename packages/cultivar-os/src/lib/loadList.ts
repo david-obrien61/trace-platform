@@ -132,19 +132,47 @@ export function ringCircumferenceFeet(gallons: number): number {
   return Math.PI * ringDiameterFeet(gallons);
 }
 
-/** What one line turned out to be. Four outcomes, all of them printed — see the header. */
+/**
+ * 🔴 THE SHEET IS AN ALLOW-LIST (David, 2026-09-17, after running the load list live).
+ * *"Trees, T-posts, SPM (yards), deer fence if marked, trunk protection. That is the whole list. It is
+ * an ALLOW-LIST of what goes on the trailer, not a filter of fees."*
+ *
+ * ⚠️ THIS SUPERSEDES [[R-144]] FOR THIS PAGE ONLY. R-144 says show every line and label none, BECAUSE
+ * nothing stored classifies a line goods-vs-fee. That is still true of the DATA — so this file matches
+ * on the line's own DESCRIPTION and SKU, which is a statement about what we RECOGNISE, never a claim
+ * that the database knows. David: *"we will have these labeled in the future in our system"* — when a
+ * per-item label exists, read it and delete `NON_LOAD_LINES`. R-144 still governs every other surface.
+ *
+ * ⚠️ THE MATCH LIST IS MEASURED, NOT IMAGINED: every name below appears in LAWNS's own 144 order lines
+ * (44 distinct non-tree rows, read 2026-09-17). ✏️ It is NOT `service_offerings` — that table holds FOUR
+ * rows for LAWNS (Trip Charge · Tree Bubbler · Tree Installation · Tree Tarp) and carries neither Trunk
+ * Protection nor Deer Fencing, so it cannot answer this question today.
+ */
 export type LoadItemKind =
   /** Resolved to a RUNG on this nursery's ladder: a tree. The only kind that earns a bill of materials. */
   | 'tree'
-  /** Resolved to a real unit that is NOT a container — a 50 lb bag, a 4.4 cf bale. It loads; it
-   *  takes no stake, mix or bubbler, and we are not guessing that it does. */
+  /** Trunk protection — on the list, so it prints with its quantity, per stop and per day. */
+  | 'trunk_protection'
+  /** 🔴 A BILLED BUBBLER — and it is the ONLY thing that says a tree gets one (David, 2026-09-18:
+   *  *"the bubbler is manufactured and added with a cost so not on every tree, only those
+   *  specified"*). The LINE carries the count; nothing says WHICH trees. */
+  | 'bubbler'
+  /** A billed water monitor kit — ON TOP of the one every installed tree gets. */
+  | 'water_monitor'
+  /** A deer-fence line: the stop SAYING it needs fence. Nothing else in the data can say it. */
+  | 'deer_fence'
+  /** 🔴 PLANTING WORK ON THE SITE, NOT A FEE (David, 2026-09-17). At Chris Dubec, *"8 trees plus 1
+   *  extra on site which is (PYT)"* — the crew plants NINE. Its size is unknown, so it is NOT counted
+   *  as a tree and earns no mix or posts; it is printed on its stop and it raises the FLOOR. */
+  | 'plant_on_site'
+  /** Physical goods a customer bought — a 50 lb bag, a 4.4 cf bale, a tarp. They ride the trailer, so
+   *  they print under "Also on the truck" with their quantity. They are NOT trees: no mix, no posts. */
   | 'other_goods'
-  /** Read in full and states no size — Trip Charge, Tree Bubbler, Deer Fencing, Trunk Protection.
-   *  🔴 This is NOT a claim that the line is a fee. Nothing stored classifies a line (R-144 /
-   *  tech-debt #139): it is a statement about what we could READ, which is all we know. */
-  | 'no_size_stated'
-  /** We tried and failed, or there was nothing to try — or it is a container size this nursery's
-   *  ladder does not have (`offLadder`). Printed loudest. */
+  /** A MONEY line, or a service with nothing to load — a charge, a discount, a delivery option, a
+   *  removal, or a billed bubbler (computed per tree above). It prints NOWHERE. */
+  | 'not_loaded'
+  /** It might be loadable and we could not read it — including a container size this nursery's ladder
+   *  does not have (`offLadder`), and a tree whose size we cannot reach. The ONE printed refusal. */
   | 'unresolved';
 
 export interface ResolvedLoadItem {
@@ -206,6 +234,16 @@ export interface LoadStop {
   items: ResolvedLoadItem[];
   /** Trees on this stop, consolidated. */
   trees: TreeTally[];
+  /** Trunk protection units on this stop — on the list, so it prints. */
+  trunkProtection: number;
+  /** Bubblers SPECIFIED on this stop's order. 0 is a real answer and the page says so in words. */
+  bubblers: number;
+  /** Water monitor kits: one per tree LAWNS installs, plus any billed on the order. */
+  waterMonitors: number;
+  /** True when this stop's order is an INSTALL — every tree on it gets a water monitor kit. */
+  installs: boolean;
+  /** Planting work on this stop: a tree already on site. Counted in no total (David, 2026-09-17). */
+  plantOnSite: ResolvedLoadItem[];
   /** Every tree on the stop, INCLUDING the ones whose size is off the ladder. */
   treeCount: number;
   mixGallons: number;
@@ -252,7 +290,18 @@ export interface LoadListModel {
   deerFencePosts: number;
   /** Feet of staking rope — staking posts × the configured feet per post. */
   ropeFeet: number;
+  /** 🔴 BUBBLERS ARE THE ONES BILLED, NOT ONE PER TREE (David, 2026-09-18). 0 when none is specified,
+   *  and the page prints "none specified on these orders" rather than a bare zero. */
   bubblers: number;
+  /** Water monitor kits — one per tree LAWNS installs, PLUS any billed line. Prebuilt and on the
+   *  shelf, so the sheet prints a COUNT only: never the PVC, the bamboo or the drilling. */
+  waterMonitors: number;
+  /** Trees on install stops — the part of `waterMonitors` the install rule produced. */
+  installTreeCount: number;
+  /** Trunk protection for the day. */
+  trunkProtection: number;
+  /** Planting work across the day — trees already on site, size unknown. */
+  plantOnSite: ResolvedLoadItem[];
   /** Trees whose size is not on the ladder: counted, not staked or mixed. */
   offLadderTreeCount: number;
   /** Tree rows whose rung has no volume set: counted and staked, their mix unknown. */
@@ -271,14 +320,64 @@ export interface LoadListModel {
 
   valuesUsed: ValuesUsed;
 
-  // ── everything the headline does not cover, never dropped ──────────────────
+  // ── everything the headline does not cover ─────────────────────────────────
+  /** 🔴 PHYSICAL GOODS — printed under "Also on the truck", counted in no tree, mix or post total. */
   otherGoods: ResolvedLoadItem[];
-  noSizeStated: ResolvedLoadItem[];
-  /** 🔴 Lines we could not work out at all, or could not place on the ladder. */
+  /** 🔴 THE ONE PRINTED REFUSAL: lines that might be loadable and could not be read. */
   unresolved: ResolvedLoadItem[];
+  /** Lines we RECOGNISE as not going on the trailer. Carried for the trace; printed NOWHERE
+   *  (David, 2026-09-17: *"additional information to yard crew is too confusing"*). */
+  notLoaded: ResolvedLoadItem[];
   /** Stops whose lines could not be read (permission or a failed query). */
   unreadStops: number;
 }
+
+/**
+ * 🔴 THE RULE, IN DAVID'S WORDS (2026-09-17, second pass): **ANYTHING PHYSICAL PRINTS; MONEY LINES
+ * NEVER DO.** *"Fertiliser, fungicide, perlite, ant killer and anything else physical that a customer
+ * bought is loaded on the truck, so it prints."* His first list — trees, T-posts, special mix, deer
+ * fence, trunk protection — named the INSTALL MATERIALS, not the whole sheet.
+ * ⚠️ So this list holds ONLY money lines and services with nothing to load. A physical thing is never
+ * in it. The one deliberate exception is a billed **Tree Bubbler**: bubblers are computed one per tree
+ * in the hardware total, so the billed line would read as a second demand for the same object — and
+ * NOTHING compares the two (tech-debt #326, filed not built).
+ *
+ * Matched on the description OR the SKU. Every entry was read out of LAWNS's own order lines on
+ * 2026-09-17, with its line count.
+ * ⚠️ A DATED "Flat fee …" IS DELIBERATELY ABSENT. David's own worked example keeps it in the one
+ * printed refusal — we cannot read it, and a thing we cannot read is not a thing we recognise. (His
+ * two instructions disagreed on that line; this is the reading his Saturday example gives.)
+ */
+const NON_LOAD_LINES: ReadonlyArray<{ re: RegExp; why: string }> = [
+  { re: /^trip charge$|^TC$/i,            why: 'a delivery charge' },              // 31 lines
+  { re: /discount/i,                      why: 'a discount' },                      // 7
+  { re: /^\d+(\.\d+)?% off\b/i,          why: 'a discount' },
+  { re: /surcharge|credit card fee/i,     why: 'a charge' },
+  { re: /^(morning|tailgate) delivery\b/i, why: 'a delivery option, not a thing to load' },
+  { re: /^existing tree removal$|^TR$/i,  why: 'work on site, not a thing to load' },
+];
+
+/** Physical things that state no size — they go on the truck, so they print (David, 2026-09-17). */
+const KNOWN_GOODS = /^tree tarp$|^stake kit$|^t-post stake kit$|^TSK\d*$/i;
+
+/** Lines that ARE on David's list, matched the same way. */
+const TRUNK_PROTECTION = /^trunk protection\b|^TP$/i;
+/** 🔴 THE BUBBLER MARKER, AND THERE IS NO OTHER ONE (measured 2026-09-18): the `Tree Bubbler` line.
+ *  `order_service_selections` is EMPTY for LAWNS, and no column on a line or a lot marks a tree. Five
+ *  such lines exist in the whole book — quantities 7, 2, 6, 8 and 3 — and the fifth is 3 bubblers
+ *  against 9 trees, which is David's ruling visible in the data. ✏️ This REPLACES ledger #350's
+ *  exception, where the billed line was left off because bubblers were computed one per tree. */
+const BUBBLER_LINE = /^tree bubblers?\b|^TB$/i;
+/** A billed water monitor kit — QuickBooks item 102, *"Augur Holes, and install water monitor pipe"*.
+ *  It ADDS to the count on top of the per-installed-tree rule: a customer can buy them for trees they
+ *  plant themselves. Measured 2026-09-18: the catalogue item exists and no order line has used it yet. */
+const WATER_MONITOR_LINE = /augur hole|water monitor/i;
+const DEER_FENCE_LINE  = /^deer fenc|^DF$/i;
+/** Planting WORK with no container size — the tree is already on site. Never a sized tree line. */
+const PLANT_ON_SITE    = /^plant your tree$|^PYT$|^tree install(ation)?$/i;
+
+const matches = (re: RegExp, name: string, sku: string | null): boolean =>
+  re.test(name.trim()) || (sku != null && re.test(sku.trim()));
 
 /**
  * Read ONE line into a load item.
@@ -300,6 +399,29 @@ export interface LoadListModel {
 export function resolveLoadItem(item: StopOrderItem, ladder: Ladder): ResolvedLoadItem {
   const quantity = Number(item.quantity) || 0;
   const sku = item.sku?.trim() || null;
+
+  // ── 0. the ALLOW-LIST, BEFORE ANY SIZE READING (David, 2026-09-17) ────────
+  // 🔴 IT MUST COME FIRST, AND "Military Discount 5%" IS WHY. The description reader finds "5%" at
+  // the end, calls it an unreadable SIZE and returns — so a line we plainly recognise would have
+  // printed in the one refusal section. Recognition is about the NAME, and the name is known before
+  // any size is read.
+  const label = item.business_inventory?.name?.trim() || item.description?.trim() || '';
+  if (label || sku) {
+    const flat = { quantity, name: label || sku || 'Unnamed line', sizeText: null, sku,
+                   rung: null, gallons: null, offLadder: false, unreadText: null } as const;
+    if (matches(TRUNK_PROTECTION, label, sku)) return { ...flat, kind: 'trunk_protection', reason: null };
+    if (matches(BUBBLER_LINE, label, sku)) return { ...flat, kind: 'bubbler', reason: null };
+    if (matches(WATER_MONITOR_LINE, label, sku)) return { ...flat, kind: 'water_monitor', reason: null };
+    if (matches(DEER_FENCE_LINE, label, sku))  return { ...flat, kind: 'deer_fence', reason: null };
+    if (matches(PLANT_ON_SITE, label, sku)) {
+      return { ...flat, kind: 'plant_on_site', reason: 'A tree already on site, to plant — size unknown; add its mix and T-posts by hand.' };
+    }
+    if (matches(KNOWN_GOODS, label, sku)) {
+      return { ...flat, kind: 'other_goods', reason: 'Goods — it rides the trailer; it is not a tree, so it takes no mix or posts.' };
+    }
+    const known = NON_LOAD_LINES.find(n => matches(n.re, label, sku));
+    if (known) return { ...flat, kind: 'not_loaded', reason: `Not loaded — ${known.why}.` };
+  }
 
   // ── 1. the anchored lot ───────────────────────────────────────────────────
   const lotName = item.business_inventory?.name?.trim() || null;
@@ -325,8 +447,17 @@ function classify(
   quantity: number, name: string, sizeText: string | null, sku: string | null, ladder: Ladder,
 ): ResolvedLoadItem {
   const base = { quantity, name, sizeText, sku, rung: null, gallons: null, offLadder: false, unreadText: null };
+
+  // ⚠️ The allow-list ran in `resolveLoadItem` BEFORE any size was read — see step 0 there. It is
+  // re-checked here ONLY for the name the description reader extracted, which can differ from the
+  // raw line ("Tree Bubbler. ( no existing irrigation … )" reads out as "Tree Bubbler").
+  const known = NON_LOAD_LINES.find(n => matches(n.re, name, sku));
+  if (known && !sizeText) {
+    return { ...base, kind: 'not_loaded', reason: `Not loaded — ${known.why}.` };
+  }
+
   if (!sizeText) {
-    return { ...base, kind: 'no_size_stated', reason: 'No container size on this line, so it is not counted as a tree.' };
+    return { ...base, kind: 'unresolved', reason: 'No container size on this line, and we do not recognise it — check it before you load.' };
   }
 
   const r = resolveRung(ladder, sizeText);
@@ -335,9 +466,11 @@ function classify(
   }
   switch (r.reason) {
     case 'blank':
-      return { ...base, kind: 'no_size_stated', reason: 'No container size on this line, so it is not counted as a tree.' };
+      return { ...base, kind: 'unresolved', reason: 'No container size on this line, and we do not recognise it — check it before you load.' };
     case 'not_container':
-      return { ...base, kind: 'other_goods', reason: `Sold by ${r.unit}, not by container — no stake, mix or bubbler counted for it.` };
+      // 🔴 GOODS PRINT (David, 2026-09-17, correcting the first pass): a customer bought it, so it is
+      // on the truck. 12 live LAWNS lines are goods — fertiliser, fungicide, perlite, ant killer.
+      return { ...base, kind: 'other_goods', reason: `Sold by ${r.unit}, not by container — it rides the trailer, and takes no mix or posts.` };
     case 'off_ladder':
       return {
         ...base, kind: 'unresolved', offLadder: true, unreadText: sizeText,
@@ -418,6 +551,9 @@ export interface LoadStopInput {
   /** The lines query ran and did not error. */
   linesRead: boolean;
   items: StopOrderItem[];
+  /** True when the linked order's `transport_method` is `install` — LAWNS plants these trees, and
+   *  every one of them gets a water monitor kit (David, 2026-09-18). */
+  installs?: boolean;
   /**
    * Whether this stop needs deer fence, if anything stored says so. `null` = the data cannot tell.
    * ⚠️ TODAY IT IS ALWAYS NULL: measured 2026-09-12 across the LAWNS tenant, zero order lines and
@@ -450,7 +586,10 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
 
     const items = s.items.map(i => resolveLoadItem(i, settings.ladder));
     const trees = tallyTrees(items, settings);
-    const fence: DeerFenceState = s.deerFence === true ? 'yes' : s.deerFence === false ? 'no' : 'unknown';
+    // 🔴 A DEER-FENCE LINE IS THE STOP SAYING SO. Until something else can record it, the order's own
+    // line is the only thing in the data that can (David, 2026-09-17: print nothing unless marked).
+    const fenceLine = items.some(i => i.kind === 'deer_fence');
+    const fence: DeerFenceState = s.deerFence === true || fenceLine ? 'yes' : s.deerFence === false ? 'no' : 'unknown';
     const sums = sumTrees(trees, items, fence, settings);
     if (fence === 'unknown' && sums.treeCount > 0) deerFenceUnknownStops++;
     deerFencePosts += sums.deerFencePosts;
@@ -458,6 +597,15 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
     stops.push({
       stopId: s.stopId, customerName: s.customerName, address: s.address,
       serviceType: s.serviceType, problem, items, trees,
+      trunkProtection: items.filter(i => i.kind === 'trunk_protection').reduce((n, i) => n + i.quantity, 0),
+      // 🔴 THE BILLED LINE IS THE COUNT. `bubblersPerTree` is the multiplier per SPECIFIED tree — not
+      // a per-tree default any more (David, 2026-09-18).
+      bubblers: items.filter(i => i.kind === 'bubbler').reduce((n, i) => n + i.quantity, 0) * settings.ops.bubblersPerTree,
+      // One per tree LAWNS installs, PLUS any billed kit (a customer may buy them for trees they plant).
+      waterMonitors: (s.installs ? sums.treeCount : 0)
+        + items.filter(i => i.kind === 'water_monitor').reduce((n, i) => n + i.quantity, 0),
+      installs: !!s.installs,
+      plantOnSite: items.filter(i => i.kind === 'plant_on_site'),
       treeCount: sums.treeCount,
       mixGallons: sums.mixGallons,
       mixYards: toHalfYards(sums.mixGallons, settings),
@@ -473,6 +621,7 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
   const trees = tallyTrees(allItems, settings);
   const day = sumTrees(trees, allItems, 'no', settings);
   const unresolved = allItems.filter(i => i.kind === 'unresolved');
+  const plantOnSite = allItems.filter(i => i.kind === 'plant_on_site');
   const noVolumeTrees = trees.filter(t => t.gallons == null);
 
   const seen = new Map<string, ValuesUsed['rungs'][number]>();
@@ -493,11 +642,16 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
     tPosts: day.tPosts,
     deerFencePosts,
     ropeFeet: day.tPosts * settings.ops.ropeFeetPerTPost,
-    bubblers: day.treeCount * settings.ops.bubblersPerTree,
+    bubblers: stops.reduce((n, st) => n + st.bubblers, 0),
+    waterMonitors: stops.reduce((n, st) => n + st.waterMonitors, 0),
+    installTreeCount: stops.filter(st => st.installs).reduce((n, st) => n + st.treeCount, 0),
+    trunkProtection: stops.reduce((n, st) => n + st.trunkProtection, 0),
+    plantOnSite,
     offLadderTreeCount: day.offLadderTreeCount,
     noVolumeTrees,
     deerFenceUnknownStops,
-    totalsAreFloors: unresolved.length > 0 || unreadStops > 0 || noVolumeTrees.length > 0,
+    // Planting work raises the floor: the crew plants more trees than this sheet counts.
+    totalsAreFloors: unresolved.length > 0 || unreadStops > 0 || noVolumeTrees.length > 0 || plantOnSite.length > 0,
     valuesUsed: {
       installMixContainerVolumesPerTree: settings.ops.installMixContainerVolumesPerTree,
       ropeFeetPerTPost: settings.ops.ropeFeetPerTPost,
@@ -506,9 +660,9 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
       gallonsPerCubicYard: settings.ops.trueGallonsPerCubicYard,
       rungs: [...seen.values()],
     },
-    otherGoods:   allItems.filter(i => i.kind === 'other_goods'),
-    noSizeStated: allItems.filter(i => i.kind === 'no_size_stated'),
+    otherGoods: allItems.filter(i => i.kind === 'other_goods'),
     unresolved,
+    notLoaded: allItems.filter(i => i.kind === 'not_loaded'),
     unreadStops,
   };
 }
@@ -522,7 +676,16 @@ export const LOAD_LIST_COPY = {
     `${ratio} gallons of mix per gallon of container — a 30 gallon tree takes ${30 * ratio} gallons. Container volumes are the ones set for each size.`,
   tPostRule: 'T-posts per tree are set for each container size — the figure is listed against each tree.',
   ropeRule: (feet: number) => `About ${feet} ft of rope per T-post.`,
-  bubblerRule: (n: number) => `${n} bubbler${n === 1 ? '' : 's'} per tree.`,
+  /** ✏️ 2026-09-18: bubblers are the ones BILLED, so the rule describes the marker, not a per-tree rate. */
+  bubblerRule: (n: number) => n === 1
+    ? 'One per tree the order specifies — the bubbler line on the order is the count.'
+    : `${n} per tree the order specifies — the bubbler line on the order is the count.`,
+  /** 🔴 NEVER A BARE ZERO (David, 2026-09-18). */
+  bubblersNoneSpecified: 'none specified on these orders',
+  /** Prebuilt and on the shelf: the crew count trees, count monitors, load them. A COUNT ONLY —
+   *  never the PVC, the bamboo or the drilling (David, 2026-09-18). */
+  waterMonitorRule: 'One for every tree we install, plus any bought on the order. Prebuilt — take them off the shelf.',
+  waterMonitorNone: 'none — no tree on this day is one we install, and none is on an order',
   noMulch: 'No mulch. Only the ingredients in the special mix.',
   /** The ring rule, in the yard person's words. The NUMBER is printed per tree row beside it. */
   ringRule: 'Ring diameter grows with the square root of container gallons — 5 ft at 15 gallon, 12 ft at 95 gallon, and a figure for every size above and between.',
@@ -540,11 +703,14 @@ export const LOAD_LIST_COPY = {
   noVolumeNote: 'These sizes have no container volume set, so their mix is NOT counted. Set the volume in Settings → Container sizes.',
   unresolvedHeading: 'COULD NOT WORK OUT — check these before you load',
   unresolvedWhy:
-    'These lines are printed because a blank cannot be told apart from a zero. Nothing here has been counted in the mix or post totals above.',
-  noSizeHeading: 'Also on these orders — no container size, so not counted as trees',
-  noSizeWhy:
-    'Nothing stored says whether a line is a good or a fee, so every line is shown and none is filtered away.',
-  otherGoodsHeading: 'Other goods — sold by weight, volume or length',
+    'These lines might go on the trailer and we could not read them. Nothing here is counted in the totals above. Everything this sheet does not carry — charges, discounts, delivery options — is left off entirely.',
+  /** 🔴 Planting work on a stop — a tree already there. David, 2026-09-17: the crew plants nine. */
+  plantOnSite: 'plus %n tree%s to plant on site (Plant Your Tree) — size unknown; add mix and T-posts by hand.',
+  trunkProtectionLine: (n: number) => `${n} trunk protection`,
+  /** 🔴 Physical goods the customer bought. David, 2026-09-17: *"anything physical prints."* */
+  alsoOnTruckHeading: 'Also on the truck',
+  alsoOnTruckWhy:
+    'Bought on these orders and loaded with the trees. Not counted as trees, and they take no mix or T-posts. Charges, discounts and fees are not shown anywhere on this sheet.',
   valuesHeading: 'Figures used for this list',
   sizesFailed: 'Could not read this nursery’s container sizes — no tree can be staked or mixed until they load. Reload before you load the trailer.',
   sizesNone: 'No container sizes are set up for this nursery, so no tree can be staked or mixed. Set them up in Settings → Container sizes.',

@@ -24,6 +24,11 @@
  *     refused — no rung claims both ends — but "#3/5" is ONE rung at LAWNS and now resolves.
  *   · B15 (size reading imported from shared) → tightened: this file no longer calls the unit
  *     parser at all. Every size goes through `resolveRung`.
+ *   · ✏️ 2026-09-17 — DAVID'S FIVE CHANGES AFTER RUNNING CARD 19 LIVE. The sheet is an ALLOW-LIST:
+ *     *"trees, T-posts, SPM (yards), deer fence if marked, trunk protection. That is the whole list."*
+ *     So B6/B10/B10b/B12/D13 and the old `other_goods` / `no_size_stated` kinds are GONE — a known
+ *     non-load line does not print anywhere, a line that might be loadable and could not be read is
+ *     the ONE "could not work out" section, and Plant Your Tree is WORK on a stop, not a fee.
  *   · E4 (the 95 gallon deer-fence question "not settled") → settled by the rule's own wording,
  *     *"4 T-posts per tree IN TOTAL"*: a 95 gallon tree already has 4 and takes no more.
  *
@@ -206,26 +211,39 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(midParen.kind === 'tree' && midParen.name === 'Eagleston Holly (Tree Form)',
     'B5: a parenthetical in the MIDDLE stays in the name');
 
+  // ✏️ B6/B7 REWRITTEN 2026-09-17: a KNOWN non-load line is `not_loaded` and never prints. It is
+  // matched BY NAME (the description and SKU), which is a statement about what we recognise today —
+  // see `NON_LOAD_LINES`. R-144's "show everything, labelled" no longer governs THIS page.
   const fee = res(line(1, 'Trip Charge', 'TC'));
-  ok(fee.kind === 'no_size_stated' && fee.gallons === null, 'B6 (negative): a line with no size is not a tree');
-  ok(!/fee/i.test(fee.kind), '🔴 B7 (negative): the model never asserts a line IS a fee');
+  ok(fee.kind === 'not_loaded' && fee.gallons === null, 'B6: a Trip Charge is NOT LOADED and does not print');
+  ok(/not one of the things this sheet carries|charge|fee|discount/i.test(fee.reason ?? ''),
+    'B7: …and it carries the reason it was left off, for the trace and nothing else');
 
-  const bad = res(line(1, 'Military Discount 5%', 'Military Discount'));
-  ok(bad.kind === 'unresolved' && bad.unreadText === '5%',
+  // ✏️ B8's SUBJECT CHANGED 2026-09-17: "Military Discount 5%" is now a recognised discount and does
+  // not print at all. The claim still needs a case, so it uses a line nobody recognises and nobody can
+  // read — the dated Flat fee David kept in the refusal section.
+  const bad = res(line(1, 'Flat fee - Applied on Aug 9, 2026', 'Late fee'));
+  ok(bad.kind === 'unresolved' && bad.unreadText === '9, 2026',
     '🔴 B8 (negative): a size-shaped token nobody can read is UNRESOLVED and carries the text it tried');
+  ok(res(line(1, 'Military Discount 5%', 'Military Discount')).kind === 'not_loaded',
+    'B8b: …while a RECOGNISED discount does not print, however unreadable its trailing "5%"');
   const empty = res(line(1, null, null));
   ok(empty.kind === 'unresolved' && empty.quantity === 1 && empty.reason !== null,
     '🔴 B9 (negative): a line with no description and no sku is UNRESOLVED with a reason');
 
+  // ✏️ B10/B10b, SECOND PASS 2026-09-17 — DAVID CORRECTED MY FIRST READING. I had goods printing
+  // nowhere; he ruled: *"anything physical that a customer bought is loaded on the truck, so it
+  // prints."* His original list named the INSTALL materials, not the whole sheet.
   const bag = res(line(10, 'Gardenline Lawn & Garden 19-5-9 Fertilizer - 40 lb', 'R190'));
-  ok(bag.kind === 'other_goods' && bag.gallons === null && /lb/i.test(bag.reason ?? ''),
-    'B10: a 40 lb bag is other goods — it loads, and it takes no stake, mix or bubbler');
+  ok(bag.kind === 'other_goods' && bag.gallons === null && /rides the trailer/i.test(bag.reason ?? ''),
+    '🔴 B10: a 40 lb bag is GOODS — it prints, and it takes no mix or posts');
   const fifteenLb = res(line(1, 'Some Compost - 15 lb', 'X'));
   ok(fifteenLb.kind === 'other_goods' && fifteenLb.rung === null,
     '🔴 B10b: a 15 POUND bag is goods, NOT a tree on the 15 GALLON rung — the kind is checked, not the number');
 
   const tsk = res(line(1, 'T-Post Stake Kit', 'TSK2'));
   ok(tsk.kind !== 'tree' && tsk.gallons === null, '🔴 B11 (negative): the SKU’s digits are NEVER read as a size');
+  ok(tsk.kind === 'other_goods', 'B11b: a stake kit is a physical thing — it prints under "Also on the truck"');
   const ant = res(line(2, "Martin's Surrender Fire Ant Killer Insecticide - 1 lb", 'MT10002'));
   ok(ant.gallons === null, '🔴 B12 (negative): MT10002 does not become a 10,002 gallon container');
 
@@ -269,8 +287,8 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const withSeven = build('2026-09-01', [stop('s1', 'A', [line(1, 'Live Oak - 45 gallon', 'LO45'), line(2, 'Vitex - 7 gallon', 'VX7')])]);
   ok(withSeven.unresolved.length === 1 && withSeven.offLadderTreeCount === 2,
     '🔴 L3c: the off-ladder line is on the UNRESOLVED list and its 2 trees are COUNTED');
-  ok(withSeven.treeCount === 3 && withSeven.bubblers === 3,
-    '🔴 L3d: they are in the day’s tree count and take their bubblers — a bubbler does not depend on size');
+  ok(withSeven.treeCount === 3 && withSeven.bubblers === 0,
+    '🔴 L3d: they are in the day’s tree count — and take no bubbler, because none is billed (David, 2026-09-18)');
   ok(withSeven.mixGallons === 90 && withSeven.tPosts === 2 && withSeven.totalsAreFloors === true,
     '🔴 L3e: their mix and posts cannot be known, so those totals are FLOORS and say so');
   ok(withSeven.stops[0].offLadderTreeCount === 2, 'L3f: the stop carries its own off-ladder count');
@@ -293,7 +311,7 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(none.kind === 'unresolved' && /no container sizes are set up/i.test(none.reason ?? ''),
     '🔴 L6: with no ladder, a 45 gallon line is UNRESOLVED and says the sizes are not set up — never a guess');
   ok(res(line(1, 'Fertilizer - 40 lb', 'X'), []).kind === 'other_goods',
-    'L6b: goods still load without a ladder — the ladder is for containers only');
+    'L6b: goods print with or without a ladder — the ladder is for containers only');
 
   // L7b — 🔴 AN ALIAS THE PARSER CANNOT READ IS STILL A SIZE. "cuttings" is only the slip rung's
   // alias; nothing numeric can place it, so a resolver that skipped aliases would call it unreadable.
@@ -337,7 +355,10 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const o = build('2026-09-01', [stop('s1', 'A', [line(2, 'Oak - 30 gallon', 'X')])], OVERRIDE);
   ok(o.mixGallons === 90, `🔴 M2: a STORED ratio overrides — 2 × 30 × 1.5 = 90 (got ${o.mixGallons})`);
   ok(o.ropeFeet === 20, `M3: rope = posts × the stored feet per post — 4 × 5 = 20 (got ${o.ropeFeet})`);
-  ok(o.bubblers === 4, `M4: bubblers = trees × the stored bubblers per tree — 2 × 2 = 4 (got ${o.bubblers})`);
+  // ✏️ M4 REWRITTEN 2026-09-18: `bubblersPerTree` multiplies the SPECIFIED trees, not every tree.
+  const oB = build('2026-09-01', [stop('s1', 'A', [line(2, 'Oak - 30 gallon', 'X'), line(2, 'Tree Bubbler', 'TB')])], OVERRIDE);
+  ok(oB.bubblers === 4, `M4: 2 bubblers specified × a stored 2 per specified tree = 4 (got ${oB.bubblers})`);
+  ok(o.bubblers === 0, 'M4b: …and an order that specifies none gets none, whatever the multiplier');
 
   // M5 — the yard conversion is the CONFIGURED figure.
   const yards = build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 200 gallon', 'X')])],
@@ -378,7 +399,10 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const u = build('2026-09-01', [stop('s1', 'X', [line(1, null, null)])]);
   ok(u.unresolved.length === 1 && u.treeCount === 0,
     '🔴 C8: an unreadable line is UNRESOLVED and — being unknown to be a tree — counted in no tree total');
-  ok(/blank/i.test(LOAD_LIST_COPY.unresolvedWhy), 'C9: the page states WHY those rows are printed');
+  // ✏️ C9 REWORDED 2026-09-17: the section is now "might be loadable and could not be read", and the
+  // sentence also says what is left off entirely, so a short sheet cannot be mistaken for a full one.
+  ok(/could not read/i.test(LOAD_LIST_COPY.unresolvedWhy) && /left off entirely/i.test(LOAD_LIST_COPY.unresolvedWhy),
+    'C9: the page states WHY those rows are printed AND that recognised non-load lines are left off');
 
   const withheld = build('2026-09-01', [
     stop('s1', 'Readable', [line(1, 'Live Oak - 45 gallon', 'LO45')]),
@@ -434,21 +458,33 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const bigOak = d.trees.find(t => t.rungLabel === '200 gal')!;
   ok(bigOak.tPosts === 4, `🔴 D9: the 200 gallon Live Oak carries FOUR T-posts, read off its rung (got ${bigOak.tPosts})`);
   ok(d.ropeFeet === 96, `🔴 D11: ninety-six feet of rope (24 posts × 4 ft) (got ${d.ropeFeet})`);
-  ok(d.bubblers === 11, `D12: eleven bubblers, one per tree (got ${d.bubblers})`);
+  // ✏️ D12 REVERSED 2026-09-18 ON DAVID'S CORRECTION. It asserted one bubbler per tree; he ruled the
+  // bubbler is manufactured and billed — *"not on every tree, only those specified"*. No stop on
+  // 08-29 carries a Tree Bubbler line, so the day specifies NONE.
+  ok(d.bubblers === 0, `🔴 D12: ZERO bubblers — none is specified on any of these orders (got ${d.bubblers})`);
+  ok(/none specified/i.test(LOAD_LIST_COPY.bubblersNoneSpecified), 'D12b: and the page says so in words, never a bare 0');
 
-  ok(d.totalsAreFloors === true, 'D10: the day declares a floor — on account of the ONE unreadable line');
+  // ✏️ D10 FLIPPED 2026-09-17: the day's only "unreadable" line was the Military Discount, which is
+  // now recognised and not printed. Nothing on 08-29 is unreadable, so the day is NOT a floor — which
+  // is the honest answer and the one the flag exists to make meaningful.
+  ok(d.totalsAreFloors === false,
+    '🔴 D10: with the discount recognised, nothing on this day is unreadable — so it does NOT cry floor');
   ok(d.offLadderTreeCount === 0 && d.noVolumeTrees.length === 0, 'D10a: every tree on the day is on the ladder with a volume');
   const clean = build('2026-09-01', [stop('s1', 'X', [line(1, 'Live Oak - 200 gallon', 'LO200')])]);
   ok(clean.totalsAreFloors === false && clean.tPosts === 4 && clean.ropeFeet === 16 && clean.mixGallons === 400,
     '🔴 D10b: a day of one 200 gallon tree is NOT a floor — 4 posts, 16 ft, 400 gal of mix');
 
-  ok(d.noSizeStated.filter(i => i.sku === 'TC').length === 5, 'D13: all five Trip Charge lines are listed, never filtered');
-  ok(d.unresolved.length === 1 && d.unresolved[0].unreadText === '5%',
-    '🔴 D14: the Military Discount 5% line is the day’s ONE unresolved LINE');
+  // ✏️ D13 REVERSED 2026-09-17 ON DAVID'S INSTRUCTION. It asserted that all five Trip Charge lines
+  // were LISTED (R-144, "show everything, labelled"). He ran the sheet and ruled the opposite for
+  // THIS page: *"It is an ALLOW-LIST of what goes on the trailer, not a filter of fees."*
+  ok(d.notLoaded.filter(i => i.sku === 'TC').length === 5 && !JSON.stringify(d.stops).includes('"kind":"no_size_stated"'),
+    '🔴 D13: the five Trip Charge lines are NOT LOADED — counted for the trace, printed nowhere');
+  ok(d.unresolved.length === 0 && d.notLoaded.filter(i => /discount/i.test(i.name)).length === 1,
+    '🔴 D14: the Military Discount line is RECOGNISED and left off — the day has no unresolved lines at all');
   // ✏️ D14b CHANGED 2026-09-17 (David): the fence question is a RULE printed once at the top, not an
   // UNRESOLVED line per stop. The model still counts the stops (for the trace) and adds nothing to the
   // unresolved lines.
-  ok(d.deerFenceUnknownStops === 6 && d.unresolved.length === 1,
+  ok(d.deerFenceUnknownStops === 6 && d.unresolved.length === 0,
     `🔴 D14b: six stops with trees record no fence — counted, and NOT added to the unresolved lines (got ${d.deerFenceUnknownStops}/${d.unresolved.length})`);
 
   const accounted = d.stops.reduce((n, s) => n + s.items.length, 0);
@@ -464,7 +500,11 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(cooper.treeCount === 1 && cooper.tPosts === 4 && cooper.mixGallons === 400 && cooper.unresolvedCount === 0,
     `🔴 D20: Cooper’s 200 gallon stop is FULLY computed — 4 posts, 400 gallons (got ${cooper.tPosts}/${cooper.mixGallons})`);
   const ludemann = d.stops.find(s => s.customerName === 'Leroy & Lila Ludemann')!;
-  ok(ludemann.unresolvedCount === 1, 'D20b: the unreadable line is attributed to the STOP it is on');
+  ok(ludemann.unresolvedCount === 0 && ludemann.items.filter(i => i.kind === 'not_loaded').length === 2,
+    '✏️ D20b: that stop\'s Trip Charge and Military Discount are both recognised — nothing unresolved is attributed to it');
+  const withBad = build('2026-08-29', [stop('x', 'X', [line(1, 'Oak - 15 gallon', 'A'), line(1, 'Flat fee - Applied on Aug 9, 2026', 'Late fee')])]);
+  ok(withBad.stops[0].unresolvedCount === 1,
+    'D20c: an unreadable line IS attributed to the stop it is on — the claim D20b used to carry');
 }
 
 // ══ §E DEER FENCE ═════════════════════════════════════════════════════════════════
@@ -500,6 +540,172 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const six = build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 45 gallon', 'X')], { deerFence: true })],
     { ladder: LAWNS, ops: { ...OPERATIONS_DEFAULTS, deerFenceTPostsPerTree: 6 } });
   ok(six.deerFencePosts === 4, `E8: a stored fence figure is read — 6 in total, minus the 2 staked = 4 (got ${six.deerFencePosts})`);
+}
+
+// ══ §N THE ALLOW-LIST — DAVID, 2026-09-17, AFTER RUNNING CARD 19 LIVE ══════════════
+// *"Trees, T-posts, SPM (yards), deer fence if marked, trunk protection. That is the whole list."*
+{
+  // N1 — what PRINTS. Trunk protection rides the trailer and is counted, per stop and per day.
+  const tp = build('2026-09-01', [stop('s1', 'A', [
+    line(1, 'Oak - 45 gallon', 'X'),
+    line(2, 'Trunk Protection - Green Mesh', 'TP'),
+    line(1, 'Trip Charge', 'TC'),
+    line(1, 'Customer Discount', null),
+  ])]);
+  ok(tp.trunkProtection === 2, `🔴 N1: trunk protection is COUNTED — 2 (got ${tp.trunkProtection})`);
+  ok(tp.stops[0].trunkProtection === 2, 'N1b: and the stop carries its own count, for when a stop is dropped');
+  ok(tp.notLoaded.length === 2 && tp.unresolved.length === 0,
+    '🔴 N2: the Trip Charge and the discount are NOT LOADED and NOT unresolved — they do not print at all');
+  ok(!('noSizeStated' in tp),
+    '🔴 N3 (negative): the "also on these orders" bucket is GONE — David: "too confusing"');
+  ok('otherGoods' in tp,
+    '✏️ N3b: …but GOODS have their own bucket ("Also on the truck") — David, second pass: anything physical prints');
+
+  // N4 — every known non-load name, from the live LAWNS book (144 lines, 44 distinct non-tree rows).
+  for (const [d, sku] of [['Trip Charge', 'TC'], ['Customer Discount', null],
+                          ['15% Off - Tree Sale', 'Customer Discount'], ['FUEL Surcharge', null],
+                          ['Morning Delivery', null], ['Tailgate Delivery', null],
+                          ['CREDIT CARD FEE PLEASE ADD 3.5% IF PAYING WITH A CREDIT CARD', null],
+                          ['Existing tree removal', 'TR'], ['Military Discount 5%', 'Military Discount']] as Array<[string, string | null]>) {
+    ok(res(line(1, d, sku)).kind === 'not_loaded', `N4: "${d}" is not loaded`);
+  }
+
+  // N5 — 🔴 THE LINE DAVID KEPT. A dated "Flat fee" is NOT name-matched: we cannot read it, so it
+  // prints in the one "could not work out" section. His two instructions disagreed here and this is
+  // his own worked example for Saturday, which is the stronger signal (flagged in the report).
+  ok(res(line(1, 'Flat fee - Applied on Aug 9, 2026', 'Late fee')).kind === 'unresolved',
+    '🔴 N5: a dated "Flat fee" line stays UNRESOLVED and prints — we could not read it');
+
+  // N6 — 🔴 A TREE WE CANNOT SIZE MUST NOT VANISH WITH THE FEES. The nine #301 lines read as
+  // "no size stated" today; under the allow-list that MUST mean unresolved, not dropped.
+  const nine = res(line(1, 'Cedar Elm - 30 gallon Install & Warranty', 'CE30'));
+  ok(nine.kind === 'unresolved',
+    '🔴 N6: a tree line whose size we cannot reach is UNRESOLVED — dropping it with the fees is the failure this page exists to prevent');
+  ok(res(line(1, 'Blue Point Juniper (Replacement)', 'BPJ30REP')).kind === 'unresolved',
+    'N6b: a replacement tree with no size is unresolved too');
+
+  // N7 — deer fence as a LINE means the stop records it.
+  const df = res(line(1, 'Deer Fencing', 'DF'));
+  ok(df.kind === 'deer_fence', '🔴 N7: a Deer Fencing line is the stop SAYING it needs fence');
+  const fenced = build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 45 gallon', 'X'), line(1, 'Deer Fencing', 'DF')])]);
+  ok(fenced.stops[0].deerFence === 'yes' && fenced.deerFencePosts === 2,
+    '🔴 N7b: …so the stop is fenced and the in-total arithmetic runs — 2 more posts on a 45 gal');
+  ok(build('2026-09-01', [stop('s1', 'A', [line(1, 'Oak - 45 gallon', 'X')])]).stops[0].deerFence === 'unknown',
+    'N7c (negative control): with no such line the stop is still unknown, and nothing is invented');
+}
+
+// ══ §O ANYTHING PHYSICAL PRINTS; MONEY LINES NEVER DO (David, 2026-09-17, second pass) ══
+{
+  const day = build('2026-09-01', [stop('s1', 'A', [
+    line(1, 'Oak - 45 gallon', 'X'),
+    line(10, 'Gardenline Lawn & Garden 19-5-9 Fertilizer - 40 lb', 'R190'),
+    line(2, 'Osmocote Blend 21-4-8 (12-14M) - 50 lb', 'OS98615'),
+    line(1, 'Trip Charge', 'TC'),
+    line(1, 'Customer Discount', null),
+  ])]);
+  ok(day.otherGoods.length === 2 && day.otherGoods.reduce((n, i) => n + i.quantity, 0) === 12,
+    `🔴 O1: both goods lines print, with their quantities (got ${day.otherGoods.length})`);
+  // O1b — 🔴 A PHYSICAL THING WE CANNOT READ IS STILL "COULD NOT WORK OUT", NOT GOODS. Perlite is
+  // sold by "4.4 cf" and the parser declines it, so the sheet says so rather than inventing a unit.
+  // Measured: 2 live LAWNS lines. This is the honest half of "anything physical prints".
+  const perlite = res(line(2, 'Hortiperl-G Coarse Perlite - 4.4 cf', 'TX412X'));
+  ok(perlite.kind === 'unresolved' && perlite.unreadText === '4.4 cf',
+    `🔴 O1b: a good whose unit we cannot read is UNRESOLVED and names the text it tried (got ${perlite.kind})`);
+  ok(day.treeCount === 1 && day.mixGallons === 90 && day.tPosts === 2,
+    '🔴 O2: and they are in NO tree, mix or post total — a bag is not a tree');
+  ok(day.notLoaded.length === 2 && day.unresolved.length === 0,
+    '🔴 O3: the charge and the discount are the only lines left off, and nothing is unresolved');
+  ok(day.totalsAreFloors === false,
+    '🔴 O4: goods do not make the day a floor — they are read, counted and printed');
+  ok(/rides the trailer|Also on the truck/i.test(LOAD_LIST_COPY.alsoOnTruckWhy + LOAD_LIST_COPY.alsoOnTruckHeading),
+    'O5: the section says what it is');
+  ok(/not counted as trees/i.test(LOAD_LIST_COPY.alsoOnTruckWhy) && /not shown anywhere/i.test(LOAD_LIST_COPY.alsoOnTruckWhy),
+    'O5b: …and that charges and fees appear nowhere on the sheet');
+
+  // ✏️ O6 REVERSED 2026-09-18 — YESTERDAY'S EXCEPTION IS GONE. It kept the billed Tree Bubbler off the
+  // sheet because bubblers were computed per tree. David corrected the model: the billed line IS the
+  // number, so it prints and it is the count. **Tech-debt #326 dissolves with it.**
+  ok(res(line(4, 'Tree Bubbler', 'TB')).kind === 'bubbler',
+    '🔴 O6: a BILLED Tree Bubbler is the MARKER — it prints, and it carries the count');
+  ok(res(line(1, 'Tree Tarp', null)).kind === 'other_goods',
+    'O7: a Tree Tarp IS physical and prints — it was wrongly in the not-loaded list on the first pass');
+}
+
+// ══ §Q THE BUBBLER IS BILLED, AND THE WATER MONITOR IS PER INSTALLED TREE ══════════
+// David, 2026-09-18: *"the bubbler is manufactured and added with a cost so not on every tree, only
+// those specified"* · *"every tree LAWNS installs gets one [water monitor], and a customer can also
+// buy them… a billed line adds to the count on top of the install rule"* · *"the load list prints a
+// COUNT ONLY — never the parts, never the drilling."*
+{
+  // Q1 — the billed line is the count, and it is NOT the tree count.
+  const day = build('2026-09-01', [stop('s1', 'A', [
+    ...Array.from({ length: 9 }, () => line(1, 'Oak - 30 gallon', 'X')),
+    line(3, 'Tree Bubbler', 'TB'),
+  ])]);
+  ok(day.treeCount === 9 && day.bubblers === 3,
+    `🔴 Q1: nine trees, THREE bubblers — the billed line is the count (got ${day.treeCount}/${day.bubblers})`);
+  ok(day.stops[0].bubblers === 3, 'Q1b: and the stop carries its own, for when a stop is dropped');
+  ok(build('2026-09-01', [stop('s1', 'A', [line(9, 'Oak - 30 gallon', 'X')])]).bubblers === 0,
+    '🔴 Q2: an order that specifies none gets NONE — this is the correction, and the old model printed nine');
+  ok(/none specified on these orders/i.test(LOAD_LIST_COPY.bubblersNoneSpecified),
+    'Q2b: and zero is printed in words, never as a bare 0');
+
+  // Q3 — the line PRINTS now (yesterday's exception is gone).
+  ok(res(line(3, 'Tree Bubbler', 'TB')).kind === 'bubbler' && res(line(3, 'Tree Bubbler', 'TB')).quantity === 3,
+    '🔴 Q3: the billed bubbler line is its own kind, carrying its quantity — not a money line, not dropped');
+
+  // Q4 — WATER MONITORS: one per tree LAWNS installs.
+  const installed = build('2026-09-01', [
+    stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X')], { installs: true }),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y')]),
+  ]);
+  ok(installed.waterMonitors === 8 && installed.installTreeCount === 8,
+    `🔴 Q4: eight installed trees → eight kits; the five delivered trees get none (got ${installed.waterMonitors})`);
+  ok(installed.stops[0].waterMonitors === 8 && installed.stops[1].waterMonitors === 0,
+    'Q4b: per stop, the same split');
+  ok(installed.stops[0].installs === true && installed.stops[1].installs === false,
+    'Q4c: the stop says which it is — an install, or not');
+
+  // Q5 — a BILLED kit ADDS on top, including on a stop we do not install.
+  const bought = build('2026-09-01', [
+    stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X'), line(2, 'Augur Holes, and install water monitor pipe', null)], { installs: true }),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y'), line(3, 'Augur Holes, and install water monitor pipe', null)]),
+  ]);
+  ok(bought.waterMonitors === 13,
+    `🔴 Q5: 8 installed + 2 billed + 3 billed on a delivery stop = 13 (got ${bought.waterMonitors})`);
+  ok(bought.stops[1].waterMonitors === 3,
+    '🔴 Q5b: a customer planting their own trees can buy them — the delivery stop carries 3');
+
+  // Q6 (negative) — 🔴 A COUNT ONLY. The manufacturing spec belongs to the item, not this sheet.
+  ok(!/pvc|bamboo|drill/i.test(JSON.stringify(LOAD_LIST_COPY)),
+    '🔴 Q6 (negative): the sheet never says PVC, bamboo or drilling — they are prebuilt and on the shelf');
+  ok(!/pvcInches|bambooFeet/.test(code),
+    '🔴 Q6b (negative): and the model holds no parts figures — that is the parked recipe work');
+  ok(/prebuilt/i.test(LOAD_LIST_COPY.waterMonitorRule) && /install/i.test(LOAD_LIST_COPY.waterMonitorRule),
+    'Q6c: the printed rule says where they come from and who gets them');
+}
+
+// ══ §W PLANT YOUR TREE IS WORK, NOT A FEE (David, 2026-09-17) ══════════════════════
+// At Chris Dubec: *"8 trees plus 1 extra on site which is (PYT)"* — the crew plants NINE.
+{
+  const day = build('2026-09-01', [stop('s1', 'Chris Dubec', [
+    ...Array.from({ length: 8 }, () => line(1, 'Eagleston Holly (Tree Form) - 15 gallon', 'EH15TF')),
+    line(1, 'Plant Your Tree', 'PYT'),
+    line(1, 'Trip Charge', 'TC'),
+  ])]);
+  ok(day.plantOnSite.length === 1 && day.stops[0].plantOnSite.length === 1,
+    '🔴 W1: a Plant Your Tree line is WORK on the stop — carried, not dropped as a fee');
+  ok(day.treeCount === 8,
+    `🔴 W2: it is NOT added to the tree count — nobody loads it, its size is unknown (got ${day.treeCount})`);
+  ok(day.mixGallons === 8 * 15 * 2 && day.tPosts === 16,
+    'W3: and it adds no mix and no posts — they cannot be known without a size');
+  ok(day.totalsAreFloors === true, '🔴 W4: the day is a FLOOR because of it — the crew plants nine, the sheet counts eight');
+  ok(/size unknown/i.test(LOAD_LIST_COPY.plantOnSite) && /by hand/i.test(LOAD_LIST_COPY.plantOnSite),
+    'W5: the printed sentence says the size is unknown and the mix and posts are added by hand');
+  ok(res(line(1, 'Tree Installation', null)).kind === 'plant_on_site',
+    'W6: the same shape by another name — a planting service line with no container size');
+  ok(res(line(1, 'Live Oak - 45 gallon (Install & Warranty)', 'LO45')).kind === 'tree',
+    '🔴 W7 (negative control): an "Install & Warranty" SUFFIX on a sized tree is still a TREE, not planting work');
 }
 
 // ══ §F THE FILE STATES ITS OWN CONSTRAINTS ═════════════════════════════════════════
@@ -539,9 +745,10 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
 
   const badLot = res(line(1, null, 'X', { name: 'Some Tree', size: '3GP' }));
   ok(badLot.kind === 'unresolved' && badLot.unreadText === '3GP', '🔴 G6: a LOT whose stored size nobody can read is UNRESOLVED');
-  ok(badLot.kind !== 'no_size_stated', '🔴 G7 (negative): "could not read" is never reported as "no size"');
+  ok(badLot.kind !== 'not_loaded', '🔴 G7 (negative): "could not read" is never quietly dropped as a non-load line');
   const noSizeLot = res(line(1, null, 'X', { name: 'Some Tree', size: null }));
-  ok(noSizeLot.kind === 'no_size_stated', 'G8: a lot with no size at all states that');
+  ok(noSizeLot.kind === 'unresolved',
+    '🔴 G8: a LOT with no size is UNRESOLVED — it is a real catalogue row and may well be a tree, so it prints');
 }
 
 console.log(`\nloadList: ${passed} passed, ${failed} failed`);

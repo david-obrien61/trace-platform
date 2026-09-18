@@ -92,7 +92,7 @@ const stop = (id: string): StopRow => ({
 });
 const read: StopRead = {
   stops: [stop(STOP_A), stop(STOP_B)], fulfilmentColumns: true,
-  orderStatusById: new Map(), linesByOrderId: new Map(), linesRead: false, canReadLines: false,
+  orderStatusById: new Map(), transportByOrderId: new Map(), linesByOrderId: new Map(), linesRead: false, canReadLines: false,
 };
 
 /**
