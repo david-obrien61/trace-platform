@@ -70,6 +70,16 @@
       "means": "the audit row it writes about itself exists (ledgers #335/#342)",
       "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'ledger.test_mode_removal')"
     },
+    "20260918a_clear_two_test_starts_lawns_saturday.sql": {
+      "kind": "evidence",
+      "means": "it cleared the two TEST starts on LAWNS Saturday 2026-09-19 (Freehill, Sappal) and wrote one audit row per stop — the rows are its fingerprint (ledger #351, tech-debt #344)",
+      "sql": "(SELECT count(*) = 2 FROM audit_log WHERE action = 'crew_stop.test_start_cleared' AND detail->>'migration' = '20260918a')"
+    },
+    "20260918b_attribution_correction_test_taps.sql": {
+      "kind": "evidence",
+      "means": "it recorded that the two crew taps typed 'Mauro' at 10:10 on 2026-09-18 were David testing, plus his test device — three append-only audit rows (ledger #351)",
+      "sql": "(SELECT count(*) = 3 FROM audit_log WHERE detail->>'migration' = '20260918b')"
+    },
     "20260917a_keep_phone_notes_before_street_drop.sql": {
       "kind": "evidence",
       "means": "the five customers whose phone words lived only in the old street column each hold a phone note (ledger #346)",
