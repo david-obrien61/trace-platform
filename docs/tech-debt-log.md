@@ -4476,3 +4476,42 @@ serving `origin/main`'s head, and if not, for how long has it been behind?* — 
    without anyone's machine polling — the webhook would also say *why* a build did not start, which nothing
    we own can see today.
 3. ⚠️ The CAUSE is not known and is Vercel's to explain; the check does not fix it, it makes it visible.
+
+## #348 — 🔴 ONE ADDRESS GOOGLE CANNOT FIND KILLS THE DRIVER'S WHOLE ROUTE LINK, AND NOTHING SAYS WHICH (NEW 2026-09-18, ledger #351 — the top crew-link item, above cards D–G, by David)
+
+**Seen live, 2026-09-18 ~13:18–13:29, LAWNS Saturday 2026-09-19.** Testing a two-crew workaround, four stops were
+deselected and the other four routed for Team 1 (Freehill · Sappal · Thiry · Garzon). The route page showed a map and
+saved the order; **the texted Google Maps link would not open a route** — Google offered "open in Google Maps" and
+then could not find one address, and the WHOLE route failed, not just that stop.
+
+**Why — two resolvers that disagree (read from the code, not guessed).**
+- **The app's map** (`DeliveryRoute.tsx` → `RouteMap`) geocodes each address with the JS Geocoder and takes
+  `results[0]` **whatever its quality** — an approximate or partial match is accepted as a place. A stop that returns
+  nothing is dropped from the map silently (a console trace only, no line on screen).
+- **The driver's link** (`routeHandoff.buildMapsUrl`) is `https://www.google.com/maps/dir/<a>/<b>/<c>/…` built from
+  the **address TEXT**, not from what the app found. Google Maps re-searches every segment; **if any one fails, Google
+  fails the entire route.** So the app can route a stop the link then cannot.
+- **Evidence the app placed all four:** the save recorded **4** stops at 13:18:27. A stop the app cannot place is
+  dropped BEFORE the save (the saver takes only the optimiser's located stops), so a miss in the app would have saved 3.
+- **Which address:** our data cannot say — all eight are well-formed (street · city · TX · ZIP). **Most likely 153 Twin
+  Creek View Lane, Georgetown TX 78626 (Angela Garzon)** — captured by OCR at 09:56 the same morning, a street Google's
+  search may not know, or knows under a slightly different spelling, while the Geocoder returns an approximate place.
+  Confirm by typing that exact line into Google Maps on the phone. (Not checked against any outside geocoder from here:
+  that would send a customer's address to a third party.)
+
+**The fix (filed, not built) — "surface, don't decide":**
+1. **Build the driver's link from the positions the app already found** (lat,lng), not from text, so the driver gets
+   the route the app computed and saved.
+2. **A stop the app could not place is left out of the link and NAMED on the route page** — *"Not in this route: Angela
+   Garzon — 153 Twin Creek View Lane could not be found. Check the address or call the customer."* — never a dead link
+   with no explanation.
+3. **An approximate match is treated as not placed precisely** (the Geocoder's `partial_match` / location type), and
+   named the same way — otherwise the app routes to a ZIP centroid and says nothing.
+4. Tests: a fixture where one address geocodes and one does not; the link carries the located ones and the page names
+   the other.
+
+**What it cost besides the dead link — the two-crew workaround overwrote the day's plan.** The save model is ONE
+route per day: routing Team 1's four REPLACED Lauren's eight-stop plan (the other four lost their positions), and there
+is no way to save a Team 2 route. Lauren's plan is recoverable exactly — the audit log holds every saved order (her
+09:57:52 save: Freehill → Sappal → Thiry → Garzon → Dubec → Gustafson → Kossa → Raja). Two crews need teams on the
+stop; that is tech-debt #345's territory, not this item's.
