@@ -92,6 +92,21 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — PORT THE TEN BRANCH-ONLY FILINGS TO `main` NOW (a docs-only commit), OR MERGE THE BRANCHES?** Every remaining branch conflicts in the shared docs. Owner: ledger #353.
 - 🔴 **OPEN — THE RELOAD SEEDED STOCK ON FEES AGAIN.** Run `bffc7713`: 631 of 631 rows hold qty, at least 12 are fees by name. The reversal (`20260916_reverse_seed…`, in your checkout only) targets the undone run `eab7fbd2` and now does nothing. The underlying gap is tech-debt id 307, which exists on a branch only. Owner: ledger #353.
 - ✅ **FILED 2026-09-18 — [[R-164]]: the QuickBooks ingest infers install from the TC line; Lauren gets a delivery ↔ install control; every change is recorded.** Not a question — a ruling awaiting its build (after Saturday). Owner: tech-debt #342.
+**#351 — the route order is saved (build, NOT MERGED, `20260917e` NOT APPLIED)**
+- ✅ **ANSWERED 2026-09-18 — APPLIED, RATIFIED, and the wording ruled:** Lauren's screen *"Not routed yet — press Route this day."*; crew and sheet keep the text-order sentence. Owner: ledger #351.
+- 🔴 **OPEN — CARDS G AND H** (H on LAWNS, Saturday only). Owner: `crew-day-link-full-surface-test.md`.
+- ✅ **ANSWERED — ROUTE ORDER IS A GO-LIVE FEATURE, NOT A 🟡** (David, 2026-09-17). tech-debt #320 resolved by [[R-163]].
+**#349 — Edit and Add on every contact list (build, NOT MERGED)**
+- ✅ **ANSWERED 2026-09-18 — MERGE #349 approved by David**, after both migrations were applied and measured live. Owner: ledger #349.
+- 🔴 **OPEN — THE ADDRESS CHECK ON SAVE (tech-debt #323), sized ~1½–2 days, not built.** Which service (Census free/batched/84.9% vs Google +3.3 points, no batch, 30-day refetch) and where coordinates live (the coordinate-storage question). The ring map does not exist as data yet.
+- ✅ **ANSWERED 2026-09-17 — [[R-162]]: staff may ADD a phone or email, never Edit / Make main / Remove.** `20260917d` APPLIED 2026-09-18 (measured: `pg_policies`). Owner: tech-debt #317.
+- 🟡 **OPEN — MAY STAFF ADD AN ADDRESS?** [[R-162]] says phone or email; a counter hire taking a walk-in's delivery address cannot save it. Decide when LAWNS hires staff (it has none today). Owner: tech-debt #343.
+- 🟡 **OPEN — does the ruling extend to CHECKOUT?** There a typed phone REPLACES the main value, so it still needs `customers:update`. Owner: ledger #349.
+
+**#348 — a test-mode edit never blocks the wipe (migration WRITTEN, not applied)**
+- ✅ **ANSWERED — `20260917b` IS APPLIED**, measured by reading the live function (test-mode clause present). Tonight's reload ran on it: new run `bffc7713-d275-436c-bf8c-1ff29f3d14b9`; `eab7fbd2` is gone. Owner: ledger #348.
+- 🔴 **OPEN — NEXT GO-LIVE ITEM: a captured order does not re-attach after a reload.** Re-attach by `qb_customer_id`; needs a ruling on what a detached capture shows. Owner: tech-debt #322.
+**Lightning's hold list, checked against the registers 2026-09-18 (docs only, no ledger row; filed tech-debt #327–#341)**
 - 🟡 **OPEN — CREW ACCESS AFTER THE PILOT: keep the day link, or crew logins with a permission for Done?** Owner: tech-debt #329.
 - 🟡 **OPEN — WHICH TILES A PHONE SHOWS, PER DEVICE AND ROLE, AND A BOTTOM NAV.** Your design call (§6 r7 reserves the desktop grid to you). Owner: tech-debt #340.
 - 🟡 **OPEN — WHO RELEASES A HELD REVIEW ASK, AND FROM WHERE.** Nothing reads `review_ask_held_at`; blocked behind short-list item 3 (#270). Owner: tech-debt #328.

@@ -63,9 +63,13 @@ const cachedDumps = new Map();
  * `fixture` names another snapshot in the fixtures folder — the notes harness (ledger #346) uses
  * the 2026-09-17 PRE-DROP snapshot, because what it proves is what `20260915b` did to that schema.
  */
-export async function openLiveDb({ fixture } = {}) {
+export async function openLiveDb({ fixture, migrations = [] } = {}) {
   const file = fixture ? `${FIXTURE_DIR}/${fixture}` : FIXTURE;
-  const cachedDump = cachedDumps.get(file) ?? null;
+  // `migrations` are repo migrations APPLIED ON TOP of the snapshot — what a test needs when the
+  // behaviour it drives is not live yet (ledger #349: 20260917d's INSERT policy). The cache key
+  // carries them, so a run with and without them cannot share a dump.
+  const key = [file, ...migrations].join('|');
+  const cachedDump = cachedDumps.get(key) ?? null;
   const parsers = {
     [types.NUMERIC]: v => Number(v), [types.INT8]: v => Number(v),
     [types.TIMESTAMPTZ]: v => new Date(v.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00')).toISOString(),
@@ -83,9 +87,13 @@ export async function openLiveDb({ fixture } = {}) {
     try { await db.exec(s); }
     catch (e) { throw new Error(`live schema fixture: ${e.message}\n  in: ${s.slice(0, 160)}`); }
   }
+  for (const m of migrations) {
+    try { await db.exec(readFileSync(`${process.env.PATH_TEST_ROOT ?? process.cwd()}/supabase/migrations/${m}`, 'utf8')); }
+    catch (e) { throw new Error(`migration ${m} on the snapshot: ${e.message}`); }
+  }
   await db.exec(GRANTS);
   await db.exec(`ALTER DATABASE postgres SET search_path = public, extensions;`);
-  cachedDumps.set(file, await db.dumpDataDir('none'));
+  cachedDumps.set(key, await db.dumpDataDir('none'));
   return db;
 }
 

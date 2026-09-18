@@ -4,6 +4,15 @@
 result is different from what is written, **stop** and send it to Thunder before the next step.
 Where it says "SQL editor", use Supabase → SQL editor (never the table editor).
 
+> ⏰ **TIMING — run the reload TONIGHT or EARLY FRIDAY, before training.** The undo refuses while a
+> LIVE CAPTURE sits on an imported customer (a captured invoice or receipt is never removed), and
+> training is when those appear. Measured live 2026-09-17: **0** captured orders on imported
+> customers. Everything else people type while testing — phones, emails, addresses, practice orders —
+> is taken by the wipe and never blocks it (ledger #348).
+>
+> ✅ **Test on LAWNS as much as you like.** Typing, editing and practice orders during testing are
+> expected, and the reload clears them. Nothing here asks anyone to hold back.
+>
 > 🔴 **The product import INSERTS. Never press Import twice without an Undo in between** — a second
 > press adds a second copy of every product. (Customers are matched on their QuickBooks id and would
 > not double, but products would.)
@@ -46,8 +55,37 @@ END $$;
 **Expect** the error to read `DRY RUN (nothing kept)` followed by `"refused": false`,
 `"customers_deleted": 1936`, `"contact_rows_deleted": 4609`, `"inventory_deleted": 647`,
 `"unretired": 447`, and the three `practice_…` counts `0`.
-**If it says `"refused": true` → stop** and send the whole message (someone added something by hand to
-an imported customer or product since Thursday).
+**If it says `"refused": true` → do not run 3b.** The message names what blocked it. Run this to see
+each blocker in plain words, then send it to Thunder. **It only reads — it deletes nothing.**
+```sql
+WITH run AS (SELECT 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'::uuid AS biz,
+                    'eab7fbd2-04cd-45e5-b771-cbb07f662f6f'::uuid AS r)
+SELECT 'a captured or live order on an imported customer — never removed; the reload must wait for it to be re-attached'
+       AS what_is_blocking, o.id::text AS item, coalesce(o.notes, '(no number)') AS detail
+  FROM orders o JOIN customers c ON c.id = o.customer_id, run
+ WHERE o.business_id = run.biz AND c.import_run_id = run.r
+   AND NOT (o.order_kind = 'test' AND o.import_run_id = run.r)
+UNION ALL
+SELECT 'a delivery stop on an imported customer', d.id::text, coalesce(d.address_line1, '(no address)')
+  FROM deliveries d JOIN customers c ON c.id = d.customer_id, run
+ WHERE d.business_id = run.biz AND c.import_run_id = run.r
+UNION ALL
+SELECT 'a product from this import that has stock history (a count or a movement)', b.id::text, b.name
+  FROM business_inventory b JOIN business_inventory_ledger l ON l.inventory_id = b.id, run
+ WHERE b.business_id = run.biz AND b.import_run_id = run.r
+UNION ALL
+SELECT 'a phone, email or address someone typed onto an imported customer — only blocks while writes to QuickBooks are ON',
+       t.customer_id::text, t.value
+  FROM (SELECT customer_id, import_run_id, value FROM customer_phones
+        UNION ALL SELECT customer_id, import_run_id, value FROM customer_emails
+        UNION ALL SELECT customer_id, import_run_id, coalesce(line1, label) FROM customer_addresses) t
+  JOIN customers c ON c.id = t.customer_id, run
+ WHERE c.business_id = run.biz AND c.import_run_id = run.r AND t.import_run_id IS DISTINCT FROM run.r
+ORDER BY 1;
+```
+**What to do with it:** an order, a stop or a product with stock history means the reload waits (send it
+to Thunder). A typed phone, email or address blocks **only** if writes to QuickBooks are ON — turn them
+off in Settings and run 3a again; once `20260917b` is applied it never blocks at all.
 
 **3b · Real undo (SQL editor)** — only if 3a matched:
 ```sql
@@ -104,5 +142,33 @@ In the app: **Inventory** → search the name.
 not stock); there is **one** row for that product, not two.
 
 ---
-**If anything went wrong after step 5:** the new run can be undone the same way as step 3, with its
-own run id — ask Thunder for the exact line. Do **not** press Import again first.
+
+## 9 · TONIGHT'S RUN ID — the one the NEXT wipe uses
+
+**`bffc7713-d275-436c-bf8c-1ff29f3d14b9`** — the run the 2026-09-17 20:16 UTC import created
+(1,956 customers · 631 products). The old run `eab7fbd2` is gone: zero customers, zero products,
+zero contact rows, zero rows retired by it — measured read-only after the reload.
+
+**Use it, not `eab7fbd2`, for the next undo.** Dry run first — this block CANNOT change anything,
+because it always ends by raising, which rolls the whole thing back:
+
+```sql
+DO $$
+DECLARE r jsonb;
+BEGIN
+  r := public.undo_import_run(
+         'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'::uuid,
+         'bffc7713-d275-436c-bf8c-1ff29f3d14b9'::uuid);
+  RAISE EXCEPTION 'DRY RUN — nothing was kept. Result: %', r::text;
+END $$;
+```
+
+Read the `refused` value in the error text. `refused: false` means the real undo would run and
+what it would remove is listed beside it. `refused: true` names what is holding it.
+
+⚠️ **The starting-number seed does not change this.** In test mode the seed writes **no ledger
+row** (R-158 / #342), so the seeded rows carry no history and the undo still takes them.
+
+---
+**If anything went wrong after step 5:** undo the NEW run — step 9 has its id and the dry-run
+block. Do **not** press Import again first.

@@ -286,6 +286,7 @@ NAMED GAP = honest shell intended to fill on a stated horizon. Don't conflate th
 
 | # | Workaround | Introduced | Correct Architecture | Trigger for Repair |
 |---|---|---|---|---|
+| 343 | 🟡 **A STAFF MEMBER CAN ADD A PHONE OR AN EMAIL, BUT NOT AN ADDRESS.** [[R-162]] (David, 2026-09-17, restated 2026-09-18: *"a phone or email"*) opened the two INSERT policies for phones and emails only; `customer_addresses_member_insert` still needs `customers:create`. So a counter staff member taking a walk-in's **delivery address** cannot save it — the Addresses list offers them no Add. Correct per the ruling's wording; filed because the gap is real the day a counter hire takes a delivery. | 2026-09-18, ledger #349 — `20260917d` (APPLIED) left addresses out deliberately. | Decide whether a delivery address is *adding a way to reach them* (like a phone) or a destination that needs `customers:create`. If staff may add one: the same one-policy change as `20260917d` on `customer_addresses_member_insert`, the Add control unlocked in `ContactListsPanel` (`mayAddAddress`), CARD 30 rewritten, and a staff-add path test in `contacts.paths.mts`. Either way Edit / Make main / Remove stay on `customers:update`. | **When LAWNS hires staff.** Measured 2026-09-18: LAWNS has **no STAFF member** (one manager, two owners); the only staff on the platform are two test logins on Test Dave's. **File, do not build** — David's instruction. ✏️ First filed as #342 at 10:02; #342 had been reserved at 09:47 by ledger #353, so this later claim renumbered (R-148 clause 4). |
 | 342 | 🔴 **GO-LIVE (after Saturday 2026-09-19): QUICKBOOKS-INGESTED INSTALLS ARE TYPED AS DELIVERY, AND NOBODY CAN CHANGE A STOP'S TYPE ON SCREEN — [[R-164]].** Measured live 2026-09-18: all 16 QuickBooks-ingested LAWNS orders with a TC line are `delivery`; all 15 person-chosen orders with a TC line are `install`. An install typed as delivery gets no water monitor kit (#352), no install line on the load list, and never starts a warranty (R-143, tech-debt #268). | Filed 2026-09-18, ledger #353 (David's ruling) | ONE item, three parts: ① the ingest sets `install` when a TC line is present (never `delivery` from its absence); ② a delivery ↔ install control on the stop, permission-gated server-side; ③ every change writes a history row (who, when, from → to) that can be reviewed later. The existing 16 need the same correction, through ③, not a bare UPDATE. | After the Saturday pilot; before the next QuickBooks ingest is trusted for installs. |
 | 341 | 🟡 **ACORN FLATS HAVE NO INPUTS: cells per flat, mix per flat, sowing minutes and staking minutes are recorded nowhere.** Survival between rungs is already filed (ledger #330; `docs/open-questions.md` "six numbers only Terry can supply"); these four are not. The nearest hook is the per-size unit multiplier ("a flat = N plants"), named in `user_stories.md` and never built. | Filed 2026-09-18 from Lightning's hold list (validation pass, branch `docs/hold-list-validation`) | Operations figures beside the grow ladder, read by the uppot planner like the potting figures (R-89 setup + handling). | Before the first acorn sowing is planned in TRACE. |
 | 340 | 🟡 **MOBILE: WHICH TILES A PHONE SHOWS, PER DEVICE AND PER ROLE, AND A BOTTOM NAV, ARE NOT FILED.** The delivery, orders and zone-walk passes are in the story *"Lauren does the job twice, every delivery day"* (`user_stories.md`); breakpoint pass ① is ledger #305. §6 r7 says the desktop grid is a separate decision David is taking up later. | Filed 2026-09-18 from Lightning's hold list | One tile set chosen per breakpoint and per role from the shared breakpoint vocabulary (#305), plus a bottom nav for the phone — **David's design call**. | Before the delivery pass of the mobile build. |
@@ -4027,7 +4028,20 @@ already does that properly).
 **LIGHTNING'S LEAN (2026-09-17, recorded — David decides):** save it as a ship-to through `contactWriter`
 (a typed value not saved is a defect under §6 r21); at minimum, label the box **"not saved"**.
 
-## #317 — 🟡 STAFF AT CHECKOUT CANNOT ADD A PHONE OR EMAIL TO A PICKED CUSTOMER (NEW 2026-09-17, ledger #345 — decision pending David)
+## #317 — ✅ RULED 2026-09-17 BY DAVID ([[R-162]]) — STAFF MAY ADD, NEVER EDIT / MAKE MAIN / REMOVE (NEW 2026-09-17, ledger #345)
+
+**✅ DAVID'S RULING (2026-09-17):** *"STAFF MAY ADD a phone or email — never Edit, Make main or Remove.
+Adding cannot destroy anything, and refusing it means a counter staff member cannot write down a new
+mobile at all."* **Built on `fix/contact-list-edit-add` (ledger #349):** `20260917d` (WRITTEN, not
+applied) opens the phone and email INSERT policies to any member who may READ the customer; the address
+list stays `customers:create`; every UPDATE policy is untouched. The customer page offers Add to a
+reader and withholds Edit / Make main / Remove. Path test `customer-page.add`, red-first without the
+migration. ⚠️ **Checkout is a separate surface and is NOT changed by this:** typing over a picked
+customer's phone there still needs `customers:update` and is reported NOT SAVED otherwise, because at
+checkout the typed value REPLACES what is shown rather than adding a row. Say if that should follow
+the same rule.
+
+**WAS:**
 
 **What.** Ledger #345 saves typed contact details for a picked customer only when the caller holds
 `customers:update` (or is the owner). A STAFF member who types a new number gets **NOT SAVED** in red; the
@@ -4179,6 +4193,88 @@ choosing it inside a checkout handler would answer a question David has not been
 (a) that proxy (`installTPostsPerTree > 0`); (b) a boolean column on the rung; (c) a threshold
 volume in Operations config — which the 2026-09-16 ruling forbids. **The server path would also
 need its own ladder read, and a failed read must never block an order (§6 r6).**
+## #322 — 🔴 GO-LIVE: AFTER A RELOAD, CAPTURED ORDERS DO NOT RE-ATTACH TO THE RE-IMPORTED CUSTOMER (NEW 2026-09-17, ledger #348)
+
+**What.** A reload deletes the imported customers and imports them again, and they come back with NEW
+ids. A captured order (`order_kind = 'history'`, from an OCR invoice or the QuickBooks history ingest)
+points at the OLD id, so after a reload it either blocks the undo or is left pointing at a customer
+that is gone. David, 2026-09-16: **captured records are never removed — they must RE-ATTACH by
+`qb_customer_id` after a reload.**
+
+**Why it is a go-live item.** It is what stands between "test freely, reload whenever" and "the reload
+refuses once training starts" — the undo refuses today while any captured order sits on an imported
+customer (measured live 2026-09-17: 0, which is why tonight's reload is clear). After Friday's training
+there will be some.
+
+**Shape of the fix (not built).** The import already matches on `qb_customer_id`. Either (a) the undo
+detaches a captured order's `customer_id` (keeping the QuickBooks id on the order) and the import
+re-attaches it, or (b) orders carry `qb_customer_id` and the link is derived rather than stored. Both
+need a ruling on what a captured order shows while it is detached. **Owner:** David.
+
+## #323 — 🔴 AN ADDRESS IS SAVED WITH NO CHECK AT ALL, AND NOTHING KNOWS WHERE IT IS (FILED 2026-09-17, ledger #349 — NOT BUILT, David's direction)
+
+**What.** Nothing validates an address anywhere: `505 new street, leander` saved silently on
+2026-09-17 (David's own CARD 15 run). Customer addresses, ship-to sites and delivery stops all accept
+whatever is typed, and **no coordinate is stored anywhere** — proven: zero `lat`/`lng`/`geocode`/
+`geometry` columns in the whole migration corpus (the census recon measured this).
+
+**What David asked for (2026-09-17, to be built after Saturday).** On every address save — customer
+address, ship-to, stop — geocode it:
+- **found** → store the coordinates (where they are stored is undecided — no id) and show which **delivery ring** it
+  falls in (the ring map / $3.50 loaded mile, David 2026-09-12);
+- **not found** → say *"we can't find this address"*, **ALLOW the save**, and mark it **unverified** —
+  a new street may genuinely not be mapped yet. Surface it; do not decide for the person;
+- **unverified addresses carry a marker** on the delivery schedule and the day sheet.
+
+**What the two recons concluded** (David's own, 2026-09-15, in his checkout — read for this filing;
+both are RECON ONLY, uncommitted, nothing shipped):
+
+`docs/recon/census-geocode-2026-09-15/` — **the free federal geocoder, run against LAWNS's real 1,959
+QuickBooks customers.**
+- **84.9% of resolvable addresses matched** (1,217 of 1,433); 62.1% of all 1,959 got a coordinate.
+  The August 60-address sample said 85.0% — it held at 24× the volume, 0.1 points apart.
+- **The misses are geography, not data quality: 61% are new-construction streets** TIGER has not
+  absorbed — Liberty Hill misses **35.3%**, Austin **2.0%**. No cleaning recovers them.
+- **17 misses are ours**: 9 phone-in-street rows (a tighter rule catches all 9 — this build's contact
+  lists already move those to the phone list), 5 with no house number, 3 PO boxes.
+- **Free, no key, no quota, one batch:** all 1,433 in ONE multipart POST in **6.13 seconds**; the
+  documented ceiling is 10,000 per file. ⚠️ It returns rows in a different order — join on the id.
+- `Tie` returns no coordinate (8 rows) and `Non_Exact` (207) is a weaker match that must not be shown
+  as an exact one (D-9).
+
+`docs/recon/two-stage-geocode-2026-09-15/` — **"Google normalises, Census geocodes" — the verdict is
+that it does not pay.**
+- **The ceiling is +3.3 points.** 168 of 216 misses (78%) are TIGER coverage gaps no normaliser can
+  touch: a *perfect* stage ① takes 84.9% → 88.3%.
+- **Licensing is one unresolved clause,** Google Maps Service Specific Terms §6.3.2: caching is allowed
+  only where it is *"not used as a replacement for making an additional call"* — a stored spine is
+  exactly that. A lawyer's question, not cleared.
+- **Cost: the initial run is free** (10,000 free calls per SKU per month, then $5/1,000 — 1,433 calls
+  is 14.3% of the free tier). 🔴 **But Google has no batch endpoint** (1,433 separate calls, ~1–2
+  minutes at 25 QPS), and under §6.3.1 coordinates must be **deleted and re-fetched every 30 days** —
+  ~165 addresses (11.5% of the book) on a permanent monthly refresh job that exists nowhere today.
+- It also found stage ① can **destroy a good address** (a normaliser "correcting" a real new street).
+
+**Size (not built).** ~1½–2 days: a `geocode` seam + the census batch call (half a day, the recon's
+resolver is written), 6 columns + a status on `customer_addresses` and `deliveries` with a migration
+and a cap (half a day — the recon notes `customerAddresses.test.ts` §G is pinned to one migration file
+and must be repointed), the unverified marker on the two screens and the save copy (half a day), the
+ring lookup (half a day, and it needs the ring map as data — not yet anywhere).
+
+🔴 **LIBERTY HILL IS THE REQUIREMENT, NOT AN OBJECTION (David, 2026-09-17).** The census geocoder misses
+**35.3% of Liberty Hill** — Lauren's own town, because its streets are new. So *"we can't find this
+address — saved anyway, marked unverified"* **is the behaviour to build**, not a reason to wait for a
+better geocoder: a third of her home town's addresses will take that path on day one and must still save.
+
+⚠️ **THE TRIP-CHARGE HALF WAITS ON DATA THAT DOES NOT EXIST.** The ring map (the $3.50 loaded mile,
+David 2026-09-12) is not in the database, in a migration, or in any file — so "which ring is it in"
+cannot be built until the rings exist as data. The geocode-and-mark half does not wait on it.
+
+**Open, David's:** the geocoding service (Google vs self-hosted) and where the coordinates live.
+✏️ **Corrected 2026-09-18:** this entry first cited those two as "the geocoding-service question (no id yet)" and "the coordinate-storage question".
+No such items exist in the repo — the ids came from a prompt — and #327 has since been minted for
+an unrelated item (the product import inserts). Neither question has an id yet. The recons' recommendation is Census first — free, batched, 85% — with
+the misses shown as unverified rather than guessed at. **Nothing is built and nothing is chosen here.**
 
 ## #324 — 🟡 CLAUDE.md IS OVER ITS OWN BUDGET, AND THREE INVENTORY DOCS ARE THREE MONTHS STALE (NEW 2026-09-17, ledger #347 — David: file for after Saturday)
 

@@ -17,7 +17,9 @@ import { openLiveDb, restClient, installSupabaseShim } from './lib/liveDb.mjs';
 import submitHandler from '../../packages/cultivar-os/api/orders/submit';
 import createHandler from '../../packages/cultivar-os/api/customers/create';
 import qboRouter from '../../packages/cultivar-os/api/qbo/router';
-import { readContactLists, makeContactMain, retireContact, writeContactEdit } from '../../packages/shared/src/business-logic/contactWriter';
+import {
+  addContactRow, editContactRow, makeContactMain, readContactLists, retireContact, writeContactEdit,
+} from '../../packages/shared/src/business-logic/contactWriter';
 import { saveCustomerAddress, readCustomerAddresses } from '../../packages/shared/src/business-logic/customerAddresses';
 import { persistCustomerPatch, insertCustomer } from '../../packages/cultivar-os/src/components/customers/customerEdit';
 import { commitDeliveryIngest } from '../../packages/shared/src/quickbooks/deliveryIngestWriter';
@@ -56,7 +58,9 @@ async function path(id: string, what: string, body: (check: (ok: boolean, detail
 }
 
 async function freshDb() {
-  const db: any = await openLiveDb();
+  // 20260917d is WRITTEN, not applied (ledger #349 · tech-debt #317's ruling): the staff-add path
+  // is driven against the policy as this branch defines it, so the test fails until it is applied.
+  const db: any = await openLiveDb({ migrations: ['20260917d_staff_may_add_a_phone_or_email.sql'] });
   installSupabaseShim(db);
   (globalThis as any).__ACT_AS__ = null;
   await db.exec(`
@@ -80,8 +84,8 @@ const all = async (db: any, sql: string, p: unknown[] = []) => (await db.query(s
 
 /** A customer made the way the app makes one (no contact columns on the row), with contact through the writer. */
 async function customer(db: any, first: string, contact: { phone?: string; email?: string; billing?: Record<string, string> }, extra: Record<string, unknown> = {}) {
-  const row = await one(db, `INSERT INTO public.customers (business_id, first_name, last_name, source, customer_type, person_id)
-    VALUES ($1, $2, 'Smith', 'test', 'person', $3) RETURNING id`, [B, first, extra.person_id ?? null]);
+  const row = await one(db, `INSERT INTO public.customers (business_id, first_name, last_name, source, customer_type, person_id, import_run_id)
+    VALUES ($1, $2, 'Smith', 'test', 'person', $3, $4) RETURNING id`, [B, first, extra.person_id ?? null, extra.import_run_id ?? null]);
   const out = await writeContactEdit(service(db) as any, B, row.id, contact, { phone: 'replace', email: 'replace', billing: 'replace', source: 'test' });
   if (!out.ok) throw new Error(`fixture contact: ${out.error}`);
   return row.id as string;
@@ -113,7 +117,7 @@ async function lists(db: any, customerId: string, uid: string | null = MANAGER) 
   if (!out.ok) throw new Error(`the customer page could not read the lists: ${out.error}`);
   return out.lists;
 }
-const flat = (db: any, id: string) => one(db, `SELECT phone, email, billing_line1, billing_line2, billing_city FROM public.customers WHERE id = $1`, [id]);
+const flat = (db: any, id: string) => one(db, `SELECT phone, email, billing_line1, billing_line2, billing_city, billing_zip FROM public.customers WHERE id = $1`, [id]);
 const auditRows = (db: any, id: string) => all(db, `SELECT action, actor_user_id, outcome, detail FROM public.audit_log WHERE target_id = $1 ORDER BY created_at`, [id]);
 
 // Every network call fails loudly unless a test answers it — nothing leaves this process.
@@ -145,9 +149,12 @@ await path('checkout.new-customer', 'checkout, a new customer: typed phone, emai
   check(outcomes === 'addresses:kept_main,emails:kept_main,phones:kept_main', `confirmation results: ${outcomes}`);
 });
 
+const RUN = 'e1000000-0000-4000-8000-00000000000e';   // #348: an import run, for the tagging checks
+
 await path('checkout.attached-customer', '🔴 CLV-20260917-1769 — checkout with a customer attached (ScanOrder) and a DIFFERENT phone typed: the new number is in the Phones list, the original stays main', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'john', { phone: '(512) 555-1111', email: 'john@example.com' });
+  // An IMPORTED customer (#348): this tenant is in test mode, so what is typed here rides the run.
+  const id = await customer(db, 'john', { phone: '(512) 555-1111', email: 'john@example.com' }, { import_run_id: RUN });
   const res = await submit(orderBody({ first_name: 'john', last_name: 'Smith', email: 'john@example.com', phone: '(222) 333-8080' }, id), MANAGER);
   check(res.statusCode === 200 && !!res.body?.orderId, `order not created: ${res.statusCode} ${JSON.stringify(res.body)?.slice(0, 200)}`);
   const order = await one(db, `SELECT customer_id FROM public.orders WHERE id = $1`, [res.body?.orderId]);
@@ -164,6 +171,9 @@ await path('checkout.attached-customer', '🔴 CLV-20260917-1769 — checkout wi
   check(log.some((a: any) => a.action === 'contact.add' && a.actor_user_id === MANAGER && a.detail.value === '(222) 333-8080'),
     `no change-log row for the added number: ${JSON.stringify(log)}`);
   check((await one(db, `SELECT count(*)::int n FROM public.customers`)).n === 1, 'a second customer was created');
+  // #348 — the typed number carries the customer's import run, so the import's undo takes it back.
+  const tag = await one(db, `SELECT import_run_id FROM public.customer_phones WHERE customer_id = $1 AND value = '(222) 333-8080'`, [id]);
+  check(tag?.import_run_id === RUN, `the typed phone does not carry the import run (${tag?.import_run_id ?? 'null'}) — a test-mode edit must never survive the wipe`);
 });
 
 await path('checkout.picked-customer', 'checkout, a customer picked in the checkout search (no person link, as every imported customer): the order and the typed phone go to THAT customer, no duplicate', async (check) => {
@@ -258,7 +268,7 @@ await path('ocr.existing-customer', 'invoice capture for a customer already on f
 
 await path('editor.update', 'customer editor, Save with a changed phone, email and street: the new values are main, the old ones retired (kept), the change log names the editor', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'Eddie', { phone: '(512) 555-0700', email: 'old@example.com', billing: { line1: '1 Old St', city: 'Leander' } });
+  const id = await customer(db, 'Eddie', { phone: '(512) 555-0700', email: 'old@example.com', billing: { line1: '1 Old St', city: 'Leander' } }, { import_run_id: RUN });
   (globalThis as any).__ACT_AS__ = MANAGER;
   const out = await persistCustomerPatch({ id, businessId: B, patch: { phone: '(512) 555-0777', email: 'new@example.com', billing_line1: '2 New St' } });
   check(out.error === null, `save error: ${out.error}`);
@@ -271,6 +281,9 @@ await path('editor.update', 'customer editor, Save with a changed phone, email a
   check(out.contact.some(r => r.list === 'phones' && r.outcome === 'removed') && out.contact.some(r => r.list === 'phones' && r.outcome === 'kept_main'), `results: ${JSON.stringify(out.contact)}`);
   const log = await auditRows(db, id);
   check(log.filter((a: any) => a.actor_user_id === MANAGER).length >= 3, `change log: ${JSON.stringify(log)}`);
+  // #348 — the editor's new rows ride the customer's import run while the business is in test mode.
+  const tags = await all(db, `SELECT import_run_id FROM public.customer_phones WHERE customer_id = $1 AND active`, [id]);
+  check(tags.every((t: any) => t.import_run_id === RUN), `an edited phone is untagged (${JSON.stringify(tags)})`);
 });
 
 await path('editor.create', 'customer editor, Add Customer with a phone and email: both kept and shown', async (check) => {
@@ -296,6 +309,70 @@ await path('editor.no-permission', 'customer editor used by someone who may only
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 // CUSTOMER PAGE LISTS (ContactListsPanel → makeContactMain / retireContact)
 // ═════════════════════════════════════════════════════════════════════════════════════════════
+
+await path('customer-page.add', 'customer page → Add: a typed phone, email and address appear in their lists, and the first one is the main one', async (check) => {
+  const db = await freshDb();
+  const id = await customer(db, 'Ada', {});
+  const api = restClient(db, { uid: MANAGER }) as any;
+  const p1 = await addContactRow(api, { businessId: B, customerId: id, list: 'phones', actorUserId: MANAGER, patch: { value: '(512) 555-1500' } });
+  check(p1.ok && p1.result.outcome === 'kept_main', `the first phone is the main one: ${JSON.stringify(p1.result)}`);
+  const p2 = await addContactRow(api, { businessId: B, customerId: id, list: 'phones', actorUserId: MANAGER, patch: { value: '(512) 555-1501', label: 'mobile' } });
+  check(p2.ok && p2.result.outcome === 'kept_additional', `the second is additional: ${JSON.stringify(p2.result)}`);
+  const e1 = await addContactRow(api, { businessId: B, customerId: id, list: 'emails', actorUserId: MANAGER, patch: { value: 'ada@example.com' } });
+  const a1 = await addContactRow(api, { businessId: B, customerId: id, list: 'addresses', actorUserId: MANAGER, patch: { kind: 'billing', line1: '12 Add St', city: 'Leander', state: 'TX', zip: '78641' } });
+  check(e1.ok && a1.ok, `email/address add: ${JSON.stringify([e1.result, a1.result])}`);
+  const l = await lists(db, id);
+  check(l.phones.length === 2 && l.phones.find(x => x.is_main)?.value === '(512) 555-1500', `Phones: ${JSON.stringify(l.phones)}`);
+  check(l.phones.some(x => x.label === 'mobile'), 'the label typed with the number was kept');
+  check(l.emails[0]?.value === 'ada@example.com' && l.addresses[0]?.value.startsWith('12 Add St'), `lists: ${JSON.stringify(l)}`);
+  const f = await flat(db, id);
+  check(f.phone === '(512) 555-1500' && f.email === 'ada@example.com' && f.billing_city === 'Leander', `customer row: ${JSON.stringify(f)}`);
+  const dup = await addContactRow(api, { businessId: B, customerId: id, list: 'phones', actorUserId: MANAGER, patch: { value: '512.555.1500' } });
+  check(!dup.ok && /already on this customer/.test(dup.result.reason ?? ''), `the same number again is refused in words: ${JSON.stringify(dup.result)}`);
+  check((await auditRows(db, id)).some((a: any) => a.action === 'contact.add' && a.actor_user_id === MANAGER), 'no change-log row for the add');
+  // 🔴 tech-debt #317, RULED by David 2026-09-17: STAFF MAY ADD a phone or an email — adding cannot
+  // destroy anything, and refusing it means a counter staff member cannot write down a new mobile.
+  const staffApi = restClient(db, { uid: STAFF }) as any;
+  const sPhone = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'phones', actorUserId: STAFF, patch: { value: '(512) 555-1599' } });
+  check(sPhone.ok && sPhone.result.outcome === 'kept_additional', `staff can ADD a phone: ${JSON.stringify(sPhone.result)}`);
+  const sEmail = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'emails', actorUserId: STAFF, patch: { value: 'staff@example.com' } });
+  check(sEmail.ok, `staff can ADD an email: ${JSON.stringify(sEmail.result)}`);
+  check((await lists(db, id)).phones.some(x => x.value === '(512) 555-1599'), 'the number staff added is in the Phones list');
+  // …and no further. An ADDRESS is the delivery and billing destination and stays on customers:create.
+  const sAddr = await addContactRow(staffApi, { businessId: B, customerId: id, list: 'addresses', actorUserId: STAFF, patch: { kind: 'shipping', line1: '1 Staff Rd', city: 'Leander' } });
+  check(!sAddr.ok && sAddr.result.outcome === 'not_saved', `staff cannot add an ADDRESS: ${JSON.stringify(sAddr.result)}`);
+  const mainRow = (await lists(db, id)).phones.find(x => x.is_main)!;
+  const sMain = await makeContactMain(staffApi, { businessId: B, customerId: id, list: 'phones', rowId: sPhone.result.value ? (await lists(db, id)).phones.find(x => x.value === '(512) 555-1599')!.id : mainRow.id, actorUserId: STAFF });
+  check(!sMain.ok, `staff cannot Make main: ${JSON.stringify(sMain.result)}`);
+  const sRemove = await retireContact(staffApi, { businessId: B, customerId: id, list: 'phones', rowId: mainRow.id, actorUserId: STAFF });
+  check(!sRemove.ok, `staff cannot Remove: ${JSON.stringify(sRemove.result)}`);
+  check((await lists(db, id)).phones.find(x => x.is_main)?.value === '(512) 555-1500', 'and the main number is untouched by staff');
+});
+
+await path('customer-page.edit', 'customer page → Edit: a typo is corrected in place — the row keeps its place, and an address can have every field changed', async (check) => {
+  const db = await freshDb();
+  const id = await customer(db, 'Tess', { phone: '(512) 555-1600', email: 'typo@example.com', billing: { line1: '505 new street', city: 'leander' } });
+  const api = restClient(db, { uid: MANAGER }) as any;
+  const before = await lists(db, id);
+  const e1 = await editContactRow(api, { businessId: B, customerId: id, list: 'phones', rowId: before.phones[0].id, actorUserId: MANAGER, patch: { value: '(512) 555-1601', label: 'office' } });
+  check(e1.ok && e1.result.outcome === 'kept_main', `the corrected number is still the main one: ${JSON.stringify(e1.result)}`);
+  const e2 = await editContactRow(api, { businessId: B, customerId: id, list: 'addresses', rowId: before.addresses[0].id, actorUserId: MANAGER,
+    patch: { label: 'Billing', kind: 'billing', line1: '505 New Street', line2: 'Suite 2', city: 'Leander', state: 'TX', zip: '78641' } });
+  check(e2.ok, `address edit: ${JSON.stringify(e2.result)}`);
+  const after = await lists(db, id);
+  check(after.phones.length === 1 && after.phones[0].id === before.phones[0].id && after.phones[0].value === '(512) 555-1601' && after.phones[0].label === 'office',
+    `the same row was corrected, not replaced: ${JSON.stringify(after.phones)}`);
+  check(after.addresses[0].value === '505 New Street, Suite 2, Leander, TX 78641', `Addresses: ${JSON.stringify(after.addresses)}`);
+  const f = await flat(db, id);
+  check(f.phone === '(512) 555-1601' && f.billing_zip === '78641' && f.billing_line2 === 'Suite 2', `customer row followed the edit: ${JSON.stringify(f)}`);
+  check((await auditRows(db, id)).filter((a: any) => a.action === 'contact.edit').length === 2, 'each edit writes a change-log row');
+  const blank = await editContactRow(api, { businessId: B, customerId: id, list: 'phones', rowId: after.phones[0].id, actorUserId: MANAGER, patch: { value: '   ' } });
+  check(!blank.ok && /use Remove/.test(blank.result.reason ?? ''), `a blank is refused in words, not saved: ${JSON.stringify(blank.result)}`);
+  // #317's ruling is ADD-only: a staff member may never EDIT what is there.
+  const staff = await editContactRow(restClient(db, { uid: STAFF }) as any, { businessId: B, customerId: id, list: 'phones', rowId: after.phones[0].id, actorUserId: STAFF, patch: { value: '(512) 555-1699' } });
+  check(!staff.ok, `staff cannot edit: ${JSON.stringify(staff.result)}`);
+  check((await lists(db, id)).phones[0].value === '(512) 555-1601', 'and nothing changed');
+});
 
 await path('customer-page.make-main', 'customer page → Phones → Make main: that number is main everywhere (customer row too) and the change is logged', async (check) => {
   const db = await freshDb();
@@ -345,7 +422,7 @@ await path('customer-page.no-permission', 'customer page read by someone who may
 
 await path('stop.save-site', 'delivery stop → Save as a site: the site is in the Addresses list, and the phone, email and billing street are unchanged', async (check) => {
   const db = await freshDb();
-  const id = await customer(db, 'Sid', { phone: '(512) 555-1200', email: 'sid@example.com', billing: { line1: '1 Bill St', city: 'Leander' } });
+  const id = await customer(db, 'Sid', { phone: '(512) 555-1200', email: 'sid@example.com', billing: { line1: '1 Bill St', city: 'Leander' } }, { import_run_id: RUN });
   const api = restClient(db, { uid: MANAGER }) as any;
   const book = await readCustomerAddresses(api, B, id);
   const out = await saveCustomerAddress(api, { businessId: B, customerId: id, label: 'Job site', address: { line1: '9 Site Rd', city: 'Austin', zip: '78701' }, existing: book.ok ? book.sites : [] });
@@ -354,6 +431,9 @@ await path('stop.save-site', 'delivery stop → Save as a site: the site is in t
   check(l.addresses.some(a => a.value.startsWith('9 Site Rd') && !a.is_main), `Addresses: ${JSON.stringify(l.addresses)}`);
   const f = await flat(db, id);
   check(f.phone === '(512) 555-1200' && f.email === 'sid@example.com' && f.billing_line1 === '1 Bill St', `customer row: ${JSON.stringify(f)}`);
+  // #348 — a site saved during testing rides the import run too.
+  const site = await one(db, `SELECT import_run_id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '9 Site Rd'`, [id]);
+  check(site?.import_run_id === RUN, `the saved site does not carry the import run (${site?.import_run_id ?? 'null'})`);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════

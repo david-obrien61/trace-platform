@@ -441,8 +441,8 @@ SELECT c.id, c.billing_line1 AS flat, a.line1 AS list
 ---
 
 ### CARD 15 — Test Dave's, checkout: a second phone is KEPT, the first stays main
-STATUS: owed
-LAST-PROVEN: —
+STATUS: covered
+LAST-PROVEN: 2026-09-17 (David, on `249b772`) — john smith shows `(111) 222-3333` **Main** and `(222) 333-8080`, and both addresses, the new street as **Billing 2**. Nothing lost.
 DEVICE: phone
 COVERS: ledger #345
 
@@ -600,6 +600,79 @@ COVERS: ledger #345
 
 ---
 
+### CARD 26 — Test Dave's, customer page: correct a typo with Edit
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #349
+
+1. Open **Customers → john smith**. In **Phones**, tap **Edit** on the second number.
+2. Change a digit, type `mobile` in the "what kind" box, and tap **Save changes**.
+3. Read the **Last change** box, then reload the page.
+
+**PASS:** the row shows the corrected number with `mobile` beside it, **in the same place in the list** (it was corrected, not removed and re-added), and the **Main** number is untouched. After a reload it still reads that way.
+
+---
+
+### CARD 27 — Test Dave's, customer page: Add a phone, an email and an address
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #349
+
+1. On a customer with no phone (add one from **Customers → Add Customer** if you need to), open their page.
+2. In **Phones**, tap **+ Add a phone**, type a number, tap **Save**.
+3. In **Emails**, tap **+ Add an email**, type one, tap **Save**.
+4. In **Addresses**, tap **+ Add an address**, name it `Job site`, choose **Delivery site**, type a street and city, tap **Save**.
+5. Reload, then look at the line under the customer's name.
+
+**PASS:** each one appears in its list; the first phone and email show **Main**; the line under the name shows that phone and email. The address shows as a **delivery site**, and the billing address (if any) is unchanged.
+
+---
+
+### CARD 28 — Test Dave's: the same number twice is refused in words
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #349
+
+1. On a customer with a phone, tap **+ Add a phone** and type the **same** number they already have (any spelling — dots, dashes, brackets).
+2. Tap **Save**.
+
+**PASS:** a red line says the number was **NOT SAVED — that one is already on this customer**, the list still shows it once, and nothing else changed.
+
+---
+
+### CARD 29 — The Edit customer form points at the lists
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: desktop
+COVERS: ledger #349
+
+1. **Customers** → open a customer's **Edit record**.
+2. Read the line under **Contact**.
+3. Tap the link in it.
+
+**PASS:** the line says these are the customer's **main** number and email, and the link opens that customer's page where **Phones**, **Emails** and **Addresses** are listed. (If you had typed something unsaved, it asks first.)
+
+---
+
+### CARD 30 — Test Dave's, as STAFF: add a number, and nothing else
+STATUS: owed
+LAST-PROVEN: —
+DEVICE: phone
+COVERS: ledger #349 · tech-debt #317 · [[R-162]]
+
+⚠️ Needs a STAFF login on Test Dave's, and `20260917d` applied.
+
+1. Signed in as the STAFF member, open **Customers** → a customer → their page.
+2. In **Phones**, tap **+ Add a phone**, type a number, tap **Save**.
+3. Look at the buttons on the rows, and at **Addresses**.
+
+**PASS:** the number is added and shows in the Phones list. **No row offers Edit, Make main or Remove**, and **Addresses has no Add** — with one line saying a staff member can see these details and add a phone or an email, and that changing one needs permission to edit customers.
+
+---
+
 ### CARD 14 — 🔴 LAWNS, AND ONLY AFTER EVERY CARD ABOVE IS GREEN
 STATUS: needs-test
 LAST-PROVEN: —
@@ -614,6 +687,6 @@ nobody has designed yet**, which is the thing OP-14's `needs-test` state exists 
 
 ---
 
-> **COVERAGE: 0 of 29.** Thunder may never mark a card `covered` — only David's live run flips one,
-> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–24 need the
+> **COVERAGE: 2 of 34.** Thunder may never mark a card `covered` — only David's live run flips one,
+> with a date. **Cards 1–6 (with 3b, 4b, 4c, 5a) and 12–13 are SQL and need no deploy; cards 7–11 and 15–30 need the
 > build in front of you, and GATE 0 is what settles which build that is.**

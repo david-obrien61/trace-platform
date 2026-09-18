@@ -110,7 +110,23 @@
 - 🔴 **Owner-prove in progress** (GATE 0 → 15 → 18 → 20, 21, 23; 19/22 need staff/manager logins). Then step i (snapshot proof) and step j (`20260915b` + CARD 6).
 - 🔴 **GO-LIVE ITEM FILED: tech-debt #319 — finishing a stop does not fulfil its order** (automatic SPM consumption depends on it). Pending David: #314 · #316 · #317 · #318 (leans recorded).
 
-### 🔴 NEXT GO-LIVE ITEM (after the #345 merge) — REGISTER ORDERS, THEN THE PRODUCT IMPORT UPDATE — THE PRODUCT IMPORT UPDATES, IT DOES NOT DUPLICATE · NOT STARTED
+### 🟡 PUSHED, NOT MERGED — #349 (`fix/contact-list-edit-add`, 2026-09-17) — **EDIT AND ADD ON EVERY CONTACT LIST**
+
+- 🟡 **BUILDER-COMPLETE.** Edit on every row (value, label, every address field), Add on every list, through `contactWriter`; two new registered paths, 21/21 green; the Edit customer form gains one line + link to the lists. CARD 15 ✅ **covered** (David, `249b772`); cards 26–29 owed.
+- ✅ **tech-debt #317 RULED ([[R-162]]) and built:** staff may ADD a phone or email — `20260917d` WRITTEN, NOT APPLIED.
+- 🔴 **Carries #348** (`20260917b`, in David's folder, unapplied). Merge waits on David.
+- 🔴 **FILED, NOT BUILT: tech-debt #323 — the address check on save** (geocode → ring, or "we can't find this address" + unverified marker). Sized ~1½–2 days off David's 2026-09-15 recons; service choice the geocoding-service question and coordinate home the coordinate-storage question are his.
+
+### 🟡 PUSHED, NOT MERGED — #348 (`fix/undo-test-edits`, 2026-09-17) — **A TEST-MODE EDIT NEVER BLOCKS THE WIPE**
+
+- 🟡 **BUILDER-COMPLETE. `20260917b` WRITTEN, NOT APPLIED** — in test mode the undo takes every contact row on a run customer; writes on → today's refusal; a captured order refuses in both modes. [[R-160]]. 15/15 probes, red-first.
+- ✅ **Not a blocker for tonight's reload** (live: 0 typed contact rows on imported customers, 0 orders on run customers).
+
+### 🔴 NEXT GO-LIVE ITEM — CAPTURED ORDERS RE-ATTACH AFTER A RELOAD (tech-debt #322) · NOT STARTED
+
+- David, 2026-09-16: captures are never removed and must re-attach by `qb_customer_id`. Today a captured order on an imported customer makes the undo refuse, so after Friday's training the reload stops working. Needs David's ruling on what a detached capture shows.
+
+### 🔴 THEN — REGISTER ORDERS, THEN THE PRODUCT IMPORT UPDATE — THE PRODUCT IMPORT UPDATES, IT DOES NOT DUPLICATE · NOT STARTED
 
 - Filed 2026-09-16 by David. **The QuickBooks product import matches existing rows on
   `(business_id, qb_item_id)` and UPDATES them instead of inserting; inactive QuickBooks items are not

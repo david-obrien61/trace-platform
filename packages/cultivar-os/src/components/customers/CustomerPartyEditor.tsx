@@ -241,6 +241,22 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
 
         {/* ── CONTACT ── */}
         <div style={groupTitle}>Contact</div>
+        {/* 🔴 #349 — ONE LINE, NOT A SECOND LIST SURFACE (David's choice (b), 2026-09-17). These two
+            boxes are the MAIN number and the MAIN email (the database derives them from the customer's
+            lists); a customer can hold more. Showing the full lists here as well would be a SECOND
+            edit surface for one fact — STD-011, and the drift it causes is what ledger #335 spent a
+            week removing. The lists live in ONE place, the customer's own page, and this says so and
+            takes you there. Typing in these boxes still works exactly as before: it replaces the main
+            value and keeps the old one on file. */}
+        {!creating && (
+          <p style={{ fontSize: '0.8rem', color: '#6b7280', margin: '0 0 10px' }}>
+            This is the customer&apos;s <strong>main</strong> number and email —{' '}
+            <a href={`/customers/${draft.id}`} style={{ color: '#27500A', fontWeight: 700 }}
+               onClick={e => { if (dirty && !window.confirm('Leave this form? Your unsaved changes will be lost.')) e.preventDefault(); }}>
+              see Phones, Emails and Addresses on their page
+            </a>{' '}for the rest.
+          </p>
+        )}
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
             <label style={SS.label}>Email</label>

@@ -54,7 +54,9 @@
         "commitCustomerImport",
         "persistCustomerPatch",
         "insertCustomer",
-        "commitDeliveryIngest"
+        "commitDeliveryIngest",
+        "editContactRow",
+        "addContactRow"
       ],
       "tests": "scripts/path-tests/contacts.paths.mts",
       "paths": [
@@ -183,6 +185,26 @@
           "shown": "editor → red NOT SAVED line"
         },
         {
+          "id": "customer-page.add",
+          "what": "Customer page → Phones / Emails / Addresses → Add (a number, an email or an address typed there)",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "ContactListsPanel.save (kind 'add') → addContactRow",
+          "shown": "customer page → the new row in its list (main when it is the first, additional otherwise)"
+        },
+        {
+          "id": "customer-page.edit",
+          "what": "Customer page → Edit on a row (a phone's or email's value and label; every field of an address)",
+          "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
+          "files": [
+            "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
+          ],
+          "chain": "ContactListsPanel.save (kind 'edit') → editContactRow",
+          "shown": "customer page → the corrected row, still in the same place in its list"
+        },
+        {
           "id": "customer-page.make-main",
           "what": "Customer page → Phones / Emails / Addresses → Make main",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#async function act",
@@ -238,13 +260,13 @@
         },
         {
           "id": "qbo.import-undo",
-          "what": "QuickBooks import undo (owner) — removes the run's contact rows with its customers",
+          "what": "QuickBooks import undo (owner) — removes the run's contact rows with its customers; in test mode it also removes rows a person typed onto them",
           "at": "packages/cultivar-os/api/qbo/router.ts#async function handleBooksUndo",
           "files": [
             "packages/cultivar-os/api/qbo/router.ts",
             "packages/shared/src/quickbooks/customerImportWriter.ts"
           ],
-          "chain": "router books-undo → undo_import_run (20260916d) · library: removeRunContactRows",
+          "chain": "router books-undo → undo_import_run (20260916d; 20260917b: in test mode it takes every contact row on a run customer, tagged or not — ledger #348) · library: removeRunContactRows",
           "shown": "the import panel's undo report"
         },
         {
@@ -350,7 +372,12 @@
           "why_not_through_the_writer": "a one-time SQL data fix applied by David in the SQL editor, before 20260915b drops the column it reads; contactWriter has no path from customers.address_line1 and must not grow one for a column that is about to go",
           "test": "scripts/sql-harness/notes-before-drop-346.pglite.mjs (npm run verify:notes-before-drop)"
         }
-      ]
+      ],
+      "testModeRunTag": {
+        "what": "while a business is in test mode, a phone/email/address added to a customer that carries an import_run_id is stamped with that run id (contactWriter.testModeRunTag), so the import's undo takes it back",
+        "why": "David, 2026-09-16 (restated 2026-09-17): the wipe must work regardless of what users entered during testing; only live captures are never removed",
+        "tests": "contacts.paths.mts — checkout.attached-customer, editor.update, stop.save-site each assert the tag; scripts/sql-harness/undo-test-mode-edits-348.pglite.mjs proves the undo side (npm run verify:undo-test-edits)"
+      }
     },
     {
       "id": "stop-progress",
