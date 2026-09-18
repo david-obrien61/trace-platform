@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 3 of 11 covered** (0, 0b, A — David) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 4 of 11 covered** (0, 0b, A, C — David) (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -111,6 +111,7 @@ SELECT p.proname,
 
 ## CARD B — Start and Done a stop; the schedule shows the times and the name
 **STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+⚠️ **2026-09-18 10:50–10:51, reported as CARD B — BUT THE TAP LOG SHOWS BOTH TAPS CAME THROUGH THE OFFICE DOOR** (the schedule's Start this stop / Mark done: `device_id = app-session`, no crew link, recorded as the member name *David OBrian*). That re-proves the office path (CARD 0b's) — held ask, order not fulfilled — but **not this card, whose point is the PHONE → Lauren's schedule path the driver uses.** Stays `owed` until a tap made on the crew link appears on the schedule under the name typed on the phone.
 1. On the phone page from CARD A, on STOP 1, tap **Start**. Wait at least a minute.
 2. Tap **Done**.
 3. On your computer, refresh **Delivery → Schedule** and find that stop.
@@ -132,7 +133,8 @@ SELECT p.proname,
 ---
 
 ## CARD C — the page shows no prices
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David · Test Dave's · `0bcb467 · prod`)
+✅ **PASSED:** no prices anywhere on the phone page.
 1. On the phone page, scroll through every stop.
 2. Compare with the same order on the computer (**Orders → the order**), which does show prices.
 
