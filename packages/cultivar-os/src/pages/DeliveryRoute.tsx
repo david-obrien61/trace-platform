@@ -473,7 +473,10 @@ export function DeliveryRoute() {
     // from it. (It was previously assembled twice — a bare address list for the URL and this model
     // for the map — which is precisely the parallel-copy shape that let the two drift apart.)
     const stopModels: RouteStop[] = selectedCandidates
-      .map(c => ({ label: c.label, address: c.address }))
+      // `id` rides along so the OPTIMISED order can be saved (ledger #351). It is the candidate's
+      // own id — a stop in `?date=` mode, an order in the legacy mode — and only the day mode's
+      // ids are ever written, cross-checked against the day's read before the save (see saveOrder).
+      .map(c => ({ id: c.id, label: c.label, address: c.address }))
       .filter(s => s.address.length > 0);
 
     if (stopModels.length === 0) return;
