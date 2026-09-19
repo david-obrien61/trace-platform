@@ -4423,7 +4423,7 @@ per action (as for every other tap) records who undid it.
 
 **Ranked against go-live (Lauren running more than one truck a day):** 1 and 2 are the foundation. Then 5 and 4, because each truck loads and drives on its own. Then 6, which is display only. 3 waits on the ruling.
 
-## #346 — 🟡 THE LOAD SHEET SHOULD READ THE WAY THE TRAILER IS LOADED: BULK FIRST, THEN THE STOPS (NEW 2026-09-18 — ON HOLD, NOT BUILT; no ledger row)
+## #346 — ✅ BUILT 2026-09-18 BY LEDGER #355 (branch `feat/load-list-bulk-first`, not merged — David's call) — WAS: 🟡 THE LOAD SHEET SHOULD READ THE WAY THE TRAILER IS LOADED: BULK FIRST, THEN THE STOPS (NEW 2026-09-18 — ON HOLD, NOT BUILT; no ledger row)
 
 **Held until Lauren has seen the current sheet** (David, 2026-09-18). The current layout was proven on paper the same day: CARD 6 and CARD 19 passed on `f9f3b8a · prod`.
 
@@ -4515,3 +4515,20 @@ route per day: routing Team 1's four REPLACED Lauren's eight-stop plan (the othe
 is no way to save a Team 2 route. Lauren's plan is recoverable exactly — the audit log holds every saved order (her
 09:57:52 save: Freehill → Sappal → Thiry → Garzon → Dubec → Gustafson → Kossa → Raja). Two crews need teams on the
 stop; that is tech-debt #345's territory, not this item's.
+
+## #349 — 🔴 TRUNK PROTECTION IS THREE PRODUCTS, AND THE SHEET CANNOT SAY WHICH ONE TO LOAD (NEW 2026-09-18 — FILED, NOT BUILT; measured with ledger #356)
+
+**What David said (from the physical stock, 2026-09-18).** Three products, each a flat tube, one per tree, no cutting, **chosen by the tree's caliper**: **Plantra bark protector 3"** (part TBCSOW-36) $13 · **Plantra tree guard 4"** $15 · **green mesh tube, over 4"** $20. The page-1 line prints *"2 trunk protection"* without saying which, so the yard can load the wrong sleeve.
+
+**Measured live 2026-09-18.**
+- **The catalogue holds ONE item: "Trunk Protection"** (QuickBooks item 191, $10, no size). No Plantra 3", no tree guard 4", no mesh item, and **TBCSOW-36 appears nowhere** — not in the catalogue, not on any line.
+- **The whole LAWNS book holds two trunk-protection lines,** and the product is only in their free text and price: **Saturday 2026-09-19, Chris Freehill — "Trunk Protection - Green Mesh" × 2 at $20** · **2026-10-03 — "Trunk Protection" × 1 at $13** (the Plantra 3" price).
+- On Saturday's sheet the stop block prints Freehill's line as written, so **"Green Mesh" IS on the paper — on page 2, not on the page-1 total.**
+- 🔴 **A CONTRADICTION FOR LAUREN, NOT DECIDED HERE:** Freehill's two trees are **30 gal** (Monterrey Oak, Chinese Pistache), which the caliper ladder (ledger #356) puts at **1.5–2.5 in** — and the order bills **green mesh, the over-4" sleeve.** Either mesh is used on smaller trees for another reason (deer? sun?), or the caliper rule is not the whole rule.
+
+**What it takes, NEED → WANT.**
+1. **Cheapest (~1 h, no data change):** the page-1 line groups trunk protection by its line text — *"2 trunk protection — Green Mesh"* — and a bare "Trunk Protection" prints *"size not stated on the order"*. Honest, but it depends on free text.
+2. **Right (needs Lauren in QuickBooks):** three items, one per product (e.g. TP3 · TP4 · TPM), so the ORDER says which; the load list then prints one line per product. Depends on the code join (order line → catalogue row) or on recognising three names.
+3. **Checked (after ledger #356 is applied):** the sheet compares the billed sleeve with the tree's rung caliper and flags a mismatch (a 3" sleeve billed for a 65 gal tree). It needs the three sleeves' sizes as configuration and **the Freehill question answered first.**
+
+**Blocker:** the Freehill contradiction; and Lauren creating the three items if option 2 is chosen.

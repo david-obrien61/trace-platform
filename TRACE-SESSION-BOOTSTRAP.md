@@ -695,6 +695,7 @@
 
 ### ⭐ THE CONTAINER LADDER — A CONTAINER SIZE IS A RUNG, NOT A NUMBER (2026-09-14, ledger #326, R-157)
 
+- 🟡 **#356 (2026-09-18) — CALIPER ON THE LADDER · BUILDER-COMPLETE · ⛔ MIGRATION `20260918c` NOT APPLIED** · min/max caliper per size, LAWNS backfilled; measuring height per business (LAWNS 12 in) · owner-proof: uppot CARD 31 → `docs/CLOSE-OUT-LEDGER.md` #356
 - 🟡 **#355 (2026-09-18) — THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED · BUILDER-COMPLETE** · page 1 the bulk, the stops from page 2, trees as one line · owner-proof: load-list CARDS 6 and 19 → `docs/CLOSE-OUT-LEDGER.md` #355
 - 🟡 **#354 (2026-09-18) — ONE LOAD SHEET PER CREW · BUILDER-COMPLETE** · tick the stops a crew takes, print; totals are that crew's only; a partial sheet names the stops it does not carry · owner-proof: load-list CARD 20 → `docs/CLOSE-OUT-LEDGER.md` #354
 - 🟡 **#352 (2026-09-18) — BUBBLERS ARE BILLED (Saturday: none specified); WATER MONITOR KITS ONE PER INSTALLED TREE (Saturday: 21)** · kit spec filed at `docs/recipes/water-monitor-kit.md`, recipe builder parked → `docs/CLOSE-OUT-LEDGER.md` #352

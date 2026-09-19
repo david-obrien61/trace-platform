@@ -1,5 +1,15 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #356 close-out, stacked on #355, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #356 · #355 · #354; #353 overflowed (oldest).
+     entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **LIGHTNING'S HOLD LIST CHECKED AGAINST EVERY REGISTER — AND TWELVE FILINGS LIVE ONLY ON BRANCHES. #353.** 🔴 Of 47 held items, 32 were already filed and 15 became tech-debt **#327–#341** (merged `52241e4`). **[[R-164]] + tech-debt #342 (David, for after Saturday):** the QuickBooks ingest infers install from the TC line, Lauren can switch a stop between delivery and install, and every change is recorded. Re-measured live: 15 of 15 person-chosen TC orders are install, 16 of 16 QuickBooks TC orders are delivery, and the inference runs one way only. **The real finding: twelve register ids sat on eight unmerged branches, three of them beside migrations ALREADY APPLIED live. #351 merged during this pass, so ten ids on seven branches remain, and two migrations (`20260917b`, `20260917d`).** ShipAddr is answered and closed: 730 customers hold a ship-to after the reload.
+
+**Type:** DOCS + LIVE READS (read-only), on `docs/hold-list-validation`, **own worktree (§6 r20)**, **one ledger id**. No app code, no migration. Proof narrative: ledger #353. **§3 RETENTION, after merging #351's parallel close-out: §3 = #353 · #351 · #352; #350 archived verbatim; #347 had overflowed in BOTH close-outs and is archived ONCE — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **ADOPT §6 r22?** *A filing lands on `main` the same day, whatever happens to the build; a migration applied live reaches `main` the same day.* The text is in ledger #353 and is NOT added to §6 without your word · **(b)** 🔴 **THE TEN STILL BRANCH-ONLY IDS: port them to `main` as one docs commit today, or merge the branches.** `feat/route-order-saved` (#351 · R-163) merged during this pass; every remaining branch conflicts in the shared docs · **(c)** 🔴 **PRODUCTION'S DATABASE IS AHEAD OF `main`:** `20260917b` and `20260917d` are applied live and `fix/contact-list-edit-add` is unmerged (`20260917e` was the third, until #351 merged) · **(d)** 🔴 **THE RELOAD SEEDED STOCK ON FEES AGAIN:** run `bffc7713` has qty on 631 of 631 rows, at least 12 of them fees. The reversal in your checkout targets the undone run `eab7fbd2` and now does nothing · **(f)** 🔴 **TECH-DEBT #342 IS CLAIMED TWICE:** mine (09:47, now on `main`) and `fix/contact-list-edit-add`'s (10:02). By R-148 the later one renumbers, so that branch's #342 moves to the next free id before it merges · **(e)** ⚠️ **QUICKBOOKS ITSELF WAS NOT RE-READ** for ShipAddr (only your session can). 766 is the 2026-09-16 figure, and "777" matches no measurement.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #355 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #355 · #354 · #353; #352 overflowed (oldest).
      entries-in == entries-out. -->
