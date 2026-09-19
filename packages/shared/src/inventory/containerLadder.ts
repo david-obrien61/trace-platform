@@ -95,6 +95,16 @@ export interface Rung {
   installTPostsPerTree: number;
   /** Where that post count came from. Required for the same reason `handlingBecause` is. */
   installTPostsBecause: string;
+  /**
+   * Trunk CALIPER of a tree in this size, in inches (ledger #356, David 2026-09-18): *"the trade
+   * measure LAWNS buys and sells on, and the real graduation test."* Measured at the business's
+   * `caliperMeasuredAtInches` above the soil. `null` min = not recorded (never a 0 that reads as a
+   * measurement). A null max with a min = "and up"; max equal to min = one figure.
+   */
+  caliperMinInches: number | null;
+  caliperMaxInches: number | null;
+  /** Where the caliper figures came from. Required for the same reason `handlingBecause` is. */
+  caliperBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -321,6 +331,18 @@ export function sameSizeOnLadder(
   return sameSizeLabel(a, b);
 }
 
+/**
+ * The caliper as a person reads it — "1.5–2.5 in", "1.25 in", "5 in and up" — or `null` when the
+ * rung has none recorded, so a caller says "not recorded" rather than printing a blank (ledger #356).
+ */
+export function caliperText(r: Pick<Rung, 'caliperMinInches' | 'caliperMaxInches'>): string | null {
+  const fmt = (n: number) => String(Number(n.toFixed(2)));
+  if (r.caliperMinInches == null) return null;
+  if (r.caliperMaxInches == null) return `${fmt(r.caliperMinInches)} in and up`;
+  if (r.caliperMaxInches === r.caliperMinInches) return `${fmt(r.caliperMinInches)} in`;
+  return `${fmt(r.caliperMinInches)}–${fmt(r.caliperMaxInches)} in`;
+}
+
 /** The rungs a picker OFFERS, in ladder order. Retired rungs never appear here (R-133). */
 export function activeRungs(ladder: Ladder): Rung[] {
   return ladder.filter((r) => r.active).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -341,6 +363,8 @@ export function largestRung(ladder: Ladder): Rung | null {
  * It was born in `cultivar-os/src/lib/containerLadderFields.ts` and moved here when the server's
  * import preview became a second reader: two lists for one table is the copy that drifts (#179).
  * That file re-exports this one, and its test replays the migrations against it.
+ * 🔴 `caliper_*` (ledger #356) are the same gate one migration later: `20260918c_container_ladder_caliper.sql`
+ * must be applied before a build selecting them merges.
  * 🔴 `install_t_posts_*` are asked for BEFORE `20260916_container_ladder_install_t_posts.sql` is
  * applied on a database that lacks it, every ladder read FAILS — which is why the branch carrying
  * this list must not merge before that migration runs.
@@ -349,6 +373,7 @@ export const LADDER_FIELDS = [
   'id', 'label', 'aliases', 'sort_order', 'volume_gallons',
   'handling_minutes', 'handling_because',
   'install_t_posts_per_tree', 'install_t_posts_because',
+  'caliper_min_inches', 'caliper_max_inches', 'caliper_because',
   'active',
 ] as const;
 
@@ -361,6 +386,8 @@ export interface LadderRow {
   volume_gallons: number | string | null; handling_minutes: number | string | null;
   handling_because: string | null;
   install_t_posts_per_tree: number | string | null; install_t_posts_because: string | null;
+  caliper_min_inches: number | string | null; caliper_max_inches: number | string | null;
+  caliper_because: string | null;
   active: boolean;
 }
 
@@ -380,6 +407,9 @@ export function rungFromRow(r: LadderRow): Rung {
     // what the database itself says for a rung nobody set. The reason says which.
     installTPostsPerTree: numOrNull(r.install_t_posts_per_tree) ?? 0,
     installTPostsBecause: r.install_t_posts_because ?? 'not set',
+    caliperMinInches: numOrNull(r.caliper_min_inches),
+    caliperMaxInches: numOrNull(r.caliper_max_inches),
+    caliperBecause: r.caliper_because ?? 'not set',
     active: r.active,
   };
 }

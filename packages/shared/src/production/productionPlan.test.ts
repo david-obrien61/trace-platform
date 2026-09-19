@@ -187,7 +187,7 @@ ok(!classifyLot(lot({ unitKind: 'weight', size: '40 lb' })).ok, '§D a weight is
 // ════════════════════════════════════════════════════════════════════════════════
 const mkRung = (p: Partial<Rung> & { label: string; sortOrder: number }): Rung => ({
   aliases: [], volumeGallons: null, handlingMinutes: null, handlingBecause: 'untimed',
-  installTPostsPerTree: 0, installTPostsBecause: 'not set', active: true, ...p,
+  installTPostsPerTree: 0, installTPostsBecause: 'not set', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active: true, ...p,
 });
 const LADDER: Ladder = [
   mkRung({ label: '3/5 gal', sortOrder: 30, aliases: ['#3/5'] }),

@@ -77,7 +77,7 @@ const rung = (label: string, sortOrder: number, volumeGallons: number | null, po
               aliases: string[] = [], active = true): Rung => ({
   label, aliases, sortOrder, volumeGallons,
   handlingMinutes: null, handlingBecause: 'not timed — the yard-wide rate stands in',
-  installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', active,
+  installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active,
 });
 const LAWNS: Ladder = [
   rung('slip',    10, null, 0, ['slips', 'cutting', 'cuttings']),

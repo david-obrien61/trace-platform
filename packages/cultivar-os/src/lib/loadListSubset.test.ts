@@ -74,7 +74,7 @@ function ok(cond: boolean, msg: string): void {
 {
   const rung = (label: string, sortOrder: number, volumeGallons: number | null, posts: number, aliases: string[] = []): Rung => ({
     label, aliases, sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'test',
-    installTPostsPerTree: posts, installTPostsBecause: 'test', active: true,
+    installTPostsPerTree: posts, installTPostsBecause: 'test', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active: true,
   });
   const LADDER: Ladder = [rung('15 gal', 40, 15, 2), rung('45 gal', 60, 45, 2), rung('95/100', 80, 95, 4, ['95 gallon'])];
   const SETTINGS: LoadListSettings = { ladder: LADDER, ops: OPERATIONS_DEFAULTS };

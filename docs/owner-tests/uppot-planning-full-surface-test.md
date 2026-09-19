@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 30 covered** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
+**Board: 0 of 31 covered** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -687,3 +687,18 @@ COVERS: ledger #343 — the uppot starting size is the rung's volume
 
 **FAIL:** In now shows 3 or 5 for a 3/5-size lot.
 
+---
+
+## CARD 31 — 🔴 CALIPER ON THE LADDER: EACH SIZE CARRIES ITS TRUNK CALIPER, READ AT THE NURSERY'S OWN HEIGHT
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #356 — David, 2026-09-18: *"the trade measure LAWNS buys and sells on, and the real graduation test"*
+
+⛔ **MIGRATION GATE: `supabase/migrations/20260918c_container_ladder_caliper.sql` must be applied first** (SQL editor, as postgres, whole file), then its V1–V4 pasted back. **Until it is, do not merge `feat/ladder-caliper`** — the ladder reader asks for the new columns, and every ladder read would fail.
+
+1. **Settings → Container sizes.** **PASS:** each size's line ends with its caliper, exactly:
+   **3/5 gal — caliper 1 in · 15 gal — caliper 1.25 in · 30 gal — caliper 1.5–2.5 in · 45 gal — caliper 2.5–3.5 in · 65 gal — caliper 3.5–4.5 in · 95/100 — caliper 4–5 in · 200 gal — caliper 5 in and up**, each followed by *(LAWNS, David 2026-09-18 — measured 12 in above the soil line)*. **slip** and **4 in** say **caliper not recorded**.
+2. Click **Edit** on **45 gal**. **PASS:** three new boxes — **Smallest caliper (inches) 2.5**, **Largest caliper (inches) 3.5**, **Where the caliper came from**.
+3. Type **2** in *Largest*. **PASS:** red text **"The largest caliper is below the smallest."** and **Save size** is greyed. Put **3.5** back and press **Cancel**.
+4. **Settings → Operations → Trees.** **PASS:** **Caliper measured at (inches above the soil) — 12**, and beside it **SUGGESTION — ANSI Z60.1 measures at 6 in (12 in once caliper passes 4 in) — set your own; LAWNS measures at 12**.
+
+**FAIL:** any size shows a caliper of 0 · a blank where "not recorded" should be · the height reads 6 for LAWNS · Settings → Container sizes says **Could not read the sizes** (the migration is not applied).

@@ -19,7 +19,7 @@
  */
 import {
   foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
-  sameSizeOnLadder, largestRung, activeRungs, rungFromRow, ladderCoverage, LADDER_FIELDS, LADDER_SELECT,
+  sameSizeOnLadder, largestRung, activeRungs, rungFromRow, ladderCoverage, LADDER_FIELDS, LADDER_SELECT, caliperText,
   type Rung, type Ladder,
 } from './containerLadder';
 
@@ -31,7 +31,7 @@ function ok(cond: boolean, msg: string): void {
 
 const rung = (p: Partial<Rung> & { label: string; sortOrder: number }): Rung => ({
   aliases: [], volumeGallons: null, handlingMinutes: null,
-  handlingBecause: 'untimed', installTPostsPerTree: 0, installTPostsBecause: 'not set', active: true, ...p,
+  handlingBecause: 'untimed', installTPostsPerTree: 0, installTPostsBecause: 'not set', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active: true, ...p,
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -248,7 +248,7 @@ ok(activeRungs(POSTED).map((x) => x.label).join('') === 'ab', '§L the offer lis
 
 // §M  THE ONE ROW→RUNG MAPPING
 const mapped = rungFromRow({ id: 'x', label: '3/5 gal', aliases: null, sort_order: 30, volume_gallons: '4',
-  handling_minutes: null, handling_because: null, install_t_posts_per_tree: '0', install_t_posts_because: 'LAWNS, David 2026-09-12', active: true });
+  handling_minutes: null, handling_because: null, install_t_posts_per_tree: '0', install_t_posts_because: 'LAWNS, David 2026-09-12', caliper_min_inches: null, caliper_max_inches: null, caliper_because: null, active: true });
 ok(mapped.volumeGallons === 4 && mapped.installTPostsPerTree === 0 && mapped.aliases.length === 0,
   '§M a PostgREST row maps to a Rung — string numerics become numbers, a null alias list becomes []');
 ok(rungFromRow({ ...({} as any), label: 'x', sort_order: 1, active: true, install_t_posts_per_tree: null }).installTPostsPerTree === 0,
@@ -264,6 +264,24 @@ ok(cov.offLadder.length === 2 && cov.offLadder[0].size === '7 gal' && cov.offLad
   '🔴 §N off-ladder sizes are NAMED with their counts, most first — "7 gal" twice, "1 gal" once');
 ok(cov.onLadder + cov.notContainer + cov.noSize + cov.unreadable + cov.offLadder.reduce((n, o) => n + o.count, 0) === 10,
   '🔴 §N nothing is dropped — the buckets sum to the input');
+
+// ══ §K CALIPER (ledger #356) ═══════════════════════════════════════════════════════
+{
+  const base = { id: 'x', label: '30 gal', aliases: null, sort_order: 50, volume_gallons: '30', handling_minutes: null,
+    handling_because: null, install_t_posts_per_tree: '2', install_t_posts_because: 'LAWNS', active: true };
+  const r = rungFromRow({ ...base, caliper_min_inches: '1.5', caliper_max_inches: '2.5', caliper_because: 'LAWNS, David 2026-09-18' });
+  ok(r.caliperMinInches === 1.5 && r.caliperMaxInches === 2.5 && r.caliperBecause === 'LAWNS, David 2026-09-18',
+    '🔴 §K1 the row maps its caliper — numerics arrive as strings from PostgREST');
+  const blank = rungFromRow({ ...base, caliper_min_inches: null, caliper_max_inches: null, caliper_because: null });
+  ok(blank.caliperMinInches === null && blank.caliperMaxInches === null && blank.caliperBecause === 'not set',
+    '🔴 §K2 an unrecorded caliper stays NULL — never a 0');
+  ok(caliperText({ caliperMinInches: 1.5, caliperMaxInches: 2.5 }) === '1.5–2.5 in', '§K3 a range reads "1.5–2.5 in"');
+  ok(caliperText({ caliperMinInches: 1.25, caliperMaxInches: 1.25 }) === '1.25 in', '§K4 one figure reads as one figure');
+  ok(caliperText({ caliperMinInches: 5, caliperMaxInches: null }) === '5 in and up', '🔴 §K5 a min with no max reads "5 in and up"');
+  ok(caliperText({ caliperMinInches: null, caliperMaxInches: null }) === null, '§K6 nothing recorded is null, for the caller to say so');
+  ok((LADDER_FIELDS as readonly string[]).includes('caliper_min_inches') && (LADDER_FIELDS as readonly string[]).includes('caliper_max_inches')
+     && (LADDER_FIELDS as readonly string[]).includes('caliper_because'), '§K7 the one field list asks for all three');
+}
 
 console.log(`\n── containerLadder: ${passed} passed, ${failed} failed ──`);
 if (failed) { failures.forEach((f) => console.error('  ✗ ' + f)); process.exit(1); }

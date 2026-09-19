@@ -2,7 +2,7 @@
 // ContainerSizesSettings — Settings → Container sizes. The nursery's own ladder, edited.
 //
 // PURPOSE:      One place where a size is added, named, given its volume, its handling time and
-//               its install T-posts, put in order, and retired. David, 2026-09-15: *"A rung is a row.
+//               its install T-posts and its trunk caliper (ledger #356), put in order, and retired. David, 2026-09-15: *"A rung is a row.
 //               Adding a row makes the size available everywhere — the picker offers it, the resolver
 //               recognises it, the BOM can attach to it."* Before this screen, adding a rung was SQL.
 //
@@ -29,7 +29,7 @@
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import React, { useCallback, useEffect, useState } from 'react';
-import { validateLadder, type Rung } from '@trace/shared/inventory';
+import { caliperText, validateLadder, type Rung } from '@trace/shared/inventory';
 import { loadContainerLadder, type LadderRead } from '../../lib/containerLadderRead';
 import { addRung, updateRung, setRungActive, moveRung } from '../../lib/containerLadderWrite';
 import {
@@ -99,6 +99,17 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
         <Field label="Where the T-post figure came from">
           <input style={input} value={draft.installTPostsBecause}
             onChange={(e) => setDraft({ ...draft, installTPostsBecause: e.target.value, postsCopiedFrom: null })} />
+        </Field>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field label="Smallest caliper (inches)" note="Trunk diameter of a tree in this size, at the height set in Operations → Trees. Blank if not recorded.">
+          <input style={input} type="number" step="any" min={0} value={draft.caliperMinInches} onChange={(e) => put('caliperMinInches', e.target.value)} />
+        </Field>
+        <Field label="Largest caliper (inches)" note={'Blank means "and up" — e.g. 200 gal: 5 in and up. The same as the smallest for a single figure.'}>
+          <input style={input} type="number" step="any" min={0} value={draft.caliperMaxInches} onChange={(e) => put('caliperMaxInches', e.target.value)} />
+        </Field>
+        <Field label="Where the caliper came from">
+          <input style={input} value={draft.caliperBecause} onChange={(e) => put('caliperBecause', e.target.value)} />
         </Field>
       </div>
       {problems.length > 0 && (
@@ -199,6 +210,7 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
                   {r.volumeGallons == null ? 'No volume set' : `${r.volumeGallons} gal`}
                   {' · '}{r.handlingMinutes == null ? 'yard-wide handling rate' : `${r.handlingMinutes} min a pot`} ({r.handlingBecause})
                   {' · '}<strong>{r.installTPostsPerTree} T-post{r.installTPostsPerTree === 1 ? '' : 's'}</strong> at install ({r.installTPostsBecause})
+                  {' · '}{caliperText(r) ? <><strong>caliper {caliperText(r)}</strong> ({r.caliperBecause})</> : 'caliper not recorded'}
                 </div>
               </div>
               {canWrite && !isEditing && (
