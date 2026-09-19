@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 20.** ✏️ **2026-09-18 (ledger #354): CARD 20 added — one sheet per crew. The page changed, so CARDS 6 and 19, which David ran and PASSED on paper today on `f9f3b8a · prod`, are `owed` again; the whole-day sheet is built the same way and should read exactly as it did.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 20.** ✏️ **2026-09-18 (ledger #355): the sheet reads the way the trailer is loaded — page 1 the date and the BULK (mix, T-posts, rope, bubblers, water monitor kits, trunk protection), the day's trees as ONE line ("29 trees across 8 stops"), then the stops from page 2. CARDS 1, 5, 6, 7, 13 and 19 are reworded to the new layout; the numbers do not change.** ✏️ **2026-09-18 (ledger #354): CARD 20 added — one sheet per crew. The page changed, so CARDS 6 and 19, which David ran and PASSED on paper today on `f9f3b8a · prod`, are `owed` again; the whole-day sheet is built the same way and should read exactly as it did.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
@@ -76,9 +76,8 @@ Open **`/load-list?date=2026-08-29`**.
 **PASS — every one of these, and they are the numbers to compare against the real trailer:**
 - **6 stops** · **11 trees** · **5 yards special mix** · **24 T-posts** · **96 ft rope** · **11 bubblers**
   ✏️ *(was 2.5 yards: the ratio was 1.0 until David's 2026-09-15 correction — twice the container volume, so 470 container gallons → 940 gallons of mix → 4.65 yd → 5 rounded up.)*
-- Special mix is **section 1**, above the trees, and says *loads FIRST — trees on top*.
-- The tree list is **biggest first**, starting **Live Oak 200 gallon × 1 — 4 T-posts**.
-- Trees read as **name and size** (*"Mexican Sycamore 45 gallon"*), **never a SKU**.
+- ✏️ *(2026-09-18, ledger #355)* Page 1 is headed **Bulk materials — loads first**: special mix first, saying *loads FIRST — trees on top*, then T-posts, rope, bubblers, water monitor kits. The trees are **one line — "11 trees across 6 stops"** — not a list by variety.
+- From page 2, each stop lists its own trees as **name and size** (*"Mexican Sycamore 45 gallon"*), **never a SKU**.
 **FAIL if** any number differs, or if a tree row shows a SKU instead of a name.
 
 ### CARD 2 — 🔴 THE 200 GALLON IS FULLY COMPUTED (the correction of 2026-09-12)
@@ -139,7 +138,7 @@ where nothing is marked, the sheet says nothing at all about deer fence.
 
 Saturday 2026-08-29 (and 2026-09-19 — no stop on either records fence).
 **PASS:** **nowhere** on the page do the words *deer fence*, *ring* or *fence per tree* appear. The
-hardware section shows T-posts, rope and bubblers only.
+bulk materials show T-posts, rope, bubblers and water monitor kits only.
 **🔴 FAIL if** the rule, the ring rule, or any per-tree ring/fence footage prints.
 ⚠️ **The arithmetic is still there and still tested** — a stop that says it needs fence brings each tree
 to 4 T-posts IN TOTAL, and the block prints then. Measured across the whole LAWNS book 2026-09-17:
@@ -156,7 +155,7 @@ Press **Print this day** and look at the print PREVIEW (do not waste paper; Save
 renderer).
 **PASS — all five:**
 - The **date picker and the Print button are GONE** from the paper.
-- The **consolidated headline occupies page 1 on its own**; the per-stop breakdown starts on page 2.
+- ✏️ *(ledger #355)* **Page 1 is the date and the bulk materials on their own** — mix, T-posts, rope, bubblers, water monitor kits, trunk protection, and the one trees line; **the stops start on page 2**.
 - **No stop is split across a page boundary** — a stop's name, address and lines stay together.
 - It is **black on white** — no sage background, no green fills.
 - Every flagged block still has its **border and its text** on paper.
@@ -170,7 +169,7 @@ COVERS: tech-debt #299 (was #290) — the install cost model that must be BUILT,
 SIGNAL: —
 
 Same page. Search the printed sheet for the word **mulch**.
-**PASS:** it appears **once**, in section 1, as the statement **"No mulch. Only the ingredients in
+**PASS:** it appears **once**, under the special mix on page 1, as the statement **"No mulch. Only the ingredients in
 the special mix."** There is no mulch QUANTITY anywhere.
 **FAIL if** any number is attached to mulch. Lauren states mulch is not used, only the ingredients
 in the special mix.
@@ -201,7 +200,7 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: ledger #343 — the go-live target for Saturday 2026-09-19
-SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYards: 7, tPosts: 54}`
+SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 8, trees: 29, mixYards: 9, tPosts: 62}` ✏️ *(2026-09-18: an eighth stop, Angela Garzon, 2 × 95 gal, was added; David ran this card on paper the same day on `f9f3b8a` and it PASSED with these numbers)*
 
 **Before you start:** the stamp at the foot of the screen must read **`56107ee`** (or newer) and end **`· prod`**.
 
@@ -216,20 +215,19 @@ SIGNAL: `[TRACE:LOADLIST] built {date: '2026-09-19', stops: 7, trees: 27, mixYar
    2026-09-17), and the standard mix IS 2.
 3. ✏️ **Deer fence: nothing prints** — no rule, no ring, no footage. Nothing records which stops need
    fence, and a stop that says so is the only thing that brings it back (2026-09-17).
-4. **Section 1 · Special mix.** **PASS:** it reads **7 yards special mix**, and the sentence says
-   **"2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons"** with **1350 gallons**.
-   *(The old page would have said 3½ yards and 675 gallons.)*
-5. **Section 2 · Trees — 27 in total.** Each tree row shows its own gallons of mix — e.g.
-   **Eagleston Holly (Tree Form) 45 Gallon × 5 — 10 T-posts · 450 gal mix**.
-6. **Section 3 · Hardware.** **PASS:** **54 T-posts · 216 ft rope** · ✏️ **Bubblers — none specified on these orders** *(2026-09-18: bubblers are the ones BILLED; no Saturday order carries a Tree Bubbler line — it used to say 27)* · **21 water monitor kits** *(one for every tree we install — 5 install stops, 21 trees — plus any bought on the order; none are)* · **2 trunk protection**. **FAIL if** bubblers read 27 or a bare 0, or if PVC, bamboo or drilling appears anywhere.
+4. ✏️ **Page 1 — Bulk materials — loads first** *(ledger #355)*. **PASS:** it reads **9 yards special mix**, and the sentence says
+   **"2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons"** with **1730 gallons**.
+5. ✏️ **The trees are ONE line on page 1: "29 trees across 8 stops".** No list by variety. Each stop's
+   own trees are on its block from page 2 — e.g. **Sappal: 5 × Eagleston Holly (Tree Form) 45 Gallon**.
+6. ✏️ **Still page 1, after the mix:** **62 T-posts · 248 ft rope** · **Bubblers — none specified on these orders** *(bubblers are the ones BILLED; no Saturday order carries a Tree Bubbler line)* · **23 water monitor kits** *(one for every tree on an install order — Sappal and Kossa are recorded as delivery, so 29 are needed and 23 print; tech-debt #342)* · **2 trunk protection**. **FAIL if** bubblers read a bare 0, if PVC, bamboo or drilling appears anywhere, or if any of these lines is not on page 1.
 7. **COULD NOT WORK OUT (1):** the line *"Flat fee - Applied on Aug 9, 2026"* — and nothing else.
 8. ✏️ **NOTHING ELSE PRINTS (2026-09-17).** No Trip Charge (5 of them), no Customer Discount, no
    "15% Off - Tree Sale", and **no "Also on these orders" block at all.**
-9. ✏️ **Trunk protection:** hardware shows **2 trunk protection**, and it appears on the stop that
+9. ✏️ **Trunk protection:** page 1 shows **2 trunk protection**, and it appears on the stop that
    carries it.
 10. 🔴 ✏️ **THE LAST STOP (Chris Dubec, 8 Eagleston Holly):** a flagged line reads **"plus 1 tree to
    plant on site (Plant Your Tree) — size unknown; add mix and T-posts by hand."** The day's tree count
-   stays **27** (it is not one of them) and the FLOOR warning fires because of it.
+   stays **29** (it is not one of them) and the FLOOR warning fires because of it.
 
 **FAIL if** the mix reads 3½ yards or 675 gallons (the old 1.0); if any charge, discount or "also on these
 orders" line prints; if the deer-fence rule prints on a day nobody marked; if "Figures used" is missing or
@@ -329,12 +327,12 @@ STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: [[R-155]] as amended · ledger #343
-SIGNAL: section 1 reads **2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons**
+SIGNAL: page 1 (bulk materials) reads **2 gallons of mix per gallon of container — a 30 gallon tree takes 60 gallons**
 
 ✏️ **CHANGED 2026-09-16 — THE RATIO IS 2.0, NOT 1.0.** David, 2026-09-15: *"install mix is TWICE the
 container volume (30 gal → 60 gal). The earlier 1.0 was Lightning's figure, not LAWNS's."*
 
-Same page, section 1.
+Same page, the special mix on page 1.
 **PASS:** the mix rule states **2 gallons of mix per gallon of container** with the 30 → 60 example, and
 the figure reconciles: on Saturday 2026-08-29, **470 container gallons × 2 = 940 gallons → 5 yards**
 (`940 ÷ 201.974 = 4.65`, rounded UP to the next half yard). Each tree row shows its own gallons of mix.
@@ -439,7 +437,7 @@ SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'stored'}` for the STAFF login
   differ by up to ~6% away from the anchors. **Exact at 15 and 95 either way**, so no card on real
   LAWNS sizes can tell the readings apart — it needs a sentence from David, not a test.
 - **Whether the computed bubbler count matches an invoice that bills bubblers.** The page prints
-  the computed count in section 3 and **no longer prints the billed `TB` line at all** (2026-09-17: a
+  the computed count in the bulk materials and **no longer prints the billed `TB` line at all** (2026-09-17: a
   Tree Bubbler line is recognised and left off). Nothing reconciles the two — the billed line is now
   invisible on this sheet, so a mismatch between what was billed and what the sheet says to load is
   **uncovered here**, by David's own instruction.

@@ -54,7 +54,9 @@ function ok(cond: boolean, msg: string): void {
   // ✏️ 2026-09-17: `model.noSizeStated` and `model.otherGoods` are GONE — the sheet is an allow-list,
   // and a recognised non-load line prints nowhere (David: "additional information to yard crew is too
   // confusing"). What must still be rendered is every bucket that CAN go on the trailer.
-  for (const bucket of ['model.unresolved', 'model.stops', 'model.trees', 'model.otherGoods']) {
+  // ✏️ 2026-09-18 (ledger #355): `model.trees` is no longer a bucket the sheet lists — the species
+  // roll-up became ONE line (David: trees load by stop). It is asserted in §L instead, as a count.
+  for (const bucket of ['model.unresolved', 'model.stops', 'model.otherGoods']) {
     ok(src.includes(`${bucket}.map(`),
       `🔴 A: the page RENDERS ${bucket} — a bucket the model fills and the page ignores is the same omission, one layer out`);
   }
@@ -83,7 +85,7 @@ function ok(cond: boolean, msg: string): void {
     '🔴 A10b (negative): no per-stop fence line and no fence entry in the unresolved block');
   // ✏️ A10c REVERSED 2026-09-17 (David): the figures are REFERENCE, not load instructions — their own
   // page, at the back, not the top of the sheet.
-  ok(code.indexOf('LOAD_LIST_COPY.valuesHeading') > code.indexOf('1 · Special mix'),
+  ok(code.indexOf('LOAD_LIST_COPY.bulkHeading') !== -1 && code.indexOf('LOAD_LIST_COPY.valuesHeading') > code.indexOf('LOAD_LIST_COPY.bulkHeading'),
     '🔴 A10c: the figures used come AFTER the load itself');
   ok(/ll-figures \{ page-break-before: always; \}/.test(src) && /className="ll-block ll-figures"/.test(code),
     '🔴 A10d: …and on their OWN PAGE — a print page-break, so they never crowd the load');
@@ -139,7 +141,7 @@ function ok(cond: boolean, msg: string): void {
   // ✏️ 2026-09-17 second pass: goods print in their own section (David: anything physical prints).
   ok(/model\.otherGoods\.length > 0 \?/.test(src) && /alsoOnTruckHeading/.test(src) && /alsoOnTruckWhy/.test(src),
     '🔴 B2d: "Also on the truck" prints every physical good, with the sentence saying money lines are nowhere');
-  ok(code.indexOf('alsoOnTruckHeading') > code.indexOf('3 · Hardware'),
+  ok(code.indexOf('LOAD_LIST_COPY.stopsHeading') !== -1 && code.indexOf('alsoOnTruckHeading') > code.indexOf('LOAD_LIST_COPY.stopsHeading'),
     'B2e: …after the load itself, not above it');
   ok(/s\.unresolvedCount > 0/.test(src),
     'B3: a stop carrying a line nobody could read says so on its OWN row, not only in the day total');
@@ -251,6 +253,38 @@ function ok(cond: boolean, msg: string): void {
     '🔴 F9: the tick boxes sit in a `no-print` panel OUTSIDE the sheet — never on the paper');
   ok(/model\.stopCount === 0 && !pick\?\.isSubset \? \(/.test(code) && /LOAD_LIST_COPY\.subsetNone/.test(code),
     'F10: nothing ticked says "nothing ticked", not "no stops on this day"');
+}
+
+// ══ §L THE SHEET READS THE WAY THE TRAILER IS LOADED (ledger #355) ═════════════════
+// David, 2026-09-18: page 1 the date, then the bulk — mix, T-posts, rope, bubblers, water monitor kits,
+// trunk protection — then the stops from page 2, each with its trees. The roll-up by variety is one line.
+{
+  const at = (needle: string) => code.indexOf(needle);
+  const bulk = at('LOAD_LIST_COPY.bulkHeading'), stops = at('LOAD_LIST_COPY.stopsHeading');
+  ok(bulk !== -1 && stops !== -1 && bulk < stops, '🔴 L1: the bulk materials come BEFORE the stops');
+  const order = ['model.mixYards} yard', 'model.tPosts} T-posts', 'model.ropeFeet} ft rope',
+                 'model.bubblers > 0 ?', 'model.waterMonitors > 0 ?', 'LOAD_LIST_COPY.trunkProtectionLine('];
+  const idx = order.map(at);
+  ok(idx.every(i => i > bulk) && idx.every((i, n) => n === 0 || i > idx[n - 1]) && idx[idx.length - 1] < stops,
+    '🔴 L2: …in the loading order: mix, T-posts, rope, bubblers, water monitor kits, trunk protection — all on page 1');
+  const headline = at('className="ll-headline"');
+  // Div depth, counted from the page-1 block's own opening tag: still open at the bulk, closed by the stops.
+  const depth = (from: number, to: number) => {
+    const slice = code.slice(from, to);
+    return (slice.match(/<div[\s>]/g) ?? []).length - (slice.match(/<\/div>/g) ?? []).length;
+  };
+  const open = code.lastIndexOf('<div', headline);
+  ok(headline !== -1 && headline < bulk && depth(open, bulk) > 0 && depth(open, stops) <= 0,
+    '🔴 L3: the bulk sits inside the page-1 block that breaks after itself, so the stops start on page 2');
+  ok(/LOAD_LIST_COPY\.treesLine\(model\.treeCount, model\.stopCount\)/.test(code) && at('LOAD_LIST_COPY.treesLine(') < stops,
+    '🔴 L4: the day\'s trees are ONE line on page 1 — "29 trees across 8 stops"');
+  ok(!/2 · Trees|in total<\/h2>/.test(code), 'L5 (negative): the species roll-up heading is gone');
+  const fence = at('Deer fence — add by hand');
+  const treeMaps = [...code.matchAll(/model\.trees\.map\(/g)].map(m => m.index ?? -1);
+  ok(treeMaps.length === 1 && treeMaps[0] > fence,
+    '🔴 L6 (negative): the only per-variety list left is the deer-fence block, which prints only when a stop is fenced');
+  ok(at('model.offLadderTreeCount > 0 ?') > at('LOAD_LIST_COPY.treesLine(') && at('model.offLadderTreeCount > 0 ?') < stops,
+    'L7: the not-set-up warning stays beside the trees line, on page 1');
 }
 
 console.log(`\nloadListPage: ${passed} passed, ${failed} failed`);

@@ -87,6 +87,9 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#355 — the load sheet reads the way the trailer is loaded (build, BUILDER-COMPLETE)**
+- 🟡 **OPEN — ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** No → the one line stays. Yes → the roll-up moves to the back as a pick list (~1 h). Owner: ledger #355.
+
 **#354 — one load sheet per crew (build, BUILDER-COMPLETE)**
 - 🟡 **OPEN — CARD 20** (read-only, LAWNS Saturday): tick 1–4 → 6.5 yd · 36 posts · 11 kits; 5–8 → 2.5 yd · 26 posts · 12 kits. Owner: `load-list-full-surface-test.md`.
 - ⚠️ **NOTED — the crew link is still one per day**; only the paper splits. Owner: tech-debt #345 (piece 4).

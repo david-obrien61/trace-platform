@@ -695,6 +695,7 @@
 
 ### ⭐ THE CONTAINER LADDER — A CONTAINER SIZE IS A RUNG, NOT A NUMBER (2026-09-14, ledger #326, R-157)
 
+- 🟡 **#355 (2026-09-18) — THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED · BUILDER-COMPLETE** · page 1 the bulk, the stops from page 2, trees as one line · owner-proof: load-list CARDS 6 and 19 → `docs/CLOSE-OUT-LEDGER.md` #355
 - 🟡 **#354 (2026-09-18) — ONE LOAD SHEET PER CREW · BUILDER-COMPLETE** · tick the stops a crew takes, print; totals are that crew's only; a partial sheet names the stops it does not carry · owner-proof: load-list CARD 20 → `docs/CLOSE-OUT-LEDGER.md` #354
 - 🟡 **#352 (2026-09-18) — BUBBLERS ARE BILLED (Saturday: none specified); WATER MONITOR KITS ONE PER INSTALLED TREE (Saturday: 21)** · kit spec filed at `docs/recipes/water-monitor-kit.md`, recipe builder parked → `docs/CLOSE-OUT-LEDGER.md` #352
 - 🟡 **#350 (2026-09-17) — THE LOAD LIST PRINTS WHAT GOES ON THE TRUCK · MERGED** · anything physical prints (trees, install materials, goods under "Also on the truck"), money lines never do · David's five changes after running CARD 19 live: charges/discounts print nowhere · one "could not work out" section · Plant Your Tree is work on a stop · deer fence silent unless marked · figures on their own page · **Saturday 09-19 totals unchanged (27 trees · 7 yd · 54 posts)** · owed: load-list CARDS 3, 5, 12, 13, 15, 19 → `docs/CLOSE-OUT-LEDGER.md` #350
