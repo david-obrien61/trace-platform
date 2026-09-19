@@ -16,10 +16,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Ladder, Rung } from '@trace/shared/inventory';
 import {
-  OPERATIONS_DEFAULTS, PLANTING_MATERIAL_KEYS, PLANTING_MATERIAL_LABELS, plantingMaterialProblems,
+  OPERATIONS_DEFAULTS, OPERATIONS_BASIS, PLANTING_MATERIAL_KEYS, PLANTING_MATERIAL_LABELS, plantingMaterialProblems,
+  resolveConfig,
 } from '@trace/shared/production';
 import {
-  COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
+  CALIPER_NOT_SET, COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
 } from './containerLadderDraft';
 
 let passed = 0, failed = 0;
@@ -32,7 +33,7 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(
 
 const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Rung> = {}): Rung => ({
   label, aliases: [], sortOrder, volumeGallons: null, handlingMinutes: null,
-  handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12',
+  handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [
@@ -163,6 +164,45 @@ const LAWNS: Ladder = [
   ok(/sameSizeOnLadder\(ladder,/.test(src) && !/const sameSize = sameSizeLabel/.test(src), 'G3: the screen compares sizes on the ladder');
   ok(/activeRungs\(ladder\)/.test(src) && /rungChips/.test(src), '🔴 G4: the nursery\'s sizes are offered as chips');
   ok(/offLadderNote\(/.test(src) && /will be saved as typed/.test(src), '🔴 G5: an off-ladder size is warned about, never blocked');
+}
+
+// ══ §K CALIPER ON THE RUNG (ledger #356) ══════════════════════════════════════════
+// David, 2026-09-18: caliper is the trade measure LAWNS buys and sells on. Min and max per size, and
+// the height it is measured at is a per-business figure.
+{
+  const thirty = rung('30 gal', 50, 2, { caliperMinInches: 1.5, caliperMaxInches: 2.5, caliperBecause: 'LAWNS, David 2026-09-18' });
+  const d = draftFromRung(thirty);
+  ok(d.caliperMinInches === '1.5' && d.caliperMaxInches === '2.5' && d.caliperBecause === 'LAWNS, David 2026-09-18',
+    'K1: an existing size opens with its caliper and its reason');
+  const n = draftForNewRung([...LAWNS, thirty]);
+  ok(n.caliperMinInches === '' && n.caliperMaxInches === '' && n.caliperBecause === CALIPER_NOT_SET,
+    '🔴 K2: a NEW size does not copy a caliper — a new size\'s trees are not the biggest size\'s trees');
+  const base = { ...draftForNewRung(LAWNS), label: '7 gal', installTPostsPerTree: '2', installTPostsBecause: 'Terry' };
+  const probs = (min: string, max: string, because = 'LAWNS') => rungDraftProblems({ ...base, caliperMinInches: min, caliperMaxInches: max, caliperBecause: because }, LAWNS, null);
+  ok(probs('', '').length === 0, 'K3: no caliper at all is allowed — "not recorded" is an answer');
+  ok(probs('5', '').length === 0, 'K4: a min with no max is allowed — "5 in and up"');
+  ok(probs('', '4').some(p => /smallest caliper too/.test(p)), '🔴 K5: a max with no min is refused, in words');
+  ok(probs('3', '2').some(p => /below the smallest/.test(p)), '🔴 K6: a max below the min is refused, in words');
+  ok(probs('0', '').some(p => /smallest caliper must be/.test(p)) && probs('abc', '').some(p => /smallest caliper must be/.test(p)),
+    'K7: a zero or non-number min is refused');
+  ok(probs('1', '2', ' ').some(p => /caliper figures came from/.test(p)), 'K8: the caliper reason may not be blank');
+  const row = draftToRow({ ...base, caliperMinInches: '5', caliperMaxInches: '', caliperBecause: 'LAWNS' });
+  ok(row.caliper_min_inches === 5 && row.caliper_max_inches === null && row.caliper_because === 'LAWNS',
+    '🔴 K9: "and up" saves as a min with a NULL max — never a 0 that reads as a measurement');
+  const none = draftToRow({ ...base, caliperMinInches: '', caliperMaxInches: '' });
+  ok(none.caliper_min_inches === null && none.caliper_max_inches === null, 'K10: not recorded saves as NULL, not 0');
+
+  ok(OPERATIONS_DEFAULTS.caliperMeasuredAtInches === 6 && OPERATIONS_BASIS.caliperMeasuredAtInches.basis === 'suggestion',
+    '🔴 K11: the measuring height defaults to 6 in AND says it is a suggestion (ANSI), not a fact about this nursery');
+  ok(resolveConfig({ caliperMeasuredAtInches: 12 }, null, false).ops.caliperMeasuredAtInches === 12,
+    '🔴 K12: a nursery\'s own height is read — LAWNS measures at 12');
+  const screen = strip(read('packages/cultivar-os/src/components/settings/ContainerSizesSettings.tsx'));
+  ok(/put\('caliperMinInches'/.test(screen) && /put\('caliperMaxInches'/.test(screen) && /put\('caliperBecause'/.test(screen),
+    'K13: the size editor has the three caliper inputs');
+  ok(/caliperText\(r\)/.test(screen) && /caliper not recorded/.test(screen),
+    '🔴 K14: the size list shows each caliper, and says "not recorded" rather than a blank');
+  const opsScreen = strip(read('packages/cultivar-os/src/components/settings/OperationsSettings.tsx'));
+  ok(/keys: \['caliperMeasuredAtInches'\]/.test(opsScreen), 'K15: Settings → Operations offers the measuring height');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);

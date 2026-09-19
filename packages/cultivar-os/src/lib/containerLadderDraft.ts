@@ -18,7 +18,7 @@
 //
 // DEPENDENCIES: @trace/shared/inventory (Rung, Ladder, foldLabel, largestRung) — pure.
 // OUTPUTS:      RungDraft · draftFromRung · draftForNewRung · rungDraftProblems · draftToRow ·
-//               nextSortOrder · COPIED_POSTS_NOTE.
+//               nextSortOrder · COPIED_POSTS_NOTE · CALIPER_NOT_SET.
 // ============================================================
 import { foldLabel, largestRung, type Ladder, type Rung } from '@trace/shared/inventory';
 
@@ -37,7 +37,14 @@ export interface RungDraft {
   installTPostsBecause: string;
   /** The rung the post count was copied from, while nobody has touched it. Null once edited. */
   postsCopiedFrom: string | null;
+  /** Caliper in inches, as typed (ledger #356). '' = not recorded. A blank max with a min = "and up". */
+  caliperMinInches: string;
+  caliperMaxInches: string;
+  caliperBecause: string;
 }
+
+/** The reason a rung carries when nobody has recorded its caliper — the database's own default. */
+export const CALIPER_NOT_SET = 'not set — no caliper recorded for this size';
 
 const numText = (n: number | null): string => (n == null ? '' : String(n));
 
@@ -51,6 +58,9 @@ export function draftFromRung(r: Rung): RungDraft {
     installTPostsPerTree: String(r.installTPostsPerTree),
     installTPostsBecause: r.installTPostsBecause,
     postsCopiedFrom: null,
+    caliperMinInches: numText(r.caliperMinInches),
+    caliperMaxInches: numText(r.caliperMaxInches),
+    caliperBecause: r.caliperBecause,
   };
 }
 
@@ -63,6 +73,8 @@ export function draftForNewRung(ladder: Ladder): RungDraft {
     installTPostsPerTree: top ? String(top.installTPostsPerTree) : '0',
     installTPostsBecause: top ? `${COPIED_POSTS_NOTE} (from ${top.label})` : 'not set — no posts until somebody enters them',
     postsCopiedFrom: top ? top.label : null,
+    // Caliper is NOT copied from the top rung: a new size's trees are not the biggest size's trees.
+    caliperMinInches: '', caliperMaxInches: '', caliperBecause: CALIPER_NOT_SET,
   };
 }
 
@@ -112,6 +124,14 @@ export function rungDraftProblems(d: RungDraft, ladder: Ladder, editingLabel: st
     out.push('T-posts per tree must be a whole number, 0 or more.');
   }
   if (!d.installTPostsBecause.trim()) out.push('Say where the T-post figure came from.');
+  // Caliper (ledger #356) — both optional; a max needs a min and may not be below it.
+  const cMin = optionalPositive(d.caliperMinInches);
+  const cMax = optionalPositive(d.caliperMaxInches);
+  if (cMin === 'bad') out.push('The smallest caliper must be a number of inches above 0, or left blank if it is not recorded.');
+  if (cMax === 'bad') out.push('The largest caliper must be a number of inches above 0, or left blank for "and up".');
+  if (cMax !== 'bad' && cMax != null && cMin == null) out.push('Enter the smallest caliper too — a largest with no smallest is not a size.');
+  if (typeof cMin === 'number' && typeof cMax === 'number' && cMax < cMin) out.push('The largest caliper is below the smallest.');
+  if (!d.caliperBecause.trim()) out.push('Say where the caliper figures came from — even "not set".');
   return out;
 }
 
@@ -134,5 +154,8 @@ export function draftToRow(d: RungDraft) {
     install_t_posts_because: d.postsCopiedFrom && d.installTPostsBecause.startsWith(COPIED_POSTS_NOTE)
       ? `copied from ${d.postsCopiedFrom} when this size was added`
       : d.installTPostsBecause.trim(),
+    caliper_min_inches: typeof optionalPositive(d.caliperMinInches) === 'number' ? Number(d.caliperMinInches) : null,
+    caliper_max_inches: typeof optionalPositive(d.caliperMaxInches) === 'number' ? Number(d.caliperMaxInches) : null,
+    caliper_because: d.caliperBecause.trim(),
   };
 }

@@ -24,6 +24,7 @@ export type { UnitKind, UnitParse, UnitColumns, MultiUnitGroup, MultiUnitCandida
 export {
   foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
   sameSizeOnLadder, largestRung, activeRungs, LADDER_FIELDS, LADDER_SELECT, rungFromRow, ladderCoverage,
+  caliperText,
 } from './containerLadder';
 export type { Rung, Ladder, RungResolution, LadderConflict, LadderRow, LadderCoverage } from './containerLadder';
 export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retiredFilter';

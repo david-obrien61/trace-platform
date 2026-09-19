@@ -148,6 +148,14 @@ export interface OperationsConfig {
   bubblersPerTree: number;
   /** T-posts a deer-fenced tree carries IN TOTAL — a tree already staked with 2 needs 2 more. */
   deerFenceTPostsPerTree: number;
+
+  /**
+   * Inches above the soil line this nursery measures trunk CALIPER at (ledger #356). David,
+   * 2026-09-18: it *"varies by nursery, so the height is a per-business setting, not a constant."*
+   * LAWNS measures at 12. Every caliper on the ladder (`container_ladder.caliper_*_inches`) is read
+   * at this height — a 3.25 in tree at 6 in is a smaller tree at 12.
+   */
+  caliperMeasuredAtInches: number;
 }
 
 /** US gallons in one cubic yard: 46,656 in³ ÷ 231 in³. THE one definition (ledger #343) — the load
@@ -182,6 +190,7 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   ropeFeetPerTPost: 4,
   bubblersPerTree: 1,
   deerFenceTPostsPerTree: 4,
+  caliperMeasuredAtInches: 6,
 };
 
 /**
@@ -211,6 +220,7 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
+  caliperMeasuredAtInches: { basis: 'suggestion', because: 'ANSI Z60.1 measures at 6 in (12 in once caliper passes 4 in) — set your own; LAWNS measures at 12' },
 };
 
 /** Plain-language names for the planting-material keys. The screen shows these, never a key. */

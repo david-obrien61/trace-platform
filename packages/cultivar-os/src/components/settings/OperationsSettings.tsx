@@ -71,6 +71,11 @@ const GROUPS: Array<{ title: string; note?: string; keys: NumKey[] }> = [
     keys: [...PLANTING_MATERIAL_KEYS],
   },
   {
+    title: 'Trees',
+    note: 'The height above the soil line this nursery measures trunk caliper at. Every caliper on Container sizes is read at this height.',
+    keys: ['caliperMeasuredAtInches'],
+  },
+  {
     title: 'Holding back',
     note: 'Months of cover defaults to the grow time, because cover exists to bridge the gap until the uppotted stock is ready. Leave the override blank to keep them tied.',
     keys: ['growMonthsDefault', 'cushionPctDefault', 'survivalRate', 'potRecoveryRate'],
@@ -92,6 +97,7 @@ const LABELS: Partial<Record<NumKey, string>> = {
   cushionPctDefault: 'Cushion (share)',
   survivalRate: 'Survive the move (share)',
   potRecoveryRate: 'Pots recovered rather than binned (share)',
+  caliperMeasuredAtInches: 'Caliper measured at (inches above the soil)',
   ...PLANTING_MATERIAL_LABELS,
 };
 
