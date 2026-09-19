@@ -751,5 +751,12 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
     '🔴 G8: a LOT with no size is UNRESOLVED — it is a real catalogue row and may well be a tree, so it prints');
 }
 
+// ══ §L THE TREES ARE ONE LINE (ledger #355) ═══════════════════════════════════════
+{
+  ok(LOAD_LIST_COPY.treesLine(29, 8) === '29 trees across 8 stops', '🔴 L1: the day\'s trees read "29 trees across 8 stops" (David, 2026-09-18)');
+  ok(LOAD_LIST_COPY.treesLine(1, 1) === '1 tree across 1 stop', 'L2: …and singular reads as singular');
+  ok(LOAD_LIST_COPY.bulkHeading.startsWith('Bulk materials'), 'L3: page 1 is headed as the bulk');
+}
+
 console.log(`\nloadList: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }

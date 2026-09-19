@@ -87,6 +87,9 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#355 — the load sheet reads the way the trailer is loaded (build, BUILDER-COMPLETE)**
+- 🟡 **OPEN — ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** No → the one line stays. Yes → the roll-up moves to the back as a pick list (~1 h). Owner: ledger #355.
+
 **Onboarding discovery question set — filed 2026-09-18 (docs only, no ledger row; tech-debt #350)**
 - 🔴 **OPEN — WHERE DOES "THIS REQUIRES THAT" LIVE?** (LAWNS: install requires TC). No edge exists between two sellable rows; inferring install from the TC line is the workaround. Owner: tech-debt #350 / #342.
 - 🟡 **OPEN — DELIVERY RINGS: how many, how far from the yard, and measured from which of a customer's addresses?** Owner: tech-debt #350 / #323.

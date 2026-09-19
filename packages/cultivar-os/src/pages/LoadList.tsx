@@ -343,7 +343,10 @@ export function LoadList() {
                 </div>
               ) : null}
 
-              <h2 style={S.h2}>1 · Special mix — loads first</h2>
+              {/* 🔴 THE SHEET READS THE WAY THE TRAILER IS LOADED (David, 2026-09-18, ledger #355): the
+                  bulk goes on first, so page 1 is the bulk — mix, posts, rope, bubblers, kits, trunk
+                  protection — and the stops, each with its own trees, start on page 2. */}
+              <h2 style={S.h2}>{LOAD_LIST_COPY.bulkHeading}</h2>
               <div style={S.big}>
                 {model.mixYards} yard{model.mixYards === 1 ? '' : 's'} special mix
               </div>
@@ -352,32 +355,6 @@ export function LoadList() {
                 across the trees whose size is set up, rounded up to the next half yard.)
               </p>
               <p style={S.note}><strong>{LOAD_LIST_COPY.noMulch}</strong></p>
-
-              <h2 style={S.h2}>2 · Trees — {model.treeCount} in total</h2>
-              {model.trees.map(t => (
-                <div key={`${t.name}|${t.rungLabel}`} style={S.row} className="ll-row">
-                  <span><strong>{t.name} {t.sizeText}</strong> × {t.quantity}</span>
-                  <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
-                    {t.tPosts * t.quantity} T-post{t.tPosts * t.quantity === 1 ? '' : 's'}
-                    {' · '}{t.mixGallonsPerTree == null ? 'mix not set' : `${t.mixGallonsPerTree * t.quantity} gal mix`}
-                  </span>
-                </div>
-              ))}
-              {model.offLadderTreeCount > 0 ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>{LOAD_LIST_COPY.offLadderNote(model.offLadderTreeCount)}</strong>
-                </div>
-              ) : null}
-              {model.noVolumeTrees.length > 0 ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>{LOAD_LIST_COPY.noVolumeNote}</strong>
-                  {model.noVolumeTrees.map(t => (
-                    <div key={`novol|${t.name}|${t.rungLabel}`} style={S.note}>{t.name} {t.sizeText} × {t.quantity}</div>
-                  ))}
-                </div>
-              ) : null}
-
-              <h2 style={S.h2}>3 · Hardware</h2>
               <div style={S.row} className="ll-row">
                 <span style={S.big}>{model.tPosts} T-posts</span>
                 <span style={S.note}>{LOAD_LIST_COPY.tPostRule}</span>
@@ -413,6 +390,28 @@ export function LoadList() {
                 <div style={S.row} className="ll-row">
                   <span style={S.big}>+{model.deerFencePosts} T-posts for deer fence</span>
                   <span style={S.note}>{LOAD_LIST_COPY.deerFenceTotal(model.valuesUsed.deerFenceTPostsPerTree)}</span>
+                </div>
+              ) : null}
+
+              {/* The trees are loaded by STOP, not by variety — every stop lists its own from page 2 —
+                  so the day's trees are one line here, a count to check the trailer against
+                  (David, 2026-09-18). The not-set-up and no-volume warnings stay beside it, because
+                  they say why a total above may be short. */}
+              <div style={S.row} className="ll-row">
+                <span style={S.big}>{LOAD_LIST_COPY.treesLine(model.treeCount, model.stopCount)}</span>
+                <span style={S.note}>{LOAD_LIST_COPY.treesByStop}</span>
+              </div>
+              {model.offLadderTreeCount > 0 ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>{LOAD_LIST_COPY.offLadderNote(model.offLadderTreeCount)}</strong>
+                </div>
+              ) : null}
+              {model.noVolumeTrees.length > 0 ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>{LOAD_LIST_COPY.noVolumeNote}</strong>
+                  {model.noVolumeTrees.map(t => (
+                    <div key={`novol|${t.name}|${t.rungLabel}`} style={S.note}>{t.name} {t.sizeText} × {t.quantity}</div>
+                  ))}
                 </div>
               ) : null}
 
@@ -468,8 +467,8 @@ export function LoadList() {
 
             </div>
 
-            {/* ── PER-STOP. What you need when a stop gets dropped. ───────────────────── */}
-            <h2 style={S.h2}>Per stop</h2>
+            {/* ── THE STOPS, from page 2 — each customer with their trees and quantities. ─── */}
+            <h2 style={S.h2}>{LOAD_LIST_COPY.stopsHeading}</h2>
             {model.stops.map(s => (
               <div key={s.stopId} style={{ margin: '0 0 1.25rem' }} className="ll-block ll-stop">
                 <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>

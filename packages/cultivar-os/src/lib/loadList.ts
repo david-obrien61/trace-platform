@@ -715,6 +715,12 @@ export const LOAD_LIST_COPY = {
   sizesFailed: 'Could not read this nursery’s container sizes — no tree can be staked or mixed until they load. Reload before you load the trailer.',
   sizesNone: 'No container sizes are set up for this nursery, so no tree can be staked or mixed. Set them up in Settings → Container sizes.',
   emptyDay: 'No stops are scheduled for this day.',
+  // 🔴 THE SHEET READS THE WAY THE TRAILER IS LOADED (David, 2026-09-18, ledger #355).
+  bulkHeading: 'Bulk materials — loads first',
+  treesLine: (trees: number, stops: number) =>
+    `${trees} tree${trees === 1 ? '' : 's'} across ${stops} stop${stops === 1 ? '' : 's'}`,
+  treesByStop: 'Each stop’s trees are listed with the stop, from the next page.',
+  stopsHeading: 'Stops',
   // 🔴 ONE SHEET PER CREW (ledger #354). A partial sheet says it is partial, says its totals are its
   // own, and names every stop of the day it does not carry.
   subsetHowTo: 'Untick the stops another crew is taking, then print. Every total is for the ticked stops only.',
