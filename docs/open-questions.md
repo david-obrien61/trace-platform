@@ -87,6 +87,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#356 — caliper on the ladder (build, BUILDER-COMPLETE, migration NOT APPLIED)**
+- ⛔ **OPEN — APPLY `20260918c_container_ladder_caliper.sql`, THEN MERGE (#355 first).** Owner: ledger #356.
+- 🔴 **OPEN — FREEHILL'S TWO 30 GAL TREES ARE BILLED GREEN MESH (THE OVER-4" SLEEVE).** The caliper rule says 1.5–2.5 in. Which is right — and is caliper the whole rule for which sleeve? Owner: tech-debt #349.
+- 🟡 **OPEN — TRUNK PROTECTION AS THREE QUICKBOOKS ITEMS?** The catalogue holds one generic item; the product is only in line text. Owner: tech-debt #349.
+- 🟡 **OPEN — THE CALIPER HEIGHT DEFAULT: 6 IN (ANSI) OR 12?** LAWNS is set to 12 either way. Owner: ledger #356.
+
 **#355 — the load sheet reads the way the trailer is loaded (build, BUILDER-COMPLETE)**
 - 🟡 **OPEN — ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** No → the one line stays. Yes → the roll-up moves to the back as a pick list (~1 h). Owner: ledger #355.
 
