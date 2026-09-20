@@ -29,7 +29,7 @@
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import React, { useCallback, useEffect, useState } from 'react';
-import { caliperText, validateLadder, type Rung } from '@trace/shared/inventory';
+import { CALIPER_STANDARD, caliperText, standardCaliperHeightInches, validateLadder, type Rung } from '@trace/shared/inventory';
 import { loadContainerLadder, type LadderRead } from '../../lib/containerLadderRead';
 import { addRung, updateRung, setRungActive, moveRung } from '../../lib/containerLadderWrite';
 import {
@@ -160,6 +160,8 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
     <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 20, marginBottom: 20 }}>
       <h2 style={{ color: GREEN, marginTop: 0 }}>Container sizes</h2>
       <p style={{ color: '#444', lineHeight: 1.5, maxWidth: 760, marginTop: 0 }}>
+        Caliper is read at the height set in <strong>Settings → Operations → Trees</strong>; what each size would be
+        measured at under {CALIPER_STANDARD.name} is shown beside it, for reference only.{' '}
         The sizes this nursery grows and sells, smallest first. <strong>A size added here is offered everywhere</strong> —
         the uppot plan, the count screen and the delivery load list. Sizes are never deleted: retiring one stops it being
         offered, and every old lot and order that names it still reads it. A change here affects the next load list and the
@@ -211,6 +213,11 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
                   {' · '}{r.handlingMinutes == null ? 'yard-wide handling rate' : `${r.handlingMinutes} min a pot`} ({r.handlingBecause})
                   {' · '}<strong>{r.installTPostsPerTree} T-post{r.installTPostsPerTree === 1 ? '' : 's'}</strong> at install ({r.installTPostsBecause})
                   {' · '}{caliperText(r) ? <><strong>caliper {caliperText(r)}</strong> ({r.caliperBecause})</> : 'caliper not recorded'}
+                  {/* Reference only — what the STANDARD would measure this size at. The height the
+                      platform uses is the nursery's own, in Settings → Operations → Trees. */}
+                  {standardCaliperHeightInches(r) != null
+                    ? <> · <span style={{ color: '#666' }}>{CALIPER_STANDARD.name} would measure it at {standardCaliperHeightInches(r)} in</span></>
+                    : null}
                 </div>
               </div>
               {canWrite && !isEditing && (

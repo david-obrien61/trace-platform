@@ -37,6 +37,7 @@
 // DEPENDENCIES: @trace/shared/production · ../../lib/supabase.
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
+import { CALIPER_STANDARD } from '@trace/shared/inventory';
 import { supabase } from '../../lib/supabase';
 import {
   OPERATIONS_DEFAULTS, OPERATIONS_BASIS, WITHHELD_REASON,
@@ -72,7 +73,7 @@ const GROUPS: Array<{ title: string; note?: string; keys: NumKey[] }> = [
   },
   {
     title: 'Trees',
-    note: 'The height above the soil line this nursery measures trunk caliper at. Every caliper on Container sizes is read at this height.',
+    note: `The height above the soil line this nursery measures trunk caliper at. Every caliper on Container sizes is read at this height. ${CALIPER_STANDARD.sentence}`,
     keys: ['caliperMeasuredAtInches'],
   },
   {
@@ -199,6 +200,18 @@ export default function OperationsSettings({ businessId, canWrite, canReadMoney 
           })}
         </div>
       ))}
+
+      {/* 🔴 WHERE THE HEIGHT CAME FROM, IN THE NURSERY'S OWN WORDS (ledger #356, David 2026-09-18). The
+          standard is a DEFAULT AND A REFERENCE, never enforced: a nursery that departs from it — LAWNS
+          measures everything at 12, including below 4½ in where the standard says 6 — says so here, and
+          the platform records the departure rather than correcting it. */}
+      <div style={{ marginBottom: 20 }}>
+        <h3 style={{ fontSize: 15, marginBottom: 8 }}>Where the caliper height came from</h3>
+        <input type="text" value={ops.caliperMeasuredAtBecause ?? ''} disabled={!canWrite}
+          placeholder={`Not said — pre-filled from the standard. ${CALIPER_STANDARD.sentence}`}
+          onChange={(e) => set('caliperMeasuredAtBecause', e.target.value)}
+          style={{ width: '100%', maxWidth: 760, minHeight: 44, fontSize: 15, padding: '4px 8px' }} />
+      </div>
 
       {/* ── THE WINDOW ── */}
       <div style={{ marginBottom: 20 }}>

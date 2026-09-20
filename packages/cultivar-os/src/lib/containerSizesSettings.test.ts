@@ -14,7 +14,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Ladder, Rung } from '@trace/shared/inventory';
+import { CALIPER_STANDARD, type Ladder, type Rung } from '@trace/shared/inventory';
 import {
   OPERATIONS_DEFAULTS, OPERATIONS_BASIS, PLANTING_MATERIAL_KEYS, PLANTING_MATERIAL_LABELS, plantingMaterialProblems,
   resolveConfig,
@@ -203,6 +203,26 @@ const LAWNS: Ladder = [
     '🔴 K14: the size list shows each caliper, and says "not recorded" rather than a blank');
   const opsScreen = strip(read('packages/cultivar-os/src/components/settings/OperationsSettings.tsx'));
   ok(/keys: \['caliperMeasuredAtInches'\]/.test(opsScreen), 'K15: Settings → Operations offers the measuring height');
+}
+
+// ══ §L THE STANDARD IS SHOWN, THE NURSERY'S OWN FIGURE IS USED (ledger #356, David 2026-09-18) ═══
+{
+  ok(OPERATIONS_BASIS.caliperMeasuredAtInches.because === CALIPER_STANDARD.sentence,
+    '🔴 L1: the height field shows the STANDARD\'s sentence as its basis — one wording, not a second copy');
+  ok(OPERATIONS_DEFAULTS.caliperMeasuredAtBecause === '',
+    'L2: nobody has said why by default — an empty reason, never an invented one');
+  ok(resolveConfig({ caliperMeasuredAtInches: 12, caliperMeasuredAtBecause: 'we measure everything at 12' }, null, false)
+       .ops.caliperMeasuredAtBecause === 'we measure everything at 12',
+    '🔴 L3: a nursery\'s own words are read back — the departure is RECORDED, not corrected');
+  const sizes = strip(read('packages/cultivar-os/src/components/settings/ContainerSizesSettings.tsx'));
+  ok(/standardCaliperHeightInches\(r\)/.test(sizes) && /would measure it at/.test(sizes),
+    '🔴 L4: each size shows what the standard would measure it at, for reference');
+  const opsScreen = strip(read('packages/cultivar-os/src/components/settings/OperationsSettings.tsx'));
+  ok(/caliperMeasuredAtBecause/.test(opsScreen) && /CALIPER_STANDARD\.sentence/.test(opsScreen),
+    '🔴 L5: Operations carries the height, the standard\'s sentence, and a box for the nursery\'s own words');
+  const mig = read('supabase/migrations/20260918c_container_ladder_caliper.sql');
+  ok(/caliperMeasuredAtBecause/.test(mig) && /not corrected/.test(mig),
+    '🔴 L6: the migration records WHY LAWNS measures at 12, in their own words');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);

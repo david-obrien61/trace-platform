@@ -71,6 +71,7 @@
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import { type BasisKind } from './basis';
+import { CALIPER_STANDARD } from '../inventory/containerLadder';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // THE OPERATIONS SIDE — `business_operations_config.config`, gated settings:read
@@ -156,6 +157,12 @@ export interface OperationsConfig {
    * at this height — a 3.25 in tree at 6 in is a smaller tree at 12.
    */
   caliperMeasuredAtInches: number;
+  /**
+   * Where that height came from, in the nursery's own words (David, 2026-09-18: the platform
+   * *"records where the value came from"*). Empty means nobody has said — the screen then shows the
+   * standard's sentence as the reason it is pre-filled.
+   */
+  caliperMeasuredAtBecause: string;
 }
 
 /** US gallons in one cubic yard: 46,656 in³ ÷ 231 in³. THE one definition (ledger #343) — the load
@@ -191,6 +198,7 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   bubblersPerTree: 1,
   deerFenceTPostsPerTree: 4,
   caliperMeasuredAtInches: 6,
+  caliperMeasuredAtBecause: '',
 };
 
 /**
@@ -220,7 +228,8 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
-  caliperMeasuredAtInches: { basis: 'suggestion', because: 'ANSI Z60.1 measures at 6 in (12 in once caliper passes 4 in) — set your own; LAWNS measures at 12' },
+  caliperMeasuredAtInches: { basis: 'suggestion', because: CALIPER_STANDARD.sentence },
+  caliperMeasuredAtBecause: { basis: 'fact', because: "the nursery's own words for why it measures where it does" },
 };
 
 /** Plain-language names for the planting-material keys. The screen shows these, never a key. */

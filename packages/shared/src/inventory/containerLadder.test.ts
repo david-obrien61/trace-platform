@@ -20,6 +20,7 @@
 import {
   foldLabel, numericKeysOf, resolveRung, rungsAbove, nextRung, validateLadder, handlingFor,
   sameSizeOnLadder, largestRung, activeRungs, rungFromRow, ladderCoverage, LADDER_FIELDS, LADDER_SELECT, caliperText,
+  standardCaliperHeightInches, CALIPER_STANDARD,
   type Rung, type Ladder,
 } from './containerLadder';
 
@@ -281,6 +282,27 @@ ok(cov.onLadder + cov.notContainer + cov.noSize + cov.unreadable + cov.offLadder
   ok(caliperText({ caliperMinInches: null, caliperMaxInches: null }) === null, '§K6 nothing recorded is null, for the caller to say so');
   ok((LADDER_FIELDS as readonly string[]).includes('caliper_min_inches') && (LADDER_FIELDS as readonly string[]).includes('caliper_max_inches')
      && (LADDER_FIELDS as readonly string[]).includes('caliper_because'), '§K7 the one field list asks for all three');
+}
+
+// ══ §S THE TRADE STANDARD — A DEFAULT AND A REFERENCE, NEVER ENFORCED (ledger #356) ═════════════
+// ANSI Z60.2-2025 §1.2.1, read from the document: six inches (from the SOIL LINE for container stock)
+// "up to and including the four-inch caliper size interval … from four inches up to, but not including,
+// 4.5 inches. If the caliper measured at six inches is four and one-half inches or more, the caliper
+// shall be measured at 12 inches".
+{
+  ok(CALIPER_STANDARD.switchAtInches === 4.5,
+    '🔴 §S1 the threshold is FOUR AND A HALF inches — a summary of the standard says 4, and the standard does not');
+  ok(CALIPER_STANDARD.smallHeightInches === 6 && CALIPER_STANDARD.largeHeightInches === 12, '§S2 the two heights are 6 and 12');
+  ok(/soil line/.test(CALIPER_STANDARD.sentence) && /4½ in or more/.test(CALIPER_STANDARD.sentence)
+     && /Change this if you measure differently/.test(CALIPER_STANDARD.sentence),
+    '🔴 §S3 the shown sentence says SOIL LINE, says 4½, and says it may be changed — a default, never a rule');
+  ok(standardCaliperHeightInches({ caliperMinInches: 1.5, caliperMaxInches: 2.5 }) === 6, '§S4 a 30 gal tree reads at 6 in');
+  ok(standardCaliperHeightInches({ caliperMinInches: 3.5, caliperMaxInches: 4.5 }) === 12,
+    '🔴 §S5 a tree reading exactly 4.5 moves to 12 in — "four and one-half inches OR MORE"');
+  ok(standardCaliperHeightInches({ caliperMinInches: 2.5, caliperMaxInches: 3.5 }) === 6, '§S6 …and 3.5 does not');
+  ok(standardCaliperHeightInches({ caliperMinInches: 5, caliperMaxInches: null }) === 12, '§S7 "5 in and up" reads at 12 in');
+  ok(standardCaliperHeightInches({ caliperMinInches: null, caliperMaxInches: null }) === null,
+    '🔴 §S8 a size with no caliper gets NO standard height — the screen says nothing rather than guessing');
 }
 
 console.log(`\n── containerLadder: ${passed} passed, ${failed} failed ──`);

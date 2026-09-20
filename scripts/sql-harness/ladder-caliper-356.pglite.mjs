@@ -88,7 +88,8 @@ const one = async (db, q) => (await db.query(q)).rows[0];
     'C3c a zero caliper is refused');
 
   const ops = await one(db, `SELECT config FROM public.business_operations_config WHERE business_id='${L}'`);
-  ok(ops && Object.keys(ops.config).join() === 'caliperMeasuredAtInches' && ops.config.caliperMeasuredAtInches === 12, `🔴 C4 LAWNS measures at 12 in, and nothing else is invented (got ${JSON.stringify(ops?.config)})`);
+  ok(ops && Object.keys(ops.config).sort().join() === 'caliperMeasuredAtBecause,caliperMeasuredAtInches'
+     && ops.config.caliperMeasuredAtInches === 12 && /measure everything at 12/.test(ops.config.caliperMeasuredAtBecause), `🔴 C4 LAWNS measures at 12 in, its own words are recorded, and nothing else is invented (got ${JSON.stringify(ops?.config)})`);
   ok((await one(db, `SELECT count(*)::int AS n FROM public.business_operations_config WHERE business_id='${T}'`)).n === 0, 'C4b no other tenant gets a height');
 
   // a re-run never overwrites what somebody has since edited

@@ -91,7 +91,8 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - ⛔ **OPEN — APPLY `20260918c_container_ladder_caliper.sql`, THEN MERGE (#355 first).** Owner: ledger #356.
 - 🔴 **OPEN — FREEHILL'S TWO 30 GAL TREES ARE BILLED GREEN MESH (THE OVER-4" SLEEVE).** The caliper rule says 1.5–2.5 in. Which is right — and is caliper the whole rule for which sleeve? Owner: tech-debt #349.
 - 🟡 **OPEN — TRUNK PROTECTION AS THREE QUICKBOOKS ITEMS?** The catalogue holds one generic item; the product is only in line text. Owner: tech-debt #349.
-- 🟡 **OPEN — THE CALIPER HEIGHT DEFAULT: 6 IN (ANSI) OR 12?** LAWNS is set to 12 either way. Owner: ledger #356.
+- ✅ **ANSWERED 2026-09-18 — the standard is SHOWN as a default and a reference, never enforced** (6 in from the soil line; 12 once the reading at 6 in is 4½ in or more). LAWNS's 12-throughout is recorded as their choice. Measured-at stays on the business.
+- 🟡 **OPEN — ROOT BALL: does LAWNS dig to the 10–12 in per inch rule of thumb, or to the standard's tables?** Owner: tech-debt #351.
 
 **#355 — the load sheet reads the way the trailer is loaded (build, BUILDER-COMPLETE)**
 - 🟡 **OPEN — ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** No → the one line stays. Yes → the roll-up moves to the back as a pick list (~1 h). Owner: ledger #355.

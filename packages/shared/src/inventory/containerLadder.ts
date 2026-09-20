@@ -332,6 +332,49 @@ export function sameSizeOnLadder(
 }
 
 /**
+ * 🔴 WHAT THE TRADE STANDARD SAYS, AS A DEFAULT AND A REFERENCE — NEVER ENFORCED (David, 2026-09-18).
+ * ANSI Z60.2-2025, the American Standard for Nursery Stock (approved 17 April 2025, superseding
+ * Z60.1-2014), read from the document itself, §1.2.1:
+ *   *"…caliper measurement is taken six inches above the ground level for field grown stock and from
+ *   the soil line for container grown stock, which should be at or near the top of the root flare…
+ *   up to and including the four-inch caliper size interval (i.e., from four inches up to, but not
+ *   including, 4.5 inches). If the caliper measured at six inches is four and one-half inches or
+ *   more, the caliper shall be measured at 12 inches above the ground level, soil line, or root
+ *   flare, as appropriate."*
+ * ⚠️ **THE THRESHOLD IS 4½ INCHES, NOT 4** — a summary of the standard says 4, and the standard does
+ * not. And for CONTAINER stock the six inches is measured from the SOIL LINE, not from the ground.
+ * The same section: *"Seldom are tree trunks perfectly round. The most accurate measurement will
+ * result from the use of a diameter tape. Caliper measurements taken with manual or electronic
+ * 'slot' or 'pincer' type caliper tools should be the average of the smallest and largest
+ * measurements."*
+ * 🔴 A NURSERY MAY DEPART FROM IT AND THE PLATFORM RECORDS THE DEPARTURE RATHER THAN CORRECTING IT.
+ * LAWNS measures everything at 12 inches, including below 4½ where the standard says 6 — Terry has
+ * forty years in the trade and knows the publication. The height the platform USES is the business's
+ * own (`caliperMeasuredAtInches`); this is what it SHOWS beside it.
+ */
+export const CALIPER_STANDARD = {
+  name: 'ANSI Z60.2-2025',
+  smallHeightInches: 6,
+  largeHeightInches: 12,
+  /** At and above this reading (taken at six inches), the standard moves the measurement to 12 in. */
+  switchAtInches: 4.5,
+  sentence:
+    'ANSI Z60.2-2025 measures at 6 in from the soil line for container stock, and at 12 in once the '
+    + 'reading at 6 in is 4½ in or more. Change this if you measure differently.',
+} as const;
+
+/**
+ * The height the STANDARD would measure this caliper at — 6 in, or 12 once the tree reads 4½ in or
+ * more. `null` when the rung records no caliper, so a caller says nothing rather than guessing.
+ * ⚠️ REFERENCE ONLY. What the platform uses is the business's `caliperMeasuredAtInches`.
+ */
+export function standardCaliperHeightInches(r: Pick<Rung, 'caliperMinInches' | 'caliperMaxInches'>): number | null {
+  const reading = r.caliperMaxInches ?? r.caliperMinInches;
+  if (reading == null) return null;
+  return reading >= CALIPER_STANDARD.switchAtInches ? CALIPER_STANDARD.largeHeightInches : CALIPER_STANDARD.smallHeightInches;
+}
+
+/**
  * The caliper as a person reads it — "1.5–2.5 in", "1.25 in", "5 in and up" — or `null` when the
  * rung has none recorded, so a caller says "not recorded" rather than printing a blank (ledger #356).
  */

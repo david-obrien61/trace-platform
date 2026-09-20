@@ -4546,3 +4546,13 @@ stop; that is tech-debt #345's territory, not this item's.
 4. **An item that is BOTH fitted and sold over the counter** — measured live 2026-09-18: trunk protection appears on an order with no trip charge (3648.606). An item is a product row or a service row, never both.
 
 **Blocker:** none for the document. Each of the four gaps is its own build and needs David's shape first.
+
+## #351 — 🟡 ROOT BALL SIZE: A LARGE-TREE RULE OF THUMB, NOT THE STANDARD'S RULE (NEW 2026-09-18 — FILED, NOT BUILT, David's instruction)
+
+**The rule of thumb.** ~**10–12 inches of root ball diameter per inch of caliper**, which the install BOM could read for hole size once anything reads caliper at all.
+
+🔴 **IT IS NOT WHAT ANSI Z60.2-2025 SAYS, AND THE DIFFERENCE MATTERS ON SMALL TREES.** The standard gives **tables** of minimum root ball diameter per caliper/height specification (§1.5.1 and the per-type tables), not a ratio. Read out of the document's own Type 1 shade-tree table: **½ in caliper → 12 in ball (≈24× per inch of caliper)** · ¾ in → 13 in · 1 in → 16 in · **1¼ in → 18 in (≈14×)** · **1½ in → 20 in (≈13×)**. The ratio falls as the tree grows and only approaches 10–12 on big stock. **So the rule of thumb is a LARGE-TREE approximation and is recorded here as one** (David, 2026-09-18: *"your reading of the tables is the one on record"*).
+
+**What it would take to use it.** The hole size belongs to the install BOM, beside the mix and the posts: a figure per rung (or the standard's table), read at print time by the load list. It needs (a) David's ruling on whether LAWNS digs to the rule of thumb or to the table, and (b) a home — today the install figures are per-tree ratios in `business_operations_config` and per-size figures on `container_ladder`; a ball diameter is per size, so the rung is its natural home, exactly like caliper.
+
+**Blocker:** David's ruling. Nothing reads caliper yet (ledger #356), and the hole size is a step past it.

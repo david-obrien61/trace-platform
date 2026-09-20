@@ -20,10 +20,14 @@
 -- 🔴 RANGES MAY OVERLAP BETWEEN RUNGS AND THAT IS NOT REFUSED. LAWNS's own 65 (3.5–4.5) and 95/100
 -- (4–5) overlap at 4–4.5: trees are not machined. A size is a pot; the caliper describes the trees
 -- that grow in it.
--- 🔴 THE MEASURING HEIGHT IS PER BUSINESS, NOT A CONSTANT. It varies by nursery (ANSI Z60.1 measures
--- at 6 in, and at 12 in once caliper passes 4 in; LAWNS measures everything at 12). It is stored as
--- `caliperMeasuredAtInches` in `business_operations_config.config`, beside the other figures a
--- nursery sets once. The code default is 6 and says it is a suggestion; LAWNS gets 12 below.
+-- 🔴 THE MEASURING HEIGHT IS PER BUSINESS, NOT A CONSTANT, AND THE STANDARD IS A DEFAULT, NEVER A RULE.
+-- ANSI Z60.2-2025 §1.2.1, read from the document: caliper is taken six inches above ground for field
+-- grown stock and FROM THE SOIL LINE for container grown stock, *"up to and including the four-inch
+-- caliper size interval (i.e., from four inches up to, but not including, 4.5 inches). If the caliper
+-- measured at six inches is four and one-half inches or more, the caliper shall be measured at 12
+-- inches"*. ⚠️ The threshold is 4½ in, not 4. LAWNS measures EVERYTHING at 12, including below 4½ —
+-- their choice, recorded in `caliperMeasuredAtBecause` below, not corrected. Both live in
+-- `business_operations_config.config`; the code default is 6 and says it is a suggestion.
 --
 -- 🔴 NO HISTORY MOVES. Nothing stores a caliper copied from a rung.
 --
@@ -81,11 +85,13 @@ UPDATE public.container_ladder cl
 -- every other figure keeps reading its default, exactly as before. If a row exists by the time this
 -- runs, the key is added only when absent — never overwriting a height somebody has since saved.
 INSERT INTO public.business_operations_config (business_id, config)
-SELECT b.id, jsonb_build_object('caliperMeasuredAtInches', 12)
+SELECT b.id, jsonb_build_object('caliperMeasuredAtInches', 12,
+                                 'caliperMeasuredAtBecause', 'LAWNS, David 2026-09-18 — they measure everything at 12 in, including below 4.5 in where ANSI Z60.2-2025 says 6. Their choice, recorded, not corrected.')
   FROM public.businesses b
  WHERE b.name = 'LAWNS Tree Farm, LLC'
 ON CONFLICT (business_id) DO UPDATE
-   SET config = public.business_operations_config.config || jsonb_build_object('caliperMeasuredAtInches', 12)
+   SET config = public.business_operations_config.config || jsonb_build_object('caliperMeasuredAtInches', 12,
+                                 'caliperMeasuredAtBecause', 'LAWNS, David 2026-09-18 — they measure everything at 12 in, including below 4.5 in where ANSI Z60.2-2025 says 6. Their choice, recorded, not corrected.')
  WHERE NOT (public.business_operations_config.config ? 'caliperMeasuredAtInches');
 
 -- ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -115,4 +121,5 @@ ON CONFLICT (business_id) DO UPDATE
 --
 -- V4 · LAWNS measures at 12 in, and nothing else in its Operations row was invented
 --   SELECT config FROM public.business_operations_config WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
---   -- EXPECT: {"caliperMeasuredAtInches": 12}
+--   -- EXPECT: {"caliperMeasuredAtInches": 12, "caliperMeasuredAtBecause": "LAWNS, David 2026-09-18 — they measure
+--   --           everything at 12 in, including below 4.5 in where ANSI Z60.2-2025 says 6. Their choice, recorded, not corrected."}
