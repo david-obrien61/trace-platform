@@ -169,9 +169,18 @@ COMMIT;
 --    AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9'
 --    AND qb_item_id = '1118';
 --
--- V4 · a counter spot-check in words: these should read 0.
+-- V4 · a counter spot-check in words: these three should read 0. The query selects a FIXED
+--      three BY ID — it is not "the first three it finds", so the same rows come back every run.
+--
+-- ✏️ CORRECTED 2026-09-20, COMMENT ONLY (§6 r1 — this file is APPLIED). The first draft named
+--    "Trip Charge · Tailgate Delivery · Labor Hours" beside ids 176/195/210, and those ids are
+--    NOT those rows: 176 is Stump Removal, 195 is Tree removal and disposal, 210 is Extra charge.
+--    David ran it and got the three the QUERY names, which is what a correct query looks like
+--    under a wrong label. All six are in the 44, so the check passed on its own terms — but a
+--    hand-written id→name mapping that nobody re-derived is exactly tech-debt #73's class, in a
+--    comment. The ids below are now the ones the names actually carry, re-derived from the run.
 -- SELECT name, qty, sell_price FROM public.business_inventory
 --  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
 --    AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9'
---    AND qb_item_id IN ('176', '195', '210')   -- Trip Charge · Tailgate Delivery · Labor Hours
+--    AND qb_item_id IN ('186', '117', '13')   -- Trip Charge · Tailgate Delivery · Labor Hours
 --  ORDER BY name;
