@@ -265,6 +265,11 @@ export const ITEM_IMPORT_INSERT_COLUMNS = [
   'business_id', 'name', 'size', 'description', 'sku', 'qty', 'status', 'variant_group',
   'sell_price', 'price_basis', 'qb_item_id', 'import_run_id',
   'unit_kind', 'unit_value', 'unit_value_max', 'unit_name', 'unit_parsed_from',
+  // 🔴 WHAT QUICKBOOKS CALLS THE ITEM (ledger #357, `20260920b`). Read since the first import and
+  // thrown away until now. `qb_item_name` is Intuit's CODE (`DLO30`) and is NOT a sku — where a
+  // row has both they differ — so the display identifier `sku ?? qb_item_name` is computed on
+  // read by `itemIdentifier()` and is never stored merged.
+  'qb_item_name', 'qb_item_fqn', 'qb_item_type', 'qb_income_account',
 ] as const;
 
 /** One adapted item → one row to insert. Pure, so the probes can assert the row without a client.
@@ -293,6 +298,10 @@ export function rowForItem(businessId: string, runId: string, item: AdaptedItem)
     price_basis: item.unitPrice === null ? null : 'quickbooks_item_price',
     qb_item_id: item.qboId,
     import_run_id: runId,
+    qb_item_name: item.qboName,
+    qb_item_fqn: item.fullyQualifiedName,
+    qb_item_type: item.qboType,
+    qb_income_account: item.incomeAccount,
     // 🔴 `variant_group` ADDED 2026-09-07 (tech-debt #205) — THE IMPORT WAS LEAVING EVERY FAMILY
     // UNGROUPED AND THE SIZE PICKER COULD NOT FIRE ON ANY OF THEM.
     //

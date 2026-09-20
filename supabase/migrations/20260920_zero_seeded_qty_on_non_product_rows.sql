@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 20260920 — THE STARTING-NUMBER SEED GAVE STOCK TO 41 ROWS THAT ARE NOT PRODUCTS · ledger #357
+-- 20260920 — THE STARTING-NUMBER SEED GAVE STOCK TO 44 ROWS THAT ARE NOT PRODUCTS · ledger #357
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
 --
@@ -14,13 +14,23 @@
 -- each item is — tech-debt #352, which waits on the item type and income account being stored.
 -- This file repairs the rows that are live today, and nothing else.
 --
--- ── THE 41 ROWS ─────────────────────────────────────────────────────────────────────────────
+-- ── THE 44 ROWS ─────────────────────────────────────────────────────────────────────────────
 -- Matched on `qb_item_id`, NOT on our row id: the QuickBooks id survives a reload, our id does
 -- not. Identified by reading every row the run created that carries no parsed size, plus every
 -- sized row whose name contains a fee word (only the three Tree Staking Kits, which are real
--- goods and are NOT touched). The four rows nobody could classify from the name are
--- DELIBERATELY LEFT ALONE, pending David: Arizona Cypress Blue Ice Replacement (1120),
--- Gallons Diesel (11), HYIS (1118) and Fertilizer-1 (1001).
+-- goods and are NOT touched).
+--
+-- ✏️ DAVID RULED THE FOUR UNCLASSIFIED ROWS 2026-09-20, AND THREE JOIN THE LIST (41 → 44), each
+-- checked against the book before it was added:
+--   · Arizona Cypress Blue Ice Replacement (1120) — ZERO. One invoice line, 2026-07-23, **$0**,
+--     described "Arizona Cypress Blue Ice (Replacement)". A warranty replacement, not stock.
+--   · Gallons Diesel (11) — ZERO. **Nothing in the book contradicts it:** zero lines across 1,510
+--     invoices, 318 estimates and the one credit memo. Fuel billed to a job.
+--   · Fertilizer-1 (1001) — ZERO. Sold ONCE, 2025-05-15, and the line reads **$250,
+--     "Fertilizations of Existing Trees and Shrubs"** — the WORK, not a product. The item's own
+--     $0 is a placeholder. It has never been sold as a product, which was David's condition.
+--   · HYIS (1118) — **KEPT AT 10.** Two invoice lines at $35 (2026-08-07, 2026-09-11), booked to
+--     Sales of Nursery Stock. Physical, so it keeps its starting number.
 --
 --   FEES / CHARGES (5)     Backyard Delivery · Tailgate Delivery · Trip Charge · Extra charge ·
 --                          Late fee
@@ -38,6 +48,10 @@
 --                          Discount 5%
 --   BOOKKEEPING (7)        Balance Correction · Bank Deposit/Customer Overpayment Refund ·
 --                          Credit · Custom Amount · Deposit · Gift Certificate · Sales
+--   RULED BY DAVID (3)     Arizona Cypress Blue Ice Replacement · Gallons Diesel · Fertilizer-1
+--                          ────────────────────────────────────────────────────────────────────
+--                          5 + 23 + 6 + 7 + 3 = 44. HYIS is the fourth ruled row and is KEPT,
+--                          so 587 of the 631 keep their seeded 10.
 --
 -- ── WHY NO LEDGER ROW IS WRITTEN, AND WHY THE LEDGER MUST STAY AT 470 ───────────────────────
 -- This is a plain UPDATE of `qty`. MEASURED on the live catalog 2026-09-20: `business_inventory`
@@ -58,26 +72,26 @@ DO $guard$
 DECLARE
   v_biz   uuid := 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
   v_run   uuid := 'bffc7713-d275-436c-bf8c-1ff29f3d14b9';
-  v_ids   text[] := ARRAY['1','2','3','4','5','6','7','8','10','12','13','14','15','16','91',
-                          '102','105','116','117','121','128','129','137','164','167','172',
-                          '176','186','187','195','196','197','198','199','207','210','603',
-                          '1000','1006','1007','1116'];
+  v_ids   text[] := ARRAY['1','2','3','4','5','6','7','8','10','11','12','13','14','15','16',
+                          '91','102','105','116','117','121','128','129','137','164','167',
+                          '172','176','186','187','195','196','197','198','199','207','210',
+                          '603','1000','1001','1006','1007','1116','1120'];
   v_found int;
   v_at10  int;
   v_at0   int;
   v_hist  int;
   v_done  int;
 BEGIN
-  IF array_length(v_ids, 1) <> 41 THEN
-    RAISE EXCEPTION 'REFUSED: the id list holds % entries, not 41. Nothing changed.', array_length(v_ids, 1);
+  IF array_length(v_ids, 1) <> 44 THEN
+    RAISE EXCEPTION 'REFUSED: the id list holds % entries, not 44. Nothing changed.', array_length(v_ids, 1);
   END IF;
 
   SELECT count(*) INTO v_found
     FROM public.business_inventory
    WHERE business_id = v_biz AND import_run_id = v_run AND qb_item_id = ANY(v_ids);
 
-  IF v_found <> 41 THEN
-    RAISE EXCEPTION 'REFUSED: % of the 41 rows are in run bffc7713 on this business, not 41. The catalogue has been reloaded or these ids have moved — re-identify before running this. Nothing changed.', v_found;
+  IF v_found <> 44 THEN
+    RAISE EXCEPTION 'REFUSED: % of the 44 rows are in run bffc7713 on this business, not 44. The catalogue has been reloaded or these ids have moved — re-identify before running this. Nothing changed.', v_found;
   END IF;
 
   SELECT count(*) FILTER (WHERE qty = 10),
@@ -86,12 +100,12 @@ BEGIN
     FROM public.business_inventory
    WHERE business_id = v_biz AND import_run_id = v_run AND qb_item_id = ANY(v_ids);
 
-  IF v_at0 = 41 THEN
-    RAISE EXCEPTION 'ALREADY APPLIED: all 41 rows are already at 0. Nothing changed.';
+  IF v_at0 = 44 THEN
+    RAISE EXCEPTION 'ALREADY APPLIED: all 44 rows are already at 0. Nothing changed.';
   END IF;
 
-  IF v_at10 <> 41 THEN
-    RAISE EXCEPTION 'REFUSED: % of the 41 rows hold the seeded 10; the rest hold some other number, which means a person or a sale has touched them. A real count must never be overwritten. Nothing changed.', v_at10;
+  IF v_at10 <> 44 THEN
+    RAISE EXCEPTION 'REFUSED: % of the 44 rows hold the seeded 10; the rest hold some other number, which means a person or a sale has touched them. A real count must never be overwritten. Nothing changed.', v_at10;
   END IF;
 
   -- A row with ledger history has had something real happen to it, so its number is not a
@@ -102,7 +116,7 @@ BEGIN
    WHERE i.business_id = v_biz AND i.import_run_id = v_run AND i.qb_item_id = ANY(v_ids);
 
   IF v_hist <> 0 THEN
-    RAISE EXCEPTION 'REFUSED: % of the 41 rows carry ledger history, so their quantity is a measured number and not the seed. Nothing changed.', v_hist;
+    RAISE EXCEPTION 'REFUSED: % of the 44 rows carry ledger history, so their quantity is a measured number and not the seed. Nothing changed.', v_hist;
   END IF;
 
   UPDATE public.business_inventory
@@ -112,8 +126,8 @@ BEGIN
 
   GET DIAGNOSTICS v_done = ROW_COUNT;
 
-  IF v_done <> 41 THEN
-    RAISE EXCEPTION 'REFUSED: the update touched % rows, not 41. Rolled back, nothing changed.', v_done;
+  IF v_done <> 44 THEN
+    RAISE EXCEPTION 'REFUSED: the update touched % rows, not 44. Rolled back, nothing changed.', v_done;
   END IF;
 
   RAISE NOTICE 'OK — % non-product rows set to 0. No ledger row was written.', v_done;
@@ -125,17 +139,18 @@ COMMIT;
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- VERIFY — run after applying. Read-only.
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- V1 · the 41 are at 0, and nothing else in the run moved. EXPECT: non_products_at_zero = 41 ·
---      products_still_at_ten = 590 · run_rows = 631.
+-- V1 · the 44 are at 0, and nothing else in the run moved. EXPECT: non_products_at_zero = 44 ·
+--      products_still_at_ten = 587 · run_rows = 631.
 -- SELECT
---   count(*) FILTER (WHERE qb_item_id = ANY(ARRAY['1','2','3','4','5','6','7','8','10','12','13',
---     '14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176',
---     '186','187','195','196','197','198','199','207','210','603','1000','1006','1007','1116'])
---     AND qty = 0) AS non_products_at_zero,
---   count(*) FILTER (WHERE NOT (qb_item_id = ANY(ARRAY['1','2','3','4','5','6','7','8','10','12',
+--   count(*) FILTER (WHERE qb_item_id = ANY(ARRAY['1','2','3','4','5','6','7','8','10','11','12',
 --     '13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172',
---     '176','186','187','195','196','197','198','199','207','210','603','1000','1006','1007',
---     '1116'])) AND qty = 10) AS products_still_at_ten,
+--     '176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006',
+--     '1007','1116','1120'])
+--     AND qty = 0) AS non_products_at_zero,
+--   count(*) FILTER (WHERE NOT (qb_item_id = ANY(ARRAY['1','2','3','4','5','6','7','8','10','11','12',
+--     '13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172',
+--     '176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006',
+--     '1007','1116','1120'])) AND qty = 10) AS products_still_at_ten,
 --   count(*) AS run_rows
 --   FROM public.business_inventory
 --  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
@@ -148,12 +163,11 @@ COMMIT;
 --   FROM public.business_inventory_ledger
 --  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 --
--- V3 · the four unclassified rows are untouched, still at 10, still David's call. EXPECT 4 rows.
+-- V3 · HYIS is the one unclassified row David KEPT. EXPECT one row, qty 10.
 -- SELECT name, qty FROM public.business_inventory
 --  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
 --    AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9'
---    AND qb_item_id IN ('1120', '11', '1118', '1001')
---  ORDER BY name;
+--    AND qb_item_id = '1118';
 --
 -- V4 · a counter spot-check in words: these should read 0.
 -- SELECT name, qty, sell_price FROM public.business_inventory

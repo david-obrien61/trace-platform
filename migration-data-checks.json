@@ -92,8 +92,8 @@
   },
   "20260920_zero_seeded_qty_on_non_product_rows.sql": {
    "kind": "evidence",
-   "means": "the 41 non-product rows of run bffc7713 carry qty 0, and the 590 real products still hold the seeded 10 \u2014 the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
-   "sql": "(SELECT count(*) FILTER (WHERE qb_item_id IN ('1','2','3','4','5','6','7','8','10','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1006','1007','1116') AND qty = 0) = 41 AND count(*) FILTER (WHERE qb_item_id NOT IN ('1','2','3','4','5','6','7','8','10','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1006','1007','1116') AND qty = 10) = 590 FROM business_inventory WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9')"
+   "means": "the 44 non-product rows of run bffc7713 carry qty 0, and the 587 real products still hold the seeded 10 \u2014 the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
+   "sql": "(SELECT count(*) FILTER (WHERE qb_item_id IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 0) = 44 AND count(*) FILTER (WHERE qb_item_id NOT IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 10) = 587 FROM business_inventory WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9')"
   }
  }
 }

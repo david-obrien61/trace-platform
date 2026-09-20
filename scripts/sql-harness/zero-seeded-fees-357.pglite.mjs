@@ -17,15 +17,16 @@ const MIG = readFileSync(`${process.cwd()}/supabase/migrations/20260920_zero_see
 const BIZ = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 const RUN = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9';
 const OWNER = '0a000000-0000-4000-8000-0000000000aa';
-/** The 41 the migration names, and the four it must leave alone. */
-const FEES = ['1','2','3','4','5','6','7','8','10','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1006','1007','1116'];
-const AMBIGUOUS = ['1120', '11', '1118', '1001'];
+/** The 44 the migration names, and the one row it must leave alone. */
+const FEES = ['1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120'];
+/** HYIS — the one row David KEPT at 10 (two invoice lines at $35, booked to Nursery Stock). */
+const KEPT = ['1118'];
 
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fails++; };
 const one = async (db, q, p = []) => (await db.query(q, p)).rows[0];
 
-/** A tenant mid-test: the run's 41 fee rows + 4 unclassified + 590 real products, all seeded to 10. */
+/** A tenant mid-test: the run's 44 non-product rows + HYIS + 586 real products, all seeded to 10. */
 async function fresh({ qtyOverride = null, withHistory = false, missingRow = false, alreadyZero = false } = {}) {
   const db = await openLiveDb();
   await db.exec(`insert into auth.users (id) values ('${OWNER}')`);
@@ -38,8 +39,8 @@ async function fresh({ qtyOverride = null, withHistory = false, missingRow = fal
     [BIZ, name, qty, qb, RUN]);
   const feeIds = missingRow ? FEES.slice(0, -1) : FEES;   // one row gone: deleted by hand, or a reload moved it
   for (const qb of feeIds) await add(qb, `Fee row ${qb}`, alreadyZero ? 0 : (qtyOverride ?? 10));
-  for (const qb of AMBIGUOUS) await add(qb, `Unclassified ${qb}`, 10);
-  for (let i = 0; i < 590 - AMBIGUOUS.length; i++) await add(`9${String(i).padStart(4, '0')}`, `Real product ${i}`, 10);
+  for (const qb of KEPT) await add(qb, `Unclassified ${qb}`, 10);
+  for (let i = 0; i < 587 - KEPT.length; i++) await add(`9${String(i).padStart(4, '0')}`, `Real product ${i}`, 10);
   if (withHistory) {
     const row = await one(db, `select id from public.business_inventory where business_id=$1 and qb_item_id='176'`, [BIZ]);
     await db.query(`insert into public.business_inventory_ledger (id, business_id, inventory_id, delta, kind, reason)
@@ -57,7 +58,7 @@ const counts = async (db) => await one(db, `select
   (select count(*)::int from public.business_inventory where business_id=$1 and qb_item_id = any($2) and qty = 0) fees_at_zero,
   (select count(*)::int from public.business_inventory where business_id=$1 and not (qb_item_id = any($2)) and qty = 10) others_at_ten,
   (select count(*)::int from public.business_inventory where business_id=$1 and qb_item_id = any($3) and qty = 10) unclassified_at_ten,
-  (select count(*)::int from public.business_inventory_ledger where business_id=$1) ledger_rows`, [BIZ, FEES, AMBIGUOUS]);
+  (select count(*)::int from public.business_inventory_ledger where business_id=$1) ledger_rows`, [BIZ, FEES, KEPT]);
 
 // ── A · THE HAPPY PATH ────────────────────────────────────────────────────────────────────────
 {
@@ -66,9 +67,9 @@ const counts = async (db) => await one(db, `select
   const r = await apply(db);
   const after = await counts(db);
   ok(r.ok, `A1 it applies (${r.error ?? 'no error'})`);
-  ok(after.fees_at_zero === 41, `A2 all 41 fee rows are at 0 (${after.fees_at_zero})`);
-  ok(after.others_at_ten === 590, `A3 the 590 other rows still hold their seeded 10 (${after.others_at_ten})`);
-  ok(after.unclassified_at_ten === 4, `A4 the four unclassified rows are untouched, still 10 (${after.unclassified_at_ten})`);
+  ok(after.fees_at_zero === 44, `A2 all 44 non-product rows are at 0 (${after.fees_at_zero})`);
+  ok(after.others_at_ten === 587, `A3 the 587 other rows still hold their seeded 10 (${after.others_at_ten})`);
+  ok(after.unclassified_at_ten === 1, `A4 HYIS — the row David kept — is untouched, still 10 (${after.unclassified_at_ten})`);
   ok(before.ledger_rows === 0 && after.ledger_rows === 0, `A5 🔴 NO ledger row was written (before ${before.ledger_rows}, after ${after.ledger_rows})`);
 }
 
@@ -82,14 +83,14 @@ const counts = async (db) => await one(db, `select
   const db = await fresh({ qtyOverride: 7 });
   const r = await apply(db);
   const after = await counts(db);
-  ok(!r.ok && /hold the seeded 10/.test(r.error), `B2 a fee row holding a number nobody seeded REFUSES — a real count is never overwritten (${(r.error ?? 'applied').slice(0, 70)})`);
+  ok(!r.ok && /hold the seeded 10/.test(r.error), `B2 a non-product row holding a number nobody seeded REFUSES — a real count is never overwritten (${(r.error ?? 'applied').slice(0, 70)})`);
   ok(after.fees_at_zero === 0, 'B3 …and nothing was changed');
 }
 {
   const db = await fresh({ withHistory: true });
   const r = await apply(db);
   const after = await counts(db);
-  ok(!r.ok && /ledger history/.test(r.error), `B4 a fee row with ledger history REFUSES (${(r.error ?? 'applied').slice(0, 70)})`);
+  ok(!r.ok && /ledger history/.test(r.error), `B4 a non-product row with ledger history REFUSES (${(r.error ?? 'applied').slice(0, 70)})`);
   ok(after.fees_at_zero === 0, 'B5 …and nothing was changed');
 }
 {
@@ -100,7 +101,7 @@ const counts = async (db) => await one(db, `select
   const db = await fresh({ missingRow: true });
   const r = await apply(db);
   const after = await counts(db);
-  ok(!r.ok && /not 41/.test(r.error), `B6 one of the 41 rows missing REFUSES — the catalogue is not what this file was written against (${(r.error ?? 'applied').slice(0, 70)})`);
+  ok(!r.ok && /not 44/.test(r.error), `B6 one of the 44 rows missing REFUSES — the catalogue is not what this file was written against (${(r.error ?? 'applied').slice(0, 70)})`);
   ok(after.fees_at_zero === 0, 'B7 …and nothing was changed');
 }
 {
@@ -109,7 +110,7 @@ const counts = async (db) => await one(db, `select
   await db.exec(`insert into public.businesses (id, owner_id, name, business_type, qbo_writes_enabled)
                  values ('${BIZ}', '${OWNER}', 'Empty', 'nursery', false)`);
   const r = await apply(db);
-  ok(!r.ok && /not 41/.test(r.error), `B8 on a database where the run does not exist it REFUSES rather than matching zero rows (${(r.error ?? 'applied').slice(0, 60)})`);
+  ok(!r.ok && /not 44/.test(r.error), `B8 on a database where the run does not exist it REFUSES rather than matching zero rows (${(r.error ?? 'applied').slice(0, 60)})`);
 }
 
 console.log(fails ? `\n${fails} probe(s) FAILED` : '\nall probes passed');

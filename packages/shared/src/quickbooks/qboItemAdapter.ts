@@ -74,6 +74,13 @@ export const SIZE_STATE_NOTE: Record<SizeState, string> = {
 export interface AdaptedItem extends IncomingItem {
   /** Intuit's own `Type`, carried through so the report can say what kind of thing this is. */
   qboType: string | null;
+  /** Intuit's raw `Name` — the CODE the owner types (`DLO30`), not the readable name. Kept
+   *  because it is the identifier LAWNS actually works in and their species sheets join on;
+   *  `name` above is read out of `Description` and is a different thing (ledger #357). */
+  qboName: string | null;
+  /** `IncomeAccountRef.name`. The LEADING half of what a row IS — at LAWNS 91 of 134
+   *  `Service`-typed rows are real plants, so the account decides and the type only assists. */
+  incomeAccount: string | null;
   /** Intuit's `FullyQualifiedName` — what tells two identically-named items apart on screen. */
   fullyQualifiedName: string | null;
   /** The item's published price, or null. NEVER coerced to 0 (itemList's own rule). */
@@ -290,6 +297,8 @@ export function adaptQboItems(rows: QboItemRow[]): AdaptedItemList {
       name: read.name ?? row.name,
       size: read.size,
       qboType: row.type,
+      qboName: row.name,
+      incomeAccount: row.incomeAccount,
       fullyQualifiedName: row.fullyQualifiedName,
       unitPrice: row.unitPrice,
       sourceDescription: row.description,

@@ -32,6 +32,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2, ClipboardCheck, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { itemIdentifier, itemIdentifierSource } from '@trace/shared/quickbooks/itemIdentifier';
 import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/dupSize';
 import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
@@ -72,6 +73,8 @@ interface InventoryRow {
   id: string;
   name: string;
   sku: string | null;
+  /** Intuit's item CODE (`DLO30`). Shown when the row has no SKU — see `itemIdentifier`. */
+  qb_item_name?: string | null;
   qty: number;
   unit_cost: number | null;
   sell_price: number | null;
@@ -103,7 +106,7 @@ interface InventoryRow {
 // base table still grants SELECT on every column, so a member with devtools reads unit_cost with
 // one query. This removes it from the rendered surface and is prerequisite work for the real fix
 // (#81 option (b) — move cost to a costs:read-gated side table, the labor_resource_wages shape).
-const BASE_COLS = 'id,name,sku,qty,sell_price,location,status,serial_number,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
+const BASE_COLS = 'id,name,sku,qb_item_name,qty,sell_price,location,status,serial_number,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
 const COST_COLS = 'unit_cost,cost_confidence';
 const coreCols = (canCosts: boolean) => (canCosts ? `${BASE_COLS},${COST_COLS}` : BASE_COLS);
 const fullCols = (canCosts: boolean) => `${coreCols(canCosts)},reorder_point`;
@@ -413,8 +416,20 @@ export function BusinessInventory() {
           </span>
         );
       } },
-    { key: 'sku', header: 'SKU', sortable: true, sortVal: r => (r.sku ?? '').toLowerCase(),
-      render: r => r.sku ? <span style={SS.skuText}>{r.sku}</span> : <span style={SS.muted}>—</span> },
+    // 🔴 SKU, ELSE THE QUICKBOOKS CODE — COMPUTED HERE, NEVER STORED MERGED (ledger #357).
+    // QuickBooks holds a SKU on 1 of LAWNS's 1,157 items; the code the owner types is Intuit's
+    // `Name`. The header says "SKU / code" rather than "SKU" because showing a QuickBooks item
+    // code under a header reading SKU is a small lie, and the two are genuinely different values
+    // (item 1048: sku `CBBM1Y`, code `BBM1Y`). The title attribute names which one is on screen.
+    { key: 'sku', header: 'SKU / code', sortable: true,
+      sortVal: r => (itemIdentifier(r) ?? '').toLowerCase(),
+      render: r => {
+        const id = itemIdentifier(r);
+        if (!id) return <span style={SS.muted}>—</span>;
+        const from = itemIdentifierSource(r);
+        return <span style={SS.skuText}
+                     title={from === 'sku' ? 'The SKU from QuickBooks' : 'This product has no SKU in QuickBooks — this is its QuickBooks item code'}>{id}</span>;
+      } },
     // D-52 — the three numbers, side by side. On-hand ("Qty") is the ONLY editable one; Committed
     // and Available are DERIVED and locked (§6 r13: a non-editable field reads as system-managed
     // WITH a reason, never as a mystery-greyed cell). They sit immediately beside Qty because the
