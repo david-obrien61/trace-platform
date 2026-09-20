@@ -1,5 +1,13 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #359 close-out, OP-13 N=3) — verbatim, not summarized. -->
+
+### 2026-09-18 — THUNDER **ONE LOAD SHEET PER CREW — TICK THE STOPS A CREW TAKES, PRINT, AND EVERY TOTAL IS THAT CREW'S. #354.** 🔴 David, from LAWNS: *"TWO CREWS SATURDAY, and the load list cannot be split."* The sheet read every stop on the date. Now `?stops=` picks the stops (`loadListSubset.ts`, pure) and ONLY those reach `buildLoadList`, so mix, posts, rope, kits and the could-not-work-out lines are the crew's and the day's totals are never computed on a crew's sheet. Tick boxes (screen only) write the link; all ticked = no `stops=` = today's whole-day sheet, unchanged. A partial sheet says *"carries 4 of the day's 8 stops"*, names every stop it does not carry, refuses an id from another day by name, and numbers each stop by Lauren's plan. **Saturday, live: stops 1–4 = 6.5 yd · 36 posts · 11 kits; 5–8 = 2.5 yd · 26 posts · 12 kits — the two add to the day's 9 · 62 · 23 exactly.**
+
+**Type:** BUILD (one pure helper + the page + copy), on `feat/load-list-subset`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #354. **§3 RETENTION: 1 archived verbatim (#351), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **THE CREW LINK IS STILL ONE PER DAY** — both drivers' phones show all 8 stops; only the paper splits. Per-team links are tech-debt #345 piece 4 · **(b)** ⚠️ **MIX ROUNDS UP PER SHEET** — two halves can add to half a yard more than the day (not on Saturday: 6.5 + 2.5 = 9) · **(c)** ⚠️ **CARDS 6 AND 19 PASSED ON PAPER TODAY AND ARE `owed` AGAIN** because the page changed; the whole-day path builds the same way · **(d)** ⚠️ **THE LAYOUT (bulk first), TRUNK-PROTECTION SIZES AND CALIPER ON THE LADDER ARE NOT STARTED** — reported one at a time, as you asked.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #356 close-out, stacked on #355, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #356 · #355 · #354; #353 overflowed (oldest).
      entries-in == entries-out. -->
