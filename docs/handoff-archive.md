@@ -1,5 +1,19 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, after merging origin/main —
+     #356 and #358 landed while #357 was in flight — OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id: #358 · #357 · #356; #355 and #354 overflowed.
+     ⚠️ #354's entry is NOT re-archived here: main had already archived it, and what this branch's
+     §3 still held was a STALE SNAPSHOT of the same entry (an earlier branch name and a different
+     flagged item, revised on main after this branch merged it). Main's copy is the current one and
+     is the one kept — no history is lost, and the archive keeps one heading per entry. -->
+
+### 2026-09-18 — THUNDER **THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED — PAGE 1 IS THE BULK, THE STOPS START ON PAGE 2, THE SPECIES ROLL-UP IS ONE LINE. #355.** David: *page 1 the date, then bulk materials (mix, T-posts, rope, bubblers, water monitor kits, trunk protection), then the stops from page 2.* The roll-up by variety had pushed the hardware onto page 2; it is now **"29 trees across 8 stops"**. Page only — every figure unchanged.
+
+**Type:** BUILD (page layout + copy), on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #355. **§3 RETENTION: 1 archived verbatim (#352), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** 🟡 **ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** If yes, the roll-up moves to the back as a pick list — ~1 h, no model change · **(b)** ⚠️ **CARDS 6 AND 19 ARE REWORDED** to the new layout (page 1 bulk, stops from page 2); their numbers are Saturday's 8-stop figures · **(c)** ⚠️ **ITEMS 3 (trunk-protection sizes) AND 4 (caliper on the ladder) ARE NEXT, IN THAT ORDER.**
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #358 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #358 · #355 · #353; #354 overflowed (oldest).
      (#356's entry lives on `feat/ladder-caliper`, unmerged, so it is not in §3 on this branch.)
@@ -23,6 +37,8 @@
 **Type:** BUILD (one pure helper + the page + copy), on `feat/load-list-subset`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #354. **§3 RETENTION: 1 archived verbatim (#351), 1 written — entries-in == entries-out.**
 
 **FLAGGED FOR DAVID:** **(a)** ⚠️ **THE CREW LINK IS STILL ONE PER DAY** — both drivers' phones show all 8 stops; only the paper splits. Per-team links are tech-debt #345 piece 4 · **(b)** ⚠️ **MIX ROUNDS UP PER SHEET** — two halves can add to half a yard more than the day (not on Saturday: 6.5 + 2.5 = 9) · **(c)** ⚠️ **CARDS 6 AND 19 PASSED ON PAPER TODAY AND ARE `owed` AGAIN** because the page changed; the whole-day path builds the same way · **(d)** ⚠️ **THE LAYOUT (bulk first), TRUNK-PROTECTION SIZES AND CALIPER ON THE LADDER ARE NOT STARTED** — reported one at a time, as you asked.
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, OP-13 N=3) — verbatim, not
+     summarized. §3 holds the newest three by date; the overflow moves here. entries-in == entries-out. -->
 
 ### 2026-09-18 — THUNDER **TWO CORRECTIONS TO THE INSTALL BOM — THE BUBBLER IS BILLED, NOT ONE PER TREE; THE WATER MONITOR KIT IS ONE PER TREE WE INSTALL. #352.** 🔴 David: *"the bubbler is manufactured and added with a cost so not on every tree, only those specified"* — the billed `Tree Bubbler` line is the only marker in the data and it is the count, so **Saturday 2026-09-19 prints "Bubblers — none specified on these orders" where it printed 27**, ledger #350's exception is gone and tech-debt #326 dissolves. The **water monitor kit** was missing entirely: one for every tree LAWNS installs (the order's `transport_method`) plus any billed on QuickBooks item 102 — **21 on Saturday** — printed as a COUNT only, never the parts. The manufacturing spec (**24"** of 1" PVC, drilled, plus a 3 ft bamboo stick) is filed against the item for the parked recipe builder.
 
