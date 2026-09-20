@@ -4556,3 +4556,35 @@ stop; that is tech-debt #345's territory, not this item's.
 **What it would take to use it.** The hole size belongs to the install BOM, beside the mix and the posts: a figure per rung (or the standard's table), read at print time by the load list. It needs (a) David's ruling on whether LAWNS digs to the rule of thumb or to the table, and (b) a home — today the install figures are per-tree ratios in `business_operations_config` and per-size figures on `container_ladder`; a ball diameter is per size, so the rung is its natural home, exactly like caliper.
 
 **Blocker:** David's ruling. Nothing reads caliper yet (ledger #356), and the hole size is a step past it.
+
+---
+
+## #353 — 🟡 AFTER A BULK HISTORY IMPORT THE ORDERS ROSTER SHOWS THE 50 MOST RECENTLY *WRITTEN* ROWS, WHICH WOULD ALL BE 2024–2025 INVOICES (NEW 2026-09-20, ledger #359 — filed in place of a defect that did not exist)
+
+**✏️ THIS ROW REPLACES A CLAIM I MADE AND GOT WRONG, AND THE CORRECTION IS THE REASON IT IS FILED.** The
+2026-09-20 build report stated that `/orders` had *"no read limit — `.order('created_at')` with no `.limit()`"*,
+and called it ledger #251's defect class on a second screen. **That is false.** `Orders.tsx` carries
+`.limit(ROSTER_PAGE_LIMIT)` with `ROSTER_PAGE_LIMIT = 50`, added **2026-08-28** by ledger #225, and
+`orderRosterFilter.ts:23` states the reasoning in its own words: *"a total that is silently a cap is a number
+that lies."* The roster also renders `rosterCountLabel(...)` — *"showing 3 of 50+"* — and logs `atPageCap`. **The
+screen is bounded and it says so.** The claim came from a grep for `\.limit\([0-9]+\)`, which cannot match
+`.limit(ROSTER_PAGE_LIMIT)`; absence of a match was read as absence of a limit. **That is the exact defect the
+report was about — [[R-26]], and #182's shape: a probe that could not reach its target reporting the same as one
+that passed.**
+
+**WHAT IS ACTUALLY TRUE, AND IT IS SMALLER.** The roster reads `.order('created_at', { ascending: false })`.
+Every row a bulk import writes carries the same `created_at` — the moment of the import — so after the
+1,510-invoice history import the newest 50 by `created_at` would be **1,510 imported historical invoices**,
+and this week's real orders would fall off the first page. The count sentence stays honest (*"of 50+"*), so
+**this is not a silent lie; it is the wrong fifty.** `orders.sale_date` is populated on every history order
+(the whole population today: 44 of 45) and is the honest sort for a roster of sales.
+
+**Blast radius, measured 2026-09-20.** `/orders` only. `CustomerDetail.tsx` has no limit and does not need one:
+the busiest QuickBooks customer holds **18 invoices**, the top three are 18 · 18 · 17, and **no customer has
+more than 50** — so the per-customer read cannot reach PostgREST's 1,000-row default.
+
+**Fix (filed, not built).** Sort the roster by `COALESCE(sale_date, created_at::date)` rather than `created_at`,
+or offer the sort. It is small, and it is **not urgent before the import** — the screen degrades legibly rather
+than lying. Bundle it with the import build, where the 1,510 rows arrive.
+
+**Blocker:** none. It waits on the import being scoped.
