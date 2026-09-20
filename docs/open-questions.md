@@ -87,6 +87,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**Onboarding discovery question set — filed 2026-09-18 (docs only, no ledger row; tech-debt #350)**
+- 🔴 **OPEN — WHERE DOES "THIS REQUIRES THAT" LIVE?** (LAWNS: install requires TC). No edge exists between two sellable rows; inferring install from the TC line is the workaround. Owner: tech-debt #350 / #342.
+- 🟡 **OPEN — DELIVERY RINGS: how many, how far from the yard, and measured from which of a customer's addresses?** Owner: tech-debt #350 / #323.
+- 🟡 **OPEN — AN ITEM SOLD BOTH FITTED AND OVER THE COUNTER: product, service, or both?** Measured 2026-09-18: trunk protection on invoice 3648.606, no TC line. Owner: tech-debt #350 / #349.
+
 **#354 — one load sheet per crew (build, BUILDER-COMPLETE)**
 - 🟡 **OPEN — CARD 20** (read-only, LAWNS Saturday): tick 1–4 → 6.5 yd · 36 posts · 11 kits; 5–8 → 2.5 yd · 26 posts · 12 kits. Owner: `load-list-full-surface-test.md`.
 - ⚠️ **NOTED — the crew link is still one per day**; only the paper splits. Owner: tech-debt #345 (piece 4).

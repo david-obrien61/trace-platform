@@ -56,6 +56,7 @@
 - **How demonstrated:** Click → sandbox clears → their real lineup (e.g. 116 varieties, 27 categories) materializes, flagged where uncertain.
 
 ### 1.4 AI-assisted questions — the onboarding IS the demo
+> 🔴 **THE QUESTIONS THEMSELVES ARE FILED: [docs/onboarding/discovery-question-set.md](onboarding/discovery-question-set.md)** (2026-09-18, David's instruction — tech-debt #350). Eight questions, each from a LAWNS surprise of that week, each naming where its answer lands and which have **no home yet**. This capability has described the ASKING since June; that file is the first time it has held the QUESTIONS.
 - **What:** For what the site can't tell us (sizes, counts), discovery **asks** — and the asking *is* the demonstration of "exploiting AI for small business." They confirm; the AI configures. **David: if builtwithCAI shows "exploit AI for small business," add that to the definition.**
 - **Status:** 🟡 PARTIAL (verified) — pain-point/question scaffolding exists in discovery; the "asking-as-configuration" wiring into real setup is net-new.
 - **When:** DEMO-BLOCKING (it's the close of the wow).

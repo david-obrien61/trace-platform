@@ -24,6 +24,7 @@ This tool exists to make sure no one else hand-writes those answers.
 ---
 
 ## What This Tool Is
+> 🔴 **WHAT IT MUST ASK ONCE IT HAS GUESSED: [docs/onboarding/discovery-question-set.md](docs/onboarding/discovery-question-set.md)** — the onboarding discovery question set (2026-09-18, tech-debt #350). The website read is the DRAFT; these eight questions are what turn it into fact (delivery rings and which address they measure from · sizes and variants · services · one thing REQUIRING another · install fees · kits · parts sold separately · an item sold both fitted and over the counter).
 
 **builtwithcai.com is TRACE's no-pressure front door.**
 

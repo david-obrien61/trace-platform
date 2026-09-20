@@ -4515,3 +4515,17 @@ route per day: routing Team 1's four REPLACED Lauren's eight-stop plan (the othe
 is no way to save a Team 2 route. Lauren's plan is recoverable exactly — the audit log holds every saved order (her
 09:57:52 save: Freehill → Sappal → Thiry → Garzon → Dubec → Gustafson → Kossa → Raja). Two crews need teams on the
 stop; that is tech-debt #345's territory, not this item's.
+
+## #350 — 🔴 THE ONBOARDING DISCOVERY QUESTION SET IS FILED, AND FOUR OF ITS EIGHT ANSWERS HAVE NOWHERE TO GO (NEW 2026-09-18 — FILED, NOT BUILT, David's instruction)
+
+**What.** [docs/onboarding/discovery-question-set.md](onboarding/discovery-question-set.md) — the eight questions a new business is asked during analysis, each taken from a LAWNS surprise of the same week. David: *"these must be asked during analysis, not discovered months in."* **PLATFORM, not LAWNS-specific.**
+
+**Where it runs.** Today: the analysis conversation before a catalogue import, by hand. Next: `customer-onboarding-capability_v1.md` §1.4 (which has described the asking since June and never held the questions — a pointer is now there), then the discovery module (`DISCOVERY_MODULE_BRIEF.md`, `api/discovery/ingest.ts`), then the onboarding wizard. 🔴 **No user story exists for it**; one is written before any screen (§9's story gate).
+
+**🔴 THE FOUR ANSWERS WITH NOWHERE TO GO — this is the item, not the document:**
+1. **Delivery rings** — no ring table, no stored coordinates (tech-debt #323).
+2. **One sellable thing REQUIRING another** (LAWNS: install requires TC) — there is no "requires" edge between two rows, and its absence is why the TC line has to be *inferred* as an install signal ([[R-164]], tech-debt #342).
+3. **Kits and their parts** — the recipe builder is parked; `docs/recipes/water-monitor-kit.md` is read by nothing.
+4. **An item that is BOTH fitted and sold over the counter** — measured live 2026-09-18: trunk protection appears on an order with no trip charge (3648.606). An item is a product row or a service row, never both.
+
+**Blocker:** none for the document. Each of the four gaps is its own build and needs David's shape first.
