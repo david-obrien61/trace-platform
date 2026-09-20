@@ -717,12 +717,16 @@ export const LOAD_LIST_COPY = {
   emptyDay: 'No stops are scheduled for this day.',
   // 🔴 THE SHEET READS THE WAY THE TRAILER IS LOADED (David, 2026-09-18, ledger #355).
   bulkHeading: 'Bulk materials — loads first',
-  treesLine: (trees: number, stops: number) =>
-    `${trees} tree${trees === 1 ? '' : 's'} across ${stops} stop${stops === 1 ? '' : 's'}`,
-  treesByStop: 'Each stop’s trees are listed with the stop, from the next page.',
   stopsHeading: 'Stops',
   // 🔴 ONE SHEET PER CREW (ledger #354). A partial sheet says it is partial, says its totals are its
   // own, and names every stop of the day it does not carry.
+  // 🔴 LAUREN PULLS BY VARIETY, THEN STAGES, THEN CHECKS THE NAMES (David, 2026-09-20, ledger #358).
+  // The roll-up is the PULL list; the per-stop list is the CHECK at staging, against the customer's
+  // name on each tree's tag. Neither is redundant — they are two steps of one job, in order.
+  pullHeading: (trees: number, stops: number) =>
+    `Trees to pull — ${trees} across ${stops} stop${stops === 1 ? '' : 's'}`,
+  pullWhy: 'Pull by variety, stage them, then check the names against the stops overleaf.',
+  stopsWhy: 'Each tree is tagged with the customer’s name. Check the tags against these names as you stage.',
   subsetHowTo: 'Untick the stops another crew is taking, then print. Every total is for the ticked stops only.',
   subsetOfDay: (dayStops: number) => `of ${dayStops} on this day`,
   subsetHeading: (kept: number, dayStops: number) =>

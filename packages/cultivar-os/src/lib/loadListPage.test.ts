@@ -276,13 +276,18 @@ function ok(cond: boolean, msg: string): void {
   const open = code.lastIndexOf('<div', headline);
   ok(headline !== -1 && headline < bulk && depth(open, bulk) > 0 && depth(open, stops) <= 0,
     '🔴 L3: the bulk sits inside the page-1 block that breaks after itself, so the stops start on page 2');
-  ok(/LOAD_LIST_COPY\.treesLine\(model\.treeCount, model\.stopCount\)/.test(code) && at('LOAD_LIST_COPY.treesLine(') < stops,
-    '🔴 L4: the day\'s trees are ONE line on page 1 — "29 trees across 8 stops"');
+  // ✏️ REVERSED 2026-09-20 (ledger #358): Lauren pulls BY VARIETY, so the roll-up is the pull list and
+  // it sits between the bulk and the stops — pull, stage, check names, load.
+  ok(/LOAD_LIST_COPY\.pullHeading\(model\.treeCount, model\.stopCount\)/.test(code)
+     && at('LOAD_LIST_COPY.pullHeading(') > bulk && at('LOAD_LIST_COPY.pullHeading(') < stops,
+    '🔴 L4: the PULL list sits after the bulk and before the stops — the order the work happens in');
+  ok(at('LOAD_LIST_COPY.pullWhy') < stops && /LOAD_LIST_COPY\.stopsWhy/.test(code) && at('LOAD_LIST_COPY.stopsWhy') > stops,
+    '🔴 L4b: each list says what it is FOR — pull by variety, then check the tag names at staging');
   ok(!/2 · Trees|in total<\/h2>/.test(code), 'L5 (negative): the species roll-up heading is gone');
   const fence = at('Deer fence — add by hand');
   const treeMaps = [...code.matchAll(/model\.trees\.map\(/g)].map(m => m.index ?? -1);
-  ok(treeMaps.length === 1 && treeMaps[0] > fence,
-    '🔴 L6 (negative): the only per-variety list left is the deer-fence block, which prints only when a stop is fenced');
+  ok(treeMaps.length === 2 && treeMaps[0] < stops && treeMaps[1] > fence,
+    '🔴 L6: exactly TWO per-variety lists — the pull list on page 1, and the deer-fence block that prints only when a stop is fenced');
   ok(at('model.offLadderTreeCount > 0 ?') > at('LOAD_LIST_COPY.treesLine(') && at('model.offLadderTreeCount > 0 ?') < stops,
     'L7: the not-set-up warning stays beside the trees line, on page 1');
 }

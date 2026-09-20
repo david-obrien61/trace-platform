@@ -1,5 +1,9 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #358 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #358 · #355 · #353; #354 overflowed (oldest).
+     (#356's entry lives on `feat/ladder-caliper`, unmerged, so it is not in §3 on this branch.)
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #356 close-out, stacked on #355, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #356 · #355 · #354; #353 overflowed (oldest).
      entries-in == entries-out. -->
@@ -13,6 +17,12 @@
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #355 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #355 · #354 · #353; #352 overflowed (oldest).
      entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **ONE LOAD SHEET PER CREW — TICK THE STOPS A CREW TAKES, PRINT, AND EVERY TOTAL IS THAT CREW'S. #354.** 🔴 David, from LAWNS: *"TWO CREWS SATURDAY, and the load list cannot be split."* The sheet read every stop on the date. Now `?stops=` picks the stops (`loadListSubset.ts`, pure) and ONLY those reach `buildLoadList`, so mix, posts, rope, kits and the could-not-work-out lines are the crew's and the day's totals are never computed on a crew's sheet. Tick boxes (screen only) write the link; all ticked = no `stops=` = today's whole-day sheet, unchanged. A partial sheet says *"carries 4 of the day's 8 stops"*, names every stop it does not carry, refuses an id from another day by name, and numbers each stop by Lauren's plan. **Saturday, live: stops 1–4 = 6.5 yd · 36 posts · 11 kits; 5–8 = 2.5 yd · 26 posts · 12 kits — the two add to the day's 9 · 62 · 23 exactly.**
+
+**Type:** BUILD (one pure helper + the page + copy), on `feat/load-list-subset`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #354. **§3 RETENTION: 1 archived verbatim (#351), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **THE CREW LINK IS STILL ONE PER DAY** — both drivers' phones show all 8 stops; only the paper splits. Per-team links are tech-debt #345 piece 4 · **(b)** ⚠️ **MIX ROUNDS UP PER SHEET** — two halves can add to half a yard more than the day (not on Saturday: 6.5 + 2.5 = 9) · **(c)** ⚠️ **CARDS 6 AND 19 PASSED ON PAPER TODAY AND ARE `owed` AGAIN** because the page changed; the whole-day path builds the same way · **(d)** ⚠️ **THE LAYOUT (bulk first), TRUNK-PROTECTION SIZES AND CALIPER ON THE LADDER ARE NOT STARTED** — reported one at a time, as you asked.
 
 ### 2026-09-18 — THUNDER **TWO CORRECTIONS TO THE INSTALL BOM — THE BUBBLER IS BILLED, NOT ONE PER TREE; THE WATER MONITOR KIT IS ONE PER TREE WE INSTALL. #352.** 🔴 David: *"the bubbler is manufactured and added with a cost so not on every tree, only those specified"* — the billed `Tree Bubbler` line is the only marker in the data and it is the count, so **Saturday 2026-09-19 prints "Bubblers — none specified on these orders" where it printed 27**, ledger #350's exception is gone and tech-debt #326 dissolves. The **water monitor kit** was missing entirely: one for every tree LAWNS installs (the order's `transport_method`) plus any billed on QuickBooks item 102 — **21 on Saturday** — printed as a COUNT only, never the parts. The manufacturing spec (**24"** of 1" PVC, drilled, plus a 3 ft bamboo stick) is filed against the item for the parked recipe builder.
 

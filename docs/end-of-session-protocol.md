@@ -25,6 +25,13 @@ This check applies at the moment of opening a file to edit it — not retrospect
 
 ## SCHEMA VERIFICATION GATE (mid-session — triggers on any table-touching change)
 
+> 🔴 **A V-STEP THAT EXPECTS A REFUSAL SAYS SO IN ITS OWN LINE: "THE ERROR IS THE PASS."** David,
+> 2026-09-20, having stopped at one: *"V2's expected-failure line reads as a real error in the SQL
+> editor output. Worth a line saying 'the ERROR is the pass' so the next person does not stop there —
+> I did."* Every verification step that proves a CHECK, a policy or a trigger REFUSES something ends
+> with what the reader will see and what it means: the red error, the constraint's own name, and the
+> rollback. A step that reads as a failure to the person running it will be read as one.
+
 **A migration is NOT "done" and NOT committable-as-working until Thunder produces catalog-backed verification output showing the change STUCK.**
 
 This gate fires during the session, not at close — the moment you create or alter a table, column, policy, constraint, FK, or trigger. Verification queries hit the live catalog (`information_schema` / `pg_catalog`), NEVER the builder's memory. Structure AND security must both be proven. RLS is MANDATORY — it is the failure that does not announce itself and leaks tenant data silently.

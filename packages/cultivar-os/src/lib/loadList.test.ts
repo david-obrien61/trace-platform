@@ -753,8 +753,12 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
 
 // ══ §L THE TREES ARE ONE LINE (ledger #355) ═══════════════════════════════════════
 {
-  ok(LOAD_LIST_COPY.treesLine(29, 8) === '29 trees across 8 stops', '🔴 L1: the day\'s trees read "29 trees across 8 stops" (David, 2026-09-18)');
-  ok(LOAD_LIST_COPY.treesLine(1, 1) === '1 tree across 1 stop', 'L2: …and singular reads as singular');
+  // ✏️ REVERSED 2026-09-20 (ledger #358, Lauren's answer): the roll-up is the PULL list, not a line.
+  ok(LOAD_LIST_COPY.pullHeading(29, 8) === 'Trees to pull — 29 across 8 stops',
+    '🔴 L1: the roll-up is headed as what it IS — the list the yard pulls against');
+  ok(LOAD_LIST_COPY.pullHeading(1, 1) === 'Trees to pull — 1 across 1 stop', 'L2: …and singular reads as singular');
+  ok(/tagged with the customer/i.test(LOAD_LIST_COPY.stopsWhy),
+    '🔴 L2b: the stops say WHY they are there — the tag carries the customer\'s name, checked at staging');
   ok(LOAD_LIST_COPY.bulkHeading.startsWith('Bulk materials'), 'L3: page 1 is headed as the bulk');
 }
 

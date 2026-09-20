@@ -1,5 +1,7 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
+# Last updated: 2026-09-20 — #358 the species roll-up returns as the pick list — see §3
+
 # Last updated: 2026-09-18 — #356 caliper on the ladder — see §3
 # ⚠️ THIS LINE IS A POINTER, NEVER A SUMMARY (OP-13 / STD-011) — the narrative lives in §3 and ONLY in §3. Do not restate it here.
 # ⚠️ ONE POINTER LINE, NOT A STACK — four accumulated here by 2026-09-12 (#305 · #307 · #309 twice, one a duplicate of the other). The rule says ONE line; four pointers is the header regrowing sideways, which the line-count metric cannot see either (OP-13's own finding).
@@ -271,6 +273,12 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > The proof narrative — how it was proven, the verify counts, the mutation scores, the reasoning — goes in that build's **`docs/CLOSE-OUT-LEDGER.md` row**, which is permanent and which nothing has to cut.
 > **The preamble above is the test: §3's value is being LOADED, not being stored.** A proof narrative is not what a session needs loaded; it is what it needs to be able to FIND.
 > ⚠️ **AND THE ENTRY IS NOT OPTIONAL — a ledger row with no §3 entry is an INCOMPLETE CLOSE-OUT**, asserted by `npm run verify:handoff-retention` (check 5).
+### 2026-09-20 — THUNDER **LAUREN PULLS BY VARIETY — THE SPECIES ROLL-UP COMES BACK AS THE PICK LIST. #358.** Her process, via David: *pull by variety → stage → check the names at staging → load*, and the tag on each tree carries the CUSTOMER'S name. ✏️ **REVERSES #355's one-line version, two days old** — it was cut on the belief that nothing is loaded by variety; the PULL is. Page 1: the bulk, then **Trees to pull — 29 across 8 stops**; the stops from page 2 are the name check. Page only; no figure moves. ✏️ **Id moved #357 → #358 under [[R-148]] clause (4)** — `fix/seeded-fee-rows` claimed #357 ninety-four seconds earlier.
+
+**Type:** BUILD (page layout + copy), on `feat/load-list-pick-list`, **own worktree (§6 r20)**, one ledger id. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #358.
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **TWO VIEWS OF THE SAME TREES IS NOW DELIBERATE, NOT DUPLICATION** — the sheet says what each is for, so nobody "tidies" one away again · **(b)** ⚠️ **CARDS 1, 6 AND 19 ARE REWORDED** and stay `owed` · **(c)** 🔴 **THE TAG QUESTION IS REPORTED, NOT BUILT** — committed stock is already DERIVED from open orders (D-52); nothing today can hold the tag NAME against an order line.
+
 ### 2026-09-18 — THUNDER **CALIPER ON THE LADDER — EVERY SIZE CARRIES ITS TRUNK CALIPER, READ AT THE NURSERY'S OWN HEIGHT. #356. TECH-DEBT #349.** David: *"the trade measure LAWNS buys and sells on, and the real graduation test."* Min and max caliper per rung (nullable; a blank max = "and up"), LAWNS backfilled 3/5 1.0 · 15 1.25 · 30 1.5–2.5 · 45 2.5–3.5 · 65 3.5–4.5 · 95/100 4–5 · 200 5+, and the measuring height as a per-business Operations figure (LAWNS 12 in). Nothing reads caliper yet. **Trunk protection (item 3) filed as tech-debt #349:** the catalogue has one generic item; the product lives only in line text; and Saturday's Freehill order bills the over-4" mesh for two 30 gal trees.
 
 **Type:** BUILD + MIGRATION WRITTEN (NOT APPLIED), on `feat/ladder-caliper` stacked on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, one ledger id. Migration executed on PGlite, ALL PASS. Proof narrative: ledger #356. **§3 RETENTION: 1 archived verbatim (#353), 1 written — entries-in == entries-out.**
@@ -282,13 +290,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 **Type:** BUILD (page layout + copy), on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #355. **§3 RETENTION: 1 archived verbatim (#352), 1 written — entries-in == entries-out.**
 
 **FLAGGED FOR DAVID:** **(a)** 🟡 **ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** If yes, the roll-up moves to the back as a pick list — ~1 h, no model change · **(b)** ⚠️ **CARDS 6 AND 19 ARE REWORDED** to the new layout (page 1 bulk, stops from page 2); their numbers are Saturday's 8-stop figures · **(c)** ⚠️ **ITEMS 3 (trunk-protection sizes) AND 4 (caliper on the ladder) ARE NEXT, IN THAT ORDER.**
-
-### 2026-09-18 — THUNDER **ONE LOAD SHEET PER CREW — TICK THE STOPS A CREW TAKES, PRINT, AND EVERY TOTAL IS THAT CREW'S. #354.** 🔴 David, from LAWNS: *"TWO CREWS SATURDAY, and the load list cannot be split."* The sheet read every stop on the date. Now `?stops=` picks the stops (`loadListSubset.ts`, pure) and ONLY those reach `buildLoadList`, so mix, posts, rope, kits and the could-not-work-out lines are the crew's and the day's totals are never computed on a crew's sheet. Tick boxes (screen only) write the link; all ticked = no `stops=` = today's whole-day sheet, unchanged. A partial sheet says *"carries 4 of the day's 8 stops"*, names every stop it does not carry, refuses an id from another day by name, and numbers each stop by Lauren's plan. **Saturday, live: stops 1–4 = 6.5 yd · 36 posts · 11 kits; 5–8 = 2.5 yd · 26 posts · 12 kits — the two add to the day's 9 · 62 · 23 exactly.**
-
-**Type:** BUILD (one pure helper + the page + copy), on `feat/load-list-subset`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #354. **§3 RETENTION: 1 archived verbatim (#351), 1 written — entries-in == entries-out.**
-
-**FLAGGED FOR DAVID:** **(a)** ⚠️ **THE CREW LINK IS STILL ONE PER DAY** — both drivers' phones show all 8 stops; only the paper splits. Per-team links are tech-debt #345 piece 4 · **(b)** ⚠️ **MIX ROUNDS UP PER SHEET** — two halves can add to half a yard more than the day (not on Saturday: 6.5 + 2.5 = 9) · **(c)** ⚠️ **CARDS 6 AND 19 PASSED ON PAPER TODAY AND ARE `owed` AGAIN** because the page changed; the whole-day path builds the same way · **(d)** ⚠️ **THE LAYOUT (bulk first), TRUNK-PROTECTION SIZES AND CALIPER ON THE LADDER ARE NOT STARTED** — reported one at a time, as you asked.
-
 
 ## 3b. OPEN QUESTIONS — the register
 

@@ -695,6 +695,8 @@
 
 ### ⭐ THE CONTAINER LADDER — A CONTAINER SIZE IS A RUNG, NOT A NUMBER (2026-09-14, ledger #326, R-157)
 
+- 🟡 **#358 (2026-09-20) — THE SPECIES ROLL-UP IS THE PICK LIST · BUILDER-COMPLETE** · Lauren pulls by variety, then checks tag names at staging; reverses #355's one line · owner-proof: load-list CARDS 1, 6, 19 → `docs/CLOSE-OUT-LEDGER.md` #358
+
 - 🟡 **#356 (2026-09-18) — CALIPER ON THE LADDER · BUILDER-COMPLETE · ⛔ MIGRATION `20260918c` NOT APPLIED** · min/max caliper per size, LAWNS backfilled; measuring height per business (LAWNS 12 in) · owner-proof: uppot CARD 31 → `docs/CLOSE-OUT-LEDGER.md` #356
 - 🟡 **#355 (2026-09-18) — THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED · BUILDER-COMPLETE** · page 1 the bulk, the stops from page 2, trees as one line · owner-proof: load-list CARDS 6 and 19 → `docs/CLOSE-OUT-LEDGER.md` #355
 - 🟡 **#354 (2026-09-18) — ONE LOAD SHEET PER CREW · BUILDER-COMPLETE** · tick the stops a crew takes, print; totals are that crew's only; a partial sheet names the stops it does not carry · owner-proof: load-list CARD 20 → `docs/CLOSE-OUT-LEDGER.md` #354

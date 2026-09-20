@@ -693,7 +693,11 @@ COVERS: ledger #343 — the uppot starting size is the rung's volume
 **STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
 COVERS: ledger #356 — David, 2026-09-18: *"the trade measure LAWNS buys and sells on, and the real graduation test"*
 
-⛔ **MIGRATION GATE: `supabase/migrations/20260918c_container_ladder_caliper.sql` must be applied first** (SQL editor, as postgres, whole file), then its V1–V4 pasted back. **Until it is, do not merge `feat/ladder-caliper`** — the ladder reader asks for the new columns, and every ladder read would fail.
+✅ **APPLIED 2026-09-20 by David — V1–V4 all pass** (three columns with the honest default · the 45 gal max-below-min UPDATE refused by `container_ladder_caliper_range_check` and rolled back · nine rungs with calipers and provenance · `caliperMeasuredAtInches` 12 with its because line). Measured live afterwards: 3/5 1.0 · 15 1.25 · 30 1.5–2.5 · 45 2.5–3.5 · 65 3.5–4.5 · 95/100 4–5 · 200 5+, slip and 4 in not recorded.
+
+🔴 **WHEN A V-BLOCK EXPECTS A REFUSAL, THE ERROR IS THE PASS.** David, 2026-09-20: *"V2's expected-failure line reads as a real error in the SQL editor output… I did [stop there]."* A V-step that ends `-- EXPECT: … violates check constraint …` has PASSED when the SQL editor shows that red error and the transaction rolls back; it has FAILED if the UPDATE succeeds. Read the constraint NAME in the error: it must be the one the step names.
+
+⛔ **THE MIGRATION GATE, for anyone running this on another tenant: `supabase/migrations/20260918c_container_ladder_caliper.sql` must be applied first** (SQL editor, as postgres, whole file), then its V1–V4 pasted back. **Until it is, do not merge `feat/ladder-caliper`** — the ladder reader asks for the new columns, and every ladder read would fail.
 
 1. **Settings → Container sizes.** **PASS:** each size's line ends with its caliper, exactly:
    **3/5 gal — caliper 1 in · 15 gal — caliper 1.25 in · 30 gal — caliper 1.5–2.5 in · 45 gal — caliper 2.5–3.5 in · 65 gal — caliper 3.5–4.5 in · 95/100 — caliper 4–5 in · 200 gal — caliper 5 in and up**, each followed by *(LAWNS, David 2026-09-18 — measured 12 in above the soil line)*. **slip** and **4 in** say **caliper not recorded**.
