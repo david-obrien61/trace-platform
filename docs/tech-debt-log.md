@@ -4559,7 +4559,7 @@ stop; that is tech-debt #345's territory, not this item's.
 
 ---
 
-## #353 — 🟡 AFTER A BULK HISTORY IMPORT THE ORDERS ROSTER SHOWS THE 50 MOST RECENTLY *WRITTEN* ROWS, WHICH WOULD ALL BE 2024–2025 INVOICES (NEW 2026-09-20, ledger #359 — filed in place of a defect that did not exist)
+## #354 — 🟡 AFTER A BULK HISTORY IMPORT THE ORDERS ROSTER SHOWS THE 50 MOST RECENTLY *WRITTEN* ROWS, WHICH WOULD ALL BE 2024–2025 INVOICES (NEW 2026-09-20, ledger #359 — filed in place of a defect that did not exist)
 
 **✏️ THIS ROW REPLACES A CLAIM I MADE AND GOT WRONG, AND THE CORRECTION IS THE REASON IT IS FILED.** The
 2026-09-20 build report stated that `/orders` had *"no read limit — `.order('created_at')` with no `.limit()`"*,
@@ -4588,3 +4588,5 @@ or offer the sort. It is small, and it is **not urgent before the import** — t
 than lying. Bundle it with the import build, where the 1,510 rows arrive.
 
 **Blocker:** none. It waits on the import being scoped.
+
+✏️ **FILED AS #353 AT 14:41 AND RENUMBERED TO #354.** `origin/fix/seeded-fee-rows` claims #353 too (the import preview's field map). **By commit time mine is earlier — 14:41:00 against 14:47:51 — so R-148 clause (4) would move theirs.** I moved MINE anyway, deliberately: their row was first filed as #351 at **14:05:19** and was renumbered into #353 by a collision of its own, so its real claim predates mine by half an hour; and mine is one day old, cited by nothing but its own ledger row, while theirs carries a live measurement another session already depends on. **Cheapest thing to move, on #335's precedent.** `verify-id-sweep` never moves an id and did not move this one.
