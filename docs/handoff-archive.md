@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, OP-13 N=3) — verbatim, not
+     summarized. §3 holds the newest three by date; the overflow moves here. entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **TWO CORRECTIONS TO THE INSTALL BOM — THE BUBBLER IS BILLED, NOT ONE PER TREE; THE WATER MONITOR KIT IS ONE PER TREE WE INSTALL. #352.** 🔴 David: *"the bubbler is manufactured and added with a cost so not on every tree, only those specified"* — the billed `Tree Bubbler` line is the only marker in the data and it is the count, so **Saturday 2026-09-19 prints "Bubblers — none specified on these orders" where it printed 27**, ledger #350's exception is gone and tech-debt #326 dissolves. The **water monitor kit** was missing entirely: one for every tree LAWNS installs (the order's `transport_method`) plus any billed on QuickBooks item 102 — **21 on Saturday** — printed as a COUNT only, never the parts. The manufacturing spec (**24"** of 1" PVC, drilled, plus a 3 ft bamboo stick) is filed against the item for the parked recipe builder.
+
+**Type:** BUILD (model + print view + one column on the stop read), on `feat/bubbler-and-water-monitor`, **own worktree (§6 r20)**, **ledger #352** (moved from #351 under R-148 clause 4 — another branch reserved it 21 minutes earlier). No migration, no schema, no permission string, `api/` 12/12. **Load-list mutants 63/64 caught.** **Saturday hardware: 54 T-posts · 216 ft rope · Bubblers — none specified · 21 water monitor kits · 2 trunk protection.** **§3 RETENTION: 1 archived verbatim (#346), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **A BUBBLER LINE GIVES A COUNT, NEVER WHICH TREES.** One live line names them in free text (*"for eaglestons and chinkapin oak only"*); nothing structured holds it. If the crew ever needs to know which tree, that is a capture question · **(b)** ⚠️ **"A TREE WE INSTALL" IS THE ORDER'S `transport_method = install`.** An order recorded as `delivery` whose trees you actually plant gets no kits — the data would be wrong, not the sheet · **(c)** ⚠️ **THE KIT SPEC WAS 23" IN THE PROMPT AND IS 24" ON YOUR CORRECTION** — the file records 24 and says so · **(d)** ⚠️ **ID MOVED #351 → #352** — `feat/route-order-saved` had it first.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #354 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 now holds the newest three by ledger id: #354 · #353 · #352; #351 overflowed (oldest).
      entries-in == entries-out. -->

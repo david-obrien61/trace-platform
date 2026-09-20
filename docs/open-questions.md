@@ -92,6 +92,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — DELIVERY RINGS: how many, how far from the yard, and measured from which of a customer's addresses?** Owner: tech-debt #350 / #323.
 - 🟡 **OPEN — AN ITEM SOLD BOTH FITTED AND OVER THE COUNTER: product, service, or both?** Measured 2026-09-18: trunk protection on invoice 3648.606, no TC line. Owner: tech-debt #350 / #349.
 
+**#357 — the seeded 10 comes off 41 non-product rows (migration WRITTEN, not applied)**
+- 🔴 **OPEN — RULE ON FOUR ROWS:** Arizona Cypress Blue Ice Replacement ($0, named for a real tree) · Gallons Diesel ($5) · HYIS ($35, 2 invoices, booked to Nursery Stock) · Fertilizer-1 ($0). Left at 10 until you say. Owner: ledger #357.
+- 🟡 **OPEN — STORE THE QUICKBOOKS ITEM TYPE, INCOME ACCOUNT, NAME AND FULLY-QUALIFIED NAME?** One migration, one adapter change, ~half a day. It unblocks tech-debt #352 (the seed skipping non-products) and gives Lauren's species sheets a join. Not filed as tech-debt until you say. Owner: ledger #357.
+- ✅ **ANSWERED 2026-09-20 — the preview's field map is DERIVED, not declared by hand** (David's choice): tech-debt #351.
+- ✅ **SETTLED BY MEASUREMENT 2026-09-19 — ShipAddr was never lost.** 778 real ship-tos: 763 fold into one row, 14 differ, 1 has no billing address = the 15 Shipping rows live.
+
 **#354 — one load sheet per crew (build, BUILDER-COMPLETE)**
 - 🟡 **OPEN — CARD 20** (read-only, LAWNS Saturday): tick 1–4 → 6.5 yd · 36 posts · 11 kits; 5–8 → 2.5 yd · 26 posts · 12 kits. Owner: `load-list-full-surface-test.md`.
 - ⚠️ **NOTED — the crew link is still one per day**; only the paper splits. Owner: tech-debt #345 (piece 4).
