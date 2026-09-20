@@ -1141,7 +1141,7 @@ async function sectionPreview() {
   // 🔴 THE LADDER, AGAINST THE INCOMING SIZES (ledger #343). Read-only; the rows stay as written.
   const rungRow = (label: string, sort_order: number, volume: number | null, aliases: string[] = []) => ({
     id: label, business_id: BIZ, label, aliases, sort_order, volume_gallons: volume, handling_minutes: null,
-    handling_because: 'not timed', install_t_posts_per_tree: 2, install_t_posts_because: 'LAWNS', active: true,
+    handling_because: 'not timed', install_t_posts_per_tree: 2, install_t_posts_because: 'LAWNS', caliper_min_inches: null, caliper_max_inches: null, caliper_because: null, active: true,
   });
   const withLadder = recorder({ ladder: [rungRow('15 gal', 40, 15), rungRow('95/100', 80, 95, ['100 gal'])] });
   const q = await previewItemImport(withLadder.db as any, BIZ, [

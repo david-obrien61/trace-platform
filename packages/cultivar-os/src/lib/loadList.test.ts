@@ -77,7 +77,7 @@ const rung = (label: string, sortOrder: number, volumeGallons: number | null, po
               aliases: string[] = [], active = true): Rung => ({
   label, aliases, sortOrder, volumeGallons,
   handlingMinutes: null, handlingBecause: 'not timed — the yard-wide rate stands in',
-  installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', active,
+  installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active,
 });
 const LAWNS: Ladder = [
   rung('slip',    10, null, 0, ['slips', 'cutting', 'cuttings']),
@@ -749,6 +749,17 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const noSizeLot = res(line(1, null, 'X', { name: 'Some Tree', size: null }));
   ok(noSizeLot.kind === 'unresolved',
     '🔴 G8: a LOT with no size is UNRESOLVED — it is a real catalogue row and may well be a tree, so it prints');
+}
+
+// ══ §L THE TREES ARE ONE LINE (ledger #355) ═══════════════════════════════════════
+{
+  // ✏️ REVERSED 2026-09-20 (ledger #358, Lauren's answer): the roll-up is the PULL list, not a line.
+  ok(LOAD_LIST_COPY.pullHeading(29, 8) === 'Trees to pull — 29 across 8 stops',
+    '🔴 L1: the roll-up is headed as what it IS — the list the yard pulls against');
+  ok(LOAD_LIST_COPY.pullHeading(1, 1) === 'Trees to pull — 1 across 1 stop', 'L2: …and singular reads as singular');
+  ok(/tagged with the customer/i.test(LOAD_LIST_COPY.stopsWhy),
+    '🔴 L2b: the stops say WHY they are there — the tag carries the customer\'s name, checked at staging');
+  ok(LOAD_LIST_COPY.bulkHeading.startsWith('Bulk materials'), 'L3: page 1 is headed as the bulk');
 }
 
 console.log(`\nloadList: ${passed} passed, ${failed} failed`);

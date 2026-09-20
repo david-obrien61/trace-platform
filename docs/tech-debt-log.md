@@ -4425,7 +4425,7 @@ per action (as for every other tap) records who undid it.
 
 **Ranked against go-live (Lauren running more than one truck a day):** 1 and 2 are the foundation. Then 5 and 4, because each truck loads and drives on its own. Then 6, which is display only. 3 waits on the ruling.
 
-## #346 — 🟡 THE LOAD SHEET SHOULD READ THE WAY THE TRAILER IS LOADED: BULK FIRST, THEN THE STOPS (NEW 2026-09-18 — ON HOLD, NOT BUILT; no ledger row)
+## #346 — ✅ BUILT 2026-09-18 BY LEDGER #355 (branch `feat/load-list-bulk-first`, not merged — David's call) — WAS: 🟡 THE LOAD SHEET SHOULD READ THE WAY THE TRAILER IS LOADED: BULK FIRST, THEN THE STOPS (NEW 2026-09-18 — ON HOLD, NOT BUILT; no ledger row)
 
 **Held until Lauren has seen the current sheet** (David, 2026-09-18). The current layout was proven on paper the same day: CARD 6 and CARD 19 passed on `f9f3b8a · prod`.
 
@@ -4518,6 +4518,23 @@ is no way to save a Team 2 route. Lauren's plan is recoverable exactly — the a
 09:57:52 save: Freehill → Sappal → Thiry → Garzon → Dubec → Gustafson → Kossa → Raja). Two crews need teams on the
 stop; that is tech-debt #345's territory, not this item's.
 
+## #349 — 🔴 TRUNK PROTECTION IS THREE PRODUCTS, AND THE SHEET CANNOT SAY WHICH ONE TO LOAD (NEW 2026-09-18 — FILED, NOT BUILT; measured with ledger #356)
+
+**What David said (from the physical stock, 2026-09-18).** Three products, each a flat tube, one per tree, no cutting, **chosen by the tree's caliper**: **Plantra bark protector 3"** (part TBCSOW-36) $13 · **Plantra tree guard 4"** $15 · **green mesh tube, over 4"** $20. The page-1 line prints *"2 trunk protection"* without saying which, so the yard can load the wrong sleeve.
+
+**Measured live 2026-09-18.**
+- **The catalogue holds ONE item: "Trunk Protection"** (QuickBooks item 191, $10, no size). No Plantra 3", no tree guard 4", no mesh item, and **TBCSOW-36 appears nowhere** — not in the catalogue, not on any line.
+- **The whole LAWNS book holds two trunk-protection lines,** and the product is only in their free text and price: **Saturday 2026-09-19, Chris Freehill — "Trunk Protection - Green Mesh" × 2 at $20** · **2026-10-03 — "Trunk Protection" × 1 at $13** (the Plantra 3" price).
+- On Saturday's sheet the stop block prints Freehill's line as written, so **"Green Mesh" IS on the paper — on page 2, not on the page-1 total.**
+- 🔴 **A CONTRADICTION FOR LAUREN, NOT DECIDED HERE:** Freehill's two trees are **30 gal** (Monterrey Oak, Chinese Pistache), which the caliper ladder (ledger #356) puts at **1.5–2.5 in** — and the order bills **green mesh, the over-4" sleeve.** Either mesh is used on smaller trees for another reason (deer? sun?), or the caliper rule is not the whole rule.
+
+**What it takes, NEED → WANT.**
+1. **Cheapest (~1 h, no data change):** the page-1 line groups trunk protection by its line text — *"2 trunk protection — Green Mesh"* — and a bare "Trunk Protection" prints *"size not stated on the order"*. Honest, but it depends on free text.
+2. **Right (needs Lauren in QuickBooks):** three items, one per product (e.g. TP3 · TP4 · TPM), so the ORDER says which; the load list then prints one line per product. Depends on the code join (order line → catalogue row) or on recognising three names.
+3. **Checked (after ledger #356 is applied):** the sheet compares the billed sleeve with the tree's rung caliper and flags a mismatch (a 3" sleeve billed for a 65 gal tree). It needs the three sleeves' sizes as configuration and **the Freehill question answered first.**
+
+**Blocker:** the Freehill contradiction; and Lauren creating the three items if option 2 is chosen.
+
 ## #350 — 🔴 THE ONBOARDING DISCOVERY QUESTION SET IS FILED, AND FOUR OF ITS EIGHT ANSWERS HAVE NOWHERE TO GO (NEW 2026-09-18 — FILED, NOT BUILT, David's instruction)
 
 **What.** [docs/onboarding/discovery-question-set.md](onboarding/discovery-question-set.md) — the eight questions a new business is asked during analysis, each taken from a LAWNS surprise of the same week. David: *"these must be asked during analysis, not discovered months in."* **PLATFORM, not LAWNS-specific.**
@@ -4531,3 +4548,13 @@ stop; that is tech-debt #345's territory, not this item's.
 4. **An item that is BOTH fitted and sold over the counter** — measured live 2026-09-18: trunk protection appears on an order with no trip charge (3648.606). An item is a product row or a service row, never both.
 
 **Blocker:** none for the document. Each of the four gaps is its own build and needs David's shape first.
+
+## #351 — 🟡 ROOT BALL SIZE: A LARGE-TREE RULE OF THUMB, NOT THE STANDARD'S RULE (NEW 2026-09-18 — FILED, NOT BUILT, David's instruction)
+
+**The rule of thumb.** ~**10–12 inches of root ball diameter per inch of caliper**, which the install BOM could read for hole size once anything reads caliper at all.
+
+🔴 **IT IS NOT WHAT ANSI Z60.2-2025 SAYS, AND THE DIFFERENCE MATTERS ON SMALL TREES.** The standard gives **tables** of minimum root ball diameter per caliper/height specification (§1.5.1 and the per-type tables), not a ratio. Read out of the document's own Type 1 shade-tree table: **½ in caliper → 12 in ball (≈24× per inch of caliper)** · ¾ in → 13 in · 1 in → 16 in · **1¼ in → 18 in (≈14×)** · **1½ in → 20 in (≈13×)**. The ratio falls as the tree grows and only approaches 10–12 on big stock. **So the rule of thumb is a LARGE-TREE approximation and is recorded here as one** (David, 2026-09-18: *"your reading of the tables is the one on record"*).
+
+**What it would take to use it.** The hole size belongs to the install BOM, beside the mix and the posts: a figure per rung (or the standard's table), read at print time by the load list. It needs (a) David's ruling on whether LAWNS digs to the rule of thumb or to the table, and (b) a home — today the install figures are per-tree ratios in `business_operations_config` and per-size figures on `container_ladder`; a ball diameter is per size, so the rung is its natural home, exactly like caliper.
+
+**Blocker:** David's ruling. Nothing reads caliper yet (ledger #356), and the hole size is a step past it.

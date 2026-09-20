@@ -87,6 +87,20 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
+- ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
+- 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
+
+**#356 — caliper on the ladder (build, BUILDER-COMPLETE, migration NOT APPLIED)**
+- ⛔ **OPEN — APPLY `20260918c_container_ladder_caliper.sql`, THEN MERGE (#355 first).** Owner: ledger #356.
+- 🔴 **OPEN — FREEHILL'S TWO 30 GAL TREES ARE BILLED GREEN MESH (THE OVER-4" SLEEVE).** The caliper rule says 1.5–2.5 in. Which is right — and is caliper the whole rule for which sleeve? Owner: tech-debt #349.
+- 🟡 **OPEN — TRUNK PROTECTION AS THREE QUICKBOOKS ITEMS?** The catalogue holds one generic item; the product is only in line text. Owner: tech-debt #349.
+- ✅ **ANSWERED 2026-09-18 — the standard is SHOWN as a default and a reference, never enforced** (6 in from the soil line; 12 once the reading at 6 in is 4½ in or more). LAWNS's 12-throughout is recorded as their choice. Measured-at stays on the business.
+- 🟡 **OPEN — ROOT BALL: does LAWNS dig to the 10–12 in per inch rule of thumb, or to the standard's tables?** Owner: tech-debt #351.
+
+**#355 — the load sheet reads the way the trailer is loaded (build, BUILDER-COMPLETE)**
+- 🟡 **OPEN — ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** No → the one line stays. Yes → the roll-up moves to the back as a pick list (~1 h). Owner: ledger #355.
+
 **Onboarding discovery question set — filed 2026-09-18 (docs only, no ledger row; tech-debt #350)**
 - 🔴 **OPEN — WHERE DOES "THIS REQUIRES THAT" LIVE?** (LAWNS: install requires TC). No edge exists between two sellable rows; inferring install from the TC line is the workaround. Owner: tech-debt #350 / #342.
 - 🟡 **OPEN — DELIVERY RINGS: how many, how far from the yard, and measured from which of a customer's addresses?** Owner: tech-debt #350 / #323.

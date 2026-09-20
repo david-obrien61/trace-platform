@@ -229,9 +229,9 @@ ok(!sameSizeLabel('1.5', '1.5 gal'), 'size compare: a bare DECIMAL is NOT folded
 {
   const LADDER = [
     { label: '3/5 gal', aliases: ['#3/5', '3/5 Gallon'], sortOrder: 30, volumeGallons: 4, handlingMinutes: null,
-      handlingBecause: 'not timed', installTPostsPerTree: 0, installTPostsBecause: 'LAWNS', active: true },
+      handlingBecause: 'not timed', installTPostsPerTree: 0, installTPostsBecause: 'LAWNS', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active: true },
     { label: '15 gal', aliases: [], sortOrder: 40, volumeGallons: 15, handlingMinutes: null,
-      handlingBecause: 'not timed', installTPostsPerTree: 2, installTPostsBecause: 'LAWNS', active: true },
+      handlingBecause: 'not timed', installTPostsPerTree: 2, installTPostsBecause: 'LAWNS', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set', active: true },
   ];
   const fam: CountSibling[] = [{ id: 'r3', size: '#3', qty: 10, variant_group: 'cedar-elm', sku: 'CE3' }];
   const withLadder = resolveCountTarget({ siblings: fam, groupKey: 'cedar-elm', size: '5 gal', ladder: LADDER });

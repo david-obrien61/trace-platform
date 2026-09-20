@@ -1,5 +1,42 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, after merging origin/main —
+     #356 and #358 landed while #357 was in flight — OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id: #358 · #357 · #356; #355 and #354 overflowed.
+     ⚠️ #354's entry is NOT re-archived here: main had already archived it, and what this branch's
+     §3 still held was a STALE SNAPSHOT of the same entry (an earlier branch name and a different
+     flagged item, revised on main after this branch merged it). Main's copy is the current one and
+     is the one kept — no history is lost, and the archive keeps one heading per entry. -->
+
+### 2026-09-18 — THUNDER **THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED — PAGE 1 IS THE BULK, THE STOPS START ON PAGE 2, THE SPECIES ROLL-UP IS ONE LINE. #355.** David: *page 1 the date, then bulk materials (mix, T-posts, rope, bubblers, water monitor kits, trunk protection), then the stops from page 2.* The roll-up by variety had pushed the hardware onto page 2; it is now **"29 trees across 8 stops"**. Page only — every figure unchanged.
+
+**Type:** BUILD (page layout + copy), on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #355. **§3 RETENTION: 1 archived verbatim (#352), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** 🟡 **ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** If yes, the roll-up moves to the back as a pick list — ~1 h, no model change · **(b)** ⚠️ **CARDS 6 AND 19 ARE REWORDED** to the new layout (page 1 bulk, stops from page 2); their numbers are Saturday's 8-stop figures · **(c)** ⚠️ **ITEMS 3 (trunk-protection sizes) AND 4 (caliper on the ladder) ARE NEXT, IN THAT ORDER.**
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #358 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #358 · #355 · #353; #354 overflowed (oldest).
+     (#356's entry lives on `feat/ladder-caliper`, unmerged, so it is not in §3 on this branch.)
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #356 close-out, stacked on #355, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #356 · #355 · #354; #353 overflowed (oldest).
+     entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **LIGHTNING'S HOLD LIST CHECKED AGAINST EVERY REGISTER — AND TWELVE FILINGS LIVE ONLY ON BRANCHES. #353.** 🔴 Of 47 held items, 32 were already filed and 15 became tech-debt **#327–#341** (merged `52241e4`). **[[R-164]] + tech-debt #342 (David, for after Saturday):** the QuickBooks ingest infers install from the TC line, Lauren can switch a stop between delivery and install, and every change is recorded. Re-measured live: 15 of 15 person-chosen TC orders are install, 16 of 16 QuickBooks TC orders are delivery, and the inference runs one way only. **The real finding: twelve register ids sat on eight unmerged branches, three of them beside migrations ALREADY APPLIED live. #351 merged during this pass, so ten ids on seven branches remain, and two migrations (`20260917b`, `20260917d`).** ShipAddr is answered and closed: 730 customers hold a ship-to after the reload.
+
+**Type:** DOCS + LIVE READS (read-only), on `docs/hold-list-validation`, **own worktree (§6 r20)**, **one ledger id**. No app code, no migration. Proof narrative: ledger #353. **§3 RETENTION, after merging #351's parallel close-out: §3 = #353 · #351 · #352; #350 archived verbatim; #347 had overflowed in BOTH close-outs and is archived ONCE — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **ADOPT §6 r22?** *A filing lands on `main` the same day, whatever happens to the build; a migration applied live reaches `main` the same day.* The text is in ledger #353 and is NOT added to §6 without your word · **(b)** 🔴 **THE TEN STILL BRANCH-ONLY IDS: port them to `main` as one docs commit today, or merge the branches.** `feat/route-order-saved` (#351 · R-163) merged during this pass; every remaining branch conflicts in the shared docs · **(c)** 🔴 **PRODUCTION'S DATABASE IS AHEAD OF `main`:** `20260917b` and `20260917d` are applied live and `fix/contact-list-edit-add` is unmerged (`20260917e` was the third, until #351 merged) · **(d)** 🔴 **THE RELOAD SEEDED STOCK ON FEES AGAIN:** run `bffc7713` has qty on 631 of 631 rows, at least 12 of them fees. The reversal in your checkout targets the undone run `eab7fbd2` and now does nothing · **(f)** 🔴 **TECH-DEBT #342 IS CLAIMED TWICE:** mine (09:47, now on `main`) and `fix/contact-list-edit-add`'s (10:02). By R-148 the later one renumbers, so that branch's #342 moves to the next free id before it merges · **(e)** ⚠️ **QUICKBOOKS ITSELF WAS NOT RE-READ** for ShipAddr (only your session can). 766 is the 2026-09-16 figure, and "777" matches no measurement.
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-18 (ledger #355 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 now holds the newest three by ledger id: #355 · #354 · #353; #352 overflowed (oldest).
+     entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **ONE LOAD SHEET PER CREW — TICK THE STOPS A CREW TAKES, PRINT, AND EVERY TOTAL IS THAT CREW'S. #354.** 🔴 David, from LAWNS: *"TWO CREWS SATURDAY, and the load list cannot be split."* The sheet read every stop on the date. Now `?stops=` picks the stops (`loadListSubset.ts`, pure) and ONLY those reach `buildLoadList`, so mix, posts, rope, kits and the could-not-work-out lines are the crew's and the day's totals are never computed on a crew's sheet. Tick boxes (screen only) write the link; all ticked = no `stops=` = today's whole-day sheet, unchanged. A partial sheet says *"carries 4 of the day's 8 stops"*, names every stop it does not carry, refuses an id from another day by name, and numbers each stop by Lauren's plan. **Saturday, live: stops 1–4 = 6.5 yd · 36 posts · 11 kits; 5–8 = 2.5 yd · 26 posts · 12 kits — the two add to the day's 9 · 62 · 23 exactly.**
+
+**Type:** BUILD (one pure helper + the page + copy), on `feat/load-list-subset`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #354. **§3 RETENTION: 1 archived verbatim (#351), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **THE CREW LINK IS STILL ONE PER DAY** — both drivers' phones show all 8 stops; only the paper splits. Per-team links are tech-debt #345 piece 4 · **(b)** ⚠️ **MIX ROUNDS UP PER SHEET** — two halves can add to half a yard more than the day (not on Saturday: 6.5 + 2.5 = 9) · **(c)** ⚠️ **CARDS 6 AND 19 PASSED ON PAPER TODAY AND ARE `owed` AGAIN** because the page changed; the whole-day path builds the same way · **(d)** ⚠️ **THE LAYOUT (bulk first), TRUNK-PROTECTION SIZES AND CALIPER ON THE LADDER ARE NOT STARTED** — reported one at a time, as you asked.
 <!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, OP-13 N=3) — verbatim, not
      summarized. §3 holds the newest three by date; the overflow moves here. entries-in == entries-out. -->
 

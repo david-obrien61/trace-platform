@@ -343,7 +343,10 @@ export function LoadList() {
                 </div>
               ) : null}
 
-              <h2 style={S.h2}>1 · Special mix — loads first</h2>
+              {/* 🔴 THE SHEET READS THE WAY THE TRAILER IS LOADED (David, 2026-09-18, ledger #355): the
+                  bulk goes on first, so page 1 is the bulk — mix, posts, rope, bubblers, kits, trunk
+                  protection — and the stops, each with its own trees, start on page 2. */}
+              <h2 style={S.h2}>{LOAD_LIST_COPY.bulkHeading}</h2>
               <div style={S.big}>
                 {model.mixYards} yard{model.mixYards === 1 ? '' : 's'} special mix
               </div>
@@ -352,32 +355,6 @@ export function LoadList() {
                 across the trees whose size is set up, rounded up to the next half yard.)
               </p>
               <p style={S.note}><strong>{LOAD_LIST_COPY.noMulch}</strong></p>
-
-              <h2 style={S.h2}>2 · Trees — {model.treeCount} in total</h2>
-              {model.trees.map(t => (
-                <div key={`${t.name}|${t.rungLabel}`} style={S.row} className="ll-row">
-                  <span><strong>{t.name} {t.sizeText}</strong> × {t.quantity}</span>
-                  <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
-                    {t.tPosts * t.quantity} T-post{t.tPosts * t.quantity === 1 ? '' : 's'}
-                    {' · '}{t.mixGallonsPerTree == null ? 'mix not set' : `${t.mixGallonsPerTree * t.quantity} gal mix`}
-                  </span>
-                </div>
-              ))}
-              {model.offLadderTreeCount > 0 ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>{LOAD_LIST_COPY.offLadderNote(model.offLadderTreeCount)}</strong>
-                </div>
-              ) : null}
-              {model.noVolumeTrees.length > 0 ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>{LOAD_LIST_COPY.noVolumeNote}</strong>
-                  {model.noVolumeTrees.map(t => (
-                    <div key={`novol|${t.name}|${t.rungLabel}`} style={S.note}>{t.name} {t.sizeText} × {t.quantity}</div>
-                  ))}
-                </div>
-              ) : null}
-
-              <h2 style={S.h2}>3 · Hardware</h2>
               <div style={S.row} className="ll-row">
                 <span style={S.big}>{model.tPosts} T-posts</span>
                 <span style={S.note}>{LOAD_LIST_COPY.tPostRule}</span>
@@ -413,6 +390,36 @@ export function LoadList() {
                 <div style={S.row} className="ll-row">
                   <span style={S.big}>+{model.deerFencePosts} T-posts for deer fence</span>
                   <span style={S.note}>{LOAD_LIST_COPY.deerFenceTotal(model.valuesUsed.deerFenceTPostsPerTree)}</span>
+                </div>
+              ) : null}
+
+              {/* 🔴 THE PULL LIST (ledger #358, David 2026-09-20 with Lauren's answer). The yard pulls BY
+                  VARIETY, stages, then checks names — so the roll-up is not a second copy of the stops,
+                  it is the step before them, and it sits directly under the bulk because both are
+                  "go and fetch this". ✏️ This REVERSES ledger #355's one-line version (2026-09-18), which
+                  cut it on the belief that nothing is loaded by variety. Lauren: they pull by variety. */}
+              <h2 style={S.h2}>{LOAD_LIST_COPY.pullHeading(model.treeCount, model.stopCount)}</h2>
+              <p style={S.note}>{LOAD_LIST_COPY.pullWhy}</p>
+              {model.trees.map(t => (
+                <div key={`pull|${t.name}|${t.rungLabel}`} style={S.row} className="ll-row">
+                  <span><strong>{t.name} {t.sizeText}</strong> × {t.quantity}</span>
+                  <span style={{ whiteSpace: 'nowrap', color: '#444' }}>
+                    {t.tPosts * t.quantity} T-post{t.tPosts * t.quantity === 1 ? '' : 's'}
+                    {' · '}{t.mixGallonsPerTree == null ? 'mix not set' : `${t.mixGallonsPerTree * t.quantity} gal mix`}
+                  </span>
+                </div>
+              ))}
+              {model.offLadderTreeCount > 0 ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>{LOAD_LIST_COPY.offLadderNote(model.offLadderTreeCount)}</strong>
+                </div>
+              ) : null}
+              {model.noVolumeTrees.length > 0 ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>{LOAD_LIST_COPY.noVolumeNote}</strong>
+                  {model.noVolumeTrees.map(t => (
+                    <div key={`novol|${t.name}|${t.rungLabel}`} style={S.note}>{t.name} {t.sizeText} × {t.quantity}</div>
+                  ))}
                 </div>
               ) : null}
 
@@ -468,8 +475,11 @@ export function LoadList() {
 
             </div>
 
-            {/* ── PER-STOP. What you need when a stop gets dropped. ───────────────────── */}
-            <h2 style={S.h2}>Per stop</h2>
+            {/* ── THE STOPS, from page 2 — each customer with their trees and quantities. ─── */}
+            <h2 style={S.h2}>{LOAD_LIST_COPY.stopsHeading}</h2>
+            {/* 🔴 THE NAME CHECK AT STAGING (ledger #358): a tree's tag carries the CUSTOMER'S name, and
+                the yard matches tags to these names. The sheet is the other half of a check they already run. */}
+            <p style={S.note}>{LOAD_LIST_COPY.stopsWhy}</p>
             {model.stops.map(s => (
               <div key={s.stopId} style={{ margin: '0 0 1.25rem' }} className="ll-block ll-stop">
                 <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>
