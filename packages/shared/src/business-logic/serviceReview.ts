@@ -169,7 +169,7 @@ const ACCOUNT_GOODS = /product\s+income|merchandise/i;
  * Does this account book money as GOODS — a bag, a bucket, a container?
  *
  * 🔴 EXPORTED FOR THE OPENING-STOCK SEED, AND THE TWO SCREENS USE IT FOR DIFFERENT DECISIONS ON
- * PURPOSE (David, 2026-09-22). For the SERVICES REVIEW this account is genuinely ambiguous — it
+ * PURPOSE (David, 2026-09-21). For the SERVICES REVIEW this account is genuinely ambiguous — it
  * cannot say whether a row is a thing you sell or work you do, so the row is offered CONTESTED
  * and nothing is ticked for her. For the SEED the question is narrower and has an answer:
  * *"is this on a shelf?"* — and a bag of compost is, whatever the pricing question turns out to

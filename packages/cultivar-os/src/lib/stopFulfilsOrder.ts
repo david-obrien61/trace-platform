@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PURPOSE: finishing a stop FULFILS its order, and undoing the stop puts the order back
-//   (tech-debt #319 · David, 2026-09-22: *"lift it for the office door now; the crew door keeps
+//   (tech-debt #319 · David, 2026-09-21: *"lift it for the office door now; the crew door keeps
 //   holding until teams land"*). The truck run is the moment the plant leaves the property, and
 //   until now a completed run left every order open — so nothing was ever consumed.
 // DEPENDENCIES: the supabase client (passed in) · `/api/orders/submit` action `status`, which is
@@ -120,7 +120,7 @@ export async function fulfilOrderForStop(
   stop: { id: string; order_id: string | null }, mayChangeOrders: boolean,
 ): Promise<StopOrderOutcome> {
   // 🔴 A STOP WITH NO ORDER IS ORDINARY, NOT AN ERROR — one of LAWNS's 45 has none (measured
-  // 2026-09-22). It finishes and there is nothing to fulfil.
+  // 2026-09-21). It finishes and there is nothing to fulfil.
   if (!stop.order_id) return { kind: 'no-order' };
   if (!mayChangeOrders) return { kind: 'not-allowed', message: NOT_ALLOWED };
 

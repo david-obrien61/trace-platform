@@ -1,9 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260922 — "THIS IS NOT STOCK", SAID BY THE OWNER, NOT BY US · ledger #364 · tech-debt #352
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
+-- ✅ APPLIED 2026-09-21 by David in the SQL EDITOR (§6 r17). Re-read live the same day: the table
+--    exists. ⚠️ Its four seeded rows were then REMOVED by `20260922b` — see that file for why.
 --
--- ── WHY (David, 2026-09-22) ─────────────────────────────────────────────────────────────────
+-- ── WHY (David, 2026-09-21) ─────────────────────────────────────────────────────────────────
 -- The seed decides what gets a starting number by reading the owner's books: income account
 -- first, type second. That is right for 627 of LAWNS's 631 imported rows and wrong for four,
 -- because those four are MISBOOKED in QuickBooks — a Gift Certificate filed under *Sales of
@@ -61,7 +62,7 @@ CREATE POLICY business_not_stock_items_member_write ON public.business_not_stock
   USING (is_active_member(business_id) AND has_permission(business_id, 'settings:update'))
   WITH CHECK (is_active_member(business_id) AND has_permission(business_id, 'settings:update'));
 
--- ── THE FOUR, FOR LAWNS, EACH WITH THE REASON DAVID GAVE (2026-09-22) ───────────────────────
+-- ── THE FOUR, FOR LAWNS, EACH WITH THE REASON DAVID GAVE (2026-09-21) ───────────────────────
 -- Idempotent: re-pasting updates the reason rather than raising or duplicating.
 INSERT INTO public.business_not_stock_items (business_id, qb_item_id, item_name, reason, fix_at_source)
 VALUES

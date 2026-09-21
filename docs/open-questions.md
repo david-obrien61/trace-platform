@@ -106,7 +106,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — DAVID'S "8.0 h" TEAM 2 FIGURE MATCHES NEITHER 7.85 (13 trees) NOR 8.35 (14 trees).** Piece 2.5 is tested against that fixture, so the disagreement has to be settled before the estimate can be. Owner: `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
 - ⚠️ **NOTED — Settings shows TEAMS (crews, names) directly above TEAM (logins, roles).** Each one's copy says which it is; different words are David's call. Owner: ledger #362.
 - ⚠️ **OWED — owner-test CARDS 1–5** on `docs/owner-tests/teams-full-surface-test.md`. Test Dave's, not LAWNS. Owner: ledger #362.
-- 🔴 **OPEN — NOTHING IN `npm run verify` GREPS FOR A COMMITTED CONFLICT MARKER**, and one rode `origin/main` from `f2814b0 merge(#357)` through at least five later commits including two of mine, past a green verify each time. Found by HISTORY on 2026-09-22, by eye. Owner: ledger #362 / a new cap.
+- 🔴 **OPEN — NOTHING IN `npm run verify` GREPS FOR A COMMITTED CONFLICT MARKER**, and one rode `origin/main` from `f2814b0 merge(#357)` through at least five later commits including two of mine, past a green verify each time. Found by HISTORY on 2026-09-21, by eye. Owner: ledger #362 / a new cap.
 
 **#365 — the not-stock list ships empty (migration WRITTEN, not applied)**
 - 🔴 **OPEN — APPLY `20260922b` BEFORE SEEDING**, and delete any copy of `20260922b_fix_not_stock_override_ids.sql` unapplied. Owner: ledger #365.
