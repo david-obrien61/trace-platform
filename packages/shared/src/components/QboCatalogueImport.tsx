@@ -123,7 +123,12 @@ interface UndoReport  { ok?: boolean; refused?: boolean; runId?: string;
 const money = (n: number | null) =>
   n === null || n === undefined ? 'no price' : `$${n.toLocaleString('en-US')}`;
 
-export function QboCatalogueImport({ businessId }: { businessId: string | null }) {
+export function QboCatalogueImport({ businessId, onCatalogueChanged }:
+  { businessId: string | null;
+    /** 🔴 Called after an import or an undo LANDS. Anything on the page showing the product list
+     *  is stale at that moment — the opening-stock panel most of all, because it holds product
+     *  IDS and an Undo deletes them (David, 2026-09-21). */
+    onCatalogueChanged?: () => void }) {
   // 🔴 INTERIM (David, 2026-09-08): owner authority is `owner_id` OR the OWNER ROLE, so a SECOND
   // OWNER is not hidden from her own importer by a single-valued column (R-22). The SERVER moved
   // in the same commit — `refuseUnlessOwner` → `callerHoldsOwnerAuthority` — so this never draws
@@ -206,6 +211,13 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
       if (step === 'preview') setPlan(body as PlanReport);
       if (step === 'import')  setRun(body as RunReport);
       if (step === 'undo')    { setUndone(body as UndoReport); if (body.ok) setRun(null); }
+      // 🔴 THE CATALOGUE MOVED — TELL THE PAGE. An import mints new product ids and an undo
+      // deletes them; a panel still holding the old ones will offer to write to rows that are
+      // gone. Preview changes nothing, so it does not fire.
+      if ((step === 'import' || step === 'undo') && body.ok) {
+        console.log('[TRACE:QBITEMS] catalogue changed — telling the page', { step });
+        onCatalogueChanged?.();
+      }
       if (!res.ok && !body.error && !body.refused) setFailed(`The request failed (${res.status}).`);
     } catch (e) {
       // A dead zone is NOT an empty result — say which happened (D-9).
