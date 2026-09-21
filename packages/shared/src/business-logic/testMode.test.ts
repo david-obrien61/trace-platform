@@ -158,17 +158,23 @@ function stripComments(t: string): string {
   //
   // ⚠️ If these fail, the right move is to check whether David changed the wording — not to
   // relax the assertion.
-  ok(TEST_MODE_BANNER === 'TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change.',
-    '🔴 THE BANNER IS DAVID\'S SENTENCE, VERBATIM');
-  ok(TEST_MODE_STOCK_CAVEAT === 'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.',
-    '🔴 AND SO IS THE STOCK CAVEAT — the sentence that says what is NOT being proven, which is the one that matters');
-
-  ok(/QuickBooks/.test(TEST_MODE_BANNER) && /do not change/.test(TEST_MODE_BANNER),
-    'the banner names BOTH protections — the accounting write and the tree counts');
-  ok(/not a test of/.test(TEST_MODE_STOCK_CAVEAT) && /after you switch writes on/.test(TEST_MODE_STOCK_CAVEAT),
-    '🔴 the caveat names the GAP and when it closes — a screen that only says what it protects lets somebody conclude they have tested something they have not');
+  // ✏️ AMENDED 2026-09-21 — DAVID REVERSED THE STOCK HALF: "THE BANNER IS WRONG, NOT THE COUNTS."
+  // The old sentence promised "your tree counts do not change" and it was measured FALSE the same
+  // day: a count, an adjustment, the starting-number seed and a build run all move qty in test mode.
+  // Practice is what test mode is FOR, so the sentence now says what happens and how it is undone.
+  ok(TEST_MODE_BANNER === 'TEST MODE — nothing you do here reaches QuickBooks or your permanent stock record. '
+      + 'You can change counts to practise; reloading your QuickBooks import resets them.',
+    '🔴 THE BANNER IS DAVID\'S SENTENCE, VERBATIM (2026-09-21)');
+  ok(!/tree counts do not change/.test(TEST_MODE_BANNER),
+    '🔴 (negative) THE REVERSED PROMISE IS GONE — it was false on every path but the order path');
+  ok(TEST_MODE_STOCK_CAVEAT === TEST_MODE_BANNER,
+    '🔴 ONE SENTENCE, ONE SOURCE — the four surfaces cannot disagree because there is nothing to disagree with');
+  ok(/QuickBooks/.test(TEST_MODE_BANNER) && /permanent stock record/.test(TEST_MODE_BANNER),
+    'the banner names BOTH protections — the accounting write and the permanent stock record');
+  ok(/practise/.test(TEST_MODE_BANNER) && /resets them/.test(TEST_MODE_BANNER),
+    '🔴 …and it says what a practised count DOES, and how it is undone — reloading the import');
   ok(!/stock is unaffected/i.test(TEST_MODE_BANNER + TEST_MODE_STOCK_CAVEAT),
-    '🔴 AND IT IS NOT SHORTENED TO "stock is unaffected" — David named that phrasing as the one to avoid, because it reads as a FEATURE rather than as a capability deliberately not exercised yet');
+    '🔴 AND IT IS NOT SHORTENED TO "stock is unaffected" — David named that phrasing as the one to avoid, because it reads as a FEATURE rather than as a capability not yet exercised');
 
   // 🔴 THE CONTRADICTION THAT SHIPPED FOR AN HOUR AND WOULD HAVE SHIPPED FOREVER.
   // testModeExplanation opened with "you can use every part of the system exactly as you would

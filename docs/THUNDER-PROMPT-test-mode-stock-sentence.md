@@ -21,6 +21,8 @@ His clause — *if the answer is no, the screen must say so* — is honoured wit
 
 **On the persistent banner:**
 
+> ⚠️ **SUPERSEDED 2026-09-21 — the banner now reads:** *"TEST MODE — nothing you do here reaches QuickBooks or your permanent stock record. You can change counts to practise; reloading your QuickBooks import resets them."* (R-63 as amended, ledger #370). The line below is what it said when this prompt was written.
+>
 > **TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change.**
 
 **And immediately below it, on any screen where an order is rung up:**

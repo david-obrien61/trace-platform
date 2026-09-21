@@ -43,6 +43,7 @@ import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../com
 import { applyRowPatch, applyRowPatches } from '@trace/shared/components/datasheet/rowPatch';
 import { onlyLiveInventory } from '@trace/shared/inventory/retiredFilter';
 import { findShapeCollisions } from '@trace/shared/inventory/shapeCollision';
+import { TestModeStockCaveat } from '@trace/shared/components/TestModeStockCaveat';
 import {
   fetchCommittedByLot, availableFrom, statusSelectValue, statusSelectOptions,
   resolveStatusSelection, ALL_STATUS_VALUES, type CommittedByLot,
@@ -486,6 +487,8 @@ export function BusinessInventory() {
 
   return (
     <>
+      {/* Editing a quantity here moves it in test mode too — same sentence, same source. */}
+      <TestModeStockCaveat />
       {flash && <div style={flashStyle}>{flash}</div>}
       <DataSheet<InventoryRow>
         title="Inventory"

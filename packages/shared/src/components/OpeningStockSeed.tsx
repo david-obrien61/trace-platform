@@ -40,6 +40,7 @@
 //   which says so and lets them choose). The last two are deliberately different screens.
 import React, { useCallback, useEffect, useState } from 'react';
 import { useBusinessContext } from '../context';
+import { TestModeStockCaveat } from './TestModeStockCaveat';
 import { supabase } from '../supabase/client';
 import { readLatestResult } from '../quickbooks/booksRunStore';
 import {
@@ -374,6 +375,10 @@ export function OpeningStockSeed({ catalogueVersion = 0 }: { catalogueVersion?: 
 
   return (
     <div style={card}>
+      {/* 🔴 SETTING A STARTING NUMBER MOVES THE COUNT IN TEST MODE — the same sentence as the banner,
+          from the same constant (David, 2026-09-21). The panel's own longer text below explains the
+          undo path; this is the one line that must never disagree with the other three surfaces. */}
+      <TestModeStockCaveat />
       <h3 style={h}>Starting numbers</h3>
 
       {/* ⓪ WHICH MODE, AND WHAT IT MEANS (ledger #342). */}

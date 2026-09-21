@@ -81,6 +81,7 @@ import {
 import { loadContainerLadder } from '../lib/containerLadderRead';
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { canonicalNameKey, nameTokenSet } from '@trace/shared/utils/canonicalName';
+import { TestModeStockCaveat } from '@trace/shared/components/TestModeStockCaveat';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { extractTag } from '../lib/scanTag';
 
@@ -852,6 +853,9 @@ export function InventoryCount() {
   // ── RENDER ────────────────────────────────────────────────
   return (
     <div style={S.page}>
+      {/* 🔴 A COUNT MOVES THE NUMBER IN TEST MODE (measured 2026-09-21) — so the screen that moves it
+          says so, in the same words as the banner (David's ruling: one sentence, one source). */}
+      <TestModeStockCaveat />
       <div style={S.header}>
         <button style={S.backBtn} onClick={exit} aria-label="Back to inventory"><ArrowLeft size={22} color="#1a2e0a" /></button>
         <h1 style={S.title}>Walk &amp; count</h1>

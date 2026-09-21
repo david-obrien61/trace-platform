@@ -117,6 +117,11 @@ async function resolveItemForServer(
 // stock movement and its ledger line are withheld, and the withholding is TRACEd, never silent.
 //
 // WHY: R-63 (2026-09-02) put "your tree counts do not change" on the test-mode banner, and not one
+// ✏️ AMENDED 2026-09-21: the BANNER was reversed (counts may change while practising — every other
+//   stock path moves them and always did). THIS guard is unchanged and deliberately so: a test ORDER
+//   still moves no stock, because a practice sale that quietly depletes a real lot is the one
+//   direction that cannot be undone by reloading the import. David's ruling named the counts, not
+//   the order path — if he wants test orders to deplete too, that is a separate change.
 // of the five decrement/restore sites below checked the mode. Order 6a60a0ca (LAWNS, 2026-09-09,
 // a test walk-in) took 2 units off an imported lot and wrote four permanent ledger rows.
 export interface StockRecordGate {

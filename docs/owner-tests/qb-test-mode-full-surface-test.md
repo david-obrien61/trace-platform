@@ -78,7 +78,9 @@ As the owner, with the switch OFF (its default), sign in and look at the top of 
 
 1. An amber bar sits under the header on **every** page — dashboard, orders, inventory, settings.
 2. 🔴 **Read it word for word. It must say exactly:**
-   *"TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change."*
+   ✏️ **AMENDED 2026-09-21 ([[R-63]] as amended, ledger #370) — the banner now reads:**
+   *"TEST MODE — nothing you do here reaches QuickBooks or your permanent stock record. You can change counts to practise; reloading your QuickBooks import resets them."*
+   The same sentence must also appear on the **count screen**, the **inventory grid** and the **starting-numbers panel**, not only here.
 3. **Scroll down.** It stays put — it is inside the sticky chrome.
 4. **There is no × and no "dismiss".** Look for one.
 
@@ -743,6 +745,7 @@ from coverage (OP-14 clause 2).
 
 ## CARD 26 — 🔴 A TEST SALE DOES NOT CHANGE THE TREE COUNT (ruling ①, ledger #342)
 **STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** — · **COVERS:** #342
+> ✏️ **2026-09-21: THAT PROMISE IS REVERSED — counts DO change in test mode and may (David: practice is what it is for).**
 > R-63 put *"your tree counts do not change"* on this banner on 2026-09-02, and until #342 **nothing
 > enforced it** — order `6a60a0ca` (LAWNS, 2026-09-09, a test walk-in) took 2 off *Desert Willow 30
 > Gallon*. This card is the sentence being made true.

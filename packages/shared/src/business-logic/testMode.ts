@@ -117,10 +117,16 @@ export function pushPermitted(x: { writesEnabled: boolean | null | undefined; pl
 /**
  * The banner sentence, on every screen that touches money, for as long as the mode lasts.
  *
- * 🔴 DAVID'S WORDING, VERBATIM (2026-09-02, [[R-63]]) — DO NOT PARAPHRASE IT. It answers the
- * question this build raised and deliberately did not decide: *does a test order deplete stock?*
- * The answer is NO, and his own clause was that **if the answer is no, the screen must say so**.
- * This is the screen saying so.
+ * 🔴 DAVID'S WORDING, VERBATIM — AMENDED 2026-09-21: *"THE BANNER IS WRONG, NOT THE COUNTS."*
+ * The 2026-09-02 text promised *"your tree counts do not change"*, and it was measured false on
+ * 2026-09-21: a count, an adjustment, the opening-stock seed and a build run all move `qty` in test
+ * mode — only the ORDER path was ever guarded. David's ruling is that the counts are right and the
+ * sentence was wrong: **practice is what test mode is for**, so the banner now says what actually
+ * happens, including how a practised count is undone (reload the import).
+ * ⚠️ THE OLD SENTENCE IS NOT MERELY REPLACED, IT IS REVERSED, so anyone who remembers the promise
+ * finds the reversal here rather than concluding the code drifted. [[R-63]] carries the amendment;
+ * tech-debt #308 carries the residue (in test mode `qty` moves while the ledger stays empty, so
+ * on-hand and the replay disagree until the next reload).
  *
  * It names THREE halves now, not two. The header of this file already argued the banner must say
  * what IS and IS NOT happening; the ruling agrees with that argument and extends the list from
@@ -132,28 +138,20 @@ export function pushPermitted(x: { writesEnabled: boolean | null | undefined; pl
  * one that says so. See its own note — it is the load-bearing half.
  */
 export const TEST_MODE_BANNER =
-  'TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change.';
+  'TEST MODE — nothing you do here reaches QuickBooks or your permanent stock record. '
+  + 'You can change counts to practise; reloading your QuickBooks import resets them.';
 
 /**
- * 🔴 THE SENTENCE THAT SAYS WHAT IS *NOT* BEING PROVEN — and it is the one that matters.
+ * 🔴 RETIRED 2026-09-21 AND KEPT AS A NAME, NOT A SENTENCE. `TEST_MODE_STOCK_CAVEAT` used to read
+ * *"Because stock does not move in test mode, this is not a test of whether the system tracks your
+ * trees."* Its premise is now false — stock DOES move in test mode, on every path but the order
+ * path — so it points at the banner instead of asserting the opposite of it.
  *
- * David's wording, verbatim, and his reasoning with it: a screen that only says what it PROTECTS
- * lets somebody conclude they have tested something they have not. The first sentence states the
- * protection. This one states the gap.
- *
- * The failure it prevents is specific and it is the more expensive of the two: an owner rings up
- * a week of practice orders, watches the system behave, and concludes it tracks her trees —
- * because nothing on any screen told her that the one capability she cares about most was the one
- * deliberately switched off. She finds out after go-live, on real stock.
- *
- * ⚠️ IT BELONGS WHERE AN ORDER IS RUNG UP, NOT IN THE GLOBAL BANNER. Two reasons, and the second
- * is why it is a separate export rather than a longer banner: it is only TRUE of the ring-up act
- * (nothing about reading a dashboard is a test of stock tracking), and a global banner carrying
- * both sentences would put a paragraph on every page — which is how a standing notice becomes
- * wallpaper, costing the FIRST sentence the attention it needs.
+ * ONE SENTENCE, ONE SOURCE (David, 2026-09-21: *"so the four can never disagree"*). The global
+ * banner, the count screen, the inventory grid and the starting-numbers panel all render this
+ * exact string; there is no second wording to drift.
  */
-export const TEST_MODE_STOCK_CAVEAT =
-  'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.';
+export const TEST_MODE_STOCK_CAVEAT = TEST_MODE_BANNER;
 
 /**
  * The longer form, for the settings screen where there is room to explain.
@@ -170,6 +168,7 @@ export function testModeExplanation(): string {
     'While test mode is on you can ring up orders, price them, tax them, print them and look at what comes out — none of it reaches QuickBooks, and none of it lands in your sales totals, your add-on alerts or your campaign figures.',
     TEST_MODE_STOCK_CAVEAT,
     'Test orders stay marked as tests forever, so they will never quietly join your numbers later.',
+    'Counts you change while practising — a count, an adjustment, a starting number, a batch you build — move on screen but are not written to your permanent stock record, and reloading your QuickBooks import resets them.',
   ].join(' ');
 }
 

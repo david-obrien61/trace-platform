@@ -46,12 +46,15 @@ function suitesGreen() {
 const WORDING = ROOT + 'packages/shared/src/business-logic/testMode.ts';
 const wordingSrc = readFileSync(WORDING, 'utf8');
 const WORDING_MUTANTS = [
-  { id: 'W1', why: '🔴 the banner drops the stock half — back to the pre-ruling wording',
-    from: 'nothing you do here reaches QuickBooks, and your tree counts do not change.',
-    to:   'nothing you do here reaches QuickBooks.' },
-  { id: 'W2', why: '🔴 the caveat is shortened to "stock is unaffected" — the phrasing David named as the one to avoid',
-    from: 'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.',
-    to:   'Stock is unaffected in test mode.' },
+  { id: 'W1', why: '🔴 the banner drops the stock half — back to a wording that names only QuickBooks',
+    from: 'nothing you do here reaches QuickBooks or your permanent stock record. ',
+    to:   'nothing you do here reaches QuickBooks. ' },
+  { id: 'W2', why: '🔴 the banner loses HOW a practised count is undone — the half that makes changing counts safe (2026-09-21)',
+    from: 'You can change counts to practise; reloading your QuickBooks import resets them.',
+    to:   'You can change counts to practise.' },
+  { id: 'W2b', why: '🔴 the four surfaces stop sharing ONE sentence — a second wording is exactly what drifts',
+    from: 'export const TEST_MODE_STOCK_CAVEAT = TEST_MODE_BANNER;',
+    to:   "export const TEST_MODE_STOCK_CAVEAT = 'Stock is unaffected in test mode.';" },
   { id: 'W3', why: 'the settings explanation goes back to claiming every part of the system behaves as it really would',
     from: 'While test mode is on you can ring up orders, price them, tax them, print them and look at what comes out',
     to:   'While test mode is on, you can use every part of the system exactly as you would in the real thing' },

@@ -3916,6 +3916,8 @@ reaches it (measured 2026-09-16). CARDS 7, 8, 9, 12 wait on that wiring, not on 
 
 ## #308 — 🟡 A TEST-MODE STARTING NUMBER HAS NO OPENING LEDGER LINE, AND NOTHING WRITES ONE AFTER THE SWITCH (NEW 2026-09-16, ledger #342)
 
+✏️ **2026-09-21 — THE SAME DISCARD, SEEN FROM THE OTHER END, AND NOW RULED (ledger #370).** #308 says the opening line is missing in test mode; the measurement that day says every LATER test-mode movement is missing too. Of the nine functions that move `business_inventory.qty`, **only `undo_import_run` reads the write switch** — a count, an adjustment, the seed, a soft delete and a build run all move the number while `discard_ledger_row_in_test_mode` throws the ledger row away *"silently"*. Live on LAWNS: **512 rows carrying stock, 470 ledger rows, newest 16 September.** 🔴 **DAVID'S RULING: the banner was wrong, not the counts** — practice is what test mode is for, so the sentence now says counts change and that reloading the import resets them ([[R-63]] as amended). **What is still owed here and is NOT fixed:** on-hand and the ledger replay disagree for the whole of test mode, and only a reload puts them back. The ORDER path is unaffected — it still moves no stock.
+
 **What.** David's ruling ② (2026-09-16): in test mode the opening-stock seed sets qty **only** on rows the
 QuickBooks import created and writes **no** ledger row — *"the opening ledger entry is written once, after the
 switch."* #342 built the first half (`openingStockTestWrite.ts`). **The second half does not exist.** After

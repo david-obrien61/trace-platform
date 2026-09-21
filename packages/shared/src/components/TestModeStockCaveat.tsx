@@ -32,6 +32,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useBusinessContext } from '../context';
 import { isTestMode, TEST_MODE_STOCK_CAVEAT } from '../business-logic/testMode';
+// 🔴 AMENDED 2026-09-21 ([[R-63]] as amended): this used to say stock does NOT move in test mode.
+// It does — on every path but the order path — so this now renders the ONE banner sentence at the
+// point of action: the till, the count screen, the inventory grid and the starting-numbers panel.
+// The global banner stays; a strip at the top of a page is read once and then becomes wallpaper,
+// which is the very argument this file's own header makes.
 
 export function TestModeStockCaveat() {
   const { business, loading } = useBusinessContext();
