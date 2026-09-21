@@ -131,17 +131,36 @@ async function main(): Promise<void> {
 
   // ══ D. THE MIGRATION FALLBACK AND THE HARD FAILURE ═════════════════════════════════════════
   {
+    // ✏️ REWRITTEN 2026-09-22 (ledger #362). The fallback is a LADDER now, one rung per migration,
+    // most recent first: team → fulfilment → core. It used to be a single step, and these two
+    // assertions encoded that. The behaviour changed DELIBERATELY, and D1a is the reason:
+    // 🔴 sharing one rung meant an un-applied TEAMS migration made every screen report that the
+    //    CREW columns were missing — a true-shaped, wrong message about a different migration.
     let n = 0;
     const { db, calls } = fakeDb({
       ...happy,
       deliveries: () => (++n === 1
+        ? { data: null, error: { message: 'column deliveries.team_id does not exist', code: '42703' } }
+        : { data: STOPS, error: null }),
+    });
+    const r = await readStops(db, 'biz-1', { kind: 'day', date: '2026-09-12' }, { readLines: true });
+    const stopCalls = calls.filter(c => c.table === 'deliveries');
+    ok(r.ok && r.value.fulfilmentColumns === true, '🔴 D1 a missing team_id does NOT claim the fulfilment columns are gone');
+    ok(stopCalls.length === 2 && /team_id/.test(stopCalls[0].cols) && !/team_id/.test(stopCalls[1].cols), 'D1a the first retry drops ONLY team_id');
+    ok(/started_at/.test(stopCalls[1].cols), 'D1b …and keeps started_at, because that migration IS applied');
+  }
+  {
+    let n = 0;
+    const { db, calls } = fakeDb({
+      ...happy,
+      deliveries: () => (++n <= 2
         ? { data: null, error: { message: 'column deliveries.started_at does not exist', code: '42703' } }
         : { data: STOPS, error: null }),
     });
     const r = await readStops(db, 'biz-1', { kind: 'day', date: '2026-09-12' }, { readLines: true });
     const stopCalls = calls.filter(c => c.table === 'deliveries');
-    ok(r.ok && r.value.fulfilmentColumns === false, 'D1 42703 → the core read, remembered');
-    ok(stopCalls.length === 2 && /started_at/.test(stopCalls[0].cols) && !/started_at/.test(stopCalls[1].cols), 'D2 the retry drops the four columns');
+    ok(r.ok && r.value.fulfilmentColumns === false, 'D2 both rungs missing → the core read, remembered');
+    ok(stopCalls.length === 3 && !/started_at/.test(stopCalls[2].cols) && !/team_id/.test(stopCalls[2].cols), 'D2a the last rung drops the four columns AND team_id');
   }
   {
     const { db } = fakeDb({ deliveries: () => ({ data: null, error: { message: 'permission denied for table deliveries' } }) });

@@ -61,6 +61,11 @@ export interface StopRow {
   route_position?: number | null;
   /** When that day was routed. Every stop in the plan carries the same stamp. */
   routed_at?: string | null;
+  /** Which team takes this stop (ledger #362). NULL = not assigned, which is a real state and what
+   *  every stop is before Lauren splits a day. OPTIONAL for the same reason as `completed_by_name`:
+   *  when the pre-20260921a fallback runs the column is not read at all, and `undefined` says that
+   *  honestly where `null` would claim "nobody is on it". */
+  team_id?: string | null;
   customers: {
     first_name: string; last_name: string; phone: string | null; email: string | null;
     billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null;
@@ -98,6 +103,10 @@ const STOP_COLS_CORE =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, ${CUSTOMER_JOIN}`;
 const STOP_COLS_FULL =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, started_at, completed_at, review_asked_at, review_ask_outcome, completed_by_name, route_position, routed_at, ${CUSTOMER_JOIN}`;
+// TEAMS (20260921a, ledger #362) get their OWN rung rather than joining STOP_COLS_FULL. Sharing one
+// would make an un-applied teams migration look exactly like an un-applied fulfilment migration, and
+// every screen would then say the crew columns were missing — a true-shaped, wrong message.
+const STOP_COLS_FULL_TEAM = `${STOP_COLS_FULL}, team_id`;
 const STOP_LINE_COLS =
   'order_id, quantity, description, sku, business_inventory_id, business_inventory ( name, size )';
 
@@ -122,12 +131,17 @@ export async function readStops(
       .limit(200);
   };
 
-  let { data, error } = await q(STOP_COLS_FULL);
+  let { data, error } = await q(STOP_COLS_FULL_TEAM);
   let fulfilmentColumns = true;
-  // 42703 = undefined_column, PGRST204 = not in the schema cache: 20260831d is not applied. Fall back
-  // rather than blank every screen, and REMEMBER it, so the tap can say why it is missing.
-  const code = (error as { code?: string } | null)?.code;
-  if (error && (code === '42703' || code === 'PGRST204')) {
+  // 42703 = undefined_column, PGRST204 = not in the schema cache. Fall back a rung at a time, most
+  // recent migration first, rather than blanking every screen — and REMEMBER which rung we landed on,
+  // so a tap can say why something is missing.
+  const missing = (e: unknown) => {
+    const c = (e as { code?: string } | null)?.code;
+    return c === '42703' || c === 'PGRST204';
+  };
+  if (error && missing(error)) ({ data, error } = await q(STOP_COLS_FULL));   // 20260921a not applied
+  if (error && missing(error)) {                                              // 20260831d not applied
     fulfilmentColumns = false;
     ({ data, error } = await q(STOP_COLS_CORE));
   }

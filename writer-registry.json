@@ -599,6 +599,143 @@
         }
       ],
       "declared": []
+    },
+    {
+      "id": "teams",
+      "title": "Who goes out — the team list, and which team takes a stop (ledger #362, piece 1; tech-debt #345)",
+      "writer": {
+        "name": "save_team and assign_stops_team (database) — reached only through lib/teams.ts",
+        "at": "packages/cultivar-os/src/lib/teams.ts#export async function saveTeam"
+      },
+      "writerFiles": [
+        "packages/cultivar-os/src/lib/teams.ts"
+      ],
+      "tables": [
+        "teams",
+        "team_members"
+      ],
+      "guardedColumns": {
+        "table": "deliveries",
+        "columns": [
+          "team_id"
+        ],
+        "databaseGuard": "Set only inside assign_stops_team (20260921a §4) — all-or-nothing over a set of stops, refusing a retired or foreign team and any stop that is not this business's. stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation on different columns."
+      },
+      "databaseGuardForTables": "BUILT: `teams` and `team_members` have a SELECT policy only (`deliveries:read`), and 20260921a revokes INSERT/UPDATE/DELETE from anon and authenticated. Every write is inside a SECURITY DEFINER function checking `deliveries:update`. EXECUTE on both functions is granted to `authenticated` only — never anon, because a team list is not a public fact.",
+      "inputSignal": {
+        "fileMentions": "saveTeam|assignStopsTeam|retireTeam",
+        "props": "team|member"
+      },
+      "entryFunctions": [
+        "saveTeam",
+        "retireTeam",
+        "assignStopsTeam"
+      ],
+      "tests": "scripts/path-tests/teams.paths.mts",
+      "paths": [
+        {
+          "id": "team.create",
+          "what": "Settings → Teams → Add a team → Save team",
+          "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function commit",
+          "files": [
+            "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
+            "packages/cultivar-os/src/pages/Settings.tsx",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "TeamsSettings.commit → saveTeam → rpc save_team (deliveries:update checked inside)",
+          "shown": "Settings → Teams: the team by name with its people listed under it, and 'Team 1 saved — 3 people.'"
+        },
+        {
+          "id": "team.edit",
+          "what": "Settings → Teams → Edit → Save team (the member list is replaced)",
+          "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function commit",
+          "files": [
+            "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "TeamsSettings.commit with a team id → saveTeam → rpc save_team",
+          "shown": "Settings → Teams: the new name and exactly the people now on it — anyone removed is gone from the line"
+        },
+        {
+          "id": "team.retire",
+          "what": "Settings → Teams → Retire (and Bring back)",
+          "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function setActive",
+          "files": [
+            "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "TeamsSettings.setActive → retireTeam/saveTeam → rpc save_team with active false/true",
+          "shown": "Settings → Teams: it moves under 'Retired' with a Bring back button; the stop that already has it still reads its name"
+        },
+        {
+          "id": "stop.assign-team",
+          "what": "Schedule / route / order screen → a stop → the team picker",
+          "at": "packages/cultivar-os/src/components/delivery/StopCard.tsx#function StopTeamRow",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/StopCard.tsx",
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "StopTeamRow select → setStopTeam → assignStopsTeam → rpc assign_stops_team",
+          "shown": "The stop card's team line shows the team; the schedule, the route and the order screen all read it through the same readStops"
+        },
+        {
+          "id": "stop.unassign-team",
+          "what": "Schedule / route / order screen → a stop → the team picker → No team",
+          "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function setStopTeam",
+          "files": [
+            "packages/cultivar-os/src/components/delivery/StopCard.tsx",
+            "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "StopTeamRow select '' → setStopTeam(null) → assignStopsTeam → rpc assign_stops_team with a NULL team",
+          "shown": "The stop card's team line reads 'No team' — an unassigned stop says so rather than showing a blank"
+        }
+      ],
+      "guards": [
+        {
+          "id": "team.name-taken",
+          "what": "two LIVE teams cannot share a name, ignoring case and spaces; a retired one may keep it"
+        },
+        {
+          "id": "team.duplicate-member",
+          "what": "one person cannot be on a team twice — refused, never silently merged"
+        },
+        {
+          "id": "team.no-name",
+          "what": "a team with no name is refused and nothing is written"
+        },
+        {
+          "id": "team.not-permitted",
+          "what": "a member without deliveries:update is refused by the SERVER, not by a hidden button"
+        },
+        {
+          "id": "team.other-business",
+          "what": "AC-3 — a team cannot be read, edited or put on another business's stop"
+        },
+        {
+          "id": "stop.assign-all-or-nothing",
+          "what": "one bad id in the set assigns none of them, and writes no audit row"
+        },
+        {
+          "id": "stop.retired-team",
+          "what": "a retired team cannot be put on a stop"
+        },
+        {
+          "id": "stop.no-stops-chosen",
+          "what": "an empty set is refused rather than quietly doing nothing"
+        },
+        {
+          "id": "team.no-pay-side",
+          "what": "the vendor link records who a team is and never what they are owed; losing the vendor never deletes the team"
+        }
+      ],
+      "declared": [
+        {
+          "file": "packages/ignition-os/modules/IgnitionAdmin.jsx",
+          "reason": "🔴 A NAME COLLISION, NOT A WRITE PATH — and it is declared rather than silenced because the name really does collide. Ignition has its OWN `teams` table, keyed on `shop_id` (never `business_id`), reached through Ignition's own client (`../supabase`), which points at the OLD project ufsgqckbxdtwviqjjtos. It cannot reach this database and this writer cannot reach it. Ignition is frozen donor code and is OFF LIMITS (CLAUDE.md §7). Any cap that matches a BARE table name will keep finding this file; the honest answer is this declaration, not a rename of either table."
+        }
+      ]
     }
   ],
   "proposed": [
