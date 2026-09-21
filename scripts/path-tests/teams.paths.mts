@@ -295,36 +295,6 @@ await guard('stop.no-stops-chosen', 'an empty set is refused rather than quietly
   check((await all(db, `SELECT id FROM public.audit_log WHERE action = 'stop.team_assigned'`)).length === 0, 'an empty assign wrote an audit row');
 });
 
-await guard('team.read-survives-the-rename-window', 'the editor still reads the list on a database where 20260923a has NOT been applied', async (check) => {
-  // 🔴 THE FALLBACK RUNG, ACTUALLY FIRED. `readTeams` tries `delivery_teams` and falls back to the
-  // pre-rename `teams`, so the apply and the merge can happen in either order without a window in
-  // which Lauren's Teams screen reads a table that is not there. A rung nobody has exercised is a
-  // claim, so this builds a database that has ONLY the pre-rename chain and reads through it.
-  const db: any = await openLiveDb();
-  installSupabaseShim(db);
-  await db.exec(['20260917c_crew_day_link.sql', '20260917e_route_order_is_saved.sql', '20260921a_teams.sql']
-    .map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n'));
-  await db.exec(`
-    INSERT INTO auth.users (id, email) VALUES ('${OWNER}', 'o@test.invalid'), ('${MANAGER}', 'm@test.invalid');
-    INSERT INTO public.businesses (id, owner_id, name, business_type, qbo_writes_enabled)
-      VALUES ('${B}', '${OWNER}', 'Pre-rename Nursery', 'nursery', false);
-    INSERT INTO public.business_members (business_id, user_id, name, role, permissions, active) VALUES
-      ('${B}', '${MANAGER}', 'Lauren', 'MANAGER', '${JSON.stringify(MANAGER_PERMS)}', true);
-  `);
-  // The OLD table name is what exists here — proven, not assumed.
-  check(!!(await one(db, `SELECT to_regclass('public.teams') t`)).t, 'setup: the pre-rename table is not there');
-  check(!(await one(db, `SELECT to_regclass('public.delivery_teams') t`)).t, 'setup: the renamed table exists, so this proves nothing');
-
-  const made = await saveTeam(lauren(db), B, { name: 'Team 1', memberNames: ['Mauro', 'Jose'] });
-  check(made.ok, `the writer failed on the pre-rename database: ${JSON.stringify(made)}`);
-
-  const r = await readTeams(lauren(db), B);
-  check(r.ok, `the editor could not read the list: ${JSON.stringify(r)}`);
-  check(r.ok && r.teams.length === 1 && r.teams[0].name === 'Team 1', `the fallback read returned ${JSON.stringify(r.ok ? r.teams : r)}`);
-  check(r.ok && r.teams[0].members.map(m => m.name).join(' · ') === 'Mauro · Jose',
-        'the fallback read lost the members — the join is named after the table and needs its own column list');
-});
-
 await guard('team.no-pay-side', 'the vendor link records WHO a team is and never what they are owed', async (check) => {
   const db = await freshDb();
   const v = await one(db, `INSERT INTO public.vendors (business_id, name) VALUES ($1, 'Mauro Landscaping') RETURNING id`, [B]);

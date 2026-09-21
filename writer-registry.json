@@ -654,7 +654,7 @@
         ],
         "databaseGuard": "Set only inside assign_stops_team (20260921a §4) — all-or-nothing over a set of stops, refusing a retired or foreign team and any stop that is not this business's. stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation on different columns."
       },
-      "databaseGuardForTables": "BUILT: `teams` and `team_members` have a SELECT policy only (`deliveries:read`), and 20260921a revokes INSERT/UPDATE/DELETE from anon and authenticated. Every write is inside a SECURITY DEFINER function checking `deliveries:update`. EXECUTE on both functions is granted to `authenticated` only — never anon, because a team list is not a public fact.",
+      "databaseGuardForTables": "BUILT: `delivery_teams` and `delivery_team_members` (renamed from `teams`/`team_members` by 20260923a, [[R-168]]) have a SELECT policy only (`deliveries:read`), and 20260921a revokes INSERT/UPDATE/DELETE from anon and authenticated. Every write is inside a SECURITY DEFINER function checking `deliveries:update`. EXECUTE on both functions is granted to `authenticated` only — never anon, because a team list is not a public fact.",
       "inputSignal": {
         "fileMentions": "saveTeam|assignStopsTeam|retireTeam",
         "props": "team|member"
@@ -761,10 +761,6 @@
         {
           "id": "team.no-pay-side",
           "what": "the vendor link records who a team is and never what they are owed; losing the vendor never deletes the team"
-        },
-        {
-          "id": "team.read-survives-the-rename-window",
-          "what": "the Teams editor still reads the list on a database where 20260923a has NOT been applied — the pre-rename fallback rung, actually fired"
         }
       ],
       "declared": []

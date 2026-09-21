@@ -29,12 +29,10 @@ export interface Team {
 type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
 // 🔴 RENAMED BY 20260923a ([[R-168]]): `teams` → `delivery_teams`, so the name cannot collide
-// with Ignition's own `teams`. ⚠️ THIS READ AND THAT MIGRATION SHIP TOGETHER — the rename must
-// be APPLIED before this code is merged, or the editor reads a table that no longer exists.
+// with Ignition's own `teams`. The migration is APPLIED on live (David, 2026-09-21) and the merge
+// that carried this file is live with it, so there is exactly one name to read. The embedded
+// resource is named after the TABLE, which is why the join reads `delivery_team_members`.
 const TEAM_COLUMNS = 'id, name, active, sort_order, vendor_id, delivery_team_members ( id, name, sort_order )';
-// The same read before 20260923a: the embedded resource is named after the TABLE, so the join
-// name changes with it and one column list cannot serve both.
-const TEAM_COLUMNS_PRE_RENAME = 'id, name, active, sort_order, vendor_id, team_members ( id, name, sort_order )';
 
 /**
  * Every team of the business, live ones first, each with its people in order.
@@ -43,33 +41,25 @@ const TEAM_COLUMNS_PRE_RENAME = 'id, name, active, sort_order, vendor_id, team_m
 export async function readTeams(
   db: SupabaseClient, businessId: string,
 ): Promise<{ ok: true; teams: Team[] } | { ok: false; absent: boolean; message: string }> {
-  // 🔴 A LADDER, NOT A SINGLE NAME — and it exists to remove a LIVE WINDOW, not to be tidy.
-  // 20260923a renames `teams` → `delivery_teams` ([[R-168]]). Whichever order the apply and the
-  // merge happen in, one of them is briefly reading a table the other has not got: applied-then-
-  // merged breaks the DEPLOYED editor, merged-then-applied breaks the new one. Trying the new name
-  // and falling back to the old makes the order stop mattering, so nobody has to be awake at the
-  // right minute. ⚠️ Delete the fallback once 20260923a is applied everywhere — a rung that can
-  // never fire is the stale kind of declaration this repo fails the build over.
+  // ⚠️ THE PRE-RENAME FALLBACK RUNG IS DELETED (2026-09-21). It existed to remove a live window:
+  // 20260923a renames `teams` → `delivery_teams` ([[R-168]]), and whichever order the apply and
+  // the merge happened in, one of them would briefly read a table the other had not got. Both have
+  // happened — the migration is applied on live and the merge is the deployed bundle — so the rung
+  // can no longer fire, and a rung that cannot fire is the stale kind of declaration this repo
+  // fails the build over. Its path-test guard went with it, in the same commit.
   const missing = (e: unknown) => {
     const c = (e as { code?: string } | null)?.code;
     return c === '42P01' || c === 'PGRST205' || c === 'PGRST200';
   };
-  // ⚠️ `.returns<>()` IS REQUIRED and it is a consequence of the ladder, not a shortcut: supabase-js
-  // infers the row shape from a LITERAL select string, and `cols` is a variable here because the
-  // two rungs need different column lists. Stating the row type at the boundary is the honest fix;
-  // casting the result through `unknown` would silence the same problem while asserting more.
-  // (Vendors.tsx carries the identical note for the identical reason.)
-  const read = (table: string, cols: string) => db.from(table).select(cols)
+  // ⚠️ `.returns<>()` states the row shape at the boundary rather than casting the result through
+  // `unknown`, which would silence the same problem while asserting more. (Vendors.tsx carries the
+  // identical note for the identical reason.)
+  const { data, error } = await db.from('delivery_teams').select(TEAM_COLUMNS)
     .eq('business_id', businessId)
     .order('active', { ascending: false })
     .order('sort_order', { ascending: true })
     .returns<Record<string, unknown>[]>();
 
-  let { data, error } = await read('delivery_teams', TEAM_COLUMNS);
-  if (error && missing(error)) {
-    ({ data, error } = await read('teams', TEAM_COLUMNS_PRE_RENAME));
-    if (!error && TRACE_TEAMS) console.log('[TRACE:TEAMS] read fell back to the pre-rename table (20260923a not applied here)');
-  }
   if (error) {
     const code = (error as { code?: string }).code;
     if (TRACE_TEAMS) console.log('[TRACE:TEAMS] read failed', { code, message: error.message });
@@ -78,7 +68,7 @@ export async function readTeams(
   const teams = (data ?? []).map((t: Record<string, unknown>) => ({
     id: String(t.id), name: String(t.name), active: !!t.active,
     sort_order: Number(t.sort_order ?? 0), vendor_id: (t.vendor_id as string | null) ?? null,
-    members: (((t.delivery_team_members ?? t.team_members) ?? []) as TeamMember[]).slice().sort((a, b) => a.sort_order - b.sort_order),
+    members: ((t.delivery_team_members ?? []) as TeamMember[]).slice().sort((a, b) => a.sort_order - b.sort_order),
   }));
   if (TRACE_TEAMS) console.log('[TRACE:TEAMS] read', teams.length, 'teams');
   return { ok: true, teams };
