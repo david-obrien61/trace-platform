@@ -31,7 +31,7 @@ async function fresh(mineSql) {
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
     CREATE TABLE businesses (id uuid PRIMARY KEY, qbo_writes_enabled boolean DEFAULT true);
-    INSERT INTO businesses VALUES ('${L}');
+    INSERT INTO businesses (id) VALUES ('${L}');
     CREATE FUNCTION public.is_active_member(uuid) RETURNS boolean LANGUAGE sql AS 'select true';
     CREATE FUNCTION public.has_permission(uuid, text) RETURNS boolean LANGUAGE sql AS 'select true';
     CREATE FUNCTION public.set_updated_at_generic() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $f$;
@@ -42,10 +42,33 @@ async function fresh(mineSql) {
     CREATE TRIGGER customers_updated_at BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
     CREATE TABLE business_inventory (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL,
       name text, qb_item_id text, import_run_id uuid, retired_at timestamptz, retired_reason text, retired_by_run_id uuid, created_at timestamptz DEFAULT now());
-    CREATE TABLE orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL,
-      customer_id uuid REFERENCES customers(id) ON DELETE RESTRICT, order_kind text, import_run_id uuid);
-    CREATE TABLE order_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-      quantity numeric, unit_price numeric, subtotal numeric, sku text, description text,
+    -- 🔴 THE NOT NULL SET IS COPIED FROM THE LIVE SCHEMA, NOT INVENTED (tech-debt #357).
+    -- The first version of this harness declared customer_id and transport_method NULLABLE.
+    -- LIVE REQUIRES BOTH. So 19 probes passed against a double MORE FORGIVING THAN THE REAL
+    -- THING, and the same probes pasted into the SQL editor died on 23502 before reaching the
+    -- undo at all — R-33's exact class, inside a build that quotes R-33. Source:
+    -- scripts/sql-harness/fixtures/live-schema-public.sql, CREATE TABLE public.orders.
+    CREATE TABLE orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      business_id uuid NOT NULL,
+      customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
+      transport_method text NOT NULL,
+      netting_declined boolean NOT NULL DEFAULT false,
+      subtotal numeric(10,2) NOT NULL DEFAULT 0,
+      tax_amount numeric(10,2) NOT NULL DEFAULT 0,
+      total_amount numeric(10,2) NOT NULL DEFAULT 0,
+      addons_amount numeric(10,2) NOT NULL DEFAULT 0,
+      status text NOT NULL,
+      leakage_flag boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      tax_exempt_applied boolean NOT NULL DEFAULT false,
+      order_kind text, import_run_id uuid);
+    CREATE TABLE order_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      quantity integer NOT NULL,
+      unit_price numeric(10,2) NOT NULL,
+      subtotal numeric(10,2) NOT NULL,
+      is_manual_override boolean NOT NULL DEFAULT false,
+      sku text, description text,
       business_inventory_id uuid REFERENCES business_inventory(id) ON DELETE SET NULL);
     CREATE TABLE order_compliance_records (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid REFERENCES orders(id));
     CREATE TABLE order_service_selections (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid REFERENCES orders(id));
@@ -91,13 +114,19 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
 // ── C · THE UNDO DELETES THE LOAD'S HISTORY, AND KEEPS EVERY LIVE CAPTURE
 { const { db } = await fresh(M(MINE_FILE));
   const c = await seedCustomer(db);
-  const hist = await one(db, `INSERT INTO orders (business_id, customer_id, order_kind, import_run_id)
-                              VALUES ('${L}','${c}','history','${RUN}') RETURNING id`);
-  await db.exec(`INSERT INTO order_items (order_id, quantity, unit_price, subtotal, qbo_item_id)
-                 VALUES ('${hist}', 3, 100, 300, '99');`);
+  const hist = await one(db, `INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id)
+                              VALUES ('${L}','${c}','delivery','fulfilled','history','${RUN}') RETURNING id`);
+  await db.exec(`INSERT INTO order_items (order_id, quantity, unit_price, subtotal, is_manual_override, qbo_item_id)
+                 VALUES ('${hist}', 3, 100, 300, false, '99');`);
   // A LIVE CAPTURE on its own customer — it must not make the undo refuse, and must survive it.
-  const ocr = await one(db, `INSERT INTO orders (business_id, order_kind, import_run_id)
-                             VALUES ('${L}','history',NULL) RETURNING id`);
+  // 🔴 ITS OWN CUSTOMER, OUTSIDE THE RUN — and that is not a workaround for NOT NULL, it is
+  // what the probe always meant: an OCR capture on a RUN customer must make the undo REFUSE
+  // (that is D1). To prove it SURVIVES a completed undo it has to sit on a customer the undo
+  // does not delete. The first version hid this by leaving customer_id NULL, which live forbids.
+  const outside = await one(db, `INSERT INTO customers (business_id, import_run_id, first_name)
+                                 VALUES ('${L}',NULL,'Outside') RETURNING id`);
+  const ocr = await one(db, `INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id)
+                             VALUES ('${L}','${outside}','delivery','fulfilled','history',NULL) RETURNING id`);
 
   const res = await undo(db);
   ok(res.refused === false, 'C1 the undo did NOT refuse — the load\'s history is deleted, not blocking');
@@ -114,8 +143,8 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
 // ── D · IT STILL REFUSES ON A LIVE CAPTURE THAT SITS ON A LOAD CUSTOMER
 { const { db } = await fresh(M(MINE_FILE));
   const c = await seedCustomer(db);
-  await db.exec(`INSERT INTO orders (business_id, customer_id, order_kind, import_run_id)
-                 VALUES ('${L}','${c}','history',NULL);`);           // an OCR capture
+  await db.exec(`INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id)
+                 VALUES ('${L}','${c}','delivery','fulfilled','history',NULL);`);   // an OCR capture
   const res = await undo(db);
   ok(res.refused === true, 'D1 🔴 REFUSES on an OCR capture — the 25 rows R-160 protects');
   ok(Number(res.live_orders) === 1, `D2 and it NAMES it in live_orders (got ${res.live_orders})`);
@@ -124,8 +153,8 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
 // ── E · AND ON A GENUINE LIVE ORDER (the second probe R-165's guard cell owes)
 { const { db } = await fresh(M(MINE_FILE));
   const c = await seedCustomer(db);
-  await db.exec(`INSERT INTO orders (business_id, customer_id, order_kind, import_run_id)
-                 VALUES ('${L}','${c}',NULL,NULL);`);                // a real checkout sale
+  await db.exec(`INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id)
+                 VALUES ('${L}','${c}','delivery','invoiced',NULL,NULL);`);  // a real checkout sale
   const res = await undo(db);
   ok(res.refused === true, 'E1 REFUSES on a live checkout order — the exemption is not a blanket'); }
 
@@ -137,8 +166,8 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
   ok(mutant !== M(MINE_FILE), 'F0 the mutant actually changed the file — the probe can reach its target (#182)');
   const { db } = await fresh(mutant);
   const c = await seedCustomer(db);
-  const ocr = await one(db, `INSERT INTO orders (business_id, customer_id, order_kind, import_run_id)
-                             VALUES ('${L}','${c}','history',NULL) RETURNING id`);
+  const ocr = await one(db, `INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id)
+                             VALUES ('${L}','${c}','delivery','fulfilled','history',NULL) RETURNING id`);
   let refused = null, threw = null;
   try { refused = (await undo(db)).refused; } catch (e) { threw = String(e.message).slice(0, 120); }
   ok(refused === false || threw !== null,

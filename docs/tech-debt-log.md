@@ -4590,3 +4590,50 @@ than lying. Bundle it with the import build, where the 1,510 rows arrive.
 **Blocker:** none. It waits on the import being scoped.
 
 ✏️ **FILED AS #353 AT 14:41 AND RENUMBERED TO #354.** `origin/fix/seeded-fee-rows` claims #353 too (the import preview's field map). **By commit time mine is earlier — 14:41:00 against 14:47:51 — so R-148 clause (4) would move theirs.** I moved MINE anyway, deliberately: their row was first filed as #351 at **14:05:19** and was renumbered into #353 by a collision of its own, so its real claim predates mine by half an hour; and mine is one day old, cited by nothing but its own ledger row, while theirs carries a live measurement another session already depends on. **Cheapest thing to move, on #335's precedent.** `verify-id-sweep` never moves an id and did not move this one.
+
+---
+
+## #357 — 🔴 THE PGLITE HARNESSES HAND-ROLL THEIR SCHEMA, SO A DOUBLE CAN BE MORE FORGIVING THAN LIVE — AND ONE WAS (NEW 2026-09-21, ledger #363)
+
+**What happened, in one line.** `history-undo-363.pglite.mjs` declared `orders.customer_id` and
+`orders.transport_method` NULLABLE. **Live requires both.** So **19 probes passed** against a schema
+that cannot reject what Postgres rejects, and the same probe SQL, pasted into the SQL editor by
+David, died on **`23502 null value in column "transport_method" … violates not-null constraint`**
+— *before reaching the undo at all.* **V5, V6 and V7 never ran, so the R-160 protections were
+UNPROVEN on the live database while a green harness said otherwise.**
+
+🔴 **THIS IS [[R-33]]'s NAMED CLASS — *"a fake more forgiving than the real thing is a rubber
+stamp"* — COMMITTED INSIDE A BUILD WHOSE OWN MIGRATION QUOTES R-33.** It is the third mechanism in
+that ruling (tech-debt #138: a double that could not refuse), arriving in a harness written to
+prove a different ruling. Knowing the rule is not protection against it.
+
+**The repo already had the answer and this harness did not use it.** §6 r21 says path tests run on
+**`scripts/sql-harness/fixtures/live-schema-public.sql`** — a real dump. Every PGlite harness in
+that folder hand-rolls a minimal schema instead, because the dump is large and Supabase-specific.
+That trade was never written down, so each harness re-makes it silently.
+
+**MEASURED DRIFT, 2026-09-21 — the tables this harness declares, against the fixture:**
+
+| table | live cols | harness cols | live NOT NULLs the harness did not enforce |
+|---|---|---|---|
+| `orders` | 29 | 15 | ✅ none, after this fix (was `customer_id`, `transport_method`) |
+| `order_items` | 16 | 9 | ✅ none, after this fix (was `is_manual_override`) |
+| `customers` | 31 | 11 | `marketing_opt_in` · `source` · `created_at` · `price_tier` · `customer_type` · `tax_exempt` · `status` · `updated_at` |
+| `business_inventory` | 33 | 9 | `name` · `qty` · `status` · `created_at` · `updated_at` |
+| `deliveries` | 18 | 4 | `status` · `created_at` |
+
+⚠️ **The three still-drifted tables did not bite here** — live inserts into `customers` succeeded in
+David's run, so those columns carry defaults. **That is luck, not design**, and it is the same luck
+`orders` had until it ran out.
+
+**Fixed in this pass, narrowly:** `orders` and `order_items` now carry the live NOT NULL set,
+copied from the fixture rather than invented, with the reason at the code. 19/19 still pass —
+against a schema that can now refuse.
+
+**Fix (filed, not built).** Load the fixture instead of hand-rolling, in ALL of the harnesses in
+`scripts/sql-harness/`, or extract one shared `freshLiveSchema()` they share (§6 r8 — this is one
+operation in eight places). If the dump cannot load into PGlite, that reason gets written down
+once, where the next harness author will read it.
+
+**Blocker:** none, but it is bigger than one harness — eight files. Not for the night before
+go-live.
