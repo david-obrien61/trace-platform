@@ -68,8 +68,22 @@ export async function seedQtyWithoutLedger(
     }
     // 🔴 A WHOLE CHUNK THAT WROTE NOTHING IS A REFUSAL UNTIL PROVEN OTHERWISE (R-12 / A8) — stop.
     if ((data ?? []).length === 0) {
-      console.log('[TRACE:SEED] test-mode chunk wrote ZERO rows — stopping', { businessId, done: written, of: planned });
-      return { ok: false, written, planned, error: `Set ${written} of ${planned}, then a batch of ${ids.length} was not written at all — your permissions refused it, or those products changed since this screen loaded. Nothing was written to your stock record.` };
+      // ✏️ AND IT SAYS WHICH REFUSAL IT WAS, BECAUSE IT CAN FIND OUT (David, 2026-09-21).
+      // The old message named two causes and let the owner pick: *"your permissions refused it,
+      // or those products changed since this screen loaded."* She had just pressed Undo, so the
+      // rows were GONE — and the message sent her looking at permissions. One read settles it:
+      // if the ids are not there, the catalogue moved; if they are, it is the policy. A guess
+      // dressed as a diagnosis costs more than no diagnosis (D-9).
+      const { data: still, error: stillErr } = await db.from('business_inventory')
+        .select('id').eq('business_id', businessId).in('id', ids);
+      const present = stillErr ? null : (still ?? []).length;
+      const why = present === 0
+        ? `those ${ids.length} products are no longer in your catalogue — an import or an undo has changed it since this screen loaded. Close this panel and open it again to read the new list.`
+        : present === null
+          ? `we could not tell whether those products are still there (${stillErr?.message}).`
+          : `${present} of them are still there, so this is your permissions refusing the change, not a stale screen.`;
+      console.log('[TRACE:SEED] test-mode chunk wrote ZERO rows — stopping', { businessId, done: written, of: planned, present });
+      return { ok: false, written, planned, error: `Set ${written} of ${planned}, then a batch of ${ids.length} was not written at all: ${why} Nothing was written to your stock record.` };
     }
     const n = (data ?? []).length;
     written += n;
