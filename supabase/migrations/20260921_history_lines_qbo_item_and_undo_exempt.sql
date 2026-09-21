@@ -76,6 +76,12 @@ CREATE INDEX IF NOT EXISTS order_items_qbo_item_idx
 -- ── §2 · HISTORY LEAVES WITH ITS OWN RUN ────────────────────────────────────────────────────
 -- Body verbatim from 20260917b except the clause marked R-165 inside `v_live_orders`.
 --
+-- 🔴 SHARPENED 2026-09-21 (David, after the first draft): THE UNDO DELETES, IT DOES NOT MERELY
+-- EXEMPT. ONE TENANT LOAD, ONE ID — the wipe removes everything the load created, and history
+-- orders are part of that. Exempting them from the refusal without deleting them achieves
+-- nothing: the undo would go on to delete the customers they point at, and
+-- `orders_customer_id_fkey` is RESTRICT, so it would refuse one step later with a worse error.
+--
 -- ⚠️ `v_live_lines` IS DELIBERATELY NOT GIVEN THE SAME EXEMPTION. It reaches order lines through
 -- `JOIN business_inventory bi ON bi.id = oi.business_inventory_id`, and a captured line's lot id is
 -- NULL, so an inner join already excludes every history line. Adding the clause there would change
@@ -101,6 +107,8 @@ DECLARE
   v_n             int;
   r               record;
   v_p_orders      int;
+  v_h_orders      int;                       -- history orders this load wrote (ledger #363)
+  v_h_lines       int;                       -- and their lines
   v_p_lines       int;
   v_p_stops       int;
   v_inventory     int;
@@ -134,24 +142,31 @@ BEGIN
    WHERE o.business_id = p_business_id
      AND c.business_id = p_business_id AND c.import_run_id = p_run_id
      AND NOT (o.order_kind IS NOT DISTINCT FROM 'test' AND o.import_run_id IS NOT DISTINCT FROM p_run_id)
-     -- ── R-165, AS CORRECTED 2026-09-21 (ledger #363) ────────────────────────────────────────
-     -- An order WRITTEN BY AN IMPORT is a projection of QuickBooks: press the button again and it
-     -- comes back. Deleting it loses nothing, so it must never make the CUSTOMER undo refuse.
+     -- ── R-165, AS SHARPENED 2026-09-21 (David, ledger #363) ─────────────────────────────────
+     -- ONE TENANT LOAD, ONE ID: the wipe REMOVES everything the load created. A history order
+     -- this load wrote is therefore not merely exempt from the refusal — it is DELETED below,
+     -- in the same transaction, BEFORE the customers it points at. Exempting it without
+     -- deleting it would achieve nothing: `orders_customer_id_fkey` is RESTRICT, so the customer
+     -- delete would refuse anyway, one step later and with a worse error.
      --
-     -- 🔴 KEYED ON `import_run_id`, NOT ON `order_kind` — AND THAT IS THE WHOLE POINT OF THIS LINE.
-     -- `order_kind = 'history'` covers THREE doors, and only one of them is re-derivable:
-     --    · the QuickBooks API import   (19 orders live today)  — re-derivable, exempt here
-     --    · the OCR capture             (16 orders live today)  — A PHOTOGRAPH OF A DOCUMENT
-     --    · the backfill script          (9 orders live today)  — same origin, receipts since gone
-     -- The latter 25 are LIVE CAPTURES. R-160: *only live captures are never removed.* They must
-     -- KEEP making the undo refuse, and a bare `order_kind` test would have exempted all 25
-     -- SILENTLY — the undo would have reported success while Lauren's photographed invoices sat
-     -- against customers it had just deleted.
+     -- 🔴 KEYED ON THIS LOAD'S RUN, NOT ON `order_kind` AND NOT ON 'any import'.
+     -- `order_kind = 'history'` covers THREE doors and only one is re-derivable:
+     --    · the QuickBooks API import  (19 today) — re-derivable; this load's are deleted
+     --    · the OCR capture            (16 today) — A PHOTOGRAPH OF A DOCUMENT
+     --    · the backfill script         (9 today) — same origin, receipts since gone
+     -- The latter 25 carry NO import_run_id, so they are never matched here and never deleted.
+     -- R-160: only live captures are never removed. They must KEEP making the undo refuse, and
+     -- a bare `order_kind` test would have exempted all 25 SILENTLY.
      --
-     -- MEASURED 2026-09-21, before this line was written: `order_kind = 'history' AND
-     -- import_run_id IS NOT NULL` selects 0 of LAWNS's 45 orders. Nothing that exists today
-     -- changes behaviour; only rows a future import writes are exempted.
-     AND NOT (o.order_kind = 'history' AND o.import_run_id IS NOT NULL);
+     -- ⚠️ `IS NOT DISTINCT FROM`, NEVER `=`, AND THIS IS NOT STYLE. With `=`, an OCR order
+     -- (import_run_id NULL) makes `NULL = p_run_id` → NULL, so `TRUE AND NULL` → NULL, `NOT NULL`
+     -- → NULL, and the row is dropped from the COUNT — the undo would stop refusing on exactly
+     -- the 25 rows this clause exists to protect, silently. The null-safe form is why the `test`
+     -- clause above is written the same way.
+     --
+     -- A history order carrying a DIFFERENT run's id is NOT exempt: it still counts, so the undo
+     -- REFUSES and names it. Fail-loud, not fail-silent.
+     AND NOT (o.order_kind IS NOT DISTINCT FROM 'history' AND o.import_run_id IS NOT DISTINCT FROM p_run_id);
 
   SELECT count(*) INTO v_live_lines
     FROM public.order_items oi
@@ -252,6 +267,30 @@ BEGIN
              RETURNING 1)
     SELECT count(*) INTO v_p_orders FROM d;
 
+  -- ①b THE LOAD'S HISTORY ORDERS AND THEIR LINES (ledger #363). Same shape as ① above, one
+  --   word different, and it runs BEFORE products and customers because those are what it
+  --   unblocks. `order_items.order_id` is ON DELETE CASCADE, so the lines would go anyway; they
+  --   are deleted explicitly so the COUNT can be reported — the idiom ① already uses.
+  --   ⚠️ `deliveries` is NOT touched here. Its FK to orders is ON DELETE SET NULL, so a stop
+  --   outlives the order and keeps every field Lauren typed. No stop carries this run today:
+  --   phases 1 and 2 write no deliveries, and `deliveries` has no import_run_id column at all.
+  --   WHEN history deliveries are built, they get one and a DELETE belongs here beside this.
+  DELETE FROM public.order_compliance_records WHERE order_id IN (
+    SELECT o.id FROM public.orders o
+     WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id);
+  DELETE FROM public.order_service_selections WHERE order_id IN (
+    SELECT o.id FROM public.orders o
+     WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id);
+  WITH d AS (DELETE FROM public.order_items WHERE order_id IN (
+               SELECT o.id FROM public.orders o
+                WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id)
+             RETURNING 1)
+    SELECT count(*) INTO v_h_lines FROM d;
+  WITH d AS (DELETE FROM public.orders
+              WHERE business_id = p_business_id AND order_kind = 'history' AND import_run_id = p_run_id
+             RETURNING 1)
+    SELECT count(*) INTO v_h_orders FROM d;
+
   -- ② products, ③ customers — products first: a practice line could only have anchored to them,
   --   and those lines are already gone.
   WITH d AS (DELETE FROM public.business_inventory
@@ -296,6 +335,7 @@ BEGIN
     'refused', false,
     'practice_orders_deleted', v_p_orders, 'practice_lines_deleted', v_p_lines,
     'practice_deliveries_deleted', v_p_stops,
+    'history_orders_deleted', v_h_orders, 'history_lines_deleted', v_h_lines,
     'inventory_deleted', v_inventory, 'customers_deleted', v_customers,
     'contact_rows_deleted', v_contacts, 'unretired', v_unretired);
 END;
@@ -369,3 +409,49 @@ COMMIT;
 --   RAISE NOTICE 'V6 PASSED — not refused; the exemption works';
 --   RAISE EXCEPTION 'V6 rollback (expected — nothing was kept)';
 -- END $verify$;
+
+-- V7 · 🔴 A HISTORY ORDER FROM THE LOAD IS **GONE** AFTER THE UNDO, WITH ITS LINES — and an OCR
+--      capture beside it is STILL THERE. This is the probe the sharpened R-165 owes: the previous
+--      draft only proved the undo stopped REFUSING, which is not the same claim as "it removed it".
+--      Rolls itself back; writes nothing.
+-- DO $verify$
+-- DECLARE b uuid := 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
+--         r uuid := gen_random_uuid(); c uuid; hist uuid; ocr uuid; res jsonb; n int;
+-- BEGIN
+--   INSERT INTO public.customers (business_id, first_name, last_name, import_run_id)
+--        VALUES (b, 'V7', 'Probe', r) RETURNING id INTO c;
+--   -- written by THIS load: must be deleted
+--   INSERT INTO public.orders (business_id, customer_id, order_kind, status, import_run_id)
+--        VALUES (b, c, 'history', 'fulfilled', r) RETURNING id INTO hist;
+--   INSERT INTO public.order_items (order_id, quantity, unit_price, subtotal)
+--        VALUES (hist, 1, 10, 10);
+--   -- a LIVE CAPTURE on a DIFFERENT customer, so it cannot make the undo refuse: must survive
+--   INSERT INTO public.orders (business_id, order_kind, status, import_run_id)
+--        VALUES (b, 'history', 'fulfilled', NULL) RETURNING id INTO ocr;
+--
+--   res := public.undo_import_run(b, r);
+--   IF (res->>'refused')::boolean IS TRUE THEN
+--     RAISE EXCEPTION 'V7 FAILED — the undo refused instead of deleting: %', res;
+--   END IF;
+--
+--   SELECT count(*) INTO n FROM public.orders WHERE id = hist;
+--   IF n <> 0 THEN RAISE EXCEPTION 'V7 FAILED — the load''s history order SURVIVED the undo'; END IF;
+--   SELECT count(*) INTO n FROM public.order_items WHERE order_id = hist;
+--   IF n <> 0 THEN RAISE EXCEPTION 'V7 FAILED — its lines survived'; END IF;
+--
+--   SELECT count(*) INTO n FROM public.orders WHERE id = ocr;
+--   IF n <> 1 THEN RAISE EXCEPTION 'V7 FAILED — THE OCR CAPTURE WAS DELETED. R-160 breach.'; END IF;
+--
+--   RAISE NOTICE 'V7 PASSED — history_orders_deleted=%, history_lines_deleted=%, OCR intact',
+--                res->>'history_orders_deleted', res->>'history_lines_deleted';
+--   RAISE EXCEPTION 'V7 rollback (expected — nothing was kept)';
+-- END $verify$;
+--
+-- V8 · THE NULL-SAFETY THAT V5 AND V7 BOTH REST ON, ASSERTED DIRECTLY. With `=` instead of
+--      `IS NOT DISTINCT FROM`, an OCR order's NULL import_run_id makes the exclusion NULL and the
+--      row vanishes from the count — the undo silently stops refusing on the 25 rows R-160
+--      protects. Expected EXACTLY: t | f
+-- SELECT (NOT ('history' IS NOT DISTINCT FROM 'history'
+--              AND NULL::uuid IS NOT DISTINCT FROM gen_random_uuid()))          AS null_safe_counts_it,
+--        COALESCE(NOT ('history' = 'history' AND NULL::uuid = gen_random_uuid()), false)
+--                                                                               AS plain_equals_drops_it;
