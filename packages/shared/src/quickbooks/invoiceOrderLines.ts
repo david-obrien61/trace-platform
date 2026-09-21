@@ -239,6 +239,11 @@ export function buildInvoiceOrderContent(input: {
       // paper, not a key into business_inventory". Flattening `Oak:MO95` to `MO95` would throw
       // away the categorisation Terry maintains and that Jobber tells its users to destroy.
       sku: l.itemName,
+      // 🔴 THE ID THIS PARSE HAS ALWAYS READ AND USED TO THROW AWAY (tech-debt #139). `sku` keeps
+      // the NAME, which is what a person reads on a day sheet; this keeps the ID, which is what
+      // joins to the catalogue. The name is not a key — Lauren renames items — and the id is not
+      // a label. Storing one and deriving the other would be wrong in both directions.
+      qboItemId: l.itemId,
       businessInventoryId: null,
     });
   }

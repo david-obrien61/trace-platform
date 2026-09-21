@@ -163,6 +163,20 @@ export interface HistoryOrderLine {
   subtotal: number;
   description: string | null;
   sku: string | null;
+  /**
+   * The QuickBooks `Item.Id` this line is for — `Invoice.Line[].<DetailType>.ItemRef.value`.
+   *
+   * 🔴 THIS IS NOT A SECOND `businessInventoryId`, AND THE DIFFERENCE IS THE WHOLE DESIGN.
+   * `businessInventoryId` is an INTERNAL row id and is typed `null` below so that setting one is
+   * a compile error (invariant 1 — a lot id on a captured line silently reduces sellable stock,
+   * because committed stock is DERIVED, D-52). This is the SELLER'S OWN id for the item, and it
+   * is a VALUE joined to `business_inventory.qb_item_id` at read time — never a foreign key.
+   * Because both sides are QuickBooks ids, the join survives a wipe-and-reload of the catalogue
+   * with no re-attachment pass, which is why nothing here waits on `20260916b`'s open ruling.
+   *
+   * NULL on a line transcribed from a PHOTOGRAPH — an OCR capture has no QuickBooks id to read.
+   */
+  qboItemId: string | null;
   /** Invariant (1). Typed as the literal `null` so a future edit setting a lot id fails to compile. */
   businessInventoryId: null;
 }
@@ -177,6 +191,9 @@ export function historyOrderLines(lineItemsOriginal: any): HistoryOrderLine[] {
     subtotal:   Number(l?.amount ?? 0),
     description: l?.description != null ? String(l.description) : null,
     sku:         l?.sku != null ? String(l.sku) : null,
+    // A photographed invoice carries no QuickBooks Item.Id — there is nothing to read one from.
+    // NULL is the honest value here, not a gap: these lines join the catalogue by nothing.
+    qboItemId:   null,
     businessInventoryId: null,
   }));
 }

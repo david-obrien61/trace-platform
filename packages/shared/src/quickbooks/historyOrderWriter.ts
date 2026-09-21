@@ -890,6 +890,7 @@ export async function commitOrderIngest(
         subtotal: l.subtotal,
         description: l.description,
         sku: l.sku,
+        qbo_item_id: l.qboItemId,                       // the seller's item id — a VALUE, not an FK
         business_inventory_id: l.businessInventoryId,   // null — the invariant, at the write
       })),
     ).select('id');
