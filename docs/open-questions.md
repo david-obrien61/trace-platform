@@ -87,6 +87,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#365 — the not-stock list ships empty (migration WRITTEN, not applied)**
+- 🔴 **OPEN — APPLY `20260922b` BEFORE SEEDING**, and delete any copy of `20260922b_fix_not_stock_override_ids.sql` unapplied. Owner: ledger #365.
+- 🟡 **OPEN — TECH-DEBT #356: the setting has no screen.** Lauren cannot mark an item as not stock herself, so the capability exists and cannot be used. Owner: tech-debt #356.
+- ⚠️ **NOTED — the four misbooked items take 10 in test data**, by David's ruling; the durable fix is his QuickBooks retype list. Owner: ledger #365.
+
 **#364 — a goods account is stock; the owner marks the exceptions (built, migration NOT APPLIED)**
 - 🔴 **OPEN — APPLY `20260922_not_stock_overrides.sql` BEFORE SEEDING.** The seed screen refuses while the override list cannot be read, on purpose. Owner: ledger #364.
 - ⚠️ **OPEN — FIVE PHYSICAL GOODS STAY AT 0** (Adjustable Tree Bubbler · Deer Fencing · T-Post · T-Posts · Trunk Protection): their income account is *Landscaping/Installation Services*. The fix is Lauren's retype list, not another exception. Owner: ledger #364.
