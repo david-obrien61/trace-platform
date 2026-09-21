@@ -16,7 +16,7 @@
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing) · the first capability behind `followup_engine`
 **Story:** `user_stories.md` → *The stop is done — one tap, and a moved stop says where it went* (PIECES `fulfilment_tap`, `delivery_complete_state`) · *Ask for a review at the door* (ledger #247; the link moved to Business Profile in #300)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 17 covered** (15 `owed` · 2 `needs-test`). ✏️ **#300 (2026-09-11) added CARDS 13–17 and re-aimed CARDS 6, 8, 9 and 10** — the link field moved to Business Profile, and a stop marked done after its own date no longer prompts. ✏️ **#301 (2026-09-11): the tap and the ask moved into the shared `<StopCard>` + `useStopActions`** — same decisions, same permission strings, and they now also appear on `/deliveries?date=` and `/orders/:id`. No card here was `covered`, so nothing flips; every card still reads `/delivery-schedule` and still applies. The stop's own board is `stop-full-surface-test.md`.
+**Board: 0 of 18 covered** (16 `owed` · 2 `needs-test`; CARD 18 added by #369). ✏️ **#300 (2026-09-11) added CARDS 13–17 and re-aimed CARDS 6, 8, 9 and 10** — the link field moved to Business Profile, and a stop marked done after its own date no longer prompts. ✏️ **#301 (2026-09-11): the tap and the ask moved into the shared `<StopCard>` + `useStopActions`** — same decisions, same permission strings, and they now also appear on `/deliveries?date=` and `/orders/:id`. No card here was `covered`, so nothing flips; every card still reads `/delivery-schedule` and still applies. The stop's own board is `stop-full-surface-test.md`.
 **DEVICE:** CARDS 2–7, 10, 12 and 17 are **`DEVICE: phone`** — a crew surface in a customer's garden, every one provable **without a console**. CARDS 8, 9, 14 and 15 are `DEVICE: desktop`. CARDS 13 and 16 are the **SQL editor**. CARDS 1 and 11 are `needs-test`.
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -293,3 +293,48 @@ Then do the same on a stop **dated today**. **PASS:** the prompt appears (that i
 - **Saturday 2026-08-29's six real LAWNS stops.** They happened and Lauren will want to mark them. **That is David's to run, not a builder's.**
 - **Whether the tap should also appear on the route screen** (`/deliveries`). The story names this as owed by David, with the constraint *"the answer must not be both, built twice."* It is mounted in ONE place — `DeliverySchedule`, which the operations calendar also renders as its day drill-in, so today's mount already serves both the day list and the calendar with one implementation. The route screen is a one-line mount of the same component when David rules.
 - **A scroll or focus behaviour of the customer screen** — a render condition inside a `.tsx` cannot be asserted (tech-debt #134); these cards are the only proof that exists.
+
+---
+
+## CARD 18 — 🔴 FINISHING A STOP FULFILS ITS ORDER, AND UNDO PUTS IT BACK (ledger #369 · tech-debt #319)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #369
+⚠️ NEEDS `20260923_stop_remembers_the_order_status.sql` APPLIED. Without it the finish still works
+and the order is still fulfilled; only the **Undo** half can restore the order automatically.
+
+**Why this card exists.** A completed truck run used to leave every order open — so nothing ever
+came off stock, and automatic mix consumption had nothing to hang on.
+
+1. **Schedule** → pick a day with a stop whose order you can identify. Open that order in another
+   tab first and **write down its status** (at LAWNS most read **invoiced**).
+2. On the stop card press **Mark done**.
+3. Read the line at the top of the schedule.
+
+**PASS:** a green line reads **"Stop finished, and its order is marked fulfilled."** Reload the
+order tab: its status is now **fulfilled**.
+
+4. Press **Undo done** on the same stop.
+
+**PASS:** a green line reads **"Stop reopened, and its order is back to invoiced"** — naming the
+status you wrote down in step 1, not a guess. The order tab confirms it.
+
+**PASS (test mode):** the stock ledger is **unchanged** throughout — `SELECT count(*) FROM
+business_inventory_ledger WHERE business_id = '…'` reads the same before and after. Nothing writes
+the stock record while QuickBooks writes are off (R-158).
+
+**FAIL:** the stop finishes and the order stays where it was, with no line explaining why. That is
+the original defect.
+
+5. 🔴 **THE HALF-MOVE, and it needs a member who can change deliveries but NOT orders.** Signed in
+   as them, press **Mark done**.
+
+**PASS:** the stop finishes **and a RED line says the order was not fulfilled** — *"…that needs
+permission to change orders — ask an owner or manager to set it, or nothing will come off your
+stock."* **FAIL:** a green line, or silence. A finished stop beside an untouched order, unexplained,
+is the thing this card is for.
+
+6. **The crew link is unchanged** — open a crew day link, press **Done** on a stop, and confirm
+   from the order tab that **its order is NOT fulfilled**. That door keeps holding until teams land.
+
