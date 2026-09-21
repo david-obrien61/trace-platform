@@ -17,6 +17,8 @@
  *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
  *   GET  /api/qbo/history/preview    → _route=history-preview (READ-ONLY — plans the WHOLE invoice history)
  *   POST /api/qbo/history/ingest     → _route=history-ingest  (WRITES orders + order_items under the load's run)
+ *   GET  /api/qbo/relink/preview     → _route=relink-preview (READ-ONLY — plans the capture re-link)
+ *   POST /api/qbo/relink/run         → _route=relink-run     (MOVES captured orders onto the reloaded customer)
  *   GET  /api/qbo/orders/preview     → _route=orders-preview  (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/orders/ingest      → _route=orders-ingest   (WRITES orders + order_items + deliveries.order_id ONLY)
  *   GET  /api/qbo/items/preview      → _route=items-preview   (READ-ONLY — plans the catalogue import, writes nothing)
@@ -48,6 +50,7 @@ import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
 import { commitHistoryLoad } from '../../../shared/src/quickbooks/historyLoad';
+import { commitCaptureRelink } from '../../../shared/src/quickbooks/captureRelink';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 import { pushPermitted } from '../../../shared/src/business-logic/testMode';
 import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
@@ -995,6 +998,44 @@ async function walkRawInvoices(req: any, res: any) {
   return { invoices, realmId: walked.realmId, queriedAt: walked.queriedAt };
 }
 
+// ── THE CAPTURE RE-LINK (ledger #372) ────────────────────────────────────────────────────────
+// R-165's missing half: a PHOTOGRAPHED invoice finds the customer the reload created. It writes
+// no sale — it MOVES a captured order from the row an OCR capture made to the row the books
+// import brought in, and records where it came from so the wipe can put it back.
+// ⚠️ NO NEW VERCEL FUNCTION: two more `_route` branches. api/ is 12 of 12 (§6 r11).
+async function handleRelink(req: any, res: any, commit: boolean) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  if (commit) {
+    // R-80: moving a company's sales between customer records is an OWNER act. The manager floor
+    // holds `orders:create` so Lauren can ring up ONE sale; it must not re-attribute a history.
+    if (!(await refuseUnlessOwner(auth, businessId, 'RELINK', res))) return;
+  }
+  if (!(await callerCan(auth, businessId, commit ? 'orders:create' : 'orders:read'))) {
+    console.log('[TRACE:RELINK] REFUSED — caller lacks the permission', { businessId, commit });
+    return res.status(403).json({ error: 'Not authorized', code: 'FORBIDDEN' });
+  }
+  const walked = await walkRawInvoices(req, res);
+  if (!walked) return;
+  const invoices = walked.invoices.map((i: any) => ({
+    id: String(i.Id),
+    docNumber: i.DocNumber ? String(i.DocNumber) : null,
+    txnDate: i.TxnDate ?? null,
+    totalAmt: i.TotalAmt ?? null,
+    qbCustomerId: i.CustomerRef?.value ? String(i.CustomerRef.value) : null,
+  }));
+  try {
+    const report = await commitCaptureRelink(supabase(), businessId, invoices, { dryRun: !commit });
+    return res.status(report.ok ? 200 : 409).json({
+      ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: commit && report.ok,
+    });
+  } catch (e: any) {
+    console.log('[TRACE:RELINK] failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not ${commit ? 'run' : 'plan'} the re-link: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 async function handleHistoryPreview(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   if (!businessId) return res.status(400).json({ error: 'business_id required' });
@@ -1418,6 +1459,8 @@ export default async function handler(req: any, res: any) {
     case 'invoices':  return handleInvoices(req, res);
     case 'deliveries-preview': return handleDeliveriesPreview(req, res);
     case 'deliveries-ingest':  return handleDeliveriesIngest(req, res);
+    case 'relink-preview':     return handleRelink(req, res, false);
+    case 'relink-run':         return handleRelink(req, res, true);
     case 'history-preview':    return handleHistoryPreview(req, res);
     case 'history-ingest':     return handleHistoryIngest(req, res);
     case 'orders-preview':     return handleOrdersPreview(req, res);
