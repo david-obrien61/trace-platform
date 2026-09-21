@@ -7,13 +7,21 @@
 -- a table-editor object is created by `supabase_admin`, whose default ACL grants TRUNCATE and
 -- REFERENCES to `anon`, and TRUNCATE is outside row-level security entirely.
 --
--- 🔴 GATE — DO NOT APPLY UNTIL CONTACTS-349 REPORTS THE CUSTOMER/PRODUCT RELOAD DONE.
---    David, 2026-09-21. Measured here at 09:29 CDT: the reload had NOT run — `customers` and
---    `business_inventory` both still carried run bffc7713 of 2026-09-17T20:16 (1,956 customers,
---    631 live product rows). Nothing in THIS file depends on which run is live: both ids it deals
---    in are QuickBooks ids, which survive a reload by construction. What must wait for the reload
---    is the IMPORT that follows, and the join-coverage figure it reports — the 99.2% measured on
---    2026-09-20 was taken against the 631 rows the reload retires, and it is re-measured after.
+-- ✅ GATE CLEARED — THE RELOAD IS DONE. SAFE TO APPLY.
+--    Measured live 2026-09-21 16:11:42Z, after David ran it from the buttons:
+--      customers           1,963 under run 8ac868b3-4acf-4371-9883-cec6af5e5880 (+42 hand-made)
+--      business_inventory    632 under the same run — ALL live, ALL carrying qb_item_id
+--                            512 at qty 10 · 120 at qty 0 (45 not-stock + 75 under production)
+--      orders                 45 — untouched; no history order existed yet
+--    The previous run `bffc7713` is gone entirely.
+--
+--    ✏️ THIS BLOCK REPLACED A HOLD, AND THE HOLD IS QUOTED RATHER THAN DELETED so nobody wonders
+--    whether it was honoured: it read *"DO NOT APPLY UNTIL CONTACTS-349 REPORTS THE RELOAD DONE …
+--    measured here at 09:29 CDT: the reload had NOT run."* It had not, then. It has now.
+--
+--    Nothing in this file ever depended on WHICH run is live — both ids it deals in are QuickBooks
+--    ids, which survive a reload by construction. What waited for the reload is the IMPORT that
+--    follows, and the join-coverage figure it reports.
 --
 -- ADDITIVE ONLY. One nullable column with NO DEFAULT, one partial index, and one
 -- CREATE OR REPLACE of a function whose body is reproduced VERBATIM from its current definition
