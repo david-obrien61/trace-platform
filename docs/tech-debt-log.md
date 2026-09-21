@@ -4698,3 +4698,47 @@ live in this file within one hour.
 
 **Blocker:** none, but it is bigger than one harness — eight files. Not for the night before
 go-live.
+
+
+---
+
+## #359 — 🟡 THE CUSTOMER GRID PUTS ALL 2,005 ROWS IN THE DOM; AND SCREEN-TO-SCREEN TIME IS INVISIBLE TO CORE WEB VITALS (NEW 2026-09-21, ledger #370 — FILED, NOT BUILT, David's call)
+
+**① NO VIRTUALISATION.** `DataSheet.tsx` has zero windowing — measured by grep: no `react-window`,
+no `react-virtual`, no row slice. Every one of LAWNS's **2,005** customer rows is a live DOM node.
+The server read is now ~0.9 s (ledger #370); what is left of the wait is parse and layout, and that
+is where it goes. **Not tonight, on David's instruction** — it changes the shared grid every screen
+uses, the night before a pilot.
+
+**② THE THING LAUREN FEELS IS NOT A PAGE LOAD, AND THE INDUSTRY-STANDARD TOOL CANNOT SEE IT.**
+Vercel **Speed Insights** (free on Hobby, $10/mo per project on Pro) reports LCP, CLS, INP, TTFB and
+FCP from real users, by route and device. 🔴 **Core Web Vitals are measured on DOCUMENT LOAD.**
+Going from `/customers/:id` back to `/customers` in a React SPA is a client-side route change — no
+new document, so **no new LCP**. The 7 seconds David reported is invisible to it.
+**What is owed is a soft-navigation timer of our own:** mark on route change, measure to the list's
+first paint, log it with the row count and whether the roster was served from the held copy.
+**~half a day.** Speed Insights is still worth turning on for real page loads; it just does not
+answer this question, and adopting it as though it did is the [[R-26]] shape — a written claim
+standing in for a measurement.
+
+**Blocker:** none. ① is a shared-grid change and wants its own build; ② is half a day.
+
+---
+
+## #360 — 🟡 318 ESTIMATES ARE IN LAWNS'S BOOKS AND NOTHING IN TRACE READS THEM (NEW 2026-09-21, ledger #370 — filed for Lauren's estimate workflow)
+
+**Measured on the 2026-09-16 capture (`complete: true`): 318 estimates across 251 customers.**
+**127 of the 871 customers showing no order appear ONLY on an estimate** — they were quoted and
+never bought. Their empty history is CORRECT today, and it is also the most interesting list in the
+business: a quote that never closed.
+
+🔴 **AN ESTIMATE IS NOT A SALE AND MUST NEVER BECOME AN ORDER.** `order_kind = 'history'` means a
+sale that happened; an estimate is a sale that did not. Importing them as orders would put
+$1,907,816 of quotes into revenue. **If they are imported at all it is as their own object with
+their own screen** — Lauren's follow-up list, not her order history.
+
+**What it would need:** `Estimate` is already in `QBO_ENTITIES` and already walked by the router
+(#341), so the READ exists. What does not exist is a table, a screen, or a ruling on what a quote
+does in this product.
+
+**Blocker:** David's ruling on whether estimates are part of the product at all.
