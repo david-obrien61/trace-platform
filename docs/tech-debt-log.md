@@ -4635,5 +4635,36 @@ against a schema that can now refuse.
 operation in eight places). If the dump cannot load into PGlite, that reason gets written down
 once, where the next harness author will read it.
 
+✏️ **2026-09-21 — WHY EVERY HARNESS HAND-ROLLS IS NOW MEASURED, NOT GUESSED AT. THE FIXTURE DOES
+NOT LOAD INTO PGLITE.** The "fix" this row proposed — *load the fixture instead of hand-rolling* —
+was attempted and **refused twice, for two different reasons**, on
+`fixtures/live-schema-public.sql` (**254,532 characters · 4,948 lines**):
+
+1. 🔴 **`function extensions.gen_random_bytes(integer) does not exist`.** The dump calls Supabase's
+   own extension functions. They can be stubbed (`extensions.gen_random_bytes`, `auth.uid`,
+   `auth.jwt`, `auth.role` were), but **a stub is a double again** — the very thing this row is
+   about — so stubbing the way to a "live schema" earns less than it looks like it earns.
+2. 🔴 **`stack_depth.c` — PGlite exceeds its stack depth** applying the dump, even fed
+   statement-by-statement. Not a syntax problem and not fixable by stubbing: the WASM build has a
+   smaller stack than a server Postgres.
+
+**So the trade every harness in that folder made silently was the right one, and what was missing
+was the REASON.** It is written here now so the next author does not spend the afternoon
+rediscovering it.
+
+🔴 **AND THE ANSWER TAKEN INSTEAD IS BETTER THAN THE ONE PROPOSED, because it cannot drift.**
+`history-undo-363.pglite.mjs` §H **DERIVES live's NOT NULL set from the fixture by parsing it** and
+FAILS if the harness does not enforce every column. Nothing is written down twice, so the harness
+cannot silently fall behind live again — which is exactly how this row was born.
+⚠️ **It guards only the tables that harness WRITES TO** (`orders`, `order_items`). `customers`,
+`business_inventory` and `deliveries` are still short, and §H **prints the count on every run**
+rather than passing over them. **The open half of this row is extending §H's shape to the other
+seven harnesses**, not loading the dump.
+
+✏️ **§H caught its own flaw before it caught anything real:** the first matcher used `[^,]*`, which
+stops at the comma **inside `numeric(10,2)`** and reported four sound columns as gaps. A check that
+reports a defect that is not there is the mirror of one that misses a defect that is — both were
+live in this file within one hour.
+
 **Blocker:** none, but it is bigger than one harness — eight files. Not for the night before
 go-live.
