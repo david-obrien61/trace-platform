@@ -75,7 +75,14 @@ interface Suggestion {
   atOrBelow: number;
 }
 
-export function OpeningStockSeed(): React.ReactElement | null {
+/**
+ * 🔴 `catalogueVersion` — BUMPED BY THE IMPORT PANEL WHENEVER THE CATALOGUE CHANGES UNDER US
+ * (David, 2026-09-21). This panel used to read the product list once and never again, so after an
+ * Undo it went on offering to set starting numbers on **product ids that no longer existed** —
+ * and the write then failed with a message that blamed permissions. The number itself means
+ * nothing; a CHANGE in it means "what you are looking at is gone, read it again".
+ */
+export function OpeningStockSeed({ catalogueVersion = 0 }: { catalogueVersion?: number } = {}): React.ReactElement | null {
   const { businessId, isOwner, business } = useBusinessContext();
   // An unread switch is TEST mode — the side that writes nothing permanent.
   const mode = seedModeFor(business?.qbo_writes_enabled);
@@ -211,6 +218,24 @@ export function OpeningStockSeed(): React.ReactElement | null {
   }, [businessId, isOwner, mode]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // 🔴 CLEAR FIRST, THEN RE-READ — and the clear is the half that was missing. Re-reading alone
+  // would still show the old counts for as long as the query takes, and what the owner saw after
+  // her Undo was exactly that: "44 of your 631 products have no count" over a catalogue that no
+  // longer had 631 products in it. Stale numbers on screen are worse than no numbers, because she
+  // acted on them. `catalogueVersion` starts at 0 and the first render already loaded, so the
+  // guard keeps this from firing a second read on mount.
+  const firstSignal = React.useRef(true);
+  useEffect(() => {
+    if (firstSignal.current) { firstSignal.current = false; return; }
+    console.log('[TRACE:SEED] catalogue changed — clearing and re-reading', { catalogueVersion });
+    setPhase({ k: 'loading' });
+    setCandidates([]);
+    setTotalProducts(0);
+    setSug(null);
+    setStepError(null);
+    void load();
+  }, [catalogueVersion, load]);
 
   async function apply(): Promise<void> {
     setStepError(null);

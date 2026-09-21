@@ -102,7 +102,10 @@ interface ItemPlan {
 }
 interface ItemRun extends ItemPlan {
   runId?: string; created?: number; retired?: number;
-  stoppedAt?: 'create' | 'retire' | null; undoable?: boolean; committed?: boolean;
+  /** #327 — rows QuickBooks already had here, refreshed rather than re-created, and rows she had
+   *  deleted, which are reported and never revived. */
+  updated?: number; leftAlone?: number;
+  stoppedAt?: 'create' | 'update' | 'retire' | null; undoable?: boolean; committed?: boolean;
 }
 interface ItemUndo {
   ok?: boolean; inventoryDeleted?: number; unretired?: number;
@@ -123,7 +126,12 @@ interface UndoReport  { ok?: boolean; refused?: boolean; runId?: string;
 const money = (n: number | null) =>
   n === null || n === undefined ? 'no price' : `$${n.toLocaleString('en-US')}`;
 
-export function QboCatalogueImport({ businessId }: { businessId: string | null }) {
+export function QboCatalogueImport({ businessId, onCatalogueChanged }:
+  { businessId: string | null;
+    /** 🔴 Called after an import or an undo LANDS. Anything on the page showing the product list
+     *  is stale at that moment — the opening-stock panel most of all, because it holds product
+     *  IDS and an Undo deletes them (David, 2026-09-21). */
+    onCatalogueChanged?: () => void }) {
   // 🔴 INTERIM (David, 2026-09-08): owner authority is `owner_id` OR the OWNER ROLE, so a SECOND
   // OWNER is not hidden from her own importer by a single-valued column (R-22). The SERVER moved
   // in the same commit — `refuseUnlessOwner` → `callerHoldsOwnerAuthority` — so this never draws
@@ -206,6 +214,13 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
       if (step === 'preview') setPlan(body as PlanReport);
       if (step === 'import')  setRun(body as RunReport);
       if (step === 'undo')    { setUndone(body as UndoReport); if (body.ok) setRun(null); }
+      // 🔴 THE CATALOGUE MOVED — TELL THE PAGE. An import mints new product ids and an undo
+      // deletes them; a panel still holding the old ones will offer to write to rows that are
+      // gone. Preview changes nothing, so it does not fire.
+      if ((step === 'import' || step === 'undo') && body.ok) {
+        console.log('[TRACE:QBITEMS] catalogue changed — telling the page', { step });
+        onCatalogueChanged?.();
+      }
       if (!res.ok && !body.error && !body.refused) setFailed(`The request failed (${res.status}).`);
     } catch (e) {
       // A dead zone is NOT an empty result — say which happened (D-9).
@@ -507,6 +522,10 @@ export function QboCatalogueImport({ businessId }: { businessId: string | null }
             <>
               <strong style={{ color: GREEN, fontSize: '.9rem' }}>
                 Imported. {run.customers?.created ?? 0} customers and {run.items?.created} products created,{' '}
+                {/* 🔴 #327: a re-read REFRESHES what she already had rather than re-creating it, so the
+                    sentence has to account for those rows or the numbers stop adding up on screen. */}
+                {(run.items?.updated ?? 0) > 0 && <>{run.items?.updated} already here and brought up to date,{' '}</>}
+                {(run.items?.leftAlone ?? 0) > 0 && <>{run.items?.leftAlone} left alone because you had deleted them,{' '}</>}
                 {run.items?.retired} of your old rows hidden.
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>

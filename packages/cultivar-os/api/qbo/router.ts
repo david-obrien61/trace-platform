@@ -15,6 +15,8 @@
  *                           → _route=<same>     (READ-ONLY, paginated, complete, ceiling-capped — #341)
  *   GET  /api/qbo/deliveries/preview → _route=deliveries-preview (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
+ *   GET  /api/qbo/history/preview    → _route=history-preview (READ-ONLY — plans the WHOLE invoice history)
+ *   POST /api/qbo/history/ingest     → _route=history-ingest  (WRITES orders + order_items under the load's run)
  *   GET  /api/qbo/orders/preview     → _route=orders-preview  (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/orders/ingest      → _route=orders-ingest   (WRITES orders + order_items + deliveries.order_id ONLY)
  *   GET  /api/qbo/items/preview      → _route=items-preview   (READ-ONLY — plans the catalogue import, writes nothing)
@@ -45,6 +47,7 @@ import { summariseTransactions, countWithCustomFields } from '../../../shared/sr
 import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest';
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
+import { commitHistoryLoad } from '../../../shared/src/quickbooks/historyLoad';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 import { pushPermitted } from '../../../shared/src/business-logic/testMode';
 import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
@@ -971,6 +974,67 @@ async function handleDeliveriesIngest(req: any, res: any) {
 // field on a row that already exists. `orders:create` is the act; `orders:read` gates the
 // preview, which carries what every customer bought and what they paid.
 
+// ── THE WHOLE INVOICE HISTORY (ledger #363) ──────────────────────────────────────────────────
+// 🔴 THE SIBLING OF `orders-*`, AND THE DIFFERENCE IS THE ANCHOR. `orders-preview` asks "which of
+// the stops on the calendar need a load?" — 19 of them. This asks "what has this business ever
+// sold?" — 1,510 invoices. Same tables, same invariants, different question, so a different
+// planner (`historyLoad.ts`) rather than a flag on the old one.
+//
+// ⚠️ NO NEW VERCEL FUNCTION. `api/` is 12 of 12 and a 13th does not error, it makes the whole
+// deploy fail silently while the last-good bundle keeps serving (§6 r11). These are two more
+// `_route` branches on a router that already exists.
+async function walkRawInvoices(req: any, res: any) {
+  const walked = await readAllPages(req, res, 'Invoice', raw => {
+    const p = parseRows(raw, 'Invoice');
+    return { ok: p.ok, count: p.rows.length, parseError: p.parseError };
+  });
+  if (!walked) return null;
+  const invoices = walked.rows.flatMap(raw => parseRows(raw, 'Invoice').rows) as Array<Record<string, unknown>>;
+  const done = completenessOrRefuse(res, 'Invoice', walked.realmId, walked.queriedAt, walked.expected, invoices.length, walked.pages);
+  if (!done) return null;
+  return { invoices, realmId: walked.realmId, queriedAt: walked.queriedAt };
+}
+
+async function handleHistoryPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!(await callerCan(req.headers?.authorization, businessId, 'orders:read'))) {
+    console.log('[TRACE:HISTORYLOAD] preview REFUSED — caller lacks orders:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s orders', code: 'FORBIDDEN' });
+  }
+  const walked = await walkRawInvoices(req, res);
+  if (!walked) return;
+  try {
+    const report = await commitHistoryLoad(supabase(), businessId, walked.invoices, { dryRun: true });
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: false });
+  } catch (e: any) {
+    console.log('[TRACE:HISTORYLOAD] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the history load: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+async function handleHistoryIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  // R-80: importing a company's books is an OWNER act. The manager floor holds `orders:create`
+  // so that she can ring up ONE sale; it must not also import a whole sales history.
+  if (!(await refuseUnlessOwner(auth, businessId, 'HISTORYLOAD', res))) return;
+  if (!(await callerCan(auth, businessId, 'orders:create'))) {
+    console.log('[TRACE:HISTORYLOAD] ingest REFUSED — caller lacks orders:create', { businessId });
+    return res.status(403).json({ error: 'Not authorized to create orders for this business', code: 'FORBIDDEN' });
+  }
+  const walked = await walkRawInvoices(req, res);
+  if (!walked) return;
+  try {
+    const report = await commitHistoryLoad(supabase(), businessId, walked.invoices);
+    return res.status(report.ok ? 200 : 409).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: report.ok });
+  } catch (e: any) {
+    console.log('[TRACE:HISTORYLOAD] ingest failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not load the history: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 async function handleOrdersPreview(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   if (!businessId) return res.status(400).json({ error: 'business_id required' });
@@ -1354,6 +1418,8 @@ export default async function handler(req: any, res: any) {
     case 'invoices':  return handleInvoices(req, res);
     case 'deliveries-preview': return handleDeliveriesPreview(req, res);
     case 'deliveries-ingest':  return handleDeliveriesIngest(req, res);
+    case 'history-preview':    return handleHistoryPreview(req, res);
+    case 'history-ingest':     return handleHistoryIngest(req, res);
     case 'orders-preview':     return handleOrdersPreview(req, res);
     case 'orders-ingest':      return handleOrdersIngest(req, res);
     case 'items-preview':      return handleItemsPreview(req, res);

@@ -22,6 +22,8 @@
     { "source": "/api/qbo/refund-receipts", "destination": "/api/qbo-connector?_route=refund-receipts" },
     { "source": "/api/qbo/deliveries/preview", "destination": "/api/qbo-connector?_route=deliveries-preview" },
     { "source": "/api/qbo/deliveries/ingest",  "destination": "/api/qbo-connector?_route=deliveries-ingest" },
+    { "source": "/api/qbo/history/preview", "destination": "/api/qbo-connector?_route=history-preview" },
+    { "source": "/api/qbo/history/ingest",  "destination": "/api/qbo-connector?_route=history-ingest" },
     { "source": "/api/qbo/orders/preview", "destination": "/api/qbo-connector?_route=orders-preview" },
     { "source": "/api/qbo/orders/ingest",  "destination": "/api/qbo-connector?_route=orders-ingest" },
     { "source": "/api/crew/day", "destination": "/api/members/invite?_route=crew-day" },

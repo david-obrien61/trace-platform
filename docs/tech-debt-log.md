@@ -305,7 +305,7 @@ NAMED GAP = honest shell intended to fill on a stated horizon. Don't conflate th
 | 330 | 🟡 **THE STARTING NUMBERS PANEL'S COUNT LINE DOES NOT SAY WHAT IT LEFT OUT.** `OpeningStockSeed.tsx` ① reads *"N of your M products have no count against them"*; the three exclusions (holds stock · counted or sold · not created by the import, test mode) are named only after the run (`:296–299`). Lightning: it names two of the three. | Filed 2026-09-18 from Lightning's hold list | The line before the button names all three, with counts. | Next touch of the panel. |
 | 329 | 🟡 **CREW ACCESS PAST THE PILOT LINK IS UNDECIDED: crew logins or an app, and who may tap Done on site.** Today anyone holding the day's link can tap Done (ledger #347, R-161). Which crew roles may see and work a stop is tech-debt #275, unmeasured. | Filed 2026-09-18 from Lightning's hold list | **David's call:** keep the link, or give crew logins with a permission for Done. | After the Saturday 2026-09-19 pilot. |
 | 328 | 🟡 **HELD REVIEW ASKS ARE NEVER RELEASED AND NEVER COUNTED.** Both doors write `deliveries.review_ask_held_at` (R-161). Nothing reads it; `ReviewAskSheet.tsx` is kept and unmounted, and no screen shows how many asks are waiting. The follow-up module also cannot be turned on (tech-debt #270). | Filed 2026-09-18 from Lightning's hold list (measured: no reader of `review_ask_held_at` in `packages/`) | A held-ask list with an exact count ("N waiting"), from which the owner releases each ask. | After #270 is decided. |
-| 327 | 🔴 **GO-LIVE: THE PRODUCT IMPORT INSERTS, SO IMPORT IS ONLY SAFE WITH AN UNDO FIRST.** The reload checklist says it in red: *"Never press Import twice without an Undo in between."* The fix was filed 2026-09-16 on ⚡ ACTIVE STATUS with no id: match on `(business_id, qb_item_id)` and UPDATE; skip inactive items (already true, ledger #341); REPORT a row deleted in test mode, never revive it. About a day. ✏️ **THE KEY ALREADY EXISTS, MEASURED 2026-09-20 (ledger #357, David's instruction to record it): `business_inventory` carries a UNIQUE INDEX `business_inventory_business_qb_item_uidx` on `(business_id, qb_item_id)`.** Found by a harness probe that tried to insert a duplicate and was refused, so match-and-update has its key and an `ON CONFLICT (business_id, qb_item_id) DO UPDATE` is available today — **do not re-derive this.** | Filed 2026-09-18 from Lightning's hold list (the go-live item that had no id) | The customer import's shape: an existing row gets a narrow UPDATE that never carries the run id. | Before the next product import on LAWNS. |
+| 327 | ✅ **RESOLVED 2026-09-22 (ledger #368) — THE IMPORT MATCHES ON `(business_id, qb_item_id)` AND UPDATES.** An existing row takes a narrow UPDATE of the columns the import owns; `import_run_id`, `qty`, `status` and every retirement column are absent from the payload, asserted on the STATEMENT and not just the result — stamping the run id is the data-loss bug, because the undo deletes by run id. A row she deleted is reported and never revived. **The retire step had to change with it:** *"everything whose run id is not this run"* would have hidden the very rows the import just refreshed, so the stale set is computed and retired BY ID. **239 assertions; §Q proven RED against the old code, where it fails with the real symptom — `duplicate key value violates unique constraint`.** ✏️ **AND THE FILED SYMPTOM WAS WRONG:** this row and the reload checklist both said a second press *"adds a second copy of every product"*. It never could — the unique index refused it, so the second press died on row 0 and imported nothing. WAS: 🔴 **GO-LIVE: THE PRODUCT IMPORT INSERTS, SO IMPORT IS ONLY SAFE WITH AN UNDO FIRST.** The reload checklist says it in red: *"Never press Import twice without an Undo in between."* The fix was filed 2026-09-16 on ⚡ ACTIVE STATUS with no id: match on `(business_id, qb_item_id)` and UPDATE; skip inactive items (already true, ledger #341); REPORT a row deleted in test mode, never revive it. About a day. ✏️ **THE KEY ALREADY EXISTS, MEASURED 2026-09-20 (ledger #357, David's instruction to record it): `business_inventory` carries a UNIQUE INDEX `business_inventory_business_qb_item_uidx` on `(business_id, qb_item_id)`.** Found by a harness probe that tried to insert a duplicate and was refused, so match-and-update has its key and an `ON CONFLICT (business_id, qb_item_id) DO UPDATE` is available today — **do not re-derive this.** | Filed 2026-09-18 from Lightning's hold list (the go-live item that had no id) | The customer import's shape: an existing row gets a narrow UPDATE that never carries the run id. | Before the next product import on LAWNS. |
 | 303 | 🟡 **A HEADING AND A TABLE ROW CARRYING THE SAME TECH-DEBT ID STILL PASS EVERY CAP — THE DUPLICATE CHECK READS ONE OF THE LOG'S TWO ROW FORMATS.** `verify-id-citations` clause A matches `## #N` headings (`ROW_RE`); the log ALSO holds ~163 legacy TABLE rows (`| 139 | 🟡 **…**`), which correction ③ established in 2026-09-11 are real filings and which `filedIds` has counted for clause B ever since. **Clause A was never widened**, and its comment says so deliberately: *"Clause A stays on headings: the two formats were never meant to be unique across each other."* 🔴 **THAT SENTENCE WAS A DESIGN NOTE AND HAS BECOME A HOLE, AND IT HAS ALREADY BEEN PAID FOR ONCE.** tech-debt **#290**, **#291** and **#292** were claimed TWICE on 2026-09-12 — as table rows on `feat/delivery-day-load-list` and as headings on `main` — **and every id cap was green on both sides**, because no cap compares the two formats. The renumber to #299/#300/#301 cost a session (ledger #329). ✅ **TWO SIBLING HALVES ARE FIXED, WHICH IS WHY THIS ROW IS THE LEFTOVER RATHER THAN THE WHOLE DEFECT.** **(i) `verify-id-sweep`'s tech-debt matcher was headings-only too**, and it did the same damage one layer out: it printed **`NEXT FREE: #299` while this very tree held `| 299 |`…`| 303 |`**, and reported *"this tree claims none beyond main"* **with four COLLIDING rows in the file**. 🔴 **That blindness is why #290/#291/#292 had to be renumbered TWICE in one session** — the second hop only because a rival branch's four table rows were invisible to the sweep. Both formats now read, 4 probes both directions, **proven RED against the headings-only matcher.** ⚠️ **THE MATCHER IS NOW WRITTEN OUT IN BOTH CAPS** — deliberate and named: they share no module, and extracting one is its own build. **That duplication belongs to this row.** **(ii) the next-free arithmetic in `verify-id-citations`:** the NEXT-FREE arithmetic had the same blindness and was **actively handing out taken ids** — it printed *"max #294 → NEXT FREE #299"* with `| 295 |`…`| 298 |` four rows deep in the same file. Corrected in ledger #329 to read `filedIds`; **rows counted 107 → 270 and the "unused ids" list fell 187 → 28**, i.e. 159 filed items had been reported as gaps. **Probe F, both directions plus a negative control, proven RED against the old arithmetic.** | 2026-09-14 (ledger #329, measured while renumbering the three ids this defect let collide) | **Clause A unions both formats, exactly as `filedIds` already does** — one line, and the probe is the pair `## #7` + `| 7 |` in one document, which must FAIL. 🔴 **BUT IT IS A DECISION BEFORE IT IS AN EDIT, AND THAT IS WHY IT IS FILED RATHER THAN DONE:** widening clause A asserts that the two formats share ONE id space. **They do in practice — the #290 collision is the proof — but the cap's own comment records the opposite intent**, and a cap that goes red on arrival against 270 historical rows is one people switch off (#73). **Measure the live duplicate count FIRST**, then either widen and clear the hits, or declare them. | 🟡 **The next id claimed as a table row.** Not urgent while the next-free number is correct — a session that follows it will not collide — but the guard is absent and the last collision was found by hand. |
 | 302 | 🟡 **TEN COPIES OF A FIVE-LINE COMMENT-STRIPPER, EACH ONE THE REACH CONTROL FOR A DIFFERENT CAP — AND THE ELEVENTH WAS ADDED KNOWINGLY.** Every negative source-assertion in this repo (*"this string must NOT appear"*) has to read the file with comments removed, or it matches the prose EXPLAINING the rule instead of the code BREAKING it. That stripper is written out longhand in **five test files** (`loadListPage.test.ts` · `historyOrder.test.ts` · `testMode.test.ts` · `customerFieldCoverage.test.ts` · `vendorEdit.test.ts`) and **five `scripts/` caps** (`verify-field-lists` · `verify-universals` · `verify-zero-row-writes` · `verify-ui-standard-divergence` · `measure-registry-contradictions`), measured 2026-09-14. 🔴 **THE COST IS NOT THE DUPLICATION, IT IS THAT EACH COPY CAN SILENTLY STOP REACHING AND ONLY TWO OF THE TEN HAVE A CONTROL PROBE.** `loadListPage.test.ts` has `C8b`; `loadList.test.ts` now has `A1d`. **The other eight assert over a stripper nobody has proven is doing anything** — and a stripper that quietly stops working turns every negative probe downstream of it GREEN on a file that has the forbidden shape back in it. **That is tech-debt #182 exactly** (*a harness that cannot reach its target reports the same as one that passed*), ten times, in the tooling that exists to catch #182. ✏️ **FILED BY ITS OWN VICTIM, WITHIN THE HOUR:** the [[R-155]] probes `A1b`/`A1c` went RED against CORRECT code because the ruling's own explanation names the strings it forbids. **Documenting a defect is a reliable way to commit it** — third self-inflicted instance this week. | 2026-09-14 (ledger #329, measured while applying [[R-155]] — an eleventh copy added deliberately rather than an eleventh SHAPE invented, and named rather than left for the next reader to count) | **ONE shared helper** exporting the stripper **and the control assertion together**, so adopting it is what gives a cap its reach proof — `stripComments(src)` returning the code plus a `provenReaching(src, code, probe)` the caller must satisfy. 🔴 **The consolidation is the cheap half; the CONTROL is the point** (§6 r8 gets one operation into one place, [[R-33]] is what makes it worth doing). Split by consumer: the five test files can import from `packages/shared`, the five `scripts/` caps are plain `.mjs` and cannot — so it is **two homes, not one**, and that is worth knowing before anyone starts. | 🟡 **The next cap that adds a negative source-assertion** — it will write an eleventh copy, and it may not think to prove it reaches. Not urgent: no copy is known broken today, and eight are unproven rather than wrong. |
 | 301 | 🟡 **A CONTAINER SIZE STATED BEFORE AN UNBRACKETED TRAILING REMARK IS NOT READ — 9 REAL TREES, MEASURED.** 🔴 **RED-FIRST CASE FILED 2026-09-17 (ledger #343), NOT FIXED:** `packages/shared/src/quickbooks/__redfirst__/nineTrees301.redfirst.ts` runs the nine live lines verbatim with the size a person reads in each — **9 failed today, exit 1** — plus a negative control (a number inside a fertiliser name is still not a size). It is not a `.test.ts`, so it does not fail the build; `qboItemAdapter.test.ts` §P301 PINS today's behaviour, so a fix cannot land unnoticed. Re-measured 2026-09-16: the ladder build changes nothing for these nine — the reader stops at the remark before the ladder is ever asked.  `readProductFromDescription` scans BACKWARD from the end of the description and stops at the first size-shaped token, and it strips a trailing **parenthetical** first. So *"Live Oak - 200 gallon (Install & Warranty)"* reads correctly and **"Cedar Elm - 30 gallon Install & Warranty" does not** — the remark is not bracketed, so the scan never reaches the size and reports `not_stated`. 🔴 **MEASURED 2026-09-12 over all 130 LAWNS `order_items` rows: 51 resolve to a container size, and NINE are real trees whose text plainly states a gallon size we cannot reach.** The shape is one: `… - 45 Gallon (Bogo) Install & Warranty` · `… - 30 gallon Install & Warranty` · `… - 15 gallon (Buy Get One Half Off) Install & Warranty`. A tenth, *"Eagleston Holly (Tree Form) - 30 Gallon 15% Off (Install & Warranty)"*, reaches `could_not_read` on the fragment `15% Off` — honest, and still not the size. ⚠️ **NOT A FALSE GREEN — the load list prints every one of them** under *no container size* or *could not work out*, and declares its totals a FLOOR. It is incomplete and it says so. 🔴 **AND THE OBVIOUS FIX IS THE WRONG ONE: DO NOT MAKE THE SCAN LOOK HARDER.** The file's own header states why — *"continuing would find a size somewhere in the middle of a fertiliser name and present it as this product's container. Looking harder is how a scan manufactures a confident wrong answer."* ⚠️ **AND DO NOT REACH FOR THE SKU.** The tree codes look like they carry a size (`MS45`, `CHO95`) and then **`TSK2` is a T-POST COUNT** and `MT10002` is a 1 lb ant killer — a digit-scrape turns it into a 10,002-gallon container. **Distinct from #193**, which is a size at the FRONT of a description (`50lb Bag: …`); this one is a size in the MIDDLE, behind a remark. Same file, different position, and #193's blocker is a data-model QUESTION while this one is positional. ⚠️ **RENUMBERED 2026-09-14 (ledger #329): THIS ROW WAS FILED AS #292 AND COLLIDED WITH A DIFFERENT #292 ALREADY ON `main`.** Both were filed 2026-09-12; `main`'s is merged and this branch is not, so under [[R-148]] clause (4) **this one moves.** The collision was invisible while the branch sat unmerged — `verify-id-sweep` reads rival branches, and a row that collides with `main` inside the SAME FILE is a shape it does not check. 🔴 **AND IT MOVED TWICE: the first renumber landed on #295–#298, which `origin/fix/price-unit-ac1-and-four-findings` had reserved 71 SECONDS EARLIER** (17:36:49 against 17:38:00), so clause (4) applied again and these rows are now #299–#303. ⚠️ **Neither hop was caught by the sweep, and the reason is the same one filed as #303: these are TABLE rows, and the sweep — like the next-free arithmetic — reads `## #N` headings.** The sweep's own output said *"this tree claims none beyond main"* for tech-debt while four colliding rows sat in the file. | 2026-09-12 (ledger #315 — measured while building the load list, filed not fixed: re-shaping a shared size resolver inside a print-view build is the scope creep that makes a diff unreviewable) | The remark-stripper becomes **positional and unbracketed-aware** — strip a trailing marketing/fulfilment remark (`Install & Warranty`, `Bogo`, `15% Off`, `Buy One Get One …`) the way `TRAILING_PARENTHETICAL` already strips a bracketed one, **in `qboItemAdapter.ts` where the positional logic lives, and with NO unit vocabulary added** (R-27). 🔴 **It is a vocabulary of REMARKS, not of sizes, and that distinction is what keeps it safe** — the candidate it exposes still goes to `parseUnitOfMeasure` and that function alone says yes or no. Probe both directions against all 130 real rows, and include the negative control that a size in the middle of a fertiliser NAME is still refused. | 🔴 **Before the load list is relied on for a day carrying one of the nine** — it is honest today and incomplete, and the cost is a yard person hand-reading an invoice line the platform should have read. Also the day anyone counts trees-by-size from `order_items` for anything other than this sheet, because the undercount is silent there. |
@@ -4583,3 +4583,114 @@ attributed to one size**; the first cut counts only single-size stops and says s
 rule nobody has ruled. ⚠️ And a start that was never tapped, or one left from a previous day (tech-debt #344),
 poisons the average — #344 should land first or the comparison must exclude stops whose start and done are on
 different days.
+---
+
+## #354 — 🟡 AFTER A BULK HISTORY IMPORT THE ORDERS ROSTER SHOWS THE 50 MOST RECENTLY *WRITTEN* ROWS, WHICH WOULD ALL BE 2024–2025 INVOICES (NEW 2026-09-20, ledger #359 — filed in place of a defect that did not exist)
+
+**✏️ THIS ROW REPLACES A CLAIM I MADE AND GOT WRONG, AND THE CORRECTION IS THE REASON IT IS FILED.** The
+2026-09-20 build report stated that `/orders` had *"no read limit — `.order('created_at')` with no `.limit()`"*,
+and called it ledger #251's defect class on a second screen. **That is false.** `Orders.tsx` carries
+`.limit(ROSTER_PAGE_LIMIT)` with `ROSTER_PAGE_LIMIT = 50`, added **2026-08-28** by ledger #225, and
+`orderRosterFilter.ts:23` states the reasoning in its own words: *"a total that is silently a cap is a number
+that lies."* The roster also renders `rosterCountLabel(...)` — *"showing 3 of 50+"* — and logs `atPageCap`. **The
+screen is bounded and it says so.** The claim came from a grep for `\.limit\([0-9]+\)`, which cannot match
+`.limit(ROSTER_PAGE_LIMIT)`; absence of a match was read as absence of a limit. **That is the exact defect the
+report was about — [[R-26]], and #182's shape: a probe that could not reach its target reporting the same as one
+that passed.**
+
+**WHAT IS ACTUALLY TRUE, AND IT IS SMALLER.** The roster reads `.order('created_at', { ascending: false })`.
+Every row a bulk import writes carries the same `created_at` — the moment of the import — so after the
+1,510-invoice history import the newest 50 by `created_at` would be **1,510 imported historical invoices**,
+and this week's real orders would fall off the first page. The count sentence stays honest (*"of 50+"*), so
+**this is not a silent lie; it is the wrong fifty.** `orders.sale_date` is populated on every history order
+(the whole population today: 44 of 45) and is the honest sort for a roster of sales.
+
+**Blast radius, measured 2026-09-20.** `/orders` only. `CustomerDetail.tsx` has no limit and does not need one:
+the busiest QuickBooks customer holds **18 invoices**, the top three are 18 · 18 · 17, and **no customer has
+more than 50** — so the per-customer read cannot reach PostgREST's 1,000-row default.
+
+**Fix (filed, not built).** Sort the roster by `COALESCE(sale_date, created_at::date)` rather than `created_at`,
+or offer the sort. It is small, and it is **not urgent before the import** — the screen degrades legibly rather
+than lying. Bundle it with the import build, where the 1,510 rows arrive.
+
+**Blocker:** none. It waits on the import being scoped.
+
+✏️ **FILED AS #353 AT 14:41 AND RENUMBERED TO #354.** `origin/fix/seeded-fee-rows` claims #353 too (the import preview's field map). **By commit time mine is earlier — 14:41:00 against 14:47:51 — so R-148 clause (4) would move theirs.** I moved MINE anyway, deliberately: their row was first filed as #351 at **14:05:19** and was renumbered into #353 by a collision of its own, so its real claim predates mine by half an hour; and mine is one day old, cited by nothing but its own ledger row, while theirs carries a live measurement another session already depends on. **Cheapest thing to move, on #335's precedent.** `verify-id-sweep` never moves an id and did not move this one.
+
+---
+
+## #357 — 🔴 THE PGLITE HARNESSES HAND-ROLL THEIR SCHEMA, SO A DOUBLE CAN BE MORE FORGIVING THAN LIVE — AND ONE WAS (NEW 2026-09-21, ledger #363)
+
+**What happened, in one line.** `history-undo-363.pglite.mjs` declared `orders.customer_id` and
+`orders.transport_method` NULLABLE. **Live requires both.** So **19 probes passed** against a schema
+that cannot reject what Postgres rejects, and the same probe SQL, pasted into the SQL editor by
+David, died on **`23502 null value in column "transport_method" … violates not-null constraint`**
+— *before reaching the undo at all.* **V5, V6 and V7 never ran, so the R-160 protections were
+UNPROVEN on the live database while a green harness said otherwise.**
+
+🔴 **THIS IS [[R-33]]'s NAMED CLASS — *"a fake more forgiving than the real thing is a rubber
+stamp"* — COMMITTED INSIDE A BUILD WHOSE OWN MIGRATION QUOTES R-33.** It is the third mechanism in
+that ruling (tech-debt #138: a double that could not refuse), arriving in a harness written to
+prove a different ruling. Knowing the rule is not protection against it.
+
+**The repo already had the answer and this harness did not use it.** §6 r21 says path tests run on
+**`scripts/sql-harness/fixtures/live-schema-public.sql`** — a real dump. Every PGlite harness in
+that folder hand-rolls a minimal schema instead, because the dump is large and Supabase-specific.
+That trade was never written down, so each harness re-makes it silently.
+
+**MEASURED DRIFT, 2026-09-21 — the tables this harness declares, against the fixture:**
+
+| table | live cols | harness cols | live NOT NULLs the harness did not enforce |
+|---|---|---|---|
+| `orders` | 29 | 15 | ✅ none, after this fix (was `customer_id`, `transport_method`) |
+| `order_items` | 16 | 9 | ✅ none, after this fix (was `is_manual_override`) |
+| `customers` | 31 | 11 | `marketing_opt_in` · `source` · `created_at` · `price_tier` · `customer_type` · `tax_exempt` · `status` · `updated_at` |
+| `business_inventory` | 33 | 9 | `name` · `qty` · `status` · `created_at` · `updated_at` |
+| `deliveries` | 18 | 4 | `status` · `created_at` |
+
+⚠️ **The three still-drifted tables did not bite here** — live inserts into `customers` succeeded in
+David's run, so those columns carry defaults. **That is luck, not design**, and it is the same luck
+`orders` had until it ran out.
+
+**Fixed in this pass, narrowly:** `orders` and `order_items` now carry the live NOT NULL set,
+copied from the fixture rather than invented, with the reason at the code. 19/19 still pass —
+against a schema that can now refuse.
+
+**Fix (filed, not built).** Load the fixture instead of hand-rolling, in ALL of the harnesses in
+`scripts/sql-harness/`, or extract one shared `freshLiveSchema()` they share (§6 r8 — this is one
+operation in eight places). If the dump cannot load into PGlite, that reason gets written down
+once, where the next harness author will read it.
+
+✏️ **2026-09-21 — WHY EVERY HARNESS HAND-ROLLS IS NOW MEASURED, NOT GUESSED AT. THE FIXTURE DOES
+NOT LOAD INTO PGLITE.** The "fix" this row proposed — *load the fixture instead of hand-rolling* —
+was attempted and **refused twice, for two different reasons**, on
+`fixtures/live-schema-public.sql` (**254,532 characters · 4,948 lines**):
+
+1. 🔴 **`function extensions.gen_random_bytes(integer) does not exist`.** The dump calls Supabase's
+   own extension functions. They can be stubbed (`extensions.gen_random_bytes`, `auth.uid`,
+   `auth.jwt`, `auth.role` were), but **a stub is a double again** — the very thing this row is
+   about — so stubbing the way to a "live schema" earns less than it looks like it earns.
+2. 🔴 **`stack_depth.c` — PGlite exceeds its stack depth** applying the dump, even fed
+   statement-by-statement. Not a syntax problem and not fixable by stubbing: the WASM build has a
+   smaller stack than a server Postgres.
+
+**So the trade every harness in that folder made silently was the right one, and what was missing
+was the REASON.** It is written here now so the next author does not spend the afternoon
+rediscovering it.
+
+🔴 **AND THE ANSWER TAKEN INSTEAD IS BETTER THAN THE ONE PROPOSED, because it cannot drift.**
+`history-undo-363.pglite.mjs` §H **DERIVES live's NOT NULL set from the fixture by parsing it** and
+FAILS if the harness does not enforce every column. Nothing is written down twice, so the harness
+cannot silently fall behind live again — which is exactly how this row was born.
+⚠️ **It guards only the tables that harness WRITES TO** (`orders`, `order_items`). `customers`,
+`business_inventory` and `deliveries` are still short, and §H **prints the count on every run**
+rather than passing over them. **The open half of this row is extending §H's shape to the other
+seven harnesses**, not loading the dump.
+
+✏️ **§H caught its own flaw before it caught anything real:** the first matcher used `[^,]*`, which
+stops at the comma **inside `numeric(10,2)`** and reported four sound columns as gaps. A check that
+reports a defect that is not there is the mirror of one that misses a defect that is — both were
+live in this file within one hour.
+
+**Blocker:** none, but it is bigger than one harness — eight files. Not for the night before
+go-live.

@@ -87,6 +87,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#366 / #367 — the panel follows the catalogue; a committed marker fails the build (built, NOT MERGED)**
+- 🔴 **OPEN — CARD 17**: undo → import → Set with **no browser reload**. The panel must never show the pre-undo count. Owner: ledger #366.
+- ⚠️ **LEFT TO HISTORY ON DAVID'S INSTRUCTION — two stale `# Last updated:` lines in `built-inventory.md`** (line 45, 2026-09-09, another session's). Not markers, so the new cap is silent on them. Owner: HISTORY.
+
+**#368 — the product import matches and updates (built, NOT MERGED)**
+- ✅ **ANSWERED — tech-debt #327 is resolved**: pressing Import twice is safe, and the reload checklist's red line is gone. Owner: ledger #368.
+- ⚠️ **NOTED — the refresh is one statement per row** (632 round-trips on a full LAWNS re-read, inside the 300s ceiling). A batch form would be an upsert, which is what stamps the run id. Owner: ledger #368.
 **#362 — teams piece 1: who goes out (MERGED, migration APPLIED)**
 - ✅ **ANSWERED 2026-09-22 — BOTH WRITE-PATH DECLARATIONS RATIFIED BY DAVID.** `lib/teams.ts` on `deliveries` (only `team_id`) and on `audit_log` (one row per change, inside the function that made it). Marked ✅ RATIFIED in `verify-write-paths.mjs`. Owner: ledger #362.
 - ✅ **ANSWERED 2026-09-22 — RENAME, BUT NOT TODAY ([[R-168]]).** David: *"RENAME — but tomorrow, not today… Choose the name yourself; it is bookkeeping."* Chosen: `teams` → **`delivery_teams`**, `team_members` → **`delivery_team_members`**. 🟡 **STILL OPEN AS WORK** — the migration is owed, and the Ignition declaration should be DELETED with it, not kept. Owner: [[R-168]].
@@ -110,10 +117,20 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — THE RULE SKIPS 43 REAL GOODS.** Compost scoops, fertiliser bags, bubblers, staking kits and T-posts are booked to *Sales of Product Income*, which the Services review treats as ambiguous by design (*"where you also book bags and containers"*), so they stay at 0. One predicate changes it. Owner: ledger #361.
 - 🔴 **OPEN — AND IT RE-SEEDS 4 OF THE 44 YOU ZEROED:** Deposit · Gift Certificate · Arizona Cypress Blue Ice Replacement · Custom Amount. Three are booked to *Sales of Nursery Stock*, so the books call them stock. Owner: ledger #361.
 - 🟡 **OPEN — THE (UNDER PRODUCTION) MARKER IS A NAME MATCH.** No column says a plant is still growing, so a rename silently changes behaviour. Replace with the grow ladder's own state when it lands. Owner: ledger #361.
+**#360 — the books review records its run (built, NOT MERGED)**
+- 🔴 **OPEN — CARD 21's RED HALF NEEDS A MEMBER WITHOUT `books:write`.** Proving the green line is easy; proving the screen goes RED when nothing was stored is the half that matters. Owner: ledger #360.
+- 🟡 **OPEN — NOTHING READS THE STORED RUNS BACK YET except the opening-stock seed.** Comparing one month with the next is what the tables are for, and no screen does it. Owner: ledger #360.
 
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
 - 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
+**#359 — three history-import rulings; the /orders defect did not exist (docs + rulings, no app code)**
+- 🔴 **OPEN — `20260908_books_report_runs.sql` IS APPLIED LIVE AND ITS SOURCE IS ON NO MERGED BRANCH.** Absent from `origin/main`; held by `origin/chore/books-report-runs-migration` and `origin/thunder/findings-report`; staged uncommitted in David's checkout. Land it on `main` as a docs-only commit, or merge one of the two. Owner: ledger #359.
+- 🔴 **OPEN — WEBHOOKS VERSUS POLLING**, held open deliberately by [[R-166]] and not to be answered by picking a default in code. Owner: `docs/RULINGS.md` R-166.
+- 🔴 **OPEN — WIRE THE BOOKS REVIEW TO WRITE? It is ONE CALL SITE, not a build.** `saveBooksRun`/`planBooksRun` are on `main`, tested, **zero callers**; `readLatestResult` already has one, so the read side has been live against empty tables. Half a day including the card. Owner: ledger #359.
+- 🟡 **OPEN — ADOPT PROPOSED §6 r22?** *A filing lands on `main` the same day; a migration applied live reaches `main` the same day.* Raised on ledger #353 and still unadopted; ledger #359 found a second instance of exactly what it prevents. Owner: ledger #353.
+- ✅ **ANSWERED 2026-09-20 — [[R-165]] history is EXEMPT from the customer undo and carries its own import run**, so the wipe keeps working as R-95 and R-160 say. This was the one decision that could not be sequenced around.
+- ✅ **ANSWERED 2026-09-20 — [[R-167]] landed cost is phase two**; list `PurchaseCost` (1,119 of 1,157 items) gets margin onto a screen, labelled as list.
 
 **#356 — caliper on the ladder (build, BUILDER-COMPLETE, migration NOT APPLIED)**
 - ⛔ **OPEN — APPLY `20260918c_container_ladder_caliper.sql`, THEN MERGE (#355 first).** Owner: ledger #356.

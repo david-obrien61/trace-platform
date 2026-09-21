@@ -14,7 +14,7 @@
 **Capability:** 5.1 inventory (the seed) · 3.5 QuickBooks (the rule and its storage).
 **Story:** `user_stories.md` → *The imported catalogue can be sold from* (ARC: `cost-to-produce`).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 16 covered** (15 `owed` · 1 `needs-test`; CARDS 15–16 added by #342).
+**Board: 0 of 17 covered** (16 `owed` · 1 `needs-test`; CARDS 15–16 added by #342, CARD 17 by #366).
 **DEVICE:** mostly `desktop` — this is a setup surface and setup is a desk job. CARD 11 is
 `DEVICE: phone`, because the picker is where the original defect was visible and it must be
 provable **without a console**.
@@ -343,4 +343,43 @@ On **Test Dave's**, add one product **by hand** (not from QuickBooks) with **0**
 
 **PASS:** the hand-made product still reads **0**, and the Done box counts it under *not created by your
 QuickBooks import*. **FAIL:** it reads 5.
+
+
+---
+
+## CARD 17 — 🔴 THE PANEL FOLLOWS THE CATALOGUE: UNDO, IMPORT, AND IT NEVER SHOWS YESTERDAY'S COUNT (ledger #366)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #366
+
+**This is the defect David hit on 2026-09-21, in his own words: the panel read "44 of your 631
+products have no count" after an Undo had removed all 631.** Pressing Set then tried to write to
+44 product ids that no longer existed, and blamed his permissions for it.
+
+1. **Settings → Accounting.** Read the Starting-numbers panel and note the sentence — *"N of your
+   M products have no count"*. Write both numbers down.
+2. Press **UNDO THIS IMPORT** and wait for it to report what it removed.
+3. **Without reloading the browser**, look at the panel again.
+
+**PASS:** the panel goes to its loading state and comes back describing the catalogue *as it is
+now* — after a full undo that is **no products to give a starting number to**. The old numbers are
+gone from the screen **before** the new ones arrive; at no point does it show the pre-undo count.
+
+**FAIL:** it still reads "44 of your 631". That is the original defect.
+
+4. Press **PREVIEW**, then **IMPORT**, and wait for it to report.
+5. **Without reloading the browser**, look again, then press **SET STARTING NUMBERS**.
+
+**PASS:** the panel now describes the freshly imported catalogue, and Set works — on 2026-09-21's
+data that was **512 started · 45 not stock · 75 under production**. No browser reload anywhere in
+this card.
+
+**FAIL:** Set refuses with *"a batch of N was not written at all"*. That means the panel was still
+holding the old product ids.
+
+**PASS (the message, if you can make it refuse):** if a Set ever does refuse, the sentence must
+name **which** refusal it hit — *"those N products are no longer in your catalogue"* when the rows
+are gone, or *"N of them are still there, so this is your permissions refusing the change"* when
+they are not. **FAIL:** the old wording that named both causes and let you pick.
 
