@@ -2,7 +2,11 @@
 -- 20260921a — TEAMS, PIECE 1: A TEAM LIST PER BUSINESS, AND A STOP THAT CARRIES ITS TEAM
 --             ledger #362 · tech-debt #345
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- ⏳ NOT APPLIED. Apply on its own, then run the V-block at the foot and paste the output back.
+-- ✅ APPLIED 2026-09-22 BY DAVID; V-block clean, and re-read live by Thunder before the merge:
+--      V1  teams rls=true 1 policy · team_members rls=true 1 policy
+--      V2  deliveries.team_id present; all three indexes present
+--      V3  save_team · assign_stops_team → anon false · logged_in true
+--      V4  teams 0 · members 0 · stops_with_a_team 0 (this file creates no data)
 --    It depends on `20260917c` and `20260917e` (both applied) and on nothing unmerged.
 --
 -- ── WHY ─────────────────────────────────────────────────────────────────────────────────────
