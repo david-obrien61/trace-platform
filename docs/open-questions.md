@@ -112,6 +112,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
 - 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
+**#359 — three history-import rulings; the /orders defect did not exist (docs + rulings, no app code)**
+- 🔴 **OPEN — `20260908_books_report_runs.sql` IS APPLIED LIVE AND ITS SOURCE IS ON NO MERGED BRANCH.** Absent from `origin/main`; held by `origin/chore/books-report-runs-migration` and `origin/thunder/findings-report`; staged uncommitted in David's checkout. Land it on `main` as a docs-only commit, or merge one of the two. Owner: ledger #359.
+- 🔴 **OPEN — WEBHOOKS VERSUS POLLING**, held open deliberately by [[R-166]] and not to be answered by picking a default in code. Owner: `docs/RULINGS.md` R-166.
+- 🔴 **OPEN — WIRE THE BOOKS REVIEW TO WRITE? It is ONE CALL SITE, not a build.** `saveBooksRun`/`planBooksRun` are on `main`, tested, **zero callers**; `readLatestResult` already has one, so the read side has been live against empty tables. Half a day including the card. Owner: ledger #359.
+- 🟡 **OPEN — ADOPT PROPOSED §6 r22?** *A filing lands on `main` the same day; a migration applied live reaches `main` the same day.* Raised on ledger #353 and still unadopted; ledger #359 found a second instance of exactly what it prevents. Owner: ledger #353.
+- ✅ **ANSWERED 2026-09-20 — [[R-165]] history is EXEMPT from the customer undo and carries its own import run**, so the wipe keeps working as R-95 and R-160 say. This was the one decision that could not be sequenced around.
+- ✅ **ANSWERED 2026-09-20 — [[R-167]] landed cost is phase two**; list `PurchaseCost` (1,119 of 1,157 items) gets margin onto a screen, labelled as list.
 
 **#356 — caliper on the ladder (build, BUILDER-COMPLETE, migration NOT APPLIED)**
 - ⛔ **OPEN — APPLY `20260918c_container_ladder_caliper.sql`, THEN MERGE (#355 first).** Owner: ledger #356.

@@ -1,10 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
 # Last updated: 2026-09-22 — #366 the panel follows the catalogue; #367 the conflict-marker cap — see §3
-# Last updated: 2026-09-21 — #360 the books review records its run — see §3
-
-# Last updated: 2026-09-18 — #356 caliper on the ladder — see §3
-# Last updated: 2026-09-20 — #357 the seeded 10 comes off 41 non-product rows — see §3
 # ⚠️ THIS LINE IS A POINTER, NEVER A SUMMARY (OP-13 / STD-011) — the narrative lives in §3 and ONLY in §3. Do not restate it here.
 # ⚠️ ONE POINTER LINE, NOT A STACK — four accumulated here by 2026-09-12 (#305 · #307 · #309 twice, one a duplicate of the other). The rule says ONE line; four pointers is the header regrowing sideways, which the line-count metric cannot see either (OP-13's own finding).
 # Current AI: Claude Code
@@ -287,6 +283,9 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 **Type:** BUILD (two exported predicates + one planner rule + one screen read) + MIGRATION (1, WRITTEN not applied), on `feat/seed-goods-and-overrides`, **own worktree (§6 r20)**, **one ledger id**. `api/` 12/12.
 
 **FLAGGED FOR DAVID:** **(a)** 🔴 **APPLY `20260922` BEFORE THE SEED, NOT AFTER.** The screen REFUSES to seed while it cannot read the override list — deliberately, because treating an unreadable setting as an empty one would give a starting number to a gift certificate. **(b)** ⚠️ **23 ROWS STILL SKIPPED ON A LABOUR ACCOUNT INCLUDE FIVE PHYSICAL GOODS** — Adjustable Tree Bubbler · Deer Fencing · T-Post · T-Posts · Trunk Protection — booked to *Landscaping/Installation Services*. They stay at 0, and the fix is Lauren's retype list, not another exception. **(c)** ⚠️ **THE OVERRIDE IS A STOPGAP AND SAYS SO** — three of the four carry `fix_at_source = true`; when she corrects the books the override goes stale, which is why `active` exists rather than a delete.
+**Type:** BUILD (page layout + copy), on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12. Proof narrative: ledger #355. **§3 RETENTION: 1 archived verbatim (#352), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** 🟡 **ASK LAUREN: DO THEY PULL TREES FROM THE YARD BY VARIETY BEFORE LOADING?** If yes, the roll-up moves to the back as a pick list — ~1 h, no model change · **(b)** ⚠️ **CARDS 6 AND 19 ARE REWORDED** to the new layout (page 1 bulk, stops from page 2); their numbers are Saturday's 8-stop figures · **(c)** ⚠️ **ITEMS 3 (trunk-protection sizes) AND 4 (caliper on the ladder) ARE NEXT, IN THAT ORDER.**
 
 ## 3b. OPEN QUESTIONS — the register
 

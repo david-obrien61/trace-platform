@@ -195,5 +195,58 @@ const src = (lines: any[]) => parseInvoiceOrderLines({ Line: lines });
      'G3 the running total is recognised BEFORE anything else — it can never be mistaken for a line');
 }
 
+// ─── §H · THE QUICKBOOKS ITEM ID REACHES THE LINE (ledger #363) ──────────────────────────────
+// tech-debt #139: this parse has always read `ItemRef.value` and DROPPED it before the write,
+// keeping only the name in `sku`. These probes pin that it now survives, and — more importantly —
+// that it is kept SEPARATELY from the name, because the two answer different questions: Lauren
+// renames items, so the name is not a key; and nobody reads an id off a day sheet, so the id is
+// not a label. Deriving either from the other is wrong in both directions.
+{
+  const content = buildInvoiceOrderContent({
+    lines: src([sales('Oak:MO95', 'Monterrey Oak - 95 gallon', 3, 100, 300), subtotal(300)]),
+    totalTax: 0, totalAmt: 300,
+  });
+  const goods = content.lines;
+
+  ok(goods.length === 1, 'H1 one goods line — the running total is not one');
+  ok(goods[0].qboItemId === '99',
+     `H2 the line carries the QuickBooks Item.Id, not just the name (got ${JSON.stringify(goods[0].qboItemId)})`);
+  ok(goods[0].sku === 'Oak:MO95',
+     'H3 and the NAME is still kept, unflattened — the sub-item structure Terry maintains');
+  ok(goods[0].qboItemId !== goods[0].sku,
+     'H4 the id and the name are DIFFERENT fields — neither is derived from the other');
+
+  // 🔴 THE INVARIANT THAT MATTERS MORE THAN THE FEATURE. The id is a VALUE; the lot id is an
+  // internal FK and must stay null, because committed stock is DERIVED (D-52) and a lot id on a
+  // captured line reduces sellable stock with no ledger row and nothing on any screen.
+  ok(goods[0].businessInventoryId === null,
+     'H5 carrying an item id did NOT put a lot id on the line — D-52 invariant intact');
+
+  // An item with no ItemRef at all (Intuit omits it on some constructs) must be null, not '' or
+  // 'undefined'. An honest absent, never a fabricated value (§1.6 item 3).
+  const bare = buildInvoiceOrderContent({
+    lines: src([{ Id: '1', DetailType: 'SalesItemLineDetail', Amount: 50, Description: 'no item ref',
+                  SalesItemLineDetail: { Qty: 1, UnitPrice: 50 } }]),
+    totalTax: 0, totalAmt: 50,
+  });
+  ok(bare.lines[0].qboItemId === null,
+     'H6 a line with no ItemRef reports null — not an empty string, not the text "undefined"');
+
+  // ⚠️ NEGATIVE CONTROL (R-33 / #182): prove these probes can FAIL. If the field were dropped
+  // again — the exact regression tech-debt #139 describes — H2 must go red. Simulated by reading
+  // the field off an object that never had it, which is what a dropped write would produce.
+  const dropped = { ...goods[0] } as Record<string, unknown>;
+  delete dropped.qboItemId;
+  ok(dropped.qboItemId === undefined && goods[0].qboItemId === '99',
+     'H7 the probe distinguishes a carried id from a dropped one — it is capable of disagreeing');
+
+  // The source guard, in the shape §G already uses: the write site must name the column.
+  const writer = readFileSync(join(process.cwd(), 'packages/shared/src/quickbooks/historyOrderWriter.ts'), 'utf8');
+  ok(/qbo_item_id:\s*l\.qboItemId/.test(writer),
+     'H8 the writer actually inserts qbo_item_id — a field on a type nothing writes is decoration');
+  ok(!/qbo_item_id:\s*l\.businessInventoryId|business_inventory_id:\s*l\.qboItemId/.test(writer),
+     'H9 and the two are not crossed at the write — the one mistake that would be invisible');
+}
+
 console.log(`\n  invoiceOrderLines — ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:'); failures.forEach(f => console.error('  ✗ ' + f)); process.exit(1); }

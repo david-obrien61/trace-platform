@@ -4583,3 +4583,114 @@ attributed to one size**; the first cut counts only single-size stops and says s
 rule nobody has ruled. ⚠️ And a start that was never tapped, or one left from a previous day (tech-debt #344),
 poisons the average — #344 should land first or the comparison must exclude stops whose start and done are on
 different days.
+---
+
+## #354 — 🟡 AFTER A BULK HISTORY IMPORT THE ORDERS ROSTER SHOWS THE 50 MOST RECENTLY *WRITTEN* ROWS, WHICH WOULD ALL BE 2024–2025 INVOICES (NEW 2026-09-20, ledger #359 — filed in place of a defect that did not exist)
+
+**✏️ THIS ROW REPLACES A CLAIM I MADE AND GOT WRONG, AND THE CORRECTION IS THE REASON IT IS FILED.** The
+2026-09-20 build report stated that `/orders` had *"no read limit — `.order('created_at')` with no `.limit()`"*,
+and called it ledger #251's defect class on a second screen. **That is false.** `Orders.tsx` carries
+`.limit(ROSTER_PAGE_LIMIT)` with `ROSTER_PAGE_LIMIT = 50`, added **2026-08-28** by ledger #225, and
+`orderRosterFilter.ts:23` states the reasoning in its own words: *"a total that is silently a cap is a number
+that lies."* The roster also renders `rosterCountLabel(...)` — *"showing 3 of 50+"* — and logs `atPageCap`. **The
+screen is bounded and it says so.** The claim came from a grep for `\.limit\([0-9]+\)`, which cannot match
+`.limit(ROSTER_PAGE_LIMIT)`; absence of a match was read as absence of a limit. **That is the exact defect the
+report was about — [[R-26]], and #182's shape: a probe that could not reach its target reporting the same as one
+that passed.**
+
+**WHAT IS ACTUALLY TRUE, AND IT IS SMALLER.** The roster reads `.order('created_at', { ascending: false })`.
+Every row a bulk import writes carries the same `created_at` — the moment of the import — so after the
+1,510-invoice history import the newest 50 by `created_at` would be **1,510 imported historical invoices**,
+and this week's real orders would fall off the first page. The count sentence stays honest (*"of 50+"*), so
+**this is not a silent lie; it is the wrong fifty.** `orders.sale_date` is populated on every history order
+(the whole population today: 44 of 45) and is the honest sort for a roster of sales.
+
+**Blast radius, measured 2026-09-20.** `/orders` only. `CustomerDetail.tsx` has no limit and does not need one:
+the busiest QuickBooks customer holds **18 invoices**, the top three are 18 · 18 · 17, and **no customer has
+more than 50** — so the per-customer read cannot reach PostgREST's 1,000-row default.
+
+**Fix (filed, not built).** Sort the roster by `COALESCE(sale_date, created_at::date)` rather than `created_at`,
+or offer the sort. It is small, and it is **not urgent before the import** — the screen degrades legibly rather
+than lying. Bundle it with the import build, where the 1,510 rows arrive.
+
+**Blocker:** none. It waits on the import being scoped.
+
+✏️ **FILED AS #353 AT 14:41 AND RENUMBERED TO #354.** `origin/fix/seeded-fee-rows` claims #353 too (the import preview's field map). **By commit time mine is earlier — 14:41:00 against 14:47:51 — so R-148 clause (4) would move theirs.** I moved MINE anyway, deliberately: their row was first filed as #351 at **14:05:19** and was renumbered into #353 by a collision of its own, so its real claim predates mine by half an hour; and mine is one day old, cited by nothing but its own ledger row, while theirs carries a live measurement another session already depends on. **Cheapest thing to move, on #335's precedent.** `verify-id-sweep` never moves an id and did not move this one.
+
+---
+
+## #357 — 🔴 THE PGLITE HARNESSES HAND-ROLL THEIR SCHEMA, SO A DOUBLE CAN BE MORE FORGIVING THAN LIVE — AND ONE WAS (NEW 2026-09-21, ledger #363)
+
+**What happened, in one line.** `history-undo-363.pglite.mjs` declared `orders.customer_id` and
+`orders.transport_method` NULLABLE. **Live requires both.** So **19 probes passed** against a schema
+that cannot reject what Postgres rejects, and the same probe SQL, pasted into the SQL editor by
+David, died on **`23502 null value in column "transport_method" … violates not-null constraint`**
+— *before reaching the undo at all.* **V5, V6 and V7 never ran, so the R-160 protections were
+UNPROVEN on the live database while a green harness said otherwise.**
+
+🔴 **THIS IS [[R-33]]'s NAMED CLASS — *"a fake more forgiving than the real thing is a rubber
+stamp"* — COMMITTED INSIDE A BUILD WHOSE OWN MIGRATION QUOTES R-33.** It is the third mechanism in
+that ruling (tech-debt #138: a double that could not refuse), arriving in a harness written to
+prove a different ruling. Knowing the rule is not protection against it.
+
+**The repo already had the answer and this harness did not use it.** §6 r21 says path tests run on
+**`scripts/sql-harness/fixtures/live-schema-public.sql`** — a real dump. Every PGlite harness in
+that folder hand-rolls a minimal schema instead, because the dump is large and Supabase-specific.
+That trade was never written down, so each harness re-makes it silently.
+
+**MEASURED DRIFT, 2026-09-21 — the tables this harness declares, against the fixture:**
+
+| table | live cols | harness cols | live NOT NULLs the harness did not enforce |
+|---|---|---|---|
+| `orders` | 29 | 15 | ✅ none, after this fix (was `customer_id`, `transport_method`) |
+| `order_items` | 16 | 9 | ✅ none, after this fix (was `is_manual_override`) |
+| `customers` | 31 | 11 | `marketing_opt_in` · `source` · `created_at` · `price_tier` · `customer_type` · `tax_exempt` · `status` · `updated_at` |
+| `business_inventory` | 33 | 9 | `name` · `qty` · `status` · `created_at` · `updated_at` |
+| `deliveries` | 18 | 4 | `status` · `created_at` |
+
+⚠️ **The three still-drifted tables did not bite here** — live inserts into `customers` succeeded in
+David's run, so those columns carry defaults. **That is luck, not design**, and it is the same luck
+`orders` had until it ran out.
+
+**Fixed in this pass, narrowly:** `orders` and `order_items` now carry the live NOT NULL set,
+copied from the fixture rather than invented, with the reason at the code. 19/19 still pass —
+against a schema that can now refuse.
+
+**Fix (filed, not built).** Load the fixture instead of hand-rolling, in ALL of the harnesses in
+`scripts/sql-harness/`, or extract one shared `freshLiveSchema()` they share (§6 r8 — this is one
+operation in eight places). If the dump cannot load into PGlite, that reason gets written down
+once, where the next harness author will read it.
+
+✏️ **2026-09-21 — WHY EVERY HARNESS HAND-ROLLS IS NOW MEASURED, NOT GUESSED AT. THE FIXTURE DOES
+NOT LOAD INTO PGLITE.** The "fix" this row proposed — *load the fixture instead of hand-rolling* —
+was attempted and **refused twice, for two different reasons**, on
+`fixtures/live-schema-public.sql` (**254,532 characters · 4,948 lines**):
+
+1. 🔴 **`function extensions.gen_random_bytes(integer) does not exist`.** The dump calls Supabase's
+   own extension functions. They can be stubbed (`extensions.gen_random_bytes`, `auth.uid`,
+   `auth.jwt`, `auth.role` were), but **a stub is a double again** — the very thing this row is
+   about — so stubbing the way to a "live schema" earns less than it looks like it earns.
+2. 🔴 **`stack_depth.c` — PGlite exceeds its stack depth** applying the dump, even fed
+   statement-by-statement. Not a syntax problem and not fixable by stubbing: the WASM build has a
+   smaller stack than a server Postgres.
+
+**So the trade every harness in that folder made silently was the right one, and what was missing
+was the REASON.** It is written here now so the next author does not spend the afternoon
+rediscovering it.
+
+🔴 **AND THE ANSWER TAKEN INSTEAD IS BETTER THAN THE ONE PROPOSED, because it cannot drift.**
+`history-undo-363.pglite.mjs` §H **DERIVES live's NOT NULL set from the fixture by parsing it** and
+FAILS if the harness does not enforce every column. Nothing is written down twice, so the harness
+cannot silently fall behind live again — which is exactly how this row was born.
+⚠️ **It guards only the tables that harness WRITES TO** (`orders`, `order_items`). `customers`,
+`business_inventory` and `deliveries` are still short, and §H **prints the count on every run**
+rather than passing over them. **The open half of this row is extending §H's shape to the other
+seven harnesses**, not loading the dump.
+
+✏️ **§H caught its own flaw before it caught anything real:** the first matcher used `[^,]*`, which
+stops at the comma **inside `numeric(10,2)`** and reported four sound columns as gaps. A check that
+reports a defect that is not there is the mirror of one that misses a defect that is — both were
+live in this file within one hour.
+
+**Blocker:** none, but it is bigger than one harness — eight files. Not for the night before
+go-live.

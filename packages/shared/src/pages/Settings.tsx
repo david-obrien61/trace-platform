@@ -28,6 +28,7 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 // The QuickBooks item-list read (read-only against Intuit, stores nothing). Mounted inside the
 // Accounting card once a connection exists — it has nothing to read before then.
 import { QboBooksReader } from '../components/QboBooksReader';
+import { QboHistoryLoad } from '../components/QboHistoryLoad';
 import { QboWriteSwitch } from '../components/QboWriteSwitch';
 import { QboCatalogueImport } from '../components/QboCatalogueImport';
 import { OpeningStockSeed } from '../components/OpeningStockSeed';
@@ -932,6 +933,11 @@ export function Settings({
               <QboWriteSwitch businessId={businessId} />
               <QboBooksReader businessId={businessId} supabase={supabase} />
               <QboCatalogueImport businessId={businessId} onCatalogueChanged={() => setCatalogueVersion(v => v + 1)} />
+              {/* 🔴 ON THE PATH, NOT BESIDE IT. The panels above were CUT because scheduled
+                  deliveries and order lines are not this page's one path; the sales history IS —
+                  it is the same load as the customers and products directly above, under the same
+                  run id (R-165), and it is what makes a customer's record show anything at all. */}
+              <QboHistoryLoad businessId={businessId} />
               {/* 🔴 BENEATH THE IMPORT, DELIBERATELY, AND THE ORDER IS THE INSTRUCTION. The import
                   brings a PRODUCT LIST at qty 0 (R-93) and can be wiped and reloaded as many times
                   as it takes; the seed is what makes that list sellable, and it gives every product
