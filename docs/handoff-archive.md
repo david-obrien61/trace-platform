@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #368 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-22 — THUNDER **A GOODS ACCOUNT IS STOCK, AND THE OWNER CAN SAY "THIS ONE IS NOT". #364. TECH-DEBT #352.** David's two rulings: a bag of compost booked to *Sales of Product Income* **is** stock for the seed — the services review's ambiguity is about pricing a service, not about whether a bag is on the shelf — and the four misbooked rows are held back by a **per-business setting with a recorded reason**, never by names in code. `business_not_stock_items` (`20260922`, WRITTEN not applied) carries the four with David's own wording and a `fix_at_source` flag; all four are on Lauren's retype list so the repair happens in QuickBooks. 🔴 **THE MEASUREMENT FOUND A THIRD DEFECT NOBODY HAD NAMED: three real trees called "Discounted Live Oak" — $200, $250 and $300, booked to Nursery Stock — were being skipped because the classifier tests the NAME for discount words BEFORE it reads the account.** That is the opposite of the rule, so a positively-priced row on a stock account is now stock, and a real discount (priced 0 or below) still is not. **Predicted for today's reload: 509 seeded · 43 not stock · 75 under production · 4 marked.**
+
+**Type:** BUILD (two exported predicates + one planner rule + one screen read) + MIGRATION (1, WRITTEN not applied), on `feat/seed-goods-and-overrides`, **own worktree (§6 r20)**, **one ledger id**. `api/` 12/12.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **APPLY `20260922` BEFORE THE SEED, NOT AFTER.** The screen REFUSES to seed while it cannot read the override list — deliberately, because treating an unreadable setting as an empty one would give a starting number to a gift certificate. **(b)** ⚠️ **23 ROWS STILL SKIPPED ON A LABOUR ACCOUNT INCLUDE FIVE PHYSICAL GOODS** — Adjustable Tree Bubbler · Deer Fencing · T-Post · T-Posts · Trunk Protection — booked to *Landscaping/Installation Services*. They stay at 0, and the fix is Lauren's retype list, not another exception. **(c)** ⚠️ **THE OVERRIDE IS A STOPGAP AND SAYS SO** — three of the four carry `fix_at_source = true`; when she corrects the books the override goes stale, which is why `active` exists rather than a delete.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #366 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id. entries-in == entries-out. -->
 

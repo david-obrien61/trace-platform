@@ -13,9 +13,18 @@ Where it says "SQL editor", use Supabase → SQL editor (never the table editor)
 > ✅ **Test on LAWNS as much as you like.** Typing, editing and practice orders during testing are
 > expected, and the reload clears them. Nothing here asks anyone to hold back.
 >
-> 🔴 **The product import INSERTS. Never press Import twice without an Undo in between** — a second
-> press adds a second copy of every product. (Customers are matched on their QuickBooks id and would
-> not double, but products would.)
+> ✅ **Pressing Import twice is now safe (ledger #368, tech-debt #327 resolved).** The import matches
+> on the QuickBooks item id: a product you already have is **brought up to date** — name, size,
+> price, its QuickBooks identity — while **your count, its status and its run id are left alone**.
+> A product that is new is created. One you had **deleted stays deleted** and is reported, never
+> revived. The screen says which is which: *"N created, N already here and brought up to date, N
+> left alone because you had deleted them, N of your old rows hidden."*
+>
+> ✏️ **AND THE OLD WARNING HERE WAS WRONG ABOUT THE SYMPTOM, WHICH IS WORTH KNOWING.** It said a
+> second press *"adds a second copy of every product"*. It never could: `(business_id, qb_item_id)`
+> carries a UNIQUE index, so the second press **failed on the first row** with a duplicate-key
+> error and imported nothing. Measured by planting the old code against a double that models the
+> index (ledger #368, §Q).
 
 ---
 
