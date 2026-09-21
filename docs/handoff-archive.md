@@ -1,5 +1,10 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #365 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-20 — THUNDER **LAUREN PULLS BY VARIETY — THE SPECIES ROLL-UP COMES BACK AS THE PICK LIST. #358.** Her process, via David: *pull by variety → stage → check the names at staging → load*, and the tag on each tree carries the CUSTOMER'S name. ✏️ **REVERSES #355's one-line version, two days old** — it was cut on the belief that nothing is loaded by variety; the PULL is. Page 1: the bulk, then **Trees to pull — 29 across 8 stops**; the stops from page 2 are the name check. Page only; no figure moves. ✏️ **Id moved #357 → #358 under [[R-148]] clause (4)** — `fix/seeded-fee-rows` claimed #357 ninety-four seconds earlier.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #364 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id. entries-in == entries-out. -->
 
