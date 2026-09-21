@@ -100,11 +100,17 @@ const ALLOWED_DIVERGENCE = {
             'packages/cultivar-os/src/pages/InventoryReconcile.tsx'],
   },
   business_inventory: {
-    reason: 'ONE three-column projection (id,name,qty) answering "which products are empty and '
-          + 'have never been touched". The seed panel needs three columns to plan a write; a '
-          + 'registry-derived full shape would pull ~30 across the wire on every Settings open, '
-          + 'for a question that needs three. A projection is not a restatement (tech-debt #120).',
-    paths: ['packages/shared/src/components/OpeningStockSeed.tsx'],
+    reason: 'TWO narrow projections, each answering one question, neither a restatement of the '
+          + 'record shape (tech-debt #120). (1) The seed panel reads a handful of columns to plan '
+          + 'a write — a registry-derived full shape would pull ~30 across the wire on every '
+          + 'Settings open. (2) `existingItemIds` reads id,qb_item_id,status,retired_at to answer '
+          + '"what does this business already hold, and has she put it beyond reach" — a KEY read '
+          + 'plus the two tombstone columns, added by #327 so a re-import refreshes rather than '
+          + 'dying on the unique index. It must read `status` as a STRING because `deleted` is a '
+          + 'live value that is not in ALL_STATUS_VALUES (tech-debt #192), and it deliberately '
+          + 'does NOT filter retired rows, because a retired row still occupies its unique key.',
+    paths: ['packages/shared/src/components/OpeningStockSeed.tsx',
+            'packages/shared/src/quickbooks/itemImportWriter.ts'],
   },
   // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). Both tables were created by THIS build and each has exactly ONE reader, so
   // the ratchet is flagging a first list, not a divergence — and neither list is a record shape:

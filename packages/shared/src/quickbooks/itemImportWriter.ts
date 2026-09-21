@@ -198,6 +198,10 @@ export interface ImportRunReport extends ImportPlanReport {
   /** The run id. Every row created and every row retired carries it. */
   runId: string;
   created: number;
+  /** Rows QuickBooks already had here, given the narrow update (tech-debt #327). */
+  updated: number;
+  /** Matched rows the owner had deleted or retired: reported, never revived. */
+  leftAlone: number;
   retired: number;
   /**
    * 🔴 `ok` ON A RUN REPORT MEANS THE RUN SUCCEEDED — NOT THAT THE PLAN DID.
@@ -213,7 +217,7 @@ export interface ImportRunReport extends ImportPlanReport {
    */
   ok: boolean;
   /** Which phase stopped, when one did. Null on a clean run. */
-  stoppedAt: 'create' | 'retire' | null;
+  stoppedAt: 'create' | 'update' | 'retire' | null;
   /** True only when the push is held — i.e. only when this run is undoable. */
   undoable: boolean;
   committed: boolean;
@@ -271,6 +275,37 @@ export const ITEM_IMPORT_INSERT_COLUMNS = [
   // read by `itemIdentifier()` and is never stored merged.
   'qb_item_name', 'qb_item_fqn', 'qb_item_type', 'qb_income_account',
 ] as const;
+
+/**
+ * The columns an EXISTING row receives when QuickBooks is re-read (tech-debt #327). Declared as a
+ * list, like the insert columns, so the payload and the probes read one source (#179's class).
+ *
+ * 🔴 WHAT IS NOT HERE MATTERS MORE THAN WHAT IS, AND EACH ABSENCE IS A DECISION:
+ *   · `import_run_id` — **the data-loss bug this shape exists to avoid.** The undo deletes rows
+ *     carrying its run id; stamping a run id onto a row that existed BEFORE the import would make
+ *     undoing that import delete a product the owner already had. The customer import records the
+ *     same rule in the same words, and this is why an upsert is the wrong tool here.
+ *   · `qty` — the owner's number. A price list has nothing to say about how many are on the yard.
+ *   · `status`, `retired_at`, `retired_by_run_id`, `retired_reason` — a row the owner deleted or
+ *     retired STAYS deleted or retired. Re-reading her books must never revive it; it is reported
+ *     instead (David's instruction on #327: *"REPORT a row deleted in test mode, never revive it"*).
+ *   · `receipt_id`, `reorder_point`, `unit_cost`, `cost_confidence` — hers, or the cost side's.
+ */
+/** Ids per retire statement — an `in.(…)` of uuids is a URL, and 1,079 of them is not one. */
+export const RETIRE_CHUNK = 150;
+
+export const ITEM_IMPORT_UPDATE_COLUMNS = [
+  'name', 'size', 'description', 'sku', 'sell_price', 'price_basis', 'variant_group',
+  'unit_kind', 'unit_value', 'unit_value_max', 'unit_name', 'unit_parsed_from',
+  'qb_item_name', 'qb_item_fqn', 'qb_item_type', 'qb_income_account',
+] as const;
+
+/** The narrow payload for one existing row: exactly the declared columns, taken from the full row. */
+export function updateForItem(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of ITEM_IMPORT_UPDATE_COLUMNS) out[c] = row[c] ?? null;
+  return out;
+}
 
 /** One adapted item → one row to insert. Pure, so the probes can assert the row without a client.
  *
@@ -565,6 +600,38 @@ async function readLadderCoverage(db: DbLike, businessId: string, sizes: (string
 }
 
 /**
+ * What this business already holds, keyed by QuickBooks item id, with whether the owner has put
+ * the row beyond reach. Read once per run rather than per row — 632 round-trips is not a lookup.
+ *
+ * ⚠️ `status = 'deleted'` IS A REAL VALUE AND IT IS NOT IN `ALL_STATUS_VALUES` (tech-debt #192):
+ * `soft_delete_inventory` writes it, five rows carried it when that was measured, and the grid
+ * filter cannot select it. It is read here BY STRING for exactly that reason — a tombstone the
+ * vocabulary does not know about is still a tombstone, and re-reading QuickBooks must not undo it.
+ */
+async function existingItemIds(
+  db: DbLike, businessId: string,
+): Promise<{ byQb: Map<string, { id: string; deleted: boolean }>; liveIds: string[] }> {
+  const out = new Map<string, { id: string; deleted: boolean }>();
+  const liveIds: string[] = [];
+  // RETIRED-FILTER-EXEMPT: this asks what the TABLE holds, not what a person may see. A retired
+  // row still occupies its (business_id, qb_item_id) key — filtering it out here would make the
+  // import try to INSERT over it and fail on the unique index, which is the defect this read
+  // exists to prevent.
+  const { data, error } = await db.from('business_inventory')
+    .select('id, qb_item_id, status, retired_at')
+    .eq('business_id', businessId);
+  if (error) throw new Error(`could not read the existing catalogue: ${error.message}`);
+  for (const r of (data ?? []) as { id: string; qb_item_id: string | null; status: string | null; retired_at: string | null }[]) {
+    const deleted = String(r.status ?? '') === 'deleted' || r.retired_at != null;
+    if (r.qb_item_id != null) out.set(String(r.qb_item_id), { id: String(r.id), deleted });
+    // The RETIRE step needs every LIVE row, including the hand-made ones that carry no QuickBooks
+    // id — at LAWNS that is 447 of 1,079, and they are retired by an import exactly as before.
+    if (!deleted) liveIds.push(String(r.id));
+  }
+  return { byQb: out, liveIds };
+}
+
+/**
  * COMMIT — the same plan, then the write. Create first, then retire everything that is not this
  * run's own work. See the header for why that order and why no transaction.
  */
@@ -579,11 +646,34 @@ export async function commitItemImport(
   // without this override a run that wrote nothing reported success. It is set true exactly once —
   // on the committed path — and nowhere else.
   const base: ImportRunReport = {
-    ...plan, ok: false, runId, created: 0, retired: 0, stoppedAt: null, undoable, committed: false,
+    ...plan, ok: false, runId, created: 0, updated: 0, leftAlone: 0, retired: 0, stoppedAt: null, undoable, committed: false,
   };
   if (!plan.ok) return base;
 
   const rows = plan.adapted.items.map(i => rowForItem(businessId, runId, i));
+
+  // ── WHAT THIS BUSINESS ALREADY HOLDS, BY QUICKBOOKS ID (tech-debt #327) ──────────────────────
+  // 🔴 THE IMPORT USED TO INSERT EVERY ROW, WHICH IS WHY THE CHECKLIST SAID IN RED *"never press
+  // Import twice without an Undo in between"*. `(business_id, qb_item_id)` carries a UNIQUE index
+  // — measured 2026-09-20, and NOT partial, so it is a usable key — so a second press raised a
+  // duplicate-key error on row 0 and the owner had a half-explained failure instead of a re-read.
+  //
+  // ⚠️ THIS IS A READ-THEN-WRITE, NOT AN UPSERT, AND THE DIFFERENCE IS THE WHOLE POINT. An upsert
+  // writes the WHOLE row on conflict — including `import_run_id`, which would stamp this run onto
+  // a product the owner already had, and the undo would then DELETE it. The customer import made
+  // the same choice in the same words.
+  const { byQb: held, liveIds } = await existingItemIds(db, businessId);
+  const create: Record<string, unknown>[] = [];
+  const update: Record<string, unknown>[] = [];
+  let leftAlone = 0;
+  for (const r of rows) {
+    const qb = r.qb_item_id == null ? null : String(r.qb_item_id);
+    const match = qb === null ? undefined : held.get(qb);
+    if (!match) { create.push(r); continue; }
+    // A row she deleted or retired stays that way — reported, never revived (David, #327).
+    if (match.deleted) { leftAlone++; continue; }
+    update.push({ ...r, __id: match.id });
+  }
 
   // ── CREATE ────────────────────────────────────────────────────────────────────────────────
   // `.select('id')` and a COUNT CHECK, not "no error" (R-12 / A8): under RLS a refused insert
@@ -591,17 +681,56 @@ export async function commitItemImport(
   // that only looks at `error`.
   let created = 0;
   try {
-    const { data, error } = await db.from('business_inventory').insert(rows).select('id');
-    if (error) throw new Error(error.message);
-    created = (data ?? []).length;
-    if (created !== rows.length) {
-      throw new Error(`wrote ${created} of ${rows.length} catalogue rows — refusing to report success`);
+    if (create.length > 0) {
+      const { data, error } = await db.from('business_inventory').insert(create).select('id');
+      if (error) throw new Error(error.message);
+      created = (data ?? []).length;
+      if (created !== create.length) {
+        throw new Error(`wrote ${created} of ${create.length} catalogue rows — refusing to report success`);
+      }
     }
   } catch (e: any) {
     console.log('[TRACE:QBITEMS] create FAILED', { businessId, runId, attempted: rows.length, message: e?.message });
     // The half-landed state is nameable rather than mysterious: `created` says how many rows
     // carry this run id, and `undoItemImport` removes exactly those.
-    return { ...base, created, stoppedAt: 'create', error: e?.message ?? 'unknown error' };
+    return { ...base, created, leftAlone, stoppedAt: 'create', error: e?.message ?? 'unknown error' };
+  }
+
+  // ── UPDATE what she already had (tech-debt #327) ────────────────────────────────────────────
+  // 🔴 ONE STATEMENT PER ROW, exactly as the customer import reconciles its exemptions, and for
+  // the same reason: each row carries different values, so the only batch form is an upsert — and
+  // an upsert would write `import_run_id` onto a row that existed before this run, which is the
+  // data-loss bug. A loop over the matched rows is the cheap correct thing.
+  //
+  // ⚠️ IT RUNS AFTER CREATE, so a half-landed run reads "the new products are here, some existing
+  // ones not yet refreshed" — every created row identifiable by its run id and removable. The
+  // other order leaves prices changed with nothing naming the run that changed them.
+  let updated = 0;
+  const refreshedIds = new Set<string>();
+  try {
+    for (const row of update) {
+      const targetId = String(row.__id);
+      const { data, error } = await db.from('business_inventory')
+        .update(updateForItem(row))
+        .eq('business_id', businessId)
+        .eq('id', targetId)
+        .select('id');
+      if (error) throw new Error(error.message);
+      // 🔴 A REFUSED UPDATE RETURNS NO ERROR AND ZERO ROWS (A8 / R-12), and `id` is unique, so
+      // anything other than exactly one row is a fact to stop on. Written against `.length`
+      // directly rather than through a variable, because that is the shape `verify-zero-row-writes`
+      // can read — it flagged the variable form, and it was right to: a check it cannot see is a
+      // check the next reader cannot see either.
+      if ((data ?? []).length === 0 || (data ?? []).length !== 1) {
+        throw new Error(`refreshing ${String(row.name)} touched ${(data ?? []).length} rows, expected exactly 1 — `
+          + `this is what a permission refusal looks like: no error, no rows.`);
+      }
+      refreshedIds.add(targetId);
+      updated++;
+    }
+  } catch (e: any) {
+    console.log('[TRACE:QBITEMS] update FAILED', { businessId, runId, created, updated, message: e?.message });
+    return { ...base, created, updated, leftAlone, stoppedAt: 'update', error: e?.message ?? 'unknown error' };
   }
 
   // ── RETIRE ────────────────────────────────────────────────────────────────────────────────
@@ -610,14 +739,37 @@ export async function commitItemImport(
   // `import_run_id`. `not.is` + `or` is the honest spelling of "everything that is not this run".
   let retired = 0;
   try {
-    const { data, error } = await db.from('business_inventory')
-      .update({ retired_at: new Date().toISOString(), retired_reason: RETIRE_REASON, retired_by_run_id: runId })
-      .eq('business_id', businessId)
-      .is('retired_at', null)
-      .or(`import_run_id.is.null,import_run_id.neq.${runId}`)
-      .select('id');
-    if (error) throw new Error(error.message);
-    const retiredRows = data ?? [];
+    // 🔴 RETIRE BY ID, NOT BY "EVERYTHING THAT IS NOT THIS RUN" (tech-debt #327). The old
+    // predicate — `import_run_id` is null or differs — was right while every imported row was
+    // INSERTED, because then "not this run" meant "not in her books any more". Now that a row she
+    // already had is REFRESHED rather than re-created, it still carries its old run id (or none),
+    // so that predicate would retire the very rows this import just confirmed are still for sale.
+    //
+    // The stale set is therefore computed: every live row this business held before the run,
+    // minus the ones we refreshed. Rows created by this run are not in it — they did not exist
+    // when it was read. Chunked because an id list is a URL, and 1,079 uuids is not one.
+    const stale = liveIds.filter(id => !refreshedIds.has(id));
+    const retiredRows: { id: string }[] = [];
+    const stamp = new Date().toISOString();
+    for (let i = 0; i < stale.length; i += RETIRE_CHUNK) {
+      const chunk = stale.slice(i, i + RETIRE_CHUNK);
+      const { data, error } = await db.from('business_inventory')
+        .update({ retired_at: stamp, retired_reason: RETIRE_REASON, retired_by_run_id: runId })
+        .eq('business_id', businessId)
+        .is('retired_at', null)
+        .in('id', chunk)
+        .select('id');
+      if (error) throw new Error(error.message);
+      const landed = (data ?? []) as { id: string }[];
+      // 🔴 A CHUNK THAT WROTE NOTHING IS A REFUSAL (A8 / R-12). Every id in it was live when the
+      // catalogue was read moments ago, so zero rows back is not "nothing to do" — it is the
+      // policy declining, and PostgREST reports that with no error at all. A row or two moving
+      // under us is legitimate and is caught by the total comparison below; a whole chunk is not.
+      if (chunk.length > 0 && landed.length === 0) {
+        throw new Error(`a retire batch of ${chunk.length} rows changed nothing — the write was refused, not merely empty`);
+      }
+      retiredRows.push(...landed);
+    }
     retired = retiredRows.length;
     // 🔴 A ZERO-ROW UPDATE IS WHAT AN RLS REFUSAL LOOKS LIKE, AND PostgREST RETURNS NO ERROR FOR
     // IT (A8 / R-12). Planning to retire 447 rows and retiring none is not a race — a tenant being
@@ -633,12 +785,12 @@ export async function commitItemImport(
     }
   } catch (e: any) {
     console.log('[TRACE:QBITEMS] retire FAILED', { businessId, runId, created, message: e?.message });
-    return { ...base, created, retired: 0, stoppedAt: 'retire', error: e?.message ?? 'unknown error' };
+    return { ...base, created, updated, leftAlone, retired: 0, stoppedAt: 'retire', error: e?.message ?? 'unknown error' };
   }
 
-  console.log('[TRACE:QBITEMS] commit ok', { businessId, runId, created, retired, undoable });
+  console.log('[TRACE:QBITEMS] commit ok', { businessId, runId, created, updated, leftAlone, retired, undoable });
   // The ONLY place `ok: true` is set on a run report. `wouldRetire` rides on `base` for comparison.
-  return { ...base, ok: true, created, retired, stoppedAt: null, committed: true };
+  return { ...base, ok: true, created, updated, leftAlone, retired, stoppedAt: null, committed: true };
 }
 
 /**

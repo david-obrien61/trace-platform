@@ -102,7 +102,10 @@ interface ItemPlan {
 }
 interface ItemRun extends ItemPlan {
   runId?: string; created?: number; retired?: number;
-  stoppedAt?: 'create' | 'retire' | null; undoable?: boolean; committed?: boolean;
+  /** #327 — rows QuickBooks already had here, refreshed rather than re-created, and rows she had
+   *  deleted, which are reported and never revived. */
+  updated?: number; leftAlone?: number;
+  stoppedAt?: 'create' | 'update' | 'retire' | null; undoable?: boolean; committed?: boolean;
 }
 interface ItemUndo {
   ok?: boolean; inventoryDeleted?: number; unretired?: number;
@@ -519,6 +522,10 @@ export function QboCatalogueImport({ businessId, onCatalogueChanged }:
             <>
               <strong style={{ color: GREEN, fontSize: '.9rem' }}>
                 Imported. {run.customers?.created ?? 0} customers and {run.items?.created} products created,{' '}
+                {/* 🔴 #327: a re-read REFRESHES what she already had rather than re-creating it, so the
+                    sentence has to account for those rows or the numbers stop adding up on screen. */}
+                {(run.items?.updated ?? 0) > 0 && <>{run.items?.updated} already here and brought up to date,{' '}</>}
+                {(run.items?.leftAlone ?? 0) > 0 && <>{run.items?.leftAlone} left alone because you had deleted them,{' '}</>}
                 {run.items?.retired} of your old rows hidden.
               </strong>
               <p style={{ margin: '.35rem 0 0', color: DARK, fontSize: '.82rem', lineHeight: 1.5 }}>
