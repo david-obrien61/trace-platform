@@ -21,6 +21,7 @@ const C16_FILE = '20260916c_practice_orders_and_one_unit_undo.sql';
 const C16 = existsSync(MIG + C16_FILE) ? M(C16_FILE)
   : execSync(`git show origin/fix/rehearsal-never-writes-the-record:supabase/migrations/${C16_FILE}`, { encoding: 'utf8' });
 const MINE_FILE = '20260921_history_lines_qbo_item_and_undo_exempt.sql';
+const RELINK_FILE = '20260921b_capture_relink.sql';
 
 const L = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 const RUN = '11111111-1111-1111-1111-111111111111';
@@ -255,6 +256,52 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
     return live.some(c => c !== 'id' && !/NOT NULL/i.test(blk.split('\n').find(l => new RegExp('\\b' + c + '\\b').test(l)) ?? ''));
   });
   console.log(`  note  H3 — ${stillShort.length} table(s) this harness does NOT write to are still short of live: ${stillShort.join(', ')} (tech-debt #357)`);
+}
+
+
+// ── J · 🔴 THE RE-LINK MIGRATION (ledger #372) EXECUTED, AND ITS W-BLOCKS RUN.
+//        20260921b changes the wipe so a RE-LINKED capture is put back on its twin BEFORE the
+//        delete. W1 proves the capture survives and lands on the twin; W2 is the negative control
+//        proving V5's refusal still fires on a capture that was never re-linked — without it, W1
+//        passes on a function that unlinks everything.
+{
+  const { db, err } = await fresh(M(MINE_FILE));
+  ok(err === null, 'J0 the base migration still applies ' + (err ?? ''));
+  let e2 = null;
+  try { await db.exec(M(RELINK_FILE)); } catch (e) { e2 = String(e.message).slice(0, 180); await db.exec('ROLLBACK').catch(() => {}); }
+  ok(e2 === null, 'J1 20260921b EXECUTES on real Postgres ' + (e2 ?? ''));
+  if (e2 === null) {
+    ok(await one(db, `select data_type from information_schema.columns where table_name='orders' and column_name='relinked_from_customer_id'`) === 'uuid',
+       'J2 orders.relinked_from_customer_id exists and is uuid');
+
+    // W1 — a re-linked capture survives and goes home
+    const twin = await one(db, `INSERT INTO customers (business_id, import_run_id, first_name) VALUES ('${L}',NULL,'Twin') RETURNING id`);
+    const loaded = await one(db, `INSERT INTO customers (business_id, import_run_id, first_name) VALUES ('${L}','${RUN}','Loaded') RETURNING id`);
+    const cap = await one(db, `INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id, relinked_from_customer_id)
+                               VALUES ('${L}','${loaded}','delivery','fulfilled','history','${RUN}','${twin}') RETURNING id`);
+    const res = await undo(db);
+    ok(res.refused === false, 'J3 the undo did not refuse on a RE-LINKED capture');
+    ok(Number(res.captures_unlinked) === 1, `J4 it reports captures_unlinked = 1 (got ${res.captures_unlinked})`);
+    ok(await n(db, `select count(*) from orders where id='${cap}'`) === 1,
+       'J5 🔴 THE CAPTURE SURVIVED THE WIPE — R-160');
+    ok(await one(db, `select customer_id from orders where id='${cap}'`) === twin,
+       'J6 🔴 and it went back to its TWIN, not left on a deleted customer');
+    ok(await n(db, `select count(*) from orders where id='${cap}' and import_run_id is null and relinked_from_customer_id is null`) === 1,
+       'J7 the run id and the pointer were both cleared');
+    ok(await n(db, `select count(*) from customers where id='${twin}'`) === 1, 'J8 the twin is never deleted');
+    ok(await n(db, `select count(*) from customers where id='${loaded}'`) === 0, 'J9 the loaded customer went with the load');
+  }
+}
+// ── K · W2's claim: V5 IS UNCHANGED. A capture that was never re-linked still refuses.
+{
+  const { db } = await fresh(M(MINE_FILE));
+  await db.exec(M(RELINK_FILE));
+  const c = await seedCustomer(db);
+  await db.exec(`INSERT INTO orders (business_id, customer_id, transport_method, status, order_kind, import_run_id, relinked_from_customer_id)
+                 VALUES ('${L}','${c}','delivery','fulfilled','history',NULL,NULL);`);
+  const res = await undo(db);
+  ok(res.refused === true, 'K1 🔴 V5 STILL HOLDS — a plain live capture makes the undo refuse');
+  ok(await n(db, `select count(*) from customers where id='${c}'`) === 1, 'K2 and nothing was deleted');
 }
 
 console.log(`\nPGlite: ${fails === 0 ? 'ALL PASS' : fails + ' FAILED'}`);
