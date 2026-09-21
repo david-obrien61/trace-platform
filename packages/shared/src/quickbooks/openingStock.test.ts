@@ -216,5 +216,63 @@ console.log('── §E  THE MEASUREMENT AND THE SUGGESTION AGREE ────�
   ok(m!.atOrBelowSuggestion <= m!.items, 'E2  and it can never exceed the population');
 }
 
+
+// ── §J · #352 — A STARTING NUMBER GOES TO THINGS YOU SELL, AND TO NOTHING ELSE ───────────────
+// Twice in a row a reload seeded trip charges, labour, discounts and bookkeeping lines at 10,
+// and twice a hand-written migration took it back off. These probes are the reason it cannot
+// happen a third time. The rule is the Services review's own: INCOME ACCOUNT FIRST, TYPE SECOND.
+{
+  const tree = (o: Partial<SeedCandidate>): SeedCandidate => ({
+    id: 't', name: 'Shumard Red Oak 45', qty: 0, hasHistory: false, imported: true,
+    qbType: 'NonInventory', qbIncomeAccount: 'Sales of Nursery Stock', description: null, sellPrice: 500, ...o,
+  });
+  const plan = planOpeningStockSeed([
+    tree({ id: 'tree' }),
+    // A real plant that QuickBooks types as a Service — 91 of LAWNS's 134 Service rows are these.
+    tree({ id: 'service-typed-tree', name: 'Little Gem Magnolia 45', qbType: 'Service' }),
+    tree({ id: 'trip',   name: 'Trip Charge',        qbType: 'Service', qbIncomeAccount: 'Landscaping/Installation Services', sellPrice: 50 }),
+    tree({ id: 'labour', name: 'Labor Hours',        qbType: 'Service', qbIncomeAccount: 'Landscaping/Installation Services', sellPrice: 25 }),
+    tree({ id: 'disc',   name: 'Family Discount',    qbType: 'Service', qbIncomeAccount: 'Discounts given', sellPrice: -0.1 }),
+    tree({ id: 'book',   name: 'Bank Deposit/Customer Overpayment Refund', qbType: 'Service', qbIncomeAccount: 'Refunds', sellPrice: 0 }),
+    tree({ id: 'growing', name: 'Dynamite Crape Myrtle (UNDER PRODUCTION) - 3 Gallon', sellPrice: 1.95 }),
+  ], 10, 'test');
+  ok(plan.ok === true, 'J1  the plan is produced');
+  if (plan.ok) {
+    const ids = plan.steps.map(s => s.lotId).sort().join(',');
+    ok(ids === 'service-typed-tree,tree',
+       `J2  🔴 ONLY THE TWO REAL PLANTS ARE SEEDED (got ${ids || '(none)'})`);
+    ok(plan.skipped.notAProduct === 4,
+       `J3  the trip charge, the labour, the discount and the bookkeeping row are ALL skipped (${plan.skipped.notAProduct})`);
+    ok(plan.skipped.underProduction === 1,
+       `J4  a row marked (UNDER PRODUCTION) is skipped — booked to Nursery Stock, so the account rule alone would have seeded it (${plan.skipped.underProduction})`);
+    ok(plan.steps.some(s => s.lotId === 'service-typed-tree'),
+       'J5  🔴 A TREE QUICKBOOKS CALLS A "Service" IS STILL SEEDED — type alone would withhold stock from 91 of LAWNS\'s plants, which is why the ACCOUNT leads');
+  }
+}
+{
+  // 🔴 THE GUARD THAT STOPS THE RULE EATING THE CATALOGUE. Every row imported before 20260920b
+  // has NULL for both fields, and classifyDestination reads a missing account as "not a product".
+  // Applied blind, the first run after this build would have seeded NOTHING.
+  const noBooks: SeedCandidate[] = [
+    { id: 'a', name: 'Cedar Elm 30', qty: 0, hasHistory: false, imported: true },
+    { id: 'b', name: 'Vitex 15',     qty: 0, hasHistory: false, imported: true, qbType: null, qbIncomeAccount: '   ' },
+  ];
+  const plan = planOpeningStockSeed(noBooks, 10, 'test');
+  ok(plan.ok === true && plan.ok && plan.steps.length === 2,
+     `J6  🔴 WITH NO BOOKS DATA THE OLD BEHAVIOUR STANDS — silence is not evidence that a row is not a product (${plan.ok ? plan.steps.length : 'refused'} of 2)`);
+  ok(plan.ok && plan.skipped.notAProduct === 0, 'J7  …and nothing is counted as excluded by a rule that never ran');
+}
+{
+  // The marker is the owner's own convention in the NAME, so its spellings are what matter.
+  const rows = (name: string): SeedCandidate[] => [{ id: 'x', name, qty: 0, hasHistory: false, imported: true }];
+  for (const n of ['Tree (UNDER PRODUCTION) - 3 Gallon', 'Tree (under production)', 'Tree (Under  Production) ST']) {
+    const plan = planOpeningStockSeed(rows(n), 10, 'test');
+    ok(plan.ok === false || plan.steps.length === 0, `J8  "${n}" is recognised as still growing`);
+  }
+  const plan = planOpeningStockSeed(rows('Production Crape Myrtle 15'), 10, 'test');
+  ok(plan.ok === true && plan.steps.length === 1,
+     'J9  🔴 NEGATIVE CONTROL — a name merely containing "production" is NOT skipped, or the marker would eat real products');
+}
+
 console.log(`\n${passed} passed / ${failed} failed\n`);
 if (failed > 0) process.exit(1);

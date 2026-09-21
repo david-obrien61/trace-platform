@@ -87,6 +87,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#361 — the starting number goes to things you sell (built, NOT MERGED)**
+- 🔴 **OPEN — THE RULE SKIPS 43 REAL GOODS.** Compost scoops, fertiliser bags, bubblers, staking kits and T-posts are booked to *Sales of Product Income*, which the Services review treats as ambiguous by design (*"where you also book bags and containers"*), so they stay at 0. One predicate changes it. Owner: ledger #361.
+- 🔴 **OPEN — AND IT RE-SEEDS 4 OF THE 44 YOU ZEROED:** Deposit · Gift Certificate · Arizona Cypress Blue Ice Replacement · Custom Amount. Three are booked to *Sales of Nursery Stock*, so the books call them stock. Owner: ledger #361.
+- 🟡 **OPEN — THE (UNDER PRODUCTION) MARKER IS A NAME MATCH.** No column says a plant is still growing, so a rename silently changes behaviour. Replace with the grow ladder's own state when it lands. Owner: ledger #361.
+
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
 - 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
