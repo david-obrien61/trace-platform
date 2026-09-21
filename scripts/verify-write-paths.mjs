@@ -547,6 +547,19 @@ const ALLOWED_DIVERGENCE = {
             // what lets undo_import_run remove history with the customers and products in ONE
             // operation (R-165, as sharpened 2026-09-21).
             'packages/shared/src/quickbooks/historyLoad.ts',
+            // ⚠️ DECLARED 2026-09-21 (ledger #372) — PENDING DAVID'S RATIFICATION (#223 precedent).
+            // FIFTH PATH, and it is the ONLY ONE THAT WRITES NO SALE. It does not create an order,
+            // price one, or touch a line: it MOVES a captured order from the customer row an OCR
+            // capture made to the row the reload brought in, and records where it came from.
+            // Three columns, exhaustively: `customer_id`, `import_run_id`,
+            // `relinked_from_customer_id`. Not the money, not the lines, not the document number.
+            // 🔴 IT IS R-165's MISSING HALF: *captures survive a wipe AND re-link after reload.*
+            // The surviving half shipped; without this one, 16 real customers show nothing while a
+            // twin row holds their order (measured on LAWNS 2026-09-21).
+            // 🔴 IT COULD NOT RIDE `customerImportWriter`: that path writes CUSTOMERS and is keyed
+            // on the QuickBooks customer list; this one is keyed on an INVOICE, runs after the
+            // customers exist, and its whole job is a table the importer never touches.
+            'packages/shared/src/quickbooks/captureRelink.ts',
             // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
             // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
             // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with

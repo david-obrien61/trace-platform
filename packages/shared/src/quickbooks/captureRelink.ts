@@ -165,3 +165,110 @@ export function planCaptureRelink(input: {
   }
   return { matches, refusals, refusalCounts, capturesRead: captures.length };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// THE WRITER. Everything above is pure; this is the only part that touches a database.
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+export interface RelinkResult extends RelinkPlan {
+  ok: boolean;
+  blocker: string | null;
+  runId: string | null;
+  linked: number;
+}
+
+/**
+ * Re-link this tenant's captures to the customers the load brought in.
+ *
+ * 🔴 EACH MATCH IS ITS OWN UPDATE, GUARDED. Not one bulk statement: the guard
+ * (`relinked_from_customer_id IS NULL`) is what makes a second run a no-op instead of a
+ * corruption — without it a re-run would record the CURRENT customer as the twin and the wipe
+ * would then "put it back" onto the row it is already on, losing the way home forever.
+ *
+ * 🔴 IT WRITES THREE COLUMNS AND NO OTHERS: `customer_id`, `import_run_id`,
+ * `relinked_from_customer_id`. It never touches the sale — not the money, not the lines, not the
+ * document number. Moving a sale between customers is already the most dangerous thing this
+ * module does; doing anything else in the same statement would make it unreviewable.
+ */
+export async function commitCaptureRelink(
+  db: any, businessId: string, invoices: InvoiceRow[], opts: { dryRun?: boolean } = {},
+): Promise<RelinkResult> {
+  const page = async (table: string, select: string, filter: (q: any) => any) => {
+    const rows: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await filter(
+        db.from(table).select(select).eq('business_id', businessId).range(from, from + 999));
+      if (error) throw new Error(`Could not read ${table}: ${error.message}`);
+      rows.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
+    }
+    return rows;
+  };
+
+  const customers = await page('customers', 'id, qb_customer_id, import_run_id',
+    (q: any) => q);
+  const customerIdByQbId = new Map<string, string>();
+  const runTally = new Map<string, number>();
+  for (const c of customers) {
+    if (c.qb_customer_id) customerIdByQbId.set(String(c.qb_customer_id), String(c.id));
+    if (c.import_run_id) runTally.set(String(c.import_run_id), (runTally.get(String(c.import_run_id)) ?? 0) + 1);
+  }
+  let runId: string | null = null, best = 0;
+  for (const [id, n] of runTally) if (n > best) { best = n; runId = id; }
+  const loadCustomerIds = new Set(
+    customers.filter(c => c.import_run_id && String(c.import_run_id) === runId).map(c => String(c.id)));
+
+  const empty: RelinkPlan = {
+    matches: [], refusals: [], capturesRead: 0,
+    refusalCounts: { 'no-document-number': 0, 'no-invoice': 0, 'ambiguous-invoice': 0,
+                     'no-corroboration': 0, 'no-customer-row': 0, 'already-linked': 0 },
+  };
+  if (!runId) {
+    return { ...empty, ok: false, runId: null, linked: 0,
+      blocker: 'This business has no imported customers, so there is no load to re-link to.' };
+  }
+
+  // A CAPTURE is a history order with no QuickBooks invoice id — the OCR and backfill doors. An
+  // order the API door wrote already carries `qb_invoice_id` and was never on a twin.
+  const capRows = await page('orders',
+    'id, customer_id, source_document_number, sale_date, total_amount, relinked_from_customer_id',
+    (q: any) => q.eq('order_kind', 'history').is('qb_invoice_id', null));
+  const captures: CaptureRow[] = capRows
+    .filter(o => !o.relinked_from_customer_id)   // already re-linked: leave it entirely alone
+    .map(o => ({
+      id: String(o.id), customerId: o.customer_id ? String(o.customer_id) : null,
+      documentNumber: o.source_document_number ? String(o.source_document_number) : null,
+      saleDate: o.sale_date ?? null,
+      totalAmount: o.total_amount === null || o.total_amount === undefined ? null : Number(o.total_amount),
+    }));
+
+  const plan = planCaptureRelink({ captures, invoices, customerIdByQbId, loadCustomerIds });
+  if (opts.dryRun) return { ...plan, ok: true, blocker: null, runId, linked: 0 };
+
+  let linked = 0;
+  for (const m of plan.matches) {
+    const { data, error } = await db.from('orders')
+      .update({
+        customer_id: m.toCustomerId,
+        import_run_id: runId,
+        relinked_from_customer_id: m.fromCustomerId,
+      })
+      .eq('id', m.captureId)
+      .eq('business_id', businessId)
+      .is('relinked_from_customer_id', null)    // the guard — a re-run must not re-point the way home
+      .select('id');
+    if (error) {
+      return { ...plan, ok: false, runId, linked,
+        blocker: `Re-link failed on document #${m.documentNumber}: ${error.message}` };
+    }
+    // 🔴 THE VERDICT IS READ, NEVER ASSUMED. PostgREST returns NO ERROR when RLS refuses an
+    // update — zero rows, `error: null` — so a refused write is indistinguishable from a
+    // successful one unless the row count is checked (A8).
+    if ((data ?? []).length === 1) linked++;
+  }
+  console.log('[TRACE:RELINK] re-link complete', {
+    businessId, runId, capturesRead: plan.capturesRead,
+    matched: plan.matches.length, linked, refusals: plan.refusalCounts,
+  });
+  return { ...plan, ok: true, blocker: null, runId, linked };
+}
