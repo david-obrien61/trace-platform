@@ -146,6 +146,11 @@ function recorder(opts: {
       is(c: string, v: any)  { filters.push([c, 'is', v]);  return b; },
       gt(c: string, v: any)  { filters.push([c, 'gt', v]);  return b; },
       or(s: string)          { filters.push(['__or', 'or', s]); return b; },
+      // 🔴 `.in(...)` — the retire selects stale rows BY ID since #327, because "everything that
+      // is not this run" would now hide the rows the import just refreshed. The double models it
+      // rather than ignoring it: an ignored filter makes a retire look like it touched every row.
+      in(c: string, v: any[]) { filters.push([c, 'in', v]); return b; },
+      not(c: string, op: string, v: any) { filters.push([c, `not.${op}`, v]); return b; },
       order() { return b; },
       limit(n?: number) { if (typeof n === 'number') limitN = n; return b; },
       // 🔴 ADDED 2026-09-06 AND IT WENT RED FIRST. The gate now reads `businesses.qbo_writes_enabled`
@@ -170,6 +175,8 @@ function recorder(opts: {
           if (!anyTrue) return false;
           continue;
         }
+        if (op === 'in'  && !(v as any[]).map(String).includes(String(row[c]))) return false;
+        if (op === 'not.is' && (v === null ? row[c] == null : row[c] === v)) return false;
         if (op === 'eq'  && String(row[c]) !== String(v)) return false;
         if (op === 'neq' && String(row[c]) === String(v)) return false;
         if (op === 'is'  && v === null && row[c] != null) return false;
@@ -209,6 +216,21 @@ function recorder(opts: {
       }
       if (verb === 'insert') {
         const rows = Array.isArray(payload) ? payload : [payload];
+        // 🔴 THE UNIQUE INDEX, MODELLED (#327 · §6 r19a). `business_inventory` carries a UNIQUE
+        // index on `(business_id, qb_item_id)` — measured live 2026-09-20, and NOT partial. A
+        // double that let a duplicate through would make the OLD insert-everything import look
+        // like it worked on a second press, which is the exact failure this build removes: a
+        // fake more forgiving than the real system stamps its approval on a write Postgres
+        // rejects (tech-debt #138).
+        for (const r of rows as any[]) {
+          if (r.qb_item_id == null) continue;                    // NULLs never collide in btree
+          const clash = rows_.find((x: any) => String(x.business_id) === String(r.business_id)
+            && x.qb_item_id != null && String(x.qb_item_id) === String(r.qb_item_id));
+          if (clash) {
+            return { data: null, count: 0, error: { code: '23505',
+              message: `duplicate key value violates unique constraint "business_inventory_business_qb_item_uidx"` } };
+          }
+        }
         const n = opts.insertLands === undefined || opts.insertLands === 'all' ? rows.length : opts.insertLands;
         const landed = rows.slice(0, n).map((r: any, i: number) => ({ ...r, id: `new-${i}` }));
         rows_.push(...landed);
@@ -510,8 +532,72 @@ async function sectionC() {
   const upd = calls.find(c => c.verb === 'update')!;
   ok(upd.filters.some(([c, o, v]) => c === 'retired_at' && o === 'is' && v === null),
      '§C the retire only touches rows that are not already retired');
-  ok(upd.filters.some(([c]) => c === '__or'),
-     '§C 🔴 the run exclusion is an `.or(is.null, neq)` — a bare `.neq` would match NO rows at LAWNS, where all 447 have a NULL import_run_id');
+  // ✏️ REWRITTEN FOR #327. The retire used to be "everything whose import_run_id is not this
+  // run", spelled `.or(is.null, neq)` because a bare `.neq` matches no NULLs. That predicate
+  // became WRONG the moment an existing row could be REFRESHED instead of re-created: a refreshed
+  // row keeps its old run id (deliberately — stamping this run on it would make the undo delete a
+  // product she already had), so "not this run" would have retired the rows just confirmed for
+  // sale. The stale set is now computed and retired BY ID.
+  ok(upd.filters.some(([c, o]) => c === 'id' && o === 'in'),
+     '§C 🔴 THE RETIRE SELECTS STALE ROWS BY ID — computed as "every live row held before the run, minus the ones refreshed"');
+  ok(!upd.filters.some(([c]) => c === '__or'),
+     '§C 🔴 …and the old `.or(import_run_id…)` predicate is GONE — it would now retire refreshed rows');
+}
+
+
+// ── §Q · #327 — A SECOND IMPORT REFRESHES WHAT SHE HAS, AND NEVER RE-CREATES IT ──────────────
+// The checklist said in red *"never press Import twice without an Undo in between"*, because the
+// import INSERTED every row and `(business_id, qb_item_id)` is UNIQUE — so a second press died on
+// row 0. These probes are why that sentence can come out of the checklist.
+async function sectionQ() {
+  const existing = [
+    // Already hers, from an earlier run: same QuickBooks id, her own count, an old run id.
+    { id: 'keep', business_id: BIZ, qb_item_id: '1', qty: 12, sell_price: 100, name: 'Live Oak - old name',
+      retired_at: null, status: 'available', import_run_id: OLD_RUN },
+    // Hers and GONE from her books: no matching id in this read.
+    { id: 'stale', business_id: BIZ, qb_item_id: '9', qty: 0, retired_at: null, status: 'available', import_run_id: OLD_RUN },
+    // Hers and DELETED: matched by id, and must stay dead.
+    { id: 'dead', business_id: BIZ, qb_item_id: '2', qty: 0, retired_at: null, status: 'deleted', import_run_id: OLD_RUN },
+  ];
+  const { db, inventory, calls } = recorder({ inventory: existing });
+  const rep = await commitItemImport(db as any, BIZ, [
+    it('1', 'A', { description: 'Live Oak - 15 gallon', unitPrice: 250 }),
+    it('2', 'B', { description: 'Red Maple - 30 gallon' }),
+    it('3', 'C', { description: 'Cedar Elm - 45 gallon' }),
+  ], RUN, HELD);
+
+  ok(rep.ok && rep.committed, `§Q1 a second import COMMITS instead of dying on a duplicate key (${rep.error ?? 'no error'})`);
+  ok(rep.created === 1, `§Q2 only the genuinely new item is created (${rep.created})`);
+  ok(rep.updated === 1, `§Q3 the one she already had is REFRESHED, not re-created (${rep.updated})`);
+  ok(rep.leftAlone === 1, `§Q4 and the deleted row is reported, not revived (${rep.leftAlone})`);
+
+  const keep = inventory.find(r => r.id === 'keep')!;
+  ok(keep.name === 'Live Oak' && Number(keep.sell_price) === 250,
+     `§Q5 the refreshed row takes her books' name and price (${keep.name} / ${keep.sell_price})`);
+  ok(Number(keep.qty) === 12,
+     '§Q6 🔴 HER COUNT SURVIVES — a price list has nothing to say about how many are on the yard');
+  ok(String(keep.import_run_id) === OLD_RUN,
+     '§Q7 🔴 THE RUN ID IS NOT STAMPED ON IT — the undo deletes by run id, so stamping would make undoing this import delete a product she already had');
+  ok(keep.retired_at == null,
+     '§Q8 🔴 AND THE RETIRE DOES NOT HIDE IT — the row this import just confirmed is still for sale');
+
+  const dead = inventory.find(r => r.id === 'dead')!;
+  ok(String(dead.status) === 'deleted', '§Q9 🔴 a row she deleted STAYS deleted — re-reading her books never revives it');
+  ok(dead.name !== 'Red Maple', '§Q10 …and it is not quietly refreshed either');
+
+  ok(inventory.find(r => r.id === 'stale')?.retired_at != null,
+     '§Q11 a row no longer in her books is still retired — that behaviour is unchanged');
+  ok(rep.retired === 1, `§Q12 exactly one row retired: the stale one (${rep.retired})`);
+
+  // 🔴 NEGATIVE CONTROL on the payload itself, read off the recorded call.
+  const upd = calls.find(c => c.verb === 'update' && c.payload && 'name' in (c.payload as any));
+  ok(!!upd, '§Q13 the refresh was a real UPDATE statement');
+  const keys = Object.keys((upd?.payload ?? {}) as Record<string, unknown>);
+  ok(!keys.includes('import_run_id'), '§Q14 🔴 `import_run_id` IS ABSENT FROM THE PAYLOAD — asserted on the statement, not just the result');
+  ok(!keys.includes('qty') && !keys.includes('status'),
+     '§Q15 🔴 and so are qty and status — the columns that are hers, not the import\'s');
+  ok(keys.includes('qb_item_name') && keys.includes('qb_income_account'),
+     '§Q16 while the QuickBooks identity columns ARE refreshed, so a renamed item catches up');
 }
 
 // ── §D a zero-row write is a failure ─────────────────────────────────────────
@@ -1170,7 +1256,7 @@ async function sectionPreview() {
 // Sequential, not Promise.all: each section builds its own recorder, and a shared failure order
 // is what makes a red run readable.
 (async () => {
-  for (const section of [sectionB, sectionC, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionK, sectionL, sectionPreview]) {
+  for (const section of [sectionB, sectionC, sectionQ, sectionD, sectionD2, sectionE, sectionF, sectionG, sectionH, sectionI, sectionJ, sectionK, sectionL, sectionPreview]) {
     await section();
   }
   console.log(`\nitemImportWriter — ${passed} passed, ${failed} failed`);
