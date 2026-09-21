@@ -164,6 +164,34 @@ const ACCOUNT_DISCOUNT = /discount/i;
 const ACCOUNT_STOCK = /nursery\s+stock|plant\s+sales/i;
 /** An account name that books money as goods sold. Does NOT settle service-vs-product on its own. */
 const ACCOUNT_GOODS = /product\s+income|merchandise/i;
+
+/**
+ * Does this account book money as GOODS — a bag, a bucket, a container?
+ *
+ * 🔴 EXPORTED FOR THE OPENING-STOCK SEED, AND THE TWO SCREENS USE IT FOR DIFFERENT DECISIONS ON
+ * PURPOSE (David, 2026-09-22). For the SERVICES REVIEW this account is genuinely ambiguous — it
+ * cannot say whether a row is a thing you sell or work you do, so the row is offered CONTESTED
+ * and nothing is ticked for her. For the SEED the question is narrower and has an answer:
+ * *"is this on a shelf?"* — and a bag of compost is, whatever the pricing question turns out to
+ * be. David: *"the ambiguity is about pricing a service, not about whether a bag of compost is
+ * on the shelf."* One definition, two readings, neither guessing.
+ */
+export function isGoodsAccount(accountName: string | null | undefined): boolean {
+  return ACCOUNT_GOODS.test((accountName ?? '').trim());
+}
+
+/**
+ * Does this account book money as PLANT STOCK?
+ *
+ * 🔴 ALSO EXPORTED FOR THE SEED, AND FOR THE SAME REASON: `classifyDestination` tests the NAME
+ * for discount words BEFORE it reads the account, which is right for the services review and
+ * wrong for this question. LAWNS sells three trees called **"Discounted Live Oak"** at $200,
+ * $250 and $300, booked to *Sales of Nursery Stock* — real stock whose name happens to start
+ * with the word. The seed reads the account first, exactly as David ruled it.
+ */
+export function isStockAccount(accountName: string | null | undefined): boolean {
+  return ACCOUNT_STOCK.test((accountName ?? '').trim());
+}
 /** An account name that books money as carriage. */
 const ACCOUNT_DELIVERY = /delivery|freight|shipping/i;
 /** An account name that books money as work done. */

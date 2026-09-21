@@ -55,6 +55,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type { QboInvoiceRow } from './invoiceList';
 import { goodsLines, monthOf, monthsBetween } from './invoiceList';
+import { classifyDestination, DESTINATIONS, isGoodsAccount, isStockAccount } from '../business-logic/serviceReview';
 
 /**
  * The ledger `kind` a seed writes.
@@ -266,6 +267,10 @@ export function seedModeFor(qboWritesEnabled: boolean | null | undefined): SeedM
 }
 
 /** A lot the seed may touch, as the planner needs to see it. */
+/** The owner's own marker for a plant that is still growing. Case-insensitive, and matched
+ *  anywhere in the name because it appears both mid-name and at the end. 75 rows at LAWNS. */
+const UNDER_PRODUCTION = /\(under\s+production\)/i;
+
 export interface SeedCandidate {
   id: string;
   name: string;
@@ -275,6 +280,21 @@ export interface SeedCandidate {
   /** TRUE if the QuickBooks import created it (`import_run_id IS NOT NULL`). In TEST mode only
    *  these are seeded; a row somebody made by hand is never touched there. */
   imported?: boolean;
+  /** 🔴 WHAT THE OWNER'S BOOKS SAY THIS IS — `qb_item_type` and `qb_income_account`, stored by
+   *  the import since `20260920b`. The ACCOUNT leads and the type assists: at LAWNS 91 of 134
+   *  `Service`-typed rows are real plants, so type alone would withhold stock from trees. */
+  qbType?: string | null;
+  qbIncomeAccount?: string | null;
+  /** 🔴 THE OWNER'S OWN "this is not stock" OVERRIDE for this row, read from her settings — NOT a
+   *  list in code (David, 2026-09-22). Some rows are MISBOOKED in QuickBooks: a Gift Certificate
+   *  filed under Sales of Nursery Stock reads as a tree to any rule that believes the books. The
+   *  override is how she says otherwise until the books are corrected at source, and each entry
+   *  carries its reason so nobody later wonders why a row is held back. */
+  notStockOverride?: boolean;
+  /** Both are needed to recognise a DISCOUNT row, which `isDiscountItem` reads by name, text
+   *  and a negative price — a discount seeded to 10 is stock that can never be picked. */
+  description?: string | null;
+  sellPrice?: number | null;
 }
 
 export interface SeedStep {
@@ -290,7 +310,7 @@ export interface SeedStep {
 }
 
 export type SeedPlan =
-  | { ok: true; mode: SeedMode; steps: SeedStep[]; skipped: { withStock: number; withHistory: number; notImported: number } }
+  | { ok: true; mode: SeedMode; steps: SeedStep[]; skipped: { withStock: number; withHistory: number; notImported: number; notAProduct: number; underProduction: number; markedNotStock: number } }
   | { ok: false; error: string };
 
 /**
@@ -310,7 +330,7 @@ export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number, m
   const refusal = seedRefusal(qty);
   if (refusal !== null) return { ok: false, error: refusal };
 
-  let withStock = 0, withHistory = 0, notImported = 0;
+  let withStock = 0, withHistory = 0, notImported = 0, notAProduct = 0, underProduction = 0, markedNotStock = 0;
   const steps: SeedStep[] = [];
   for (const c of candidates) {
     if (Number(c.qty ?? 0) > 0) { withStock++; continue; }
@@ -318,6 +338,56 @@ export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number, m
     // 🔴 TEST MODE TOUCHES ONLY WHAT THE IMPORT MADE. `imported` must be TRUE, not merely truthy-
     // absent: a candidate built without the field is treated as hand-made and left alone.
     if (mode === 'test' && c.imported !== true) { notImported++; continue; }
+
+    // ── 🔴 IS THIS A THING YOU SELL AT ALL? (tech-debt #352) ──────────────────────────────────
+    // Twice in a row a reload gave "10 in stock" to trip charges, labour, discounts and
+    // bookkeeping lines, and twice a hand-written migration took it off again. The rule is not a
+    // name list — it is the one the Services review already applies, so the two screens cannot
+    // disagree about what a row is (§6 r8): INCOME ACCOUNT FIRST, TYPE SECOND.
+    //
+    // ⚠️ AND IT ONLY RUNS WHEN THE BOOKS ACTUALLY SAID SOMETHING. Both fields are NULL on every
+    // row imported before `20260920b`, and `classifyDestination` reads a missing account as an
+    // unknown it will not call a product — so applying it blind would withhold a starting number
+    // from the WHOLE catalogue the first time this ran. A row we know nothing about keeps the old
+    // behaviour; silence is not evidence.
+    // 🔴 THE OWNER'S OVERRIDE BEATS HER BOOKS, because she is correcting them. It is checked
+    // FIRST so a misbooked row cannot be argued back in by an account name.
+    if (c.notStockOverride === true) { markedNotStock++; continue; }
+
+    const booksSaidSomething = (c.qbIncomeAccount ?? '').trim() !== '' || (c.qbType ?? '').trim() !== '';
+    if (booksSaidSomething) {
+      const read = classifyDestination({
+        id: c.id, name: c.name, description: c.description ?? null,
+        unitPrice: c.sellPrice ?? null, type: c.qbType ?? null,
+        incomeAccountName: c.qbIncomeAccount ?? null,
+      });
+      // 🔴 A GOODS ACCOUNT IS STOCK FOR THIS QUESTION (David, 2026-09-22). The Services review
+      // calls "Sales of Product Income" ambiguous and refuses to tick it, because it cannot tell
+      // a bag from a service for PRICING. The seed asks something narrower — is it on a shelf —
+      // and for 43 LAWNS rows (compost, fertiliser, bubblers, staking kits, T-posts) the answer
+      // is plainly yes. Without this, those 43 would keep a 0 they never earned.
+      const goodsIsStock = isGoodsAccount(c.qbIncomeAccount);
+      // 🔴 AND A POSITIVELY-PRICED ROW BOOKED TO PLANT STOCK IS STOCK, WHATEVER IT IS CALLED.
+      // `classifyDestination` tests the NAME for discount words before it reads the account —
+      // correct for the services review, wrong here: LAWNS sells three trees called "Discounted
+      // Live Oak" at $200, $250 and $300, booked to Sales of Nursery Stock. Reading the name
+      // first would leave real trees at zero on a shelf that has them. The price guard is what
+      // keeps a REAL discount out: LAWNS's discount rows are priced 0 or negative, never above.
+      const pricedStock = isStockAccount(c.qbIncomeAccount) && (c.sellPrice ?? 0) > 0;
+      if (read.destination !== DESTINATIONS.product && !goodsIsStock && !pricedStock) { notAProduct++; continue; }
+    }
+
+    // ── 🔴 AND IS IT FINISHED? (David, 2026-09-18) ────────────────────────────────────────────
+    // 75 LAWNS rows carry "(UNDER PRODUCTION)" in the name. They are booked to Sales of Nursery
+    // Stock, so the account rule above calls them products — correctly, because they WILL be one.
+    // They are not sellable yet: David ruled they belong on the grow ladder, not in inventory.
+    //
+    // ⚠️ THIS IS A NAME MARKER AND IT IS ONE ON PURPOSE, RECORDED AS DEBT RATHER THAN DRESSED UP:
+    // there is no column anywhere that says a row is still growing, so the owner's own convention
+    // in the NAME is the only signal that exists today. It is the weakest kind of rule we have —
+    // a rename silently changes behaviour — and it should be replaced by a real state the moment
+    // one exists (the grow ladder's own, when it lands).
+    if (UNDER_PRODUCTION.test(c.name)) { underProduction++; continue; }
     steps.push({
       lotId: c.id,
       name: c.name,
@@ -335,5 +405,5 @@ export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number, m
       ? 'Nothing to start — in test mode only products your QuickBooks import created are given a starting number, and every one of those already holds stock or has been counted or sold.'
       : 'Nothing to start — every product either already holds stock or has already been counted or sold.' };
   }
-  return { ok: true, mode, steps, skipped: { withStock, withHistory, notImported } };
+  return { ok: true, mode, steps, skipped: { withStock, withHistory, notImported, notAProduct, underProduction, markedNotStock } };
 }

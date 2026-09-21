@@ -10,8 +10,12 @@
  *              path to `deliveries`) · ../../lib/deliveryFulfilment (every decision about the tap and
  *              the ask) · ReviewAskSheet · CustomerPartyEditor.
  * OUTPUTS      { savingId, actionError, clearActionError, markStop, editDate, saveShipTo, saveSite,
- *                openEditor,
+ *                openEditor, teams, setStopTeam,
  *                overlays } — a page renders `overlays` ONCE.
+ *
+ * TEAMS (ledger #362) are read ONCE here, at page level, not per card: a day has one team list and
+ * twenty stops. `setStopTeam` is the only client call to `assign_stops_team`, so the schedule, the
+ * route and the order screen set a team the same way, under the same permission.
  *
  * PERMISSIONS  Saving a stop's address as a named SITE is `customers:create` — a different and
  *              STRICTER string than the edit beside it, which STAFF hold and which is
@@ -29,6 +33,7 @@ import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
 import { stopAct } from '../../lib/stopProgress';
+import { readTeams, assignStopsTeam, type Team } from '../../lib/teams';
 import { updateStop, saveShipTo as saveShipToRow, type ShipToForm, type ShipToSaveOutcome } from '../../lib/stopWrites';
 import { readCustomerAddresses, saveCustomerAddress, type SaveOutcome } from '@trace/shared/business-logic';
 import type { StopRow } from '../../lib/stopRead';
@@ -73,6 +78,10 @@ export function useStopActions(
   // put the answer back in the place the question could not be seen.
   const [siteOffer,  setSiteOffer]  = useState<SiteOffer | null>(null);
   const [siteResult, setSiteResult] = useState<SiteResult | null>(null);
+  // The team list for the pickers. An empty list is a real answer (no teams yet); `teamsAbsent`
+  // is the different fact that the migration has not been applied, and the card says so.
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsAbsent, setTeamsAbsent] = useState(false);
 
   // The editor prices from the configured tiers, same source the roster uses.
   useEffect(() => {
@@ -270,9 +279,41 @@ export function useStopActions(
     </>
   );
 
+  // ── TEAMS ────────────────────────────────────────────────────────────────────────────────
+  // Read once per page. A business with no teams yet is not an error and not a prompt — the card
+  // simply has nothing to offer, and says so rather than showing an empty picker.
+  useEffect(() => {
+    if (!businessId) return;
+    let live = true;
+    void readTeams(supabase, businessId).then(r => {
+      if (!live) return;
+      if (r.ok) { setTeams(r.teams); setTeamsAbsent(false); }
+      else { setTeams([]); setTeamsAbsent(r.absent); }
+    });
+    return () => { live = false; };
+  }, [businessId]);
+
+  /** Set (or clear) the team on ONE stop. The writer takes a set; a card sends a set of one. */
+  async function setStopTeam(d: StopRow, teamId: string | null) {
+    setSavingId(d.id);
+    setActionError(null);
+    const r = await assignStopsTeam(supabase, businessId!, [d.id], teamId);
+    setSavingId(null);
+    if (!r.ok) {
+      // The SERVER's refusal is what the person reads — a retired team, a stop that moved, no
+      // permission. Never a cheerful local message over a write that did not happen.
+      setActionError(r.message);
+      return;
+    }
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] stop team set', { stop: d.id, teamId, team: r.value.teamName });
+    await onChanged();
+  }
+
   return {
     savingId, actionError, clearActionError: () => setActionError(null),
     markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
+    // TEAMS (ledger #362) — the list every picker on the page reads, and the one call that sets one.
+    teams, teamsAbsent, setStopTeam,
     // §8 V1/V3 — <StopCard> no longer renders the offer, so it no longer needs to read it. What it
     // DOES need is whether an offer is open for its own stop, which nothing on the card depends on
     // today; the surface is kept off the card deliberately (STD-011 — one renderer, one place).

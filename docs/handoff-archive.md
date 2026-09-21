@@ -1,5 +1,32 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-21 (ledger #360 close-out, after merging origin/main — OP-13 N=3)
+     — verbatim, not summarized. §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-21 — THUNDER **THE BOOKS REVIEW RECORDS ITS RUN, AND THE SCREEN SAYS WHICH OF THE TWO HAPPENED. #360.** 🔴 **`saveBooksRun` HAD ZERO CALLERS SINCE #333** — every Visualize press produced a report and stored nothing, so the opening-stock seed's `readLatestResult` had nothing to read. It is now called from `visualize()`, **after** the report window is written (`window.open` must stay inside the click, and the report must never wait on a write). **The verdict is READ, not assumed:** through PostgREST an RLS refusal and a missing table both return `error: null` with zero rows, so the returned row count is compared with what was sent and a partial insert counts as NOT saved. The screen carries that on its own line, red when it failed — a failed save must never read as a failed report. ✏️ **Landed first, on David's instruction: `20260908_books_report_runs.sql` was applied live but existed only on two branches and staged in his checkout** — byte-identical in all four places, and checked against the live catalog (both tables, 16 columns incl. the quoted `"of"`, 6 policies, 3 indexes, RLS on) before it was committed.
+
+**Type:** BUILD (one call site + one verdict line + the mount passing its client), on `feat/books-review-save`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **CARD 21 NEEDS A MEMBER WITHOUT `books:write`** to prove the red path — that is the half that matters, because a screen trusting `!error` would show green over a run nobody stored. **(b)** ⚠️ **MY OWN 2026-09-18 REPORT SAID THOSE TABLES DID NOT EXIST LIVE.** True then, not now: they were applied between, and the record is corrected rather than left as two readings of mine in conflict. **(c)** 🟡 **NEXT: #352 with #327** — the seed skipping non-products and the product import matching on `(business_id, qb_item_id)` instead of inserting, both before any reload.
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #365 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-20 — THUNDER **LAUREN PULLS BY VARIETY — THE SPECIES ROLL-UP COMES BACK AS THE PICK LIST. #358.** Her process, via David: *pull by variety → stage → check the names at staging → load*, and the tag on each tree carries the CUSTOMER'S name. ✏️ **REVERSES #355's one-line version, two days old** — it was cut on the belief that nothing is loaded by variety; the PULL is. Page 1: the bulk, then **Trees to pull — 29 across 8 stops**; the stops from page 2 are the name check. Page only; no figure moves. ✏️ **Id moved #357 → #358 under [[R-148]] clause (4)** — `fix/seeded-fee-rows` claimed #357 ninety-four seconds earlier.
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #364 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-20 — THUNDER **THE SEEDED 10 COMES OFF 44 ROWS THAT ARE NOT PRODUCTS, AND THE PREVIEW'S FIELD MAP IS FILED AS A STALE DECLARATION. #357. TECH-DEBT #353 · TECH-DEBT #352.** The 2026-09-17 reload seeded `qty = 10` onto all 631 imported rows, 44 of which are fees, labour, discounts and bookkeeping lines — a trip charge reading *"10 in stock"* at the counter, for the second run running. `20260920_zero_seeded_qty_on_non_product_rows.sql` sets those 44 to 0, matched on `qb_item_id`, refusing on anything it does not recognise. 🔴 **QUICKBOOKS' OWN `Type` WAS MEASURED AND REJECTED AS THE CLASSIFIER: 91 of LAWNS's 134 Service-typed rows are real plants** (Little Gem Magnolia, Shumard Red Oak), so the durable rule must read the INCOME ACCOUNT first — which is what the Services review already does. ✏️ **The ship-to question is settled by measurement, not opinion: ShipAddr was never lost.** 778 customers have a real ship-to; 763 are the same place as the billing address and fold to one row (`kind: both`), 14 differ and 1 has no billing address — **exactly the 15 Shipping rows live.**
+
+**Type:** MIGRATIONS (2, WRITTEN not applied) + BUILD (adapter · writer · one grid column · one shared helper) + HARNESS + FILING, on `fix/seeded-fee-rows`, **own worktree (§6 r20)**, **one ledger id**. **Not merged.** No app code, no schema, no policy, `api/` 12/12. Harness 13/13, every refusal proven red.
+
+✏️ **SECOND PASS, same day: DAVID RULED THE FOUR, AND THE IDENTITY COLUMNS ARE BUILT.** Three join the list (41 → 44) and HYIS is kept, each checked against the book rather than the name — Fertilizer-1's one sale reads **$250, "Fertilizations of Existing Trees and Shrubs"**, the work and not a product. `20260920b` adds `qb_item_name` · `qb_item_fqn` · `qb_item_type` · `qb_income_account`; the display identifier **`sku ?? qb_item_name` is computed on read and never stored merged**, because a merge would change a row's identifier the day a SKU is typed in QuickBooks.
+
+**FLAGGED FOR DAVID:** **(a)** ✅ **THE FOUR ARE RULED AND THE FILE IS EXTENDED TO 44.** HYIS keeps its 10. **(b)** 🟡 **TECH-DEBT #352 — the seed will do this again on the next reload.** The fix is one rule (income account first, type second) and it is BLOCKED on storing `qb_item_type` / `qb_income_account`, which the import reads and throws away. **(c)** 🟡 **TECH-DEBT #353 — the preview's field map contradicts the importer** and says `ShipAddr.Line1` is mapped to nothing; deriving it from the contact-record rule is the fix you chose. **(d)** 🔴 **THE FOUR COLUMNS READ NULL UNTIL THE RELOAD FILLS THEM** — that is the fill you chose over a backfill, and it is honest in the meantime: we have not read those fields into the row yet. **(e)** ✏️ **RECORDED AGAINST TECH-DEBT #327 ON YOUR INSTRUCTION:** `business_inventory_business_qb_item_uidx` on `(business_id, qb_item_id)` already exists, so match-and-update has its key — nobody needs to re-derive it.
+
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #361 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
 <!-- MOVED FROM CLAUDE.md §3 2026-09-21 (ledger #360 close-out, OP-13 N=3) — verbatim, not
      summarized. §3 holds the newest three by ledger id. entries-in == entries-out. -->
 

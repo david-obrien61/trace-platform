@@ -18,7 +18,7 @@
  * customer's billing record — `stopWrites.saveShipTo` cannot reach `customers`, and a test holds it.
  */
 import { useState, type ReactNode } from 'react';
-import { MapPin, Phone, Calendar, Pencil } from 'lucide-react';
+import { MapPin, Phone, Calendar, Pencil, Users } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { NotPermitted, WithheldData } from '@trace/shared/components/SurfaceState';
@@ -29,6 +29,7 @@ import { stopLoadOf, orderStatusOf, type StopRead, type StopRow } from '../../li
 import { shipToLine, shipToFormOf, SHIP_TO_FIELDS, type ShipToForm } from '../../lib/stopWrites';
 import type { StopActions } from './useStopActions';
 import type { StopActivity } from '../../lib/crewDayLink';
+import { teamLabel } from '../../lib/teams';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -103,6 +104,43 @@ function OrderBlock({ load }: { load: StopLoad }) {
       {load.unanchoredCount > 0 && (
         <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: AMBER, lineHeight: 1.45 }}>{LOAD_COPY.unanchoredNote}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The stop's team, and the picker that sets it. It renders NOTHING when the business has no teams:
+ * a picker with one empty option is a dead affordance, and most businesses never split a day.
+ * The list, and the one call that writes, both come from `useStopActions` — page level, one read.
+ */
+function StopTeamRow({ stop: d, actions, canEdit }: { stop: StopRow; actions: StopActions; canEdit: boolean }) {
+  const { teams, teamsAbsent, setStopTeam, savingId } = actions;
+  // `undefined` is the pre-20260921a read, which never asked for the column — so it is not "no team",
+  // it is "not known", and the row stays off rather than asserting something nobody read.
+  if (teamsAbsent || d.team_id === undefined) return null;
+  if (teams.length === 0 && !d.team_id) return null;
+  const live = teams.filter(t => t.active || t.id === d.team_id);
+  const busy = savingId === d.id;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+      <Users size={13} color={d.team_id ? GREEN : '#d1d5db'} />
+      {canEdit ? (
+        <select
+          value={d.team_id ?? ''}
+          disabled={busy}
+          onChange={e => { void setStopTeam(d, e.target.value || null); }}
+          style={{
+            fontSize: '0.8125rem', color: d.team_id ? DARK : GRAY, padding: '3px 6px',
+            border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', maxWidth: 200,
+          }}
+        >
+          <option value="">No team</option>
+          {live.map(t => <option key={t.id} value={t.id}>{t.active ? t.name : `${t.name} (retired)`}</option>)}
+        </select>
+      ) : (
+        <span style={{ fontSize: '0.8125rem', color: d.team_id ? DARK : GRAY }}>{teamLabel(teams, d.team_id)}</span>
+      )}
+      {busy && <span style={{ fontSize: '0.75rem', color: GRAY }}>saving…</span>}
     </div>
   );
 }
@@ -199,6 +237,11 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
               </span>
             )}
           </div>
+
+          {/* ── Team (ledger #362) — who is going. One line, and a picker for whoever may change
+                 the stop. A stop with no team says "No team", never a blank: unassigned is a real
+                 state and it is what every stop is before Lauren splits a day. ── */}
+          <StopTeamRow stop={d} actions={actions} canEdit={canEditStop} />
 
           {/* ── Ship-to ── */}
           {!editingAddress && (

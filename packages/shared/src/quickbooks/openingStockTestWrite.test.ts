@@ -193,8 +193,15 @@ async function main(): Promise<void> {
      && /setPhase\(\{ k: 'done', seeded: r\.written, qty, skipped: plan\.skipped \}\);\s*\n\s*return;\s*\n\s*\}/.test(testBlock),
     'S3d 🔴 and it calls the qty-only writer and RETURNS after success — it cannot fall through to the RPC');
   ok((src.match(/supabase\.rpc\(/g) ?? []).length === 1, 'S3e the live path is unchanged: one RPC call site, adjust_inventory_manual');
-  ok(/import_run_id/.test(src.slice(src.indexOf(".from('business_inventory')"), src.indexOf(".from('business_inventory')") + 120)),
+  // ✏️ WINDOW WIDENED 120 → 500 (ledger #361). The claim is unchanged and still true — the screen
+  // reads `import_run_id` in the query that loads the candidates. What broke it was #352 adding
+  // `qb_item_type` / `qb_income_account` to the same select and a comment above it, which pushed
+  // the field past a byte distance that was never the point. A probe pinned to a character count
+  // fails on formatting rather than on behaviour (#182's class: it stopped reaching its target).
+  ok(/import_run_id/.test(src.slice(src.indexOf(".from('business_inventory')"), src.indexOf(".from('business_inventory')") + 500)),
     'S3f the screen reads import_run_id, so `imported` is a measurement, not a default');
+  ok(!/import_run_id/.test(src.slice(0, src.indexOf(".from('business_inventory')"))),
+    'S3f2 🔴 NEGATIVE CONTROL — the match comes from the query, not from prose earlier in the file');
   ok(/You are in test mode\./.test(src) && /Nothing is written to your stock record/.test(src),
     'S3g the screen SAYS which mode it is in and what that means');
 }

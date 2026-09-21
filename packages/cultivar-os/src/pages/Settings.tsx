@@ -10,6 +10,7 @@ import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink'
 import { readReviewAskConfig, reviewCopyProblems, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
+import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
   getMembersByBusiness,
@@ -754,6 +755,10 @@ export function Settings() {
   const isOperations = sectionParam === 'operations';
   // CONTAINER SIZES (ledger #343) — the ladder editor, a cultivar vertical section for the same reason.
   const isContainerSizes = sectionParam === 'container-sizes';
+  // TEAMS (ledger #362) — the crews who go out, a cultivar vertical section for the same reason.
+  // 🔴 It is NOT the `TeamSection` below, which is LOGINS. Two different things, and the copy on
+  //    each says which it is: accounts and roles there, names on a truck here.
+  const isTeams = sectionParam === 'teams';
 
   // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
   console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });
@@ -793,10 +798,14 @@ export function Settings() {
   ) : businessId && isContainerSizes ? (
     // /settings/container-sizes — the direct destination for the ladder editor (RULE 2a).
     <ContainerSizesSettings businessId={businessId} canWrite={canManageSettings} />
+  ) : businessId && isTeams ? (
+    // /settings/teams — the direct destination for the crew list (RULE 2a).
+    <TeamsSettings businessId={businessId} canWrite={can('deliveries:update')} />
   ) : (businessId && !section) ? (
     <>
       <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
       <ContainerSizesSettings businessId={businessId} canWrite={canManageSettings} />
+      <TeamsSettings businessId={businessId} canWrite={can('deliveries:update')} />
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
       <ReviewAskSection businessId={businessId} />

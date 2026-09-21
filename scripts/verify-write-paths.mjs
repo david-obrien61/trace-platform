@@ -335,7 +335,14 @@ const ALLOWED_DIVERGENCE = {
             // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-18 (ledger #351). `save_route_order`
             // writes ONE `route.saved` row per plan, INSIDE the same function that writes the
             // sequence — the manifest's rule for this table, no separate client insert.
-            'packages/cultivar-os/src/lib/routeOrder.ts'],
+            'packages/cultivar-os/src/lib/routeOrder.ts',
+            // ⏳ DECLARED 2026-09-22, PENDING DAVID'S RATIFICATION (ledger #362, teams piece 1).
+            // `save_team` writes ONE `team.created` / `team.updated` row and `assign_stops_team`
+            // ONE `stop.team_assigned` row — each INSIDE the function that made the change, which
+            // is this table's own rule. No separate client insert, so there is nothing to half-land,
+            // and a REFUSED save or assign writes no row at all (proven by guards
+            // stop.assign-all-or-nothing and stop.no-stops-chosen).
+            'packages/cultivar-os/src/lib/teams.ts'],
   },
   // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
   // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
@@ -425,7 +432,13 @@ const ALLOWED_DIVERGENCE = {
             // ORDER: `save_route_order` (20260917e) writes ONLY route_position / routed_at / routed_by —
             // three columns nothing else writes — on stops it has checked are this business's, on this
             // day. It creates no stop and changes no date, address, status or customer.
-            'packages/cultivar-os/src/lib/routeOrder.ts'],
+            'packages/cultivar-os/src/lib/routeOrder.ts',
+            // ⏳ DECLARED 2026-09-22, PENDING DAVID'S RATIFICATION (ledger #362, teams piece 1).
+            // WHICH TEAM TAKES A STOP: `assign_stops_team` (20260921a) writes ONLY `team_id` — one
+            // column nothing else writes — and only on stops it has checked are this business's and
+            // not cancelled. It creates no stop and changes no date, address, status, customer,
+            // order or route position. All-or-nothing over the set: one bad id assigns none of them.
+            'packages/cultivar-os/src/lib/teams.ts'],
   },
   // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-17 (ledger #347). ONE WRITER, TWO CALLERS ([[R-161]]):
   // every Start / Done / Undo / Note row is written by `stop_progress_apply`; the two files below are
