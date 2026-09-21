@@ -87,6 +87,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#364 — a goods account is stock; the owner marks the exceptions (built, migration NOT APPLIED)**
+- 🔴 **OPEN — APPLY `20260922_not_stock_overrides.sql` BEFORE SEEDING.** The seed screen refuses while the override list cannot be read, on purpose. Owner: ledger #364.
+- ⚠️ **OPEN — FIVE PHYSICAL GOODS STAY AT 0** (Adjustable Tree Bubbler · Deer Fencing · T-Post · T-Posts · Trunk Protection): their income account is *Landscaping/Installation Services*. The fix is Lauren's retype list, not another exception. Owner: ledger #364.
+- 🟡 **OPEN — THE FOUR OVERRIDES GO STALE WHEN LAUREN FIXES THE BOOKS.** Three carry `fix_at_source = true`; nothing yet tells anyone an override is no longer needed. Owner: ledger #364.
+
 **#361 — the starting number goes to things you sell (built, NOT MERGED)**
 - 🔴 **OPEN — THE RULE SKIPS 43 REAL GOODS.** Compost scoops, fertiliser bags, bubblers, staking kits and T-posts are booked to *Sales of Product Income*, which the Services review treats as ambiguous by design (*"where you also book bags and containers"*), so they stay at 0. One predicate changes it. Owner: ledger #361.
 - 🔴 **OPEN — AND IT RE-SEEDS 4 OF THE 44 YOU ZEROED:** Deposit · Gift Certificate · Arizona Cypress Blue Ice Replacement · Custom Amount. Three are booked to *Sales of Nursery Stock*, so the books call them stock. Owner: ledger #361.

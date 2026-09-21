@@ -61,7 +61,7 @@ type Phase =
   | { k: 'empty'; why: string }
   | { k: 'ready' }
   | { k: 'working'; done: number; of: number }
-  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number; notImported: number; notAProduct: number; underProduction: number } };
+  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number; notImported: number; notAProduct: number; underProduction: number; markedNotStock: number } };
 
 /** What the books review last said, or why it said nothing. Never a silent absence. */
 interface Suggestion {
@@ -113,11 +113,11 @@ export function OpeningStockSeed(): React.ReactElement | null {
         .from('business_inventory')
         // qb_item_type / qb_income_account are what the books said this row IS (20260920b);
         // description and sell_price are what a DISCOUNT row is recognised by.
-        .select('id,name,qty,import_run_id,qb_item_type,qb_income_account,description,sell_price')
+        .select('id,name,qty,import_run_id,qb_item_id,qb_item_type,qb_income_account,description,sell_price')
         .eq('business_id', businessId)
         .is('retired_at', null);
       if (inv.error) { setPhase({ k: 'error', why: inv.error.message }); return; }
-      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null; import_run_id: string | null;
+      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null; import_run_id: string | null; qb_item_id: string | null;
         qb_item_type: string | null; qb_income_account: string | null; description: string | null; sell_price: number | null }[];
       setTotalProducts(rows.length);
 
@@ -135,6 +135,23 @@ export function OpeningStockSeed(): React.ReactElement | null {
         (led.data ?? []).map(r => String((r as { inventory_id: unknown }).inventory_id ?? '')),
       );
 
+      // ── WHAT THE OWNER HAS SAID IS NOT STOCK ──────────────────────────────────────────────
+      // 🔴 A FAILED READ IS NOT AN EMPTY LIST. If this query is refused or the table is missing,
+      // treating it as "no overrides" would quietly give a starting number to the very rows she
+      // marked — so the screen stops instead and says so (A8: zero rows and no error are what a
+      // refusal looks like, and here the two must not be treated alike).
+      const ov = await supabase
+        .from('business_not_stock_items')
+        .select('qb_item_id')
+        .eq('business_id', businessId)
+        .eq('active', true);
+      if (ov.error) {
+        setPhase({ k: 'error', why: `We could not read which products you have marked as "not stock" (${ov.error.message}), so nothing was suggested. Seeding without that list could give stock to a gift certificate.` });
+        return;
+      }
+      const notStock = new Set((ov.data ?? []).map(r => String((r as { qb_item_id: unknown }).qb_item_id ?? '')));
+      console.log('[TRACE:SEED] not-stock overrides', { count: notStock.size });
+
       const cands: SeedCandidate[] = rows.map(r => ({
         id: String(r.id),
         name: String(r.name ?? 'Unnamed product'),
@@ -145,6 +162,7 @@ export function OpeningStockSeed(): React.ReactElement | null {
         qbIncomeAccount: r.qb_income_account,
         description: r.description,
         sellPrice: r.sell_price,
+        notStockOverride: r.qb_item_id != null && notStock.has(String(r.qb_item_id)),
       }));
       setCandidates(cands);
 
@@ -283,7 +301,7 @@ export function OpeningStockSeed(): React.ReactElement | null {
   }
   if (phase.k === 'done') {
     const skipped = phase.skipped.withStock + phase.skipped.withHistory + phase.skipped.notImported
-      + phase.skipped.notAProduct + phase.skipped.underProduction;
+      + phase.skipped.notAProduct + phase.skipped.underProduction + phase.skipped.markedNotStock;
     return (
       <div style={card}>
         <h3 style={h}>Done — {phase.seeded.toLocaleString()} products start at {phase.qty}</h3>
@@ -314,7 +332,9 @@ export function OpeningStockSeed(): React.ReactElement | null {
             things you keep in stock</b> — your books put them under delivery, labour, a discount or
             bookkeeping, so a starting number would read as stock you could sell</>}
             {phase.skipped.underProduction > 0 && <>; {phase.skipped.underProduction.toLocaleString()} are
-            marked <b>(UNDER PRODUCTION)</b>, so they are still growing and are not sellable yet</>}.
+            marked <b>(UNDER PRODUCTION)</b>, so they are still growing and are not sellable yet</>}
+            {phase.skipped.markedNotStock > 0 && <>; {phase.skipped.markedNotStock.toLocaleString()} you have
+            marked as <b>not stock</b> yourself, because QuickBooks files them with your trees</>}.
           </p>
         )}
       </div>
