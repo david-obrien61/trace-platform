@@ -50,7 +50,8 @@ async function fresh(mig = RECIPES, permission = 'select true') {
     CREATE TABLE public.business_inventory (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL, name text NOT NULL,
       size text, qty numeric DEFAULT 0, qb_item_id text, retired_at timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now());
+      -- the wipe guard reads import_run_id; the live table has it, so the scaffold must too
+      import_run_id uuid, created_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE public.business_inventory_ledger (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, inventory_id uuid, delta numeric,
       kind text, reason text, source_type text, source_id uuid, actor_user_id uuid,

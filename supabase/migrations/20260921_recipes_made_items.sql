@@ -218,6 +218,48 @@ CREATE POLICY labour_rates_money_update ON public.labour_rates FOR UPDATE
   USING (public.is_active_member(business_id) AND public.has_permission(business_id, 'pricing_recipe:update'))
   WITH CHECK (public.is_active_member(business_id) AND public.has_permission(business_id, 'pricing_recipe:update'));
 
+-- ═══════════════════════ §5b — THE WIPE GUARD: A LINK THAT WOULD BLOCK THE WIPE IS REFUSED ════
+-- 🔴 PROVED NECESSARY BY THE PROBE, NOT ASSUMED (recipes-survive-wipe-370.pglite, 2026-09-21).
+-- `undo_import_run` enumerates every single-column FK into `business_inventory` from the catalog and
+-- REFUSES the wipe when one of them points at a row the load created — naming the table and column.
+-- A recipe or component linked by ROW ID to an IMPORTED product therefore silently takes away the
+-- customer's ability to reload their catalogue. The identity that survives is `qb_item_id`, so:
+--   · linking to a product that carries an `import_run_id` is REFUSED, and the message says to use
+--     the QuickBooks id instead;
+--   · linking to a row this platform owns (no import run — the bubbler) is allowed, because the wipe
+--     never touches it.
+-- This is the rule stated once, in the only place that cannot be bypassed.
+CREATE OR REPLACE FUNCTION public.recipe_link_must_survive_a_wipe()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE v_id uuid; v_run uuid; v_qb text;
+BEGIN
+  -- ⚠️ IF, not CASE: plpgsql resolves the field reference in EVERY branch of a CASE expression, so
+  -- `NEW.component_inventory_id` was looked up on `item_recipes` too and the trigger died with
+  -- "record new has no field". An IF statement is parsed branch by branch, as it executes.
+  IF TG_TABLE_NAME = 'item_recipes' THEN
+    v_id := NEW.inventory_id;
+  ELSE
+    v_id := NEW.component_inventory_id;
+  END IF;
+  IF v_id IS NULL THEN RETURN NEW; END IF;
+  SELECT bi.import_run_id, bi.qb_item_id INTO v_run, v_qb FROM public.business_inventory bi WHERE bi.id = v_id;
+  IF v_run IS NOT NULL THEN
+    RAISE EXCEPTION 'recipe_link_must_survive_a_wipe: that product came from a catalogue load, so a link by row id would be erased by the next reload and would block it. Link it by its QuickBooks item id (%) instead.', COALESCE(v_qb, 'none recorded');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_item_recipes_link_survives ON public.item_recipes;
+CREATE TRIGGER trg_item_recipes_link_survives BEFORE INSERT OR UPDATE ON public.item_recipes
+  FOR EACH ROW EXECUTE FUNCTION public.recipe_link_must_survive_a_wipe();
+DROP TRIGGER IF EXISTS trg_recipe_components_link_survives ON public.recipe_components;
+CREATE TRIGGER trg_recipe_components_link_survives BEFORE INSERT OR UPDATE ON public.recipe_components
+  FOR EACH ROW EXECUTE FUNCTION public.recipe_link_must_survive_a_wipe();
+
 -- ═══════════════════════ §6 — A BUILD RUN IS AN INVENTORY EVENT ═══════════════════════════════
 -- 🔴 ONE TRANSACTION, OR NOTHING (tech-debt #69's lesson: a multi-step accept that half-lands leaves
 -- stock wrong in two directions and the ledger is append-only, so there is no rolling back a part).
@@ -370,7 +412,19 @@ COMMENT ON FUNCTION public.record_build_run(uuid, uuid, numeric, text) IS
 --          has_function_privilege('authenticated','public.record_build_run(uuid,uuid,numeric,text)','EXECUTE') AS auth_can;
 --   -- EXPECT: anon_can false · auth_can true
 --
--- V7 · LAWNS's word for a made item
+-- V7 · 🔴 THE ERROR IS THE PASS — a component may not be linked by row id to an IMPORTED product
+--   BEGIN;
+--   INSERT INTO public.item_recipes (business_id, qb_item_id, yield_quantity, yield_unit)
+--   VALUES ('ed2e5933-45dc-4b9b-a331-ddfd125e7a74', 'PROBE-1', 1, 'each');
+--   INSERT INTO public.recipe_components (recipe_id, name, quantity, unit, component_inventory_id)
+--   SELECT r.id, 'probe', 1, 'each',
+--          (SELECT id FROM public.business_inventory
+--            WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id IS NOT NULL LIMIT 1)
+--     FROM public.item_recipes r WHERE r.qb_item_id='PROBE-1';
+--   -- EXPECT: recipe_link_must_survive_a_wipe: that product came from a catalogue load …   ← the PASS
+--   ROLLBACK;
+--
+-- V8 · LAWNS's word for a made item
 --   SELECT config->>'madeItemLabel' FROM public.business_operations_config
 --    WHERE business_id='ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 --   -- EXPECT: homemade
