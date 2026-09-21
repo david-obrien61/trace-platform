@@ -143,7 +143,25 @@ not stock); there is **one** row for that product, not two.
 
 ---
 
-## 9 · TONIGHT'S RUN ID — the one the NEXT wipe uses
+## 9 · THE CURRENT RUN ID — the one the NEXT wipe uses
+
+🔴 **`8ac868b3-4acf-4371-9883-cec6af5e5880`** — the run the **2026-09-21 16:11 UTC** reload created
+(1,963 customers · 632 products · 512 seeded at 10). Verified live straight after: the previous
+run `bffc7713` holds **zero** rows, the stock ledger is **still 470**, the not-stock list is
+**empty**, and **all 127 captured receipts survived** the wipe.
+
+Use it in the dry-run block below in place of the id shown there. ⚠️ **Every reload mints a new
+id, so the one written here is stale the moment the next import runs** — read it back with:
+
+```sql
+SELECT DISTINCT import_run_id, count(*) OVER (PARTITION BY import_run_id) AS customers
+  FROM customers
+ WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id IS NOT NULL;
+```
+
+<details><summary>Superseded: the 2026-09-17 run</summary>
+
+## 9b · THE 2026-09-17 RUN ID — SUPERSEDED, kept for the record
 
 **`bffc7713-d275-436c-bf8c-1ff29f3d14b9`** — the run the 2026-09-17 20:16 UTC import created
 (1,956 customers · 631 products). The old run `eab7fbd2` is gone: zero customers, zero products,
@@ -169,6 +187,8 @@ what it would remove is listed beside it. `refused: true` names what is holding 
 ⚠️ **The starting-number seed does not change this.** In test mode the seed writes **no ledger
 row** (R-158 / #342), so the seeded rows carry no history and the undo still takes them.
 
+</details>
+
 ---
-**If anything went wrong after step 5:** undo the NEW run — step 9 has its id and the dry-run
+**If anything went wrong after step 5:** undo the CURRENT run — step 9 has its id and the dry-run
 block. Do **not** press Import again first.
