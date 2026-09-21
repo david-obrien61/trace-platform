@@ -4412,6 +4412,8 @@ per action (as for every other tap) records who undid it.
 - **The load sheet totals the day, not the truck.** Each stop's own trees, mix and posts print, so the crews can split the load line by line, but the totals at the top are for the whole day.
 - **The saved route is one path through all 8 stops** (`deliveries.route_position` is one sequence per business per day), not one route per truck.
 
+✅ **BUILD STARTED 2026-09-22 (ledger #362), in David's order: 1 → 2 (route per team AND persist the optimiser's miles/minutes) → 2.5 THE ESTIMATE (David's rule of 2026-09-22, replacing the fixed 8-hour rule: show drive time, distance and planting time as a day is scheduled; suggest one team until the estimate exceeds a PER-BUSINESS X, 7 h at LAWNS; planting minutes per tree is a per-business setting defaulted to 30; every estimate shows its working and Lauren can override) → 3, 4, 5.** Ground truth for 2.5, measured: `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
+
 **The six pieces, in the order David set (the first two first; everything else reads them):**
 
 | # | Piece | What it takes | Size |
