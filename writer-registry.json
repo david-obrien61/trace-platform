@@ -394,6 +394,7 @@
       ],
       "tables": [
         "crew_day_links",
+        "delivery_route_plans",
         "delivery_stop_events"
       ],
       "guardedColumns": {
@@ -405,7 +406,7 @@
           "routed_at",
           "routed_by"
         ],
-        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation. The route columns (route_position / routed_at / routed_by) are written only by save_route_order (20260917e) — the one writer for the day's plan, ledger #351."
+        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation. The route columns (route_position / routed_at / routed_by) are written only by save_route_order (20260917e) — the one writer for the day's plan, ledger #351. ✏️ PIECE 2 (20260923b, [[R-169]]): the route columns are still save_route_order's alone, but the re-route CLEAR is now scoped to the team being routed — `team_id IS NOT DISTINCT FROM p_team_id`. The day-scoped clear is what wiped Team 2's order on Saturday 2026-09-19 (tech-debt #345). `delivery_route_plans` holds one row per team per day with the optimiser's OWN miles and minutes, kept as a snapshot and never recomputed."
       },
       "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role — the endpoint.",
       "inputSignal": {
@@ -541,7 +542,7 @@
         {
           "id": "route.save",
           "what": "Route this day → the optimiser resolves → the day's sequence is saved (ledger #351)",
-          "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids);",
+          "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids, teamParam,",
           "files": [
             "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
             "packages/cultivar-os/src/lib/routeOrder.ts",
@@ -550,6 +551,18 @@
           ],
           "chain": "DeliveryRoute (?date=) → RouteMap reports the optimised order → saveRouteOrder → rpc save_route_order → deliveries.route_position/routed_at/routed_by",
           "shown": "Route page: 'Saved — N stops in this order · route order · planned <time>'; crew page header: 'route order · planned <time>'; the schedule, the route list and the printed day sheet all list the stops in that order (one readStops)"
+        },
+        {
+          "id": "route.save-per-team",
+          "what": "Route page opened for ONE team (/deliveries?date=…&team=…) → Route N stops",
+          "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids, teamParam,",
+          "files": [
+            "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
+            "packages/cultivar-os/src/lib/routeOrder.ts",
+            "packages/cultivar-os/src/lib/teams.ts"
+          ],
+          "chain": "DeliveryRoute save effect → saveRouteOrder(teamId, {miles, minutes}) → rpc save_route_order(6) (deliveries:update checked inside)",
+          "shown": "Route page: 'Routing Team 1 — one team at a time', then 'Saved — N stops in this order · route order · planned H:MM'; the crew page, the schedule and the day sheet all follow that order"
         }
       ],
       "guards": [
@@ -596,13 +609,33 @@
         {
           "id": "crew.box-follows-stop",
           "what": "the schedule never shows a Started or Done the stop no longer has — the tap stays in the append-only log, the box follows the stop (David, 2026-09-18)"
+        },
+        {
+          "id": "route.keeps-another-teams-order",
+          "what": "🔴 THE SATURDAY REGRESSION (tech-debt #345) — routing one team leaves another team's saved order and stamp untouched; a stop dropped from its OWN team's route still loses its place"
+        },
+        {
+          "id": "route.refuses-teamless-stop",
+          "what": "[[R-169]] ① a set containing a stop with no team is refused and the refusal NAMES the stop; nothing is written"
+        },
+        {
+          "id": "route.refuses-mixed-teams",
+          "what": "[[R-169]] ② a set spanning two teams is refused BY NAME"
+        },
+        {
+          "id": "route.wrapper-refuses-partly-teamed",
+          "what": "the DEPLOYED page's three-argument call still refuses a partly team-less or mixed set by name, and a split day cannot be routed with no team named (⓪)"
+        },
+        {
+          "id": "route.unsplit-day-still-works",
+          "what": "a business that has never split a day routes exactly as before — teams change nothing for it"
         }
       ],
       "declared": []
     },
     {
       "id": "teams",
-      "title": "Who goes out — the team list, and which team takes a stop (ledger #362, piece 1; tech-debt #345)",
+      "title": "Who goes out — the team list, and which team takes a stop (ledger #362, pieces 1-2; tech-debt #345)",
       "writer": {
         "name": "save_team and assign_stops_team (database) — reached only through lib/teams.ts",
         "at": "packages/cultivar-os/src/lib/teams.ts#export async function saveTeam"
@@ -611,8 +644,8 @@
         "packages/cultivar-os/src/lib/teams.ts"
       ],
       "tables": [
-        "teams",
-        "team_members"
+        "delivery_teams",
+        "delivery_team_members"
       ],
       "guardedColumns": {
         "table": "deliveries",
@@ -728,14 +761,13 @@
         {
           "id": "team.no-pay-side",
           "what": "the vendor link records who a team is and never what they are owed; losing the vendor never deletes the team"
+        },
+        {
+          "id": "team.read-survives-the-rename-window",
+          "what": "the Teams editor still reads the list on a database where 20260923a has NOT been applied — the pre-rename fallback rung, actually fired"
         }
       ],
-      "declared": [
-        {
-          "file": "packages/ignition-os/modules/IgnitionAdmin.jsx",
-          "reason": "🔴 A NAME COLLISION, NOT A WRITE PATH — and it is declared rather than silenced because the name really does collide. Ignition has its OWN `teams` table, keyed on `shop_id` (never `business_id`), reached through Ignition's own client (`../supabase`), which points at the OLD project ufsgqckbxdtwviqjjtos. It cannot reach this database and this writer cannot reach it. Ignition is frozen donor code and is OFF LIMITS (CLAUDE.md §7). Any cap that matches a BARE table name will keep finding this file; the honest answer is this declaration, not a rename of either table."
-        }
-      ]
+      "declared": []
     }
   ],
   "proposed": [

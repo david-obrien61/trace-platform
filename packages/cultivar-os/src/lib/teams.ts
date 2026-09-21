@@ -28,7 +28,13 @@ export interface Team {
 }
 type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
-const TEAM_COLUMNS = 'id, name, active, sort_order, vendor_id, team_members ( id, name, sort_order )';
+// 🔴 RENAMED BY 20260923a ([[R-168]]): `teams` → `delivery_teams`, so the name cannot collide
+// with Ignition's own `teams`. ⚠️ THIS READ AND THAT MIGRATION SHIP TOGETHER — the rename must
+// be APPLIED before this code is merged, or the editor reads a table that no longer exists.
+const TEAM_COLUMNS = 'id, name, active, sort_order, vendor_id, delivery_team_members ( id, name, sort_order )';
+// The same read before 20260923a: the embedded resource is named after the TABLE, so the join
+// name changes with it and one column list cannot serve both.
+const TEAM_COLUMNS_PRE_RENAME = 'id, name, active, sort_order, vendor_id, team_members ( id, name, sort_order )';
 
 /**
  * Every team of the business, live ones first, each with its people in order.
@@ -37,19 +43,42 @@ const TEAM_COLUMNS = 'id, name, active, sort_order, vendor_id, team_members ( id
 export async function readTeams(
   db: SupabaseClient, businessId: string,
 ): Promise<{ ok: true; teams: Team[] } | { ok: false; absent: boolean; message: string }> {
-  const { data, error } = await db.from('teams').select(TEAM_COLUMNS)
+  // 🔴 A LADDER, NOT A SINGLE NAME — and it exists to remove a LIVE WINDOW, not to be tidy.
+  // 20260923a renames `teams` → `delivery_teams` ([[R-168]]). Whichever order the apply and the
+  // merge happen in, one of them is briefly reading a table the other has not got: applied-then-
+  // merged breaks the DEPLOYED editor, merged-then-applied breaks the new one. Trying the new name
+  // and falling back to the old makes the order stop mattering, so nobody has to be awake at the
+  // right minute. ⚠️ Delete the fallback once 20260923a is applied everywhere — a rung that can
+  // never fire is the stale kind of declaration this repo fails the build over.
+  const missing = (e: unknown) => {
+    const c = (e as { code?: string } | null)?.code;
+    return c === '42P01' || c === 'PGRST205' || c === 'PGRST200';
+  };
+  // ⚠️ `.returns<>()` IS REQUIRED and it is a consequence of the ladder, not a shortcut: supabase-js
+  // infers the row shape from a LITERAL select string, and `cols` is a variable here because the
+  // two rungs need different column lists. Stating the row type at the boundary is the honest fix;
+  // casting the result through `unknown` would silence the same problem while asserting more.
+  // (Vendors.tsx carries the identical note for the identical reason.)
+  const read = (table: string, cols: string) => db.from(table).select(cols)
     .eq('business_id', businessId)
     .order('active', { ascending: false })
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .returns<Record<string, unknown>[]>();
+
+  let { data, error } = await read('delivery_teams', TEAM_COLUMNS);
+  if (error && missing(error)) {
+    ({ data, error } = await read('teams', TEAM_COLUMNS_PRE_RENAME));
+    if (!error && TRACE_TEAMS) console.log('[TRACE:TEAMS] read fell back to the pre-rename table (20260923a not applied here)');
+  }
   if (error) {
     const code = (error as { code?: string }).code;
     if (TRACE_TEAMS) console.log('[TRACE:TEAMS] read failed', { code, message: error.message });
-    return { ok: false, absent: code === '42P01' || code === 'PGRST205', message: error.message };
+    return { ok: false, absent: missing(error), message: error.message };
   }
   const teams = (data ?? []).map((t: Record<string, unknown>) => ({
     id: String(t.id), name: String(t.name), active: !!t.active,
     sort_order: Number(t.sort_order ?? 0), vendor_id: (t.vendor_id as string | null) ?? null,
-    members: ((t.team_members ?? []) as TeamMember[]).slice().sort((a, b) => a.sort_order - b.sort_order),
+    members: (((t.delivery_team_members ?? t.team_members) ?? []) as TeamMember[]).slice().sort((a, b) => a.sort_order - b.sort_order),
   }));
   if (TRACE_TEAMS) console.log('[TRACE:TEAMS] read', teams.length, 'teams');
   return { ok: true, teams };

@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-22 by the N=3 retention rule (ledger #362 close-out). Verbatim, not summarised. -->
+
+### 2026-09-22 — THUNDER **THE STARTING NUMBER GOES TO THINGS YOU SELL, AND TO NOTHING ELSE. #361. TECH-DEBT #352.** The seed now asks the owner's books what each row IS, through the **same `classifyDestination` the Services review uses** — income account first, type second — and skips anything that is not a product, plus every name carrying her `(UNDER PRODUCTION)` marker (75 rows, booked to Nursery Stock, which the account rule alone would seed as sellable). 🔴 **THE RULE IS GATED ON THE BOOKS HAVING SPOKEN:** `qb_item_type` / `qb_income_account` are NULL on every row imported before `20260920b`, and a missing account reads as *not a product* — applied blind, the first run would have withheld a starting number from the entire catalogue. Silence is not evidence. **Measured through the real rule for today's reload: 474 seeded · 83 not a product · 74 under production.**
+
+**Type:** BUILD (one planner rule + the screen's counts and copy + 12 probes), on `feat/seed-skips-non-products`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **THE RULE SKIPS 43 REAL GOODS** — compost scoops, fertiliser bags, bubblers, staking kits, T-posts — because her books file them under *Sales of Product Income*, which the Services review treats as ambiguous by design (*"where you also book bags and containers"*). They stay at 0. **One predicate changes it; say the word.** **(b)** 🔴 **AND IT RE-SEEDS 4 OF THE 44 YOU ZEROED** — Deposit · Gift Certificate · Arizona Cypress Blue Ice Replacement · Custom Amount — because three of them are booked to *Sales of Nursery Stock*, so her books call them stock. **(c)** ⚠️ **THE (UNDER PRODUCTION) MARKER IS A NAME MATCH AND THE CODE SAYS SO** — no column records that a plant is still growing, so a rename silently changes behaviour. It should be replaced by the grow ladder's own state when that lands. **(d)** 🟡 **#327 IS NOT IN THIS BUILD** — the import still inserts rather than matching on `(business_id, qb_item_id)`; you asked for both before the reload and this is the first half.
+
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #365 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id. entries-in == entries-out. -->
 

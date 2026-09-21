@@ -21,7 +21,8 @@ import {
 } from '../../packages/cultivar-os/src/lib/crewDayLink';
 import { readStops } from '../../packages/cultivar-os/src/lib/stopRead';
 import { stopAct } from '../../packages/cultivar-os/src/lib/stopProgress';
-import { saveRouteOrder, routeOrderLine } from '../../packages/cultivar-os/src/lib/routeOrder';
+import { saveRouteOrder, routeOrderLine, routeRefusalText } from '../../packages/cultivar-os/src/lib/routeOrder';
+import { saveTeam, assignStopsTeam } from '../../packages/cultivar-os/src/lib/teams';
 import { readFileSync } from 'node:fs';
 
 process.env.SUPABASE_URL = 'http://pglite.test';
@@ -29,9 +30,14 @@ process.env.SUPABASE_SERVICE_KEY = 'service';
 process.env.VITE_SUPABASE_ANON_KEY = 'anon';
 
 const ROOT = process.env.PATH_TEST_ROOT ?? process.cwd();
-const MIGRATION = readFileSync(`${ROOT}/supabase/migrations/20260917c_crew_day_link.sql`, 'utf8')
+const MIGRATION = ['20260917c_crew_day_link.sql',
   // …and the route-order migration on top of it, in the order David applies them (ledger #351).
-  + '\n' + readFileSync(`${ROOT}/supabase/migrations/20260917e_route_order_is_saved.sql`, 'utf8');
+  '20260917e_route_order_is_saved.sql',
+  // …then teams, the rename, and the PER-TEAM route ([[R-169]], ledger #362 piece 2). The WHOLE
+  // chain, because `save_route_order` is REPLACED by the last of them — testing the older one
+  // would prove a writer that is about to stop existing.
+  '20260921a_teams.sql', '20260923a_delivery_teams_rename.sql', '20260923b_route_order_per_team.sql',
+].map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n');
 const ONLY = process.env.PATH_ONLY ? new Set(process.env.PATH_ONLY.split(',')) : null;
 
 const B = 'b0000000-0000-4000-8000-00000000000b';
@@ -680,6 +686,171 @@ await guard('crew.no-stock-or-order', 'test mode and live mode: nothing here wri
     const done = await one(db, `SELECT status FROM public.deliveries WHERE id = $1`, [s.id]);
     check(done.status === 'fulfilled', `writes ${writesOn ? 'on' : 'off'}: the stop did not end done`);
   }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// PIECE 2 — ONE SAVED ROUTE PER TEAM ([[R-169]], ledger #362 · tech-debt #345)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+/** A team on business B. */
+async function team(db: any, name: string) {
+  const r = await saveTeam(lauren(db), B, { name, memberNames: [] });
+  if (!r.ok) throw new Error(`team ${name}: ${r.code} ${r.message}`);
+  return r.value.teamId;
+}
+const onTeam = (db: any, stopIds: string[], teamId: string | null) =>
+  assignStopsTeam(lauren(db), B, stopIds, teamId);
+
+await path('route.save-per-team', 'Route this day for ONE team → that team\'s order is saved with the optimiser\'s miles and minutes', async (check) => {
+  const db = await freshDb();
+  const t1 = await team(db, 'Team 1');
+  const a = await stop(db, B, DAY_X), b = await stop(db, B, DAY_X), c = await stop(db, B, DAY_X);
+  await onTeam(db, [a.id, b.id, c.id], t1);
+
+  const planned = [c.id, a.id, b.id];   // NOT the creation order — a read that ignores the plan fails here
+  const out = await saveRouteOrder(lauren(db), B, DAY_X, planned, t1, { miles: 133.4, minutes: 169 });
+  check(out.ok && out.saved === 3, `save: ${JSON.stringify(out)}`);
+  check(out.ok && out.teamName === 'Team 1', 'the result does not name the team it routed');
+
+  const rows = await all(db, `SELECT id, route_position FROM public.deliveries WHERE delivery_date = $1 AND team_id = $2 ORDER BY route_position`, [DAY_X, t1]);
+  check(rows.map((r: any) => r.id).join() === planned.join(), `stored order ${JSON.stringify(rows.map((r: any) => r.route_position))}`);
+
+  // 🔴 THE OPTIMISER'S OWN NUMBERS, KEPT. Piece 2.5 compares against these, so a figure recomputed
+  // later from changed settings would be comparing the estimate with itself.
+  const plan = await one(db, `SELECT team_id, stops, miles::float8 miles, minutes, routed_by FROM public.delivery_route_plans WHERE delivery_date = $1 AND team_id = $2`, [DAY_X, t1]);
+  check(!!plan, 'no route plan row was written');
+  check(plan && plan.stops === 3 && plan.miles === 133.4 && plan.minutes === 169, `plan row ${JSON.stringify(plan)}`);
+  check(plan && plan.routed_by === MANAGER, 'the plan does not record who routed it');
+
+  const sch = await schedule(db, DAY_X);
+  check(sch.stops.map(x => x.id).join() === planned.join(), 'the schedule does not show the team\'s saved order');
+
+  // Re-routing REPLACES and re-stamps, and leaves exactly ONE plan row.
+  const again = await saveRouteOrder(lauren(db), B, DAY_X, [a.id, b.id, c.id], t1, { miles: 120, minutes: 150 });
+  check(again.ok, `re-route: ${JSON.stringify(again)}`);
+  const plans = await all(db, `SELECT miles::float8 miles FROM public.delivery_route_plans WHERE delivery_date = $1 AND team_id = $2`, [DAY_X, t1]);
+  check(plans.length === 1 && plans[0].miles === 120, `after a re-route: ${JSON.stringify(plans)}`);
+});
+
+await guard('route.keeps-another-teams-order', '🔴 THE SATURDAY REGRESSION — routing Team 1 leaves Team 2\'s saved order untouched', async (check) => {
+  const db = await freshDb();
+  const t1 = await team(db, 'Team 1'), t2 = await team(db, 'Team 2');
+  const a1 = await stop(db, B, DAY_X), a2 = await stop(db, B, DAY_X);
+  const b1 = await stop(db, B, DAY_X), b2 = await stop(db, B, DAY_X);
+  await onTeam(db, [a1.id, a2.id], t1);
+  await onTeam(db, [b1.id, b2.id], t2);
+
+  // Team 2 is routed FIRST — Lauren's 09:57 save.
+  const two = await saveRouteOrder(lauren(db), B, DAY_X, [b2.id, b1.id], t2, {});
+  check(two.ok, `team 2 save: ${JSON.stringify(two)}`);
+  const before = await all(db, `SELECT id, route_position, routed_at FROM public.deliveries WHERE team_id = $1 ORDER BY route_position`, [t2]);
+  check(before.map((r: any) => r.id).join() === [b2.id, b1.id].join(), 'team 2 did not save');
+
+  // …then Team 1. On 20260917e the clear was DAY-scoped, which is exactly what wiped Team 2's
+  // order at 13:18 and again at 13:41 on 2026-09-19.
+  const first = await saveRouteOrder(lauren(db), B, DAY_X, [a2.id, a1.id], t1, {});
+  check(first.ok && first.saved === 2, `team 1 save: ${JSON.stringify(first)}`);
+
+  const after = await all(db, `SELECT id, route_position, routed_at FROM public.deliveries WHERE team_id = $1 ORDER BY route_position`, [t2]);
+  check(after.length === 2 && after.every((r: any) => r.route_position != null), `🔴 TEAM 2 LOST ITS PLAN: ${JSON.stringify(after)}`);
+  check(after.map((r: any) => r.id).join() === [b2.id, b1.id].join(), `🔴 team 2's ORDER changed: ${JSON.stringify(after.map((r: any) => r.route_position))}`);
+  check(String(after[0].routed_at) === String(before[0].routed_at), 'team 2 was re-stamped by a save that was not about it');
+
+  const plans = await all(db, `SELECT team_id FROM public.delivery_route_plans WHERE delivery_date = $1`, [DAY_X]);
+  check(plans.length === 2, `plans for the day: ${plans.length} — one per team expected`);
+
+  // NEGATIVE CONTROL: dropping a stop from its OWN team's re-route still clears it, so this guard
+  // cannot pass just because the clear stopped working altogether.
+  await saveRouteOrder(lauren(db), B, DAY_X, [a1.id], t1, {});
+  const dropped = await one(db, `SELECT route_position FROM public.deliveries WHERE id = $1`, [a2.id]);
+  check(dropped.route_position === null, 'a stop dropped from its own team\'s route kept its number');
+});
+
+await guard('route.refuses-teamless-stop', '[[R-169]] ① a stop with no team STOPS the route, and the refusal NAMES it', async (check) => {
+  const db = await freshDb();
+  const t1 = await team(db, 'Team 1');
+  const a = await stop(db, B, DAY_X), orphan = await stop(db, B, DAY_X);
+  await onTeam(db, [a.id], t1);   // `orphan` is deliberately left with no team
+
+  const out = await saveRouteOrder(lauren(db), B, DAY_X, [a.id, orphan.id], t1, {});
+  check(!out.ok && out.code === 'stop_without_team', `a team-less stop was routed: ${JSON.stringify(out)}`);
+  // 🔴 NAMED, not counted: "one stop has no team" sends Lauren hunting through eight cards.
+  const said = out.ok ? '' : routeRefusalText(out.code, out.message);
+  check(/Smith/.test(said), `the refusal does not name the stop: "${said}"`);
+  check(/assign it to a team first/i.test(said), `the refusal does not say what to do: "${said}"`);
+  // NOTHING was written — not even for the stop that did have a team.
+  const rows = await all(db, `SELECT route_position FROM public.deliveries WHERE delivery_date = $1`, [DAY_X]);
+  check(rows.every((r: any) => r.route_position === null), `a refused route wrote positions: ${JSON.stringify(rows)}`);
+  check((await all(db, `SELECT id FROM public.delivery_route_plans`)).length === 0, 'a refused route wrote a plan row');
+});
+
+await guard('route.refuses-mixed-teams', '[[R-169]] ② a set spanning two teams is refused BY NAME, never routed across both', async (check) => {
+  const db = await freshDb();
+  const t1 = await team(db, 'Team 1'), t2 = await team(db, 'Team 2');
+  const a = await stop(db, B, DAY_X), b = await stop(db, B, DAY_X);
+  await onTeam(db, [a.id], t1);
+  await onTeam(db, [b.id], t2);
+
+  const out = await saveRouteOrder(lauren(db), B, DAY_X, [a.id, b.id], t1, {});
+  check(!out.ok && out.code === 'mixed_teams', `a mixed set was routed: ${JSON.stringify(out)}`);
+  const said = out.ok ? '' : routeRefusalText(out.code, out.message);
+  check(/Team 2/.test(said), `the refusal does not name the other team: "${said}"`);
+  const rows = await all(db, `SELECT route_position FROM public.deliveries WHERE delivery_date = $1`, [DAY_X]);
+  check(rows.every((r: any) => r.route_position === null), 'a refused mixed route wrote positions');
+});
+
+await guard('route.wrapper-refuses-partly-teamed', 'the OLD three-argument call — what the deployed page makes — still refuses a partly team-less set by name', async (check) => {
+  const db = await freshDb();
+  const t1 = await team(db, 'Team 1');
+  const a = await stop(db, B, DAY_X), orphan = await stop(db, B, DAY_X);
+  await onTeam(db, [a.id], t1);   // `orphan` has no team
+
+  // 🔴 THE RPC IS CALLED WITH THREE ARGUMENTS DIRECTLY, not through this repo's client. The client
+  // now always sends six (team defaulting to null), so calling it would test the NEW function and
+  // prove nothing about the wrapper. The DEPLOYED bundle sends three, and between David's apply
+  // and this code's merge that is the only call that happens — so the ruling has to hold for a
+  // caller that knows nothing about teams, or the window itself is where Saturday repeats.
+  const legacy = async (ids: string[]) => {
+    const { data } = await (lauren(db) as any).rpc('save_route_order', {
+      p_business_id: B, p_service_date: DAY_X, p_stop_ids: ids,
+    });
+    return data as { ok: boolean; code?: string; message?: string };
+  };
+  const out = await legacy([a.id, orphan.id]);
+  check(!out.ok, `the wrapper routed a partly team-less set: ${JSON.stringify(out)}`);
+  check(out.code === 'stop_without_team', `wrong refusal: ${JSON.stringify(out)}`);
+  const rows = await all(db, `SELECT route_position FROM public.deliveries WHERE delivery_date = $1`, [DAY_X]);
+  check(rows.every((r: any) => r.route_position === null), 'the wrapper wrote positions for a refused set');
+
+  // …and a MIXED set through the same three-argument door is refused by name too.
+  const t2 = await team(db, 'Team 2');
+  await onTeam(db, [orphan.id], t2);
+  const mixed = await legacy([a.id, orphan.id]);
+  check(!mixed.ok && mixed.code === 'mixed_teams', `the wrapper routed a mixed set: ${JSON.stringify(mixed)}`);
+  const said = routeRefusalText(mixed.code ?? '', mixed.message);
+  check(/Team [12]/.test(said), `the wrapper's refusal does not name a team: "${said}"`);
+
+  // ⓪ AND THE SAME RULE THROUGH THE NEW DOOR: naming NO team on a day that HAS been split is
+  // refused too. Without this the whole-day route writes positions across both crews while its
+  // clear (scoped to `team_id IS NULL`) touches nothing — Saturday's shape, different door.
+  const nullTeam = await saveRouteOrder(lauren(db), B, DAY_X, [a.id, orphan.id], null, {});
+  check(!nullTeam.ok && nullTeam.code === 'team_required', `a split day routed with no team: ${JSON.stringify(nullTeam)}`);
+  const namesTeam = nullTeam.ok ? '' : routeRefusalText(nullTeam.code, nullTeam.message);
+  check(/Team [12]/.test(namesTeam), `the refusal does not name the teams: "${namesTeam}"`);
+  const rows2 = await all(db, `SELECT route_position FROM public.deliveries WHERE delivery_date = $1`, [DAY_X]);
+  check(rows2.every((r: any) => r.route_position === null), 'a day routed with no team wrote positions anyway');
+});
+
+await guard('route.unsplit-day-still-works', 'a business that never split a day routes exactly as before — teams change nothing for it', async (check) => {
+  const db = await freshDb();
+  const a = await stop(db, B, DAY_X), b = await stop(db, B, DAY_X);
+  // No teams exist at all, and this is the THREE-ARGUMENT call the deployed page makes.
+  const out = await saveRouteOrder(lauren(db), B, DAY_X, [b.id, a.id]);
+  check(out.ok && out.saved === 2, `the unsplit day was refused: ${JSON.stringify(out)}`);
+  const rows = await all(db, `SELECT id FROM public.deliveries WHERE delivery_date = $1 ORDER BY route_position`, [DAY_X]);
+  check(rows.map((r: any) => r.id).join() === [b.id, a.id].join(), 'the unsplit day did not save its order');
+  const plan = await one(db, `SELECT team_id, stops FROM public.delivery_route_plans WHERE delivery_date = $1`, [DAY_X]);
+  check(plan && plan.team_id === null && plan.stops === 2, `the unsplit day's plan row: ${JSON.stringify(plan)}`);
 });
 
 if (failures) process.exitCode = 1;

@@ -14,7 +14,8 @@ import { buildRouteHandoff, driverSmsBody, type HandoffStop } from '../lib/route
 // ?date= mode renders the ONE stop (ledger #301, STD-017): the same read, card and actions as the
 // schedule and the order screen. This page adds only its own axis — the selection and the sequence.
 import { readStops, type StopRead } from '../lib/stopRead';
-import { saveRouteOrder, routeOrderLine } from '../lib/routeOrder';
+import { saveRouteOrder, routeOrderLine, routeRefusalText } from '../lib/routeOrder';
+import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
@@ -347,7 +348,12 @@ export function DeliveryRoute() {
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
   // table) for that day. Absent → the original cart-order route path, unchanged.
   const dateParam = searchParams.get('date');
+  // 🔴 THE ROUTE PAGE CARRIES THE TEAM ([[R-169]] ②, David 2026-09-22). `?date=…&team=…` routes ONE
+  // team: its stops are preselected, and a selection spanning two teams is refused BY NAME rather
+  // than quietly routed across both. Absent → the unsplit day, exactly as before teams existed.
+  const teamParam = searchParams.get('team');
   const { businessId, can } = useBusinessContext();
+  const [teams, setTeams] = useState<Team[]>([]);
 
   const [orders, setOrders]     = useState<DeliveryOrder[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -355,6 +361,13 @@ export function DeliveryRoute() {
 
   // Selected order IDs for the route
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // The team list, for the names in a refusal and the header. An empty list is a real answer: a
+  // business with no teams routes the whole day and never sees any of this.
+  useEffect(() => {
+    if (!businessId) return;
+    void readTeams(supabase, businessId).then(r => { if (r.ok) setTeams(r.teams); });
+  }, [businessId]);
 
   // Address overrides for orders missing customer address
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -405,7 +418,7 @@ export function DeliveryRoute() {
   useEffect(() => {
     if (!businessId) return;
     load();
-  }, [businessId, dateParam]);
+  }, [businessId, dateParam, teamParam]);
 
   async function load() {
     setLoading(true);
@@ -425,10 +438,15 @@ export function DeliveryRoute() {
       const res = await readStops(supabase, businessId!, { kind: 'day', date: dateParam }, { readLines: can('order_items:read') });
       if (!res.ok) { setError(res.error); setLoading(false); return; }
       setStopData(res.value);
-      const withAddr = new Set(res.value.stops.filter(s => shipToLine(s).length > 0).map(s => s.id));
+      // ?team= preselects THAT team's stops and nothing else — Lauren opens the page already
+      // looking at one crew's day. Without it, every stop with an address, as before.
+      const routable = res.value.stops.filter(s => shipToLine(s).length > 0);
+      const withAddr = new Set(
+        (teamParam ? routable.filter(s => s.team_id === teamParam) : routable).map(s => s.id),
+      );
       setSelected(withAddr);
       setLoading(false);
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route mode — date:', dateParam, 'stops:', res.value.stops.length, 'withAddr:', withAddr.size);
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route mode — date:', dateParam, 'team:', teamParam ?? 'whole day', 'stops:', res.value.stops.length, 'selected:', withAddr.size);
       return;
     }
 
@@ -550,6 +568,22 @@ export function DeliveryRoute() {
   const selectedCandidates = candidates.filter(c => selected.has(c.id));
   const canBuild = selectedCandidates.some(c => c.address.length > 0);
 
+  // ── [[R-169]] SAID EARLY, AND SAID BY THE SERVER TOO ─────────────────────────────────────────
+  // The database refuses a team-less or mixed set and is the authority; this only moves the SAME
+  // answer in front of Lauren before she waits on Directions. It never permits anything: a set
+  // this misses is still refused on the way in, which is why the guard tests drive the writer.
+  const selectionTeamProblem = React.useMemo(() => {
+    if (!dateParam || !teamParam || selected.size === 0) return null;
+    const chosen = (stopData?.stops ?? []).filter(x => selected.has(x.id));
+    const teamless = chosen.filter(x => !x.team_id)
+      .map(x => customerDisplayName(x.customers, 'A stop'));
+    if (teamless.length) return `${teamless.join(', ')} has no team — assign it to a team first.`;
+    const others = [...new Set(chosen.filter(x => x.team_id && x.team_id !== teamParam)
+      .map(x => teamLabel(teams, x.team_id)))];
+    if (others.length) return `That set also contains stops for ${others.join(', ')}. Route one team at a time.`;
+    return null;
+  }, [dateParam, teamParam, selected, stopData, teams]);
+
   // A stop changed while a route was on screen → rebuild from the re-read, once it has landed. The link
   // is derived from `displayStops`, so rebuilding the stops is what makes it carry the new address.
   useEffect(() => {
@@ -593,11 +627,17 @@ export function DeliveryRoute() {
     if (savedKeyRef.current === key) return;   // the same order, already written — not written twice
     savedKeyRef.current = key;
     void (async () => {
-      const out = await saveRouteOrder(supabase, businessId, dateParam, ids);
+      // 🔴 THE TEAM AND THE OPTIMISER'S OWN NUMBERS GO WITH THE SAVE ([[R-169]]). `routeSummary`
+      // already holds the miles and minutes Directions reported for THIS route; they are stored as
+      // a snapshot so piece 2.5 compares the estimate against what happened, not against itself.
+      const out = await saveRouteOrder(supabase, businessId, dateParam, ids, teamParam,
+        { miles: routeSummary?.miles ?? null, minutes: routeSummary?.minutes ?? null });
       if (out.ok) { setRouteSaved({ at: out.routedAt, n: out.saved }); setRouteSaveError(null); }
-      else { setRouteSaved(null); setRouteSaveError(out.message); savedKeyRef.current = ''; }
+      // The SERVER's words, not ours: it is the only party that knows WHICH stop has no team or
+      // WHICH other team is in the set, and that is the part that makes the refusal actionable.
+      else { setRouteSaved(null); setRouteSaveError(routeRefusalText(out.code, out.message)); savedKeyRef.current = ''; }
     })();
-  }, [routeSummary, dateParam, businessId, stopData]);
+  }, [routeSummary, dateParam, teamParam, businessId, stopData]);
 
   // 🔴 THE ONE DERIVATION. Link, SMS body, clipboard and the "Route ready — N stops" header all
   // read this object, and it is built from `displayStops` — the very array the numbered list below
@@ -807,21 +847,37 @@ export function DeliveryRoute() {
                 address. Naming both halves in the condition also narrows `routeUrl` to a string
                 for the link below — the card can never render a null href. */}
             {!routeBuilt || routeUrl === null ? (
-              <button
-                onClick={buildRoute}
-                disabled={!canBuild}
-                style={{
-                  width: '100%', padding: '15px 20px',
-                  background: canBuild ? GREEN : '#e5e7eb',
-                  color: canBuild ? '#fff' : '#9ca3af',
-                  fontWeight: 700, fontSize: '0.9375rem', borderRadius: 12, border: 'none',
-                  cursor: canBuild ? 'pointer' : 'default',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                <Navigation size={18} />
-                Route {selectedCandidates.length} Stop{selectedCandidates.length !== 1 ? 's' : ''}
-              </button>
+              <>
+                {/* [[R-169]] — which team this page is routing, said before anything is pressed.
+                    Only when ?team= is set: a business that has never split a day sees nothing. */}
+                {dateParam && teamParam && (
+                  <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', color: GRAY, fontWeight: 600 }}>
+                    Routing <strong style={{ color: GREEN }}>{teamLabel(teams, teamParam)}</strong> — one team at a time.
+                  </p>
+                )}
+                {/* The refusal, BEFORE the wait. The database refuses this set too and is the
+                    authority; this only saves Lauren watching Directions run to be told no. */}
+                {selectionTeamProblem && (
+                  <p role="alert" style={{ margin: '0 0 8px', fontSize: '0.8125rem', color: '#A32D2D', fontWeight: 700, lineHeight: 1.45 }}>
+                    {selectionTeamProblem}
+                  </p>
+                )}
+                <button
+                  onClick={buildRoute}
+                  disabled={!canBuild || !!selectionTeamProblem}
+                  style={{
+                    width: '100%', padding: '15px 20px',
+                    background: canBuild && !selectionTeamProblem ? GREEN : '#e5e7eb',
+                    color: canBuild && !selectionTeamProblem ? '#fff' : '#9ca3af',
+                    fontWeight: 700, fontSize: '0.9375rem', borderRadius: 12, border: 'none',
+                    cursor: canBuild && !selectionTeamProblem ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  <Navigation size={18} />
+                  Route {selectedCandidates.length} Stop{selectedCandidates.length !== 1 ? 's' : ''}
+                </button>
+              </>
             ) : (
               <div style={{ background: '#fff', borderRadius: 16, padding: '20px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
                 {/* Embedded map — numbered pins in route order. Skipped entirely when

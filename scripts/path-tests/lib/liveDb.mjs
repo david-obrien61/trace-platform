@@ -271,6 +271,18 @@ export function restClient(db, opts = {}) {
     async exec() {
       try {
         const m = await meta(db);
+        // 🔴 A MISSING TABLE REFUSES THE WAY POSTGREST REFUSES (§6 r19(a), ledger #362). Without
+        // this the adapter fell through to projection and threw *"no foreign key between X and Y"*
+        // — a RELATIONSHIP error for a table that does not exist. Any caller with a fallback for
+        // "this migration is not applied here" (stopRead's ladder, readTeams' pre-rename rung) then
+        // failed to recognise its own condition, so the rung never fired and the test that was
+        // written to exercise it reported a defect that only the double had. PostgREST returns
+        // PGRST205 with the table named; so does this now.
+        if (!m.types.has(this.table)) {
+          return { data: null, count: null, status: 404,
+            error: { code: 'PGRST205', message: `Could not find the table 'public.${this.table}' in the schema cache`,
+                     details: null, hint: null } };
+        }
         const out = await run(async (tx) => {
           const t = 't0';
           const whereSql = () => (this.where.length ? ' WHERE ' + this.where.map(x => this.cond(t, x)).join(' AND ') : '');

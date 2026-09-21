@@ -87,6 +87,15 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#362 — teams piece 1: who goes out (MERGED, migration APPLIED)**
+- ✅ **ANSWERED 2026-09-22 — BOTH WRITE-PATH DECLARATIONS RATIFIED BY DAVID.** `lib/teams.ts` on `deliveries` (only `team_id`) and on `audit_log` (one row per change, inside the function that made it). Marked ✅ RATIFIED in `verify-write-paths.mjs`. Owner: ledger #362.
+- ✅ **ANSWERED 2026-09-22 — RENAME, BUT NOT TODAY ([[R-168]]).** David: *"RENAME — but tomorrow, not today… Choose the name yourself; it is bookkeeping."* Chosen: `teams` → **`delivery_teams`**, `team_members` → **`delivery_team_members`**. 🟡 **STILL OPEN AS WORK** — the migration is owed, and the Ignition declaration should be DELETED with it, not kept. Owner: [[R-168]].
+- ✅ **ANSWERED 2026-09-22 — PIECE 2 IS RULED ([[R-169]]).** Routing refuses when any stop in the set has no team, and NAMES it (*"assign it to a team first"*); never assign silently. The route page carries the team (`/deliveries?date=…&team=…`), preselects that team's stops and refuses a mixed selection by name. 🟡 **STILL OPEN AS WORK.** Owner: [[R-169]].
+- 🟡 **OPEN — DAVID'S "8.0 h" TEAM 2 FIGURE MATCHES NEITHER 7.85 (13 trees) NOR 8.35 (14 trees).** Piece 2.5 is tested against that fixture, so the disagreement has to be settled before the estimate can be. Owner: `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
+- ⚠️ **NOTED — Settings shows TEAMS (crews, names) directly above TEAM (logins, roles).** Each one's copy says which it is; different words are David's call. Owner: ledger #362.
+- ⚠️ **OWED — owner-test CARDS 1–5** on `docs/owner-tests/teams-full-surface-test.md`. Test Dave's, not LAWNS. Owner: ledger #362.
+- 🔴 **OPEN — NOTHING IN `npm run verify` GREPS FOR A COMMITTED CONFLICT MARKER**, and one rode `origin/main` from `f2814b0 merge(#357)` through at least five later commits including two of mine, past a green verify each time. Found by HISTORY on 2026-09-22, by eye. Owner: ledger #362 / a new cap.
+
 **#365 — the not-stock list ships empty (migration WRITTEN, not applied)**
 - 🔴 **OPEN — APPLY `20260922b` BEFORE SEEDING**, and delete any copy of `20260922b_fix_not_stock_override_ids.sql` unapplied. Owner: ledger #365.
 - 🟡 **OPEN — TECH-DEBT #356: the setting has no screen.** Lauren cannot mark an item as not stock herself, so the capability exists and cannot be used. Owner: tech-debt #356.

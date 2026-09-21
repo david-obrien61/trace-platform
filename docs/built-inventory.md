@@ -1,10 +1,10 @@
-# Last updated: 2026-09-22 (**#364 — A GOODS ACCOUNT IS STOCK; THE OWNER MARKS THE EXCEPTIONS.** `isGoodsAccount` / `isStockAccount` exported from `serviceReview`; `business_not_stock_items` (written, not applied) holds four LAWNS rows with reasons; the seed reads it and refuses if it cannot.)
+# Last updated: 2026-09-22 (**#362 — WHO GOES OUT: A TEAM LIST PER BUSINESS, AND A STOP THAT CARRIES ITS TEAM.** `20260921a_teams.sql` (APPLIED) — `teams`, `team_members`, `deliveries.team_id`, writers `save_team` + `assign_stops_team`; client `lib/teams.ts`, a TEAMS card in Settings, a team line on the stop card; `teams` domain in `writer-registry.json` (5 paths, 9 guards); 19/19 mutants. Teams piece 1 of 5.)
+# (prior line, preserved: 2026-09-22 (**#364 — A GOODS ACCOUNT IS STOCK; THE OWNER MARKS THE EXCEPTIONS.** `isGoodsAccount` / `isStockAccount` exported from `serviceReview`; `business_not_stock_items` (written, not applied) holds four LAWNS rows with reasons; the seed reads it and refuses if it cannot.))
 # (prior line, preserved: 2026-09-20 (**#358 — THE SPECIES ROLL-UP IS THE PICK LIST.** Page 1: bulk, then *Trees to pull — N across M stops* by variety; the stops from page 2 are the tag-name check at staging. Reverses #355's one-line version. `LoadList.tsx` + `LOAD_LIST_COPY.pullHeading/pullWhy/stopsWhy`.))
 # (prior line, preserved: 2026-09-20 (**#357 — THE SEEDED 10 COMES OFF 41 NON-PRODUCT ROWS.** `20260920_zero_seeded_qty_on_non_product_rows.sql` (written, not applied) + `zero-seeded-fees-357.pglite.mjs` (13/13, in verify); tech-debt #353 (derive the preview field map) and #352 (the seed must skip non-products) filed.))
 
 # Last updated: 2026-09-18 (**#356 — CALIPER ON THE LADDER.** `20260918c` (written, not applied): `container_ladder.caliper_min_inches/max_inches/because` + LAWNS backfill + LAWNS `caliperMeasuredAtInches` 12; `Rung.caliper*`, `caliperText`, the size editor's caliper inputs, Settings → Operations → Trees. PGlite harness ALL PASS. Tech-debt #349 filed: trunk protection is three products.)
 # (prior line, preserved: 2026-09-18 (**#355 — THE LOAD SHEET READS THE WAY THE TRAILER IS LOADED.** Page 1 is the bulk (mix, T-posts, rope, bubblers, water monitor kits, trunk protection) and the day's trees as one line; the stops start on page 2. `LoadList.tsx` + `LOAD_LIST_COPY.bulkHeading/treesLine/treesByStop/stopsHeading`; page test §L, mutants L1–L4.))
->>>>>>> origin/main
 # (prior line, preserved: 2026-09-18 (**#354 — ONE LOAD SHEET PER CREW.** `loadListSubset.ts` (pure: parseStopsParam · pickStops · stopsParamFor); `/load-list?date=…&stops=…` builds only the ticked stops, tick boxes on screen only, a partial sheet names what it does not carry; tests 22 + 10, mutants F1–F9 caught.))
 # (prior line, preserved: 2026-09-18 (**#351 — THE ROUTE ORDER IS SAVED.** `20260917e` (route_position · routed_at · routed_by · `save_route_order`); Route this day saves the optimised order; `readStops` orders by it so the phone, schedule and printed sheet agree; [[R-163]]. Branch `feat/route-order-saved`, not merged; migration not applied.))
 # (prior line, preserved: 2026-09-18 (**#352 — THE BUBBLER IS BILLED, AND THE WATER MONITOR KIT IS PER INSTALLED TREE.** Bubblers come from the billed `Tree Bubbler` line only (zero prints as "none specified on these orders"); water monitor kits are one per tree on an `install` order plus any billed on QuickBooks item 102, printed as a count. `stopRead.ts` now returns `transportByOrderId`. Kit spec filed at `docs/recipes/water-monitor-kit.md`.))
@@ -3116,6 +3116,36 @@ no id.
 exactly ONE column on a delivery — `order_id`, and only where it is NULL — and on an existing order,
 only the two identifier columns above. `service_type` stays NULL (tech-debt #140) and nothing
 distinguishes a tree from a trip charge yet (tech-debt #139).
+## TEAMS — who goes out, and which team takes a stop (cap 3.4 · 3.5 · ledger #362, 2026-09-22) — **BUILDER-COMPLETE + DEPLOYED · 1 of 6 owner-test cards**
+
+**Piece 1 of 5.** Tech-debt **#345** is the reason: LAWNS runs Team 1, Team 2 and Team 3 and nothing in the platform could see
+them, so Saturday 2026-09-19 ran on one crew link showing all eight stops to whoever opened it, and routing Team 1's four stops
+wiped Team 2's saved order (a route save REPLACES the day's plan).
+
+- **Migration** `20260921a_teams.sql` — **APPLIED 2026-09-22 by David**, V-block clean, independently re-read live before the merge.
+  - `teams` — name, active, sort_order, optional `vendor_id` (`ON DELETE SET NULL`). Partial unique index on
+    `(business_id, lower(btrim(name))) WHERE active`: two LIVE teams cannot share a name; a retired one may keep it.
+  - `team_members` — 🔴 **NAMES, no `user_id`, no invitation** (David's ruling). A 1099 crew comes and goes.
+  - `deliveries.team_id` — nullable, and NULL is a real state: it is what every stop is before Lauren splits a day.
+  - **Writers:** `save_team` (creates/updates a team and REPLACES its member list in one call — no half-saved team) and
+    `assign_stops_team` (all-or-nothing over a set of stops). Both `SECURITY DEFINER`, both check `deliveries:update`.
+    EXECUTE granted to `authenticated` only. RLS on both tables is SELECT-only on `deliveries:read`.
+- **Client** `packages/cultivar-os/src/lib/teams.ts` — the ONE place either writer is called: `readTeams`, `saveTeam`,
+  `retireTeam`, `assignStopsTeam`, `readVendorChoices`, `teamLabel`, `splitMemberNames`.
+- **Screens:** a **TEAMS** card in Settings (`components/settings/TeamsSettings.tsx`, also at `/settings/teams`), and a team line
+  on the stop card (`StopCard.tsx` → `StopTeamRow`, list and writer from `useStopActions`) that works on the schedule, the route
+  and the order screen because all three read through one `readStops`.
+- 🔴 **`stopRead`'s migration fallback is now a LADDER**, one rung per migration, most recent first: team → fulfilment → core.
+  Sharing one rung meant an un-applied TEAMS migration would make every delivery screen report that the CREW columns were
+  missing — a true-shaped, wrong message about a different migration. `stopRead.test.ts` §D asserts the distinction.
+- **Proof:** `teams` domain in `writer-registry.json` — **5 paths + 9 guards**, each driven through the real entry point on the
+  live schema with RLS on; **19 of 19 mutants caught** (`scripts/sql-harness/teams-362.mutants.py`); 12 assertions on
+  `splitMemberNames`. `npm run verify` exit 0, zero net-new.
+- ⚠️ **Not built here (pieces 2–5):** route order per team (+ the optimiser's miles and minutes persisted at save), the capacity
+  estimate and its snapshot (2.5), a crew link per team, a load list per team, the schedule split by team.
+- ⚠️ **A NAME COLLISION IS DECLARED, NOT SILENCED:** Ignition has its own `teams` table (keyed `shop_id`, old project, frozen
+  donor code). It cannot reach this database and this writer cannot reach it.
+
 ## ONE STOP, THREE SCREENS — the shared stop card, the ship-to edit, the order on the stop (cap 3.4 · 3.5 · 3.6 · 2.1 · ledger #301, 2026-09-11)
 
 **What:** a stop renders IDENTICALLY on `/delivery-schedule`, `/deliveries?date=` and `/orders/:id` — customer · ship-to · what is on its order · status · actions. Each screen adds only its own axis: the schedule the day grouping, the route the selection + sequence (`leading`), the order its money. Before this each screen composed its own stop: the schedule never read the lines, the route showed a name and an address, the order screen showed no stop. **STD-017, now held by a test.**

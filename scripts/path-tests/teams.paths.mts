@@ -20,7 +20,12 @@ process.env.SUPABASE_SERVICE_KEY = 'service';
 process.env.VITE_SUPABASE_ANON_KEY = 'anon';
 
 const ROOT = process.env.PATH_TEST_ROOT ?? process.cwd();
-const MIGRATION = ['20260917c_crew_day_link.sql', '20260917e_route_order_is_saved.sql', '20260921a_teams.sql']
+// The chain in the order David applies it. 20260923a RENAMES the tables and 20260923b adds the
+// per-team route, so running anything less than the whole chain would prove a database that is
+// about to stop existing.
+const MIGRATION = ['20260917c_crew_day_link.sql', '20260917e_route_order_is_saved.sql',
+                  '20260921a_teams.sql', '20260923a_delivery_teams_rename.sql',
+                  '20260923b_route_order_per_team.sql']
   .map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n');
 const ONLY = process.env.PATH_ONLY ? new Set(process.env.PATH_ONLY.split(',')) : null;
 
@@ -105,10 +110,10 @@ await path('team.create', 'Settings → Teams → Add a team: the team and its p
   check(r.ok, `save refused: ${JSON.stringify(r)}`);
   if (!r.ok) return;
   check(r.value.members === 3, `members ${r.value.members}, want 3 (the blank is dropped)`);
-  const row = await one(db, `SELECT name, active, vendor_id FROM public.teams WHERE id = $1`, [r.value.teamId]);
+  const row = await one(db, `SELECT name, active, vendor_id FROM public.delivery_teams WHERE id = $1`, [r.value.teamId]);
   check(row.name === 'Team 1', `stored name "${row.name}" — it must be trimmed`);
   check(row.active === true, 'a new team is not live');
-  const names = (await all(db, `SELECT name FROM public.team_members WHERE team_id = $1 ORDER BY sort_order`, [r.value.teamId])).map((m: any) => m.name);
+  const names = (await all(db, `SELECT name FROM public.delivery_team_members WHERE team_id = $1 ORDER BY sort_order`, [r.value.teamId])).map((m: any) => m.name);
   check(JSON.stringify(names) === JSON.stringify(['Mauro', 'Jose', 'Hector']), `members ${JSON.stringify(names)} — order and trim`);
   // …and what Lauren sees on the screen.
   const shown = await listed(db);
@@ -124,7 +129,7 @@ await path('team.edit', 'Settings → Teams → Edit: the name changes and the m
   if (!first.ok) { check(false, 'setup save refused'); return; }
   const r = await saveTeam(lauren(db), B, { id: first.value.teamId, name: 'Team One', memberNames: ['Mauro', 'Hector'] });
   check(r.ok, `edit refused: ${JSON.stringify(r)}`);
-  const names = (await all(db, `SELECT name FROM public.team_members WHERE team_id = $1 ORDER BY sort_order`, [first.value.teamId])).map((m: any) => m.name);
+  const names = (await all(db, `SELECT name FROM public.delivery_team_members WHERE team_id = $1 ORDER BY sort_order`, [first.value.teamId])).map((m: any) => m.name);
   check(JSON.stringify(names) === JSON.stringify(['Mauro', 'Hector']), `members ${JSON.stringify(names)} — Jose must be gone, not kept`);
   const shown = await listed(db);
   check(shown.length === 1 && shown[0].name === 'Team One', `the screen shows ${JSON.stringify(shown.map(t => t.name))} — one team, renamed`);
@@ -200,7 +205,7 @@ await guard('team.name-taken', 'two LIVE teams cannot share a name, ignoring cas
   if (!first.ok) { check(false, 'setup save refused'); return; }
   const dup = await saveTeam(lauren(db), B, { name: '  team 1  ', memberNames: [] });
   check(!dup.ok && dup.code === 'name_taken', `a duplicate name was accepted: ${JSON.stringify(dup)}`);
-  check((await all(db, `SELECT id FROM public.teams`)).length === 1, 'a second team row was written anyway');
+  check((await all(db, `SELECT id FROM public.delivery_teams`)).length === 1, 'a second team row was written anyway');
   // Retire the first, and the name frees up — because the retired row is no longer in the index.
   const team = (await listed(db)).find(t => t.id === first.value.teamId)!;
   await retireTeam(lauren(db), B, team);
@@ -212,14 +217,14 @@ await guard('team.duplicate-member', 'one person cannot be on a team twice — i
   const db = await freshDb();
   const r = await saveTeam(lauren(db), B, { name: 'Team 1', memberNames: ['Mauro', ' mauro '] });
   check(!r.ok && r.code === 'duplicate_member', `a duplicate member was accepted: ${JSON.stringify(r)}`);
-  check((await all(db, `SELECT id FROM public.teams`)).length === 0, 'the team was written despite the refusal');
+  check((await all(db, `SELECT id FROM public.delivery_teams`)).length === 0, 'the team was written despite the refusal');
 });
 
 await guard('team.no-name', 'a team with no name is refused, and nothing is written', async (check) => {
   const db = await freshDb();
   const r = await saveTeam(lauren(db), B, { name: '   ', memberNames: ['Mauro'] });
   check(!r.ok && r.code === 'name_required', `a nameless team was accepted: ${JSON.stringify(r)}`);
-  check((await all(db, `SELECT id FROM public.teams`)).length === 0, 'a nameless team row exists');
+  check((await all(db, `SELECT id FROM public.delivery_teams`)).length === 0, 'a nameless team row exists');
 });
 
 await guard('team.not-permitted', 'a member who cannot change deliveries cannot save a team or set one on a stop', async (check) => {
@@ -231,7 +236,7 @@ await guard('team.not-permitted', 'a member who cannot change deliveries cannot 
   check(!save.ok && save.code === 'not_permitted', `staff saved a team: ${JSON.stringify(save)}`);
   const assign = await assignStopsTeam(staffer(db), B, [s], t.value.teamId);
   check(!assign.ok && assign.code === 'not_permitted', `staff set a team on a stop: ${JSON.stringify(assign)}`);
-  check((await all(db, `SELECT id FROM public.teams`)).length === 1, 'staff wrote a team row');
+  check((await all(db, `SELECT id FROM public.delivery_teams`)).length === 1, 'staff wrote a team row');
   check((await one(db, `SELECT team_id FROM public.deliveries WHERE id = $1`, [s])).team_id === null, 'staff changed the stop');
 });
 
@@ -247,7 +252,7 @@ await guard('team.other-business', 'a team belongs to its business: it cannot be
   // Their own member with full permissions still cannot reach our team by id.
   const steal = await saveTeam(stranger(db), B2, { id: t.value.teamId, name: 'Mine now', memberNames: [] });
   check(!steal.ok && steal.code === 'team_not_found', `a team was edited across businesses: ${JSON.stringify(steal)}`);
-  check((await one(db, `SELECT name FROM public.teams WHERE id = $1`, [t.value.teamId])).name === 'Team 1', 'the team was renamed across businesses');
+  check((await one(db, `SELECT name FROM public.delivery_teams WHERE id = $1`, [t.value.teamId])).name === 'Team 1', 'the team was renamed across businesses');
   // And our team cannot be put on their stop, nor theirs on ours.
   const theirStop = await stop(db, B2);
   const cross = await assignStopsTeam(lauren(db), B, [theirStop], t.value.teamId);
@@ -290,20 +295,50 @@ await guard('stop.no-stops-chosen', 'an empty set is refused rather than quietly
   check((await all(db, `SELECT id FROM public.audit_log WHERE action = 'stop.team_assigned'`)).length === 0, 'an empty assign wrote an audit row');
 });
 
+await guard('team.read-survives-the-rename-window', 'the editor still reads the list on a database where 20260923a has NOT been applied', async (check) => {
+  // 🔴 THE FALLBACK RUNG, ACTUALLY FIRED. `readTeams` tries `delivery_teams` and falls back to the
+  // pre-rename `teams`, so the apply and the merge can happen in either order without a window in
+  // which Lauren's Teams screen reads a table that is not there. A rung nobody has exercised is a
+  // claim, so this builds a database that has ONLY the pre-rename chain and reads through it.
+  const db: any = await openLiveDb();
+  installSupabaseShim(db);
+  await db.exec(['20260917c_crew_day_link.sql', '20260917e_route_order_is_saved.sql', '20260921a_teams.sql']
+    .map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n'));
+  await db.exec(`
+    INSERT INTO auth.users (id, email) VALUES ('${OWNER}', 'o@test.invalid'), ('${MANAGER}', 'm@test.invalid');
+    INSERT INTO public.businesses (id, owner_id, name, business_type, qbo_writes_enabled)
+      VALUES ('${B}', '${OWNER}', 'Pre-rename Nursery', 'nursery', false);
+    INSERT INTO public.business_members (business_id, user_id, name, role, permissions, active) VALUES
+      ('${B}', '${MANAGER}', 'Lauren', 'MANAGER', '${JSON.stringify(MANAGER_PERMS)}', true);
+  `);
+  // The OLD table name is what exists here — proven, not assumed.
+  check(!!(await one(db, `SELECT to_regclass('public.teams') t`)).t, 'setup: the pre-rename table is not there');
+  check(!(await one(db, `SELECT to_regclass('public.delivery_teams') t`)).t, 'setup: the renamed table exists, so this proves nothing');
+
+  const made = await saveTeam(lauren(db), B, { name: 'Team 1', memberNames: ['Mauro', 'Jose'] });
+  check(made.ok, `the writer failed on the pre-rename database: ${JSON.stringify(made)}`);
+
+  const r = await readTeams(lauren(db), B);
+  check(r.ok, `the editor could not read the list: ${JSON.stringify(r)}`);
+  check(r.ok && r.teams.length === 1 && r.teams[0].name === 'Team 1', `the fallback read returned ${JSON.stringify(r.ok ? r.teams : r)}`);
+  check(r.ok && r.teams[0].members.map(m => m.name).join(' · ') === 'Mauro · Jose',
+        'the fallback read lost the members — the join is named after the table and needs its own column list');
+});
+
 await guard('team.no-pay-side', 'the vendor link records WHO a team is and never what they are owed', async (check) => {
   const db = await freshDb();
   const v = await one(db, `INSERT INTO public.vendors (business_id, name) VALUES ($1, 'Mauro Landscaping') RETURNING id`, [B]);
   const r = await saveTeam(lauren(db), B, { name: 'Mauro Crew', vendorId: v.id, memberNames: ['Mauro'] });
   check(r.ok, `a contractor team was refused: ${JSON.stringify(r)}`);
   if (!r.ok) return;
-  const cols = (await all(db, `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('teams', 'team_members')`)).map((c: any) => c.column_name);
+  const cols = (await all(db, `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('delivery_teams', 'delivery_team_members')`)).map((c: any) => c.column_name);
   const money = cols.filter((c: string) => /rate|pay|wage|cost|price|amount|hourly/i.test(c));
-  check(money.length === 0, `teams carry money columns: ${JSON.stringify(money)}`);
-  const linked = await one(db, `SELECT vendor_id FROM public.teams WHERE id = $1`, [r.value.teamId]);
+  check(money.length === 0, `delivery_teams carry money columns: ${JSON.stringify(money)}`);
+  const linked = await one(db, `SELECT vendor_id FROM public.delivery_teams WHERE id = $1`, [r.value.teamId]);
   check(linked.vendor_id === v.id, 'the contractor link was not kept');
   // Losing the vendor must never delete the team or orphan its stops.
   await db.query(`DELETE FROM public.vendors WHERE id = $1`, [v.id]);
-  const after = await one(db, `SELECT id, vendor_id FROM public.teams WHERE id = $1`, [r.value.teamId]);
+  const after = await one(db, `SELECT id, vendor_id FROM public.delivery_teams WHERE id = $1`, [r.value.teamId]);
   check(after && after.vendor_id === null, `deleting the vendor took the team with it: ${JSON.stringify(after)}`);
 });
 
