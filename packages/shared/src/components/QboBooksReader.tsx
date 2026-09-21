@@ -51,6 +51,8 @@
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
 import { useDevSurface } from '../devtools';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { planBooksRun, saveBooksRun } from '../quickbooks/booksRunStore';
 import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, QBO_LIST_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
 import type { TransactionBreakdown } from '../quickbooks/transactionList';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
@@ -290,7 +292,8 @@ interface ReadState {
   note: string | null;
 }
 
-export function QboBooksReader({ businessId }: { businessId: string | null | undefined }) {
+export function QboBooksReader({ businessId, supabase }:
+  { businessId: string | null | undefined; supabase?: SupabaseClient }) {
   // 🔴 THE REHEARSAL DOOR IS THE OWNER'S, AND ONLY THE OWNER'S (David, 2026-09-04).
   // The READ itself stays at `settings:read` — that ruling is untouched, and Lauren pressing
   // "Read my QuickBooks data" is the entire point of this screen — it stays for EVERYONE, and so
@@ -327,6 +330,10 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   const [reads, setReads] = useState<Partial<Record<QboEntity, ReadResponse>>>({});
   /** What the last file load did. A refusal is shown here and nothing is loaded. */
   const [fileNote, setFileNote] = useState<{ ok: boolean; text: string } | null>(null);
+  // 🔴 THE SAVE HAS ITS OWN VERDICT LINE, SEPARATE FROM THE REPORT'S. The report is the thing
+  // the owner asked for; recording the run is ours. Folding the two into one message would let
+  // a failed save read as a failed report, which is the opposite of true.
+  const [saveNote, setSaveNote] = useState<{ ok: boolean; text: string } | null>(null);
   /** The narration trail for the one-button read. Append-only within a run; see `readAll`. */
   const [narration, setNarration] = useState<NarrationLine[]>([]);
 
@@ -542,6 +549,31 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     }
     w.document.write(html);
     w.document.close();
+
+    // ── RECORD THE RUN — AFTER the report is on screen, never before ──────────────────────────
+    // 🔴 THE ORDER IS LOAD-BEARING. `window.open` must happen inside the click, or the browser
+    // blocks it; and the report must never wait on a database write. So the document is written
+    // first and the save runs after it, reporting itself on its own line.
+    //
+    // 🔴 THE VERDICT IS READ, NOT ASSUMED. Through PostgREST an RLS refusal and a missing table
+    // both come back as `error: null` with zero rows — `saveBooksRun` compares the RETURNED row
+    // count with what it sent, and a partial insert counts as not saved. Believing `!error` here
+    // would put a green line over a run nobody stored (A8 / R-12).
+    if (!businessId || !supabase) {
+      setSaveNote({ ok: false, text: 'The report opened. This run was not recorded, because this screen has no business or no database connection — nothing else is affected.' });
+      return;
+    }
+    setSaveNote(null);
+    const plan = planBooksRun(findings, walks);
+    void saveBooksRun(supabase, businessId, plan).then(verdict => {
+      if (verdict.saved) {
+        console.log('[TRACE:QBO] books run RECORDED', { runId: verdict.runId, results: verdict.results, complete: plan.complete });
+        setSaveNote({ ok: true, text: `Report opened, and this run was recorded — ${verdict.results} finding${verdict.results === 1 ? '' : 's'} stored, so the next one can be compared with it.` });
+      } else {
+        console.log('[TRACE:QBO] books run NOT recorded', { reason: verdict.reason });
+        setSaveNote({ ok: false, text: `The report opened and is complete. This run was NOT recorded: ${verdict.reason}` });
+      }
+    });
   }
 
   const btn: React.CSSProperties = {
@@ -748,6 +780,11 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           <button onClick={visualize} style={{ ...btn, background: DARK, color: '#fff', flex: 'none', width: '100%' }}>
             Visualize — open the first-look report
           </button>
+          {saveNote && (
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: saveNote.ok ? GRAY : '#A32D2D' }}>
+              {saveNote.text}
+            </p>
+          )}
           <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0', lineHeight: 1.5 }}>
             Opens a printable report of everything read so far. Use your browser&apos;s Print
             dialog to save it as a PDF. It asks for nothing and changes nothing — and you can

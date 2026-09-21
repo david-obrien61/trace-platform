@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-21 (ledger #360 close-out, after merging origin/main — OP-13 N=3)
+     — verbatim, not summarized. §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-21 — THUNDER **THE BOOKS REVIEW RECORDS ITS RUN, AND THE SCREEN SAYS WHICH OF THE TWO HAPPENED. #360.** 🔴 **`saveBooksRun` HAD ZERO CALLERS SINCE #333** — every Visualize press produced a report and stored nothing, so the opening-stock seed's `readLatestResult` had nothing to read. It is now called from `visualize()`, **after** the report window is written (`window.open` must stay inside the click, and the report must never wait on a write). **The verdict is READ, not assumed:** through PostgREST an RLS refusal and a missing table both return `error: null` with zero rows, so the returned row count is compared with what was sent and a partial insert counts as NOT saved. The screen carries that on its own line, red when it failed — a failed save must never read as a failed report. ✏️ **Landed first, on David's instruction: `20260908_books_report_runs.sql` was applied live but existed only on two branches and staged in his checkout** — byte-identical in all four places, and checked against the live catalog (both tables, 16 columns incl. the quoted `"of"`, 6 policies, 3 indexes, RLS on) before it was committed.
+
+**Type:** BUILD (one call site + one verdict line + the mount passing its client), on `feat/books-review-save`, **own worktree (§6 r20)**, **one ledger id**. No migration, no schema, no permission string, `api/` 12/12.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **CARD 21 NEEDS A MEMBER WITHOUT `books:write`** to prove the red path — that is the half that matters, because a screen trusting `!error` would show green over a run nobody stored. **(b)** ⚠️ **MY OWN 2026-09-18 REPORT SAID THOSE TABLES DID NOT EXIST LIVE.** True then, not now: they were applied between, and the record is corrected rather than left as two readings of mine in conflict. **(c)** 🟡 **NEXT: #352 with #327** — the seed skipping non-products and the product import matching on `(business_id, qb_item_id)` instead of inserting, both before any reload.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #365 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id. entries-in == entries-out. -->
 
@@ -18,6 +27,8 @@
 
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #361 close-out, OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id. entries-in == entries-out. -->
+<!-- MOVED FROM CLAUDE.md §3 2026-09-21 (ledger #360 close-out, OP-13 N=3) — verbatim, not
+     summarized. §3 holds the newest three by ledger id. entries-in == entries-out. -->
 
 ### 2026-09-18 — THUNDER **CALIPER ON THE LADDER — EVERY SIZE CARRIES ITS TRUNK CALIPER, READ AT THE NURSERY'S OWN HEIGHT. #356. TECH-DEBT #349.** David: *"the trade measure LAWNS buys and sells on, and the real graduation test."* Min and max caliper per rung (nullable; a blank max = "and up"), LAWNS backfilled 3/5 1.0 · 15 1.25 · 30 1.5–2.5 · 45 2.5–3.5 · 65 3.5–4.5 · 95/100 4–5 · 200 5+, and the measuring height as a per-business Operations figure (LAWNS 12 in). Nothing reads caliper yet. **Trunk protection (item 3) filed as tech-debt #349:** the catalogue has one generic item; the product lives only in line text; and Saturday's Freehill order bills the over-4" mesh for two 30 gal trees.
 

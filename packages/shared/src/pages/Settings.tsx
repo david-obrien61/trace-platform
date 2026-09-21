@@ -928,7 +928,7 @@ export function Settings({
                   If they are ever remounted, note their `isOwner` gate was widened by the same
                   commit that widened the server — they are consistent, just not rendered. */}
               <QboWriteSwitch businessId={businessId} />
-              <QboBooksReader businessId={businessId} />
+              <QboBooksReader businessId={businessId} supabase={supabase} />
               <QboCatalogueImport businessId={businessId} />
               {/* 🔴 BENEATH THE IMPORT, DELIBERATELY, AND THE ORDER IS THE INSTRUCTION. The import
                   brings a PRODUCT LIST at qty 0 (R-93) and can be wiped and reloaded as many times
