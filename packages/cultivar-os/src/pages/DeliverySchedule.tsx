@@ -156,6 +156,17 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
           </div>
         )}
 
+        {/* 🔴 THE GOOD HALF OF #319, IN ITS OWN COLOUR. "Stop finished, and its order is marked
+            fulfilled" is the sentence that tells Lauren stock has moved — the whole point of the
+            change. Rendering it in the red box would read as a failure; leaving it out would make
+            a fulfilment the one thing on this screen that happens silently. */}
+        {actions.actionNote && (
+          <div style={{ background: '#ECFDF5', color: '#065F46', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', marginBottom: 12, display: 'flex', gap: 8 }}>
+            <span style={{ flex: 1 }}>{actions.actionNote}</span>
+            <button onClick={actions.clearActionError} style={{ background: 'none', border: 'none', color: '#065F46', fontWeight: 700, cursor: 'pointer' }}>×</button>
+          </div>
+        )}
+
         {/* A SELECTED DAY WITH NOTHING ON IT IS A DIFFERENT FACT from a business with nothing scheduled
             anywhere, and it must not borrow the other's words (#224). */}
         {!loading && !error && filterDate && visible.length === 0 && (

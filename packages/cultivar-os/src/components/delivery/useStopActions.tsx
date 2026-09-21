@@ -9,7 +9,7 @@
  * DEPENDENCIES supabase client · useBusinessContext (can) · ../../lib/stopWrites (the ONE client write
  *              path to `deliveries`) · ../../lib/deliveryFulfilment (every decision about the tap and
  *              the ask) · ReviewAskSheet · CustomerPartyEditor.
- * OUTPUTS      { savingId, actionError, clearActionError, markStop, editDate, saveShipTo, saveSite,
+ * OUTPUTS      { savingId, actionError, actionNote, clearActionError, markStop, editDate, saveShipTo, saveSite,
  *                openEditor, teams, setStopTeam,
  *                overlays } — a page renders `overlays` ONCE.
  *
@@ -33,6 +33,7 @@ import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
 import { stopAct } from '../../lib/stopProgress';
+import { fulfilOrderForStop, restoreOrderForStop, stopOrderNote } from '../../lib/stopFulfilsOrder';
 import { readTeams, assignStopsTeam, type Team } from '../../lib/teams';
 import { updateStop, saveShipTo as saveShipToRow, type ShipToForm, type ShipToSaveOutcome } from '../../lib/stopWrites';
 import { readCustomerAddresses, saveCustomerAddress, type SaveOutcome } from '@trace/shared/business-logic';
@@ -50,6 +51,10 @@ export function useStopActions(
 
   const [savingId, setSavingId]         = useState<string | null>(null);
   const [actionError, setActionError]   = useState<string | null>(null);
+  // 🔴 A SEPARATE LINE FROM THE ERROR, because "the stop finished and its order is fulfilled" is
+  // not a failure and must not be styled as one — and the failure half ("…but the order was not")
+  // must not be styled as a success. Two outcomes, two sentences (#319).
+  const [actionNote, setActionNote]     = useState<string | null>(null);
   // A1/E1 — ONE customer form: the same <CustomerPartyEditor> the roster uses, opened over the page.
   const [editing, setEditing]           = useState<PartyCustomer | null>(null);
   // The follow-up module's per-tenant row — the ONLY thing that decides whether a review may be asked
@@ -115,11 +120,31 @@ export function useStopActions(
    */
   async function markStop(d: StopRow, kind: 'start' | 'finish' | 'undo') {
     if (!can('deliveries:update')) { setActionError(requirementText('deliveries:update')); return; }
-    setSavingId(d.id);
+    setSavingId(d.id); setActionError(null); setActionNote(null);
     const action = kind === 'start' ? 'start' : kind === 'finish' ? 'done' : 'undo_done';
     const out = await stopAct(supabase, businessId!, d.id, action);
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY]', kind, { id: d.id, ok: out.ok, changed: out.ok ? out.changed : null });
     if (!out.ok) { setActionError(out.message); setSavingId(null); return; }
+
+    // ── THE ORDER FOLLOWS THE STOP (tech-debt #319) ───────────────────────────────────────────
+    // 🔴 AFTER the stop's own write, never before or instead of it. The stop is the fact the
+    // driver reported; the order's status is a consequence. If the consequence cannot be applied
+    // — no permission, no order, the endpoint refused — the stop still stands and the screen SAYS
+    // which half moved. Swallowing it is how a completed truck run leaves stock un-sold and
+    // nobody knows (David, 2026-09-22).
+    //
+    // ⚠️ OFFICE DOOR ONLY. The crew's Done keeps holding until teams land — David's ruling.
+    if (kind === 'finish' || kind === 'undo') {
+      const mayChangeOrders = can('orders:update');
+      const outcome = kind === 'finish'
+        ? await fulfilOrderForStop(supabase, businessId!, d, mayChangeOrders)
+        : await restoreOrderForStop(supabase, businessId!, d, mayChangeOrders);
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] order follows stop', { id: d.id, kind, outcome: outcome.kind });
+      const note = stopOrderNote(outcome);
+      if (note?.bad) setActionError(note.text);
+      else if (note) setActionNote(note.text);
+    }
+
     await onChanged();
     setSavingId(null);
   }
@@ -310,7 +335,8 @@ export function useStopActions(
   }
 
   return {
-    savingId, actionError, clearActionError: () => setActionError(null),
+    savingId, actionError, actionNote,
+    clearActionError: () => { setActionError(null); setActionNote(null); },
     markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
     // TEAMS (ledger #362) — the list every picker on the page reads, and the one call that sets one.
     teams, teamsAbsent, setStopTeam,

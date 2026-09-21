@@ -91,6 +91,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — CARD 17**: undo → import → Set with **no browser reload**. The panel must never show the pre-undo count. Owner: ledger #366.
 - ⚠️ **LEFT TO HISTORY ON DAVID'S INSTRUCTION — two stale `# Last updated:` lines in `built-inventory.md`** (line 45, 2026-09-09, another session's). Not markers, so the new cap is silent on them. Owner: HISTORY.
 
+**#369 — finishing a stop fulfils its order (built, migration NOT APPLIED)**
+- 🔴 **OPEN — APPLY `20260923` IN THE MORNING** (not tonight). Without it the Undo half cannot restore the order automatically; it says so rather than guessing. Owner: ledger #369.
+- 🔴 **OPEN — CARD 18 NEEDS A MEMBER WITH `deliveries:update` BUT NOT `orders:update`** to prove the red half, and a crew link to prove that door still holds. Owner: ledger #369.
+- 🟡 **OPEN — TECH-DEBT #358: the trip-charge zip table has no data anywhere.** Seeded from live invoice rows after the address check ①–⑤. Owner: tech-debt #358.
+
 **#368 — the product import matches and updates (built, NOT MERGED)**
 - ✅ **ANSWERED — tech-debt #327 is resolved**: pressing Import twice is safe, and the reload checklist's red line is gone. Owner: ledger #368.
 - ⚠️ **NOTED — the refresh is one statement per row** (632 round-trips on a full LAWNS re-read, inside the 300s ceiling). A batch form would be an upsert, which is what stamps the run id. Owner: ledger #368.
