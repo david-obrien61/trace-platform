@@ -2,7 +2,7 @@
 -- 20260921a — TEAMS, PIECE 1: A TEAM LIST PER BUSINESS, AND A STOP THAT CARRIES ITS TEAM
 --             ledger #362 · tech-debt #345
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- ✅ APPLIED 2026-09-22 BY DAVID; V-block clean, and re-read live by Thunder before the merge:
+-- ✅ APPLIED 2026-09-21 BY DAVID; V-block clean, and re-read live by Thunder before the merge:
 --      V1  teams rls=true 1 policy · team_members rls=true 1 policy
 --      V2  deliveries.team_id present; all three indexes present
 --      V3  save_team · assign_stops_team → anon false · logged_in true
@@ -38,7 +38,7 @@
 --     day still has ONE saved route and routing a subset still replaces it (#345, #348).
 --   · It does not change the crew link, the load list or the schedule's grouping (pieces 3–5).
 --   · It reads no money and writes no pay.
---   · It does not decide capacity. David's rule of 2026-09-22 (drive + planting time, a per-business
+--   · It does not decide capacity. David's rule of 2026-09-21 (drive + planting time, a per-business
 --     threshold, a per-business minutes-per-tree) is piece 2.5; the ground truth it will be tested
 --     against is `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
 -- ════════════════════════════════════════════════════════════════════════════════════════════

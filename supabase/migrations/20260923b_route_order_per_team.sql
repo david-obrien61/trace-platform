@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260923b — TEAMS, PIECE 2: ONE SAVED ROUTE PER TEAM PER DAY, AND THE OPTIMISER'S OWN
 --             MILES AND MINUTES KEPT AT SAVE TIME
---             ledger #362 · [[R-169]] (David, 2026-09-22) · tech-debt #345
+--             ledger #362 · [[R-169]] (David, 2026-09-21) · tech-debt #345
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- ⏳ NOT APPLIED. Apply 20260923a FIRST (the rename), then this. V-block at the foot.
 --
@@ -18,7 +18,7 @@
 -- "Every stop on this DAY that is not in this list loses its place." Team 2's stops were on that
 -- day and not in that list. The clear is now scoped to the TEAM being routed.
 --
--- ── DAVID'S RULING, BUILT HERE ([[R-169]], 2026-09-22) ──────────────────────────────────────
+-- ── DAVID'S RULING, BUILT HERE ([[R-169]], 2026-09-21) ──────────────────────────────────────
 --   ① Routing a set in which ANY stop has no team is REFUSED, and the refusal NAMES the stop:
 --     *"assign it to a team first"*. 🔴 NEVER assign silently — guessing a team writes an
 --     attribution nobody made, onto the one artefact the crew actually follows.

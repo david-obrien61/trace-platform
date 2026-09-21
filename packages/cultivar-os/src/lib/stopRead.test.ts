@@ -131,7 +131,7 @@ async function main(): Promise<void> {
 
   // ══ D. THE MIGRATION FALLBACK AND THE HARD FAILURE ═════════════════════════════════════════
   {
-    // ✏️ REWRITTEN 2026-09-22 (ledger #362). The fallback is a LADDER now, one rung per migration,
+    // ✏️ REWRITTEN 2026-09-21 (ledger #362). The fallback is a LADDER now, one rung per migration,
     // most recent first: team → fulfilment → core. It used to be a single step, and these two
     // assertions encoded that. The behaviour changed DELIBERATELY, and D1a is the reason:
     // 🔴 sharing one rung meant an un-applied TEAMS migration made every screen report that the

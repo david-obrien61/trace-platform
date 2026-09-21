@@ -1,6 +1,6 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260923a — RENAME: teams → delivery_teams, so the name cannot collide with Ignition's own
---             ledger #362 · [[R-168]] (David, 2026-09-22)
+--             ledger #362 · [[R-168]] (David, 2026-09-21)
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- ⏳ NOT APPLIED. Apply this FIRST, then 20260923b. Run the V-block at the foot and paste it back.
 --
@@ -9,7 +9,7 @@
 -- frozen donor code and off limits (CLAUDE.md §7). The two databases cannot reach each other, so
 -- NOTHING IS BROKEN TODAY. What breaks is every check that matches a BARE table name: the writer
 -- registry had to carry a declaration for an Ignition file it will never write, and the next such
--- check will need one too. David, 2026-09-22: *"RENAME — but tomorrow, not today. Choose the name
+-- check will need one too. David, 2026-09-21: *"RENAME — but tomorrow, not today. Choose the name
 -- yourself; it is bookkeeping."*
 --
 -- 🔴 IT IS CHEAP EXACTLY NOW AND NOT LATER. Measured before writing: zero rows on every tenant,

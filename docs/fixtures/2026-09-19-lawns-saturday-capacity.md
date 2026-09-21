@@ -1,12 +1,12 @@
 # GROUND TRUTH — LAWNS Saturday 2026-09-19: the split, the drive, the two estimates
 
-**This is the fixture piece 2.5 (the capacity estimate) is tested against.** David's instruction, 2026-09-22.
+**This is the fixture piece 2.5 (the capacity estimate) is tested against.** David's instruction, 2026-09-21.
 Nothing in the platform holds these drive times: `save_route_order` records the stop order and nothing else,
 so the optimiser's miles and minutes were discarded at every one of Friday's seventeen saves. **They survive
 only because David ran the same two routes in Google Maps himself and wrote them down.** Persisting them at
 save time is piece 2's job; until then this file is the only record.
 
-## The split Lauren made (by GEOGRAPHY, not workload — David, 2026-09-22)
+## The split Lauren made (by GEOGRAPHY, not workload — David, 2026-09-21)
 Round trips from **400 Honey Comb Mesa**, measured by David in Google Maps on Friday 2026-09-18.
 
 | | Stops (in the saved order) | Drive | Distance | Trees | Container gallons |
@@ -47,7 +47,7 @@ opened on Friday at 10:48. So the planting figure remains a stated default, not 
 Lauren for the actual finish times; that answer is the first real measurement and belongs in this file when it
 arrives. This is exactly why the per-tree minutes must be an editable per-business setting rather than a constant.
 
-## How the estimate learns (David, 2026-09-22) — and what is built when
+## How the estimate learns (David, 2026-09-21) — and what is built when
 1. **SNAPSHOT THE ESTIMATE** when a day is scheduled or routed: trees, the minutes-per-tree used, the planting
    total, drive minutes and miles. **Stored, never recomputed when a setting later changes** — history keeps what
    was believed at the time. Built with piece 2.5.

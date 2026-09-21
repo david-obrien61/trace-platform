@@ -336,7 +336,7 @@ const ALLOWED_DIVERGENCE = {
             // writes ONE `route.saved` row per plan, INSIDE the same function that writes the
             // sequence — the manifest's rule for this table, no separate client insert.
             'packages/cultivar-os/src/lib/routeOrder.ts',
-            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-22 (ledger #362, teams piece 1).
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-21 (ledger #362, teams piece 1).
             // `save_team` writes ONE `team.created` / `team.updated` row and `assign_stops_team`
             // ONE `stop.team_assigned` row — each INSIDE the function that made the change, which
             // is this table's own rule. No separate client insert, so there is nothing to half-land,
@@ -433,7 +433,7 @@ const ALLOWED_DIVERGENCE = {
             // three columns nothing else writes — on stops it has checked are this business's, on this
             // day. It creates no stop and changes no date, address, status or customer.
             'packages/cultivar-os/src/lib/routeOrder.ts',
-            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-22 (ledger #362, teams piece 1).
+            // ✅ DECLARED AND RATIFIED BY DAVID 2026-09-21 (ledger #362, teams piece 1).
             // WHICH TEAM TAKES A STOP: `assign_stops_team` (20260921a) writes ONLY `team_id` — one
             // column nothing else writes — and only on stops it has checked are this business's and
             // not cancelled. It creates no stop and changes no date, address, status, customer,

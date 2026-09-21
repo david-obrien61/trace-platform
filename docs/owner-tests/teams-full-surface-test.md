@@ -11,11 +11,11 @@
 
 **Capability:** 3.5 (delivery / routing) · 3.4 (scheduling)
 **Story:** `user_stories.md` → *Lauren does the job twice, every delivery day*
-**Build:** ledger **#362** · branch `feat/teams` · migration `20260921a_teams.sql` (APPLIED 2026-09-22)
+**Build:** ledger **#362** · branch `feat/teams` · migration `20260921a_teams.sql` (APPLIED 2026-09-21)
 **Tech debt this closes the first piece of:** **#345** — Saturday 2026-09-19, when routing Team 1's
 four stops wiped Team 2's order, because the day had one route and the platform had no teams.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 6 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-22). **CARDS 1–5 owed.**
+**Board: 1 of 6 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–5 owed.**
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **five**
 paths and **nine** guards through the real entry points on the live schema, RLS on; deliberate breaks
 are caught by `scripts/sql-harness/teams-362.mutants.py`.
@@ -28,7 +28,7 @@ are caught by `scripts/sql-harness/teams-362.mutants.py`.
 ---
 
 ## CARD 0 — the database update is in
-**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-22 (David — the `20260921a` V-block, whose V3 IS this check; re-read live by Thunder the same hour)
+**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-21 (David — the `20260921a` V-block, whose V3 IS this check; re-read live by Thunder the same hour)
 ✅ Already run on apply: `save_team` and `assign_stops_team` → `anon false · logged_in true`;
 `teams` and `team_members` → `rls true, 1 policy` each; `deliveries.team_id` present.
 **No need to run it again.**

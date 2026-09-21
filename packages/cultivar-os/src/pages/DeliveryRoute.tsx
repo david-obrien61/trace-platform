@@ -348,7 +348,7 @@ export function DeliveryRoute() {
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
   // table) for that day. Absent → the original cart-order route path, unchanged.
   const dateParam = searchParams.get('date');
-  // 🔴 THE ROUTE PAGE CARRIES THE TEAM ([[R-169]] ②, David 2026-09-22). `?date=…&team=…` routes ONE
+  // 🔴 THE ROUTE PAGE CARRIES THE TEAM ([[R-169]] ②, David 2026-09-21). `?date=…&team=…` routes ONE
   // team: its stops are preselected, and a selection spanning two teams is refused BY NAME rather
   // than quietly routed across both. Absent → the unsplit day, exactly as before teams existed.
   const teamParam = searchParams.get('team');

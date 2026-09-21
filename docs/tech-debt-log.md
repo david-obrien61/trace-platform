@@ -4417,7 +4417,7 @@ per action (as for every other tap) records who undid it.
 - **The load sheet totals the day, not the truck.** Each stop's own trees, mix and posts print, so the crews can split the load line by line, but the totals at the top are for the whole day.
 - **The saved route is one path through all 8 stops** (`deliveries.route_position` is one sequence per business per day), not one route per truck.
 
-✅ **BUILD STARTED 2026-09-22 (ledger #362), in David's order: 1 → 2 (route per team AND persist the optimiser's miles/minutes) → 2.5 THE ESTIMATE (David's rule of 2026-09-22, replacing the fixed 8-hour rule: show drive time, distance and planting time as a day is scheduled; suggest one team until the estimate exceeds a PER-BUSINESS X, 7 h at LAWNS; planting minutes per tree is a per-business setting defaulted to 30; every estimate shows its working and Lauren can override) → 3, 4, 5.** Ground truth for 2.5, measured: `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
+✅ **BUILD STARTED 2026-09-21 (ledger #362), in David's order: 1 → 2 (route per team AND persist the optimiser's miles/minutes) → 2.5 THE ESTIMATE (David's rule of 2026-09-21, replacing the fixed 8-hour rule: show drive time, distance and planting time as a day is scheduled; suggest one team until the estimate exceeds a PER-BUSINESS X, 7 h at LAWNS; planting minutes per tree is a per-business setting defaulted to 30; every estimate shows its working and Lauren can override) → 3, 4, 5.** Ground truth for 2.5, measured: `docs/fixtures/2026-09-19-lawns-saturday-capacity.md`.
 
 **The six pieces, in the order David set (the first two first; everything else reads them):**
 
@@ -4566,9 +4566,9 @@ stop; that is tech-debt #345's territory, not this item's.
 
 **Blocker:** David's ruling. Nothing reads caliper yet (ledger #356), and the hole size is a step past it.
 
-## #355 — 🟡 THE ESTIMATE CANNOT LEARN YET: NO TAPS EXIST TO COMPARE IT WITH (NEW 2026-09-22, ledger #362 — David's loop, step 3, filed until there is data)
+## #355 — 🟡 THE ESTIMATE CANNOT LEARN YET: NO TAPS EXIST TO COMPARE IT WITH (NEW 2026-09-21, ledger #362 — David's loop, step 3, filed until there is data)
 
-**David's rule, 2026-09-22:** settings plus a formula do not learn, so the loop is (1) snapshot the estimate when a
+**David's rule, 2026-09-21:** settings plus a formula do not learn, so the loop is (1) snapshot the estimate when a
 day is scheduled or routed, (2) keep the actual minutes the Start/Done taps give, **by tree size**, (3) SURFACE a
 comparison — *"the last N installs at 45 gal averaged M minutes; your setting is 30 — change it?"* — which Lauren
 accepts or declines, **nothing changing silently**, and (4) **X — the one-team/two-team threshold — is a POLICY: it

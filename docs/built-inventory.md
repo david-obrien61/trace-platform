@@ -1,4 +1,4 @@
-# Last updated: 2026-09-22 (**#362 — WHO GOES OUT: A TEAM LIST PER BUSINESS, AND A STOP THAT CARRIES ITS TEAM.** `20260921a_teams.sql` (APPLIED) — `teams`, `team_members`, `deliveries.team_id`, writers `save_team` + `assign_stops_team`; client `lib/teams.ts`, a TEAMS card in Settings, a team line on the stop card; `teams` domain in `writer-registry.json` (5 paths, 9 guards); 19/19 mutants. Teams piece 1 of 5.)
+# Last updated: 2026-09-21 (**#362 — WHO GOES OUT: A TEAM LIST PER BUSINESS, AND A STOP THAT CARRIES ITS TEAM.** `20260921a_teams.sql` (APPLIED) — `teams`, `team_members`, `deliveries.team_id`, writers `save_team` + `assign_stops_team`; client `lib/teams.ts`, a TEAMS card in Settings, a team line on the stop card; `teams` domain in `writer-registry.json` (5 paths, 9 guards); 19/19 mutants. Teams piece 1 of 5.)
 # (prior line, preserved: 2026-09-21 (**#364 — A GOODS ACCOUNT IS STOCK; THE OWNER MARKS THE EXCEPTIONS.** `isGoodsAccount` / `isStockAccount` exported from `serviceReview`; `business_not_stock_items` (written, not applied) holds four LAWNS rows with reasons; the seed reads it and refuses if it cannot.))
 # Last updated: 2026-09-21 (**#368 — THE PRODUCT IMPORT MATCHES AND UPDATES.** Matched on `(business_id, qb_item_id)`; an existing row takes a narrow UPDATE that never carries the run id, qty or status; the retire step now computes the stale set and retires by id. tech-debt #327 resolved.)
 # Last updated: 2026-09-21 (**#369 — FINISHING A STOP FULFILS ITS ORDER.** The office door fulfils through `/api/orders/submit`; Undo done restores the status the stop remembered (`20260923`, written not applied); the crew door still holds. tech-debt #319 resolved, #358 filed.)
@@ -3121,13 +3121,13 @@ no id.
 exactly ONE column on a delivery — `order_id`, and only where it is NULL — and on an existing order,
 only the two identifier columns above. `service_type` stays NULL (tech-debt #140) and nothing
 distinguishes a tree from a trip charge yet (tech-debt #139).
-## TEAMS — who goes out, and which team takes a stop (cap 3.4 · 3.5 · ledger #362, 2026-09-22) — **BUILDER-COMPLETE + DEPLOYED · 1 of 6 owner-test cards**
+## TEAMS — who goes out, and which team takes a stop (cap 3.4 · 3.5 · ledger #362, 2026-09-21) — **BUILDER-COMPLETE + DEPLOYED · 1 of 6 owner-test cards**
 
 **Piece 1 of 5.** Tech-debt **#345** is the reason: LAWNS runs Team 1, Team 2 and Team 3 and nothing in the platform could see
 them, so Saturday 2026-09-19 ran on one crew link showing all eight stops to whoever opened it, and routing Team 1's four stops
 wiped Team 2's saved order (a route save REPLACES the day's plan).
 
-- **Migration** `20260921a_teams.sql` — **APPLIED 2026-09-22 by David**, V-block clean, independently re-read live before the merge.
+- **Migration** `20260921a_teams.sql` — **APPLIED 2026-09-21 by David**, V-block clean, independently re-read live before the merge.
   - `teams` — name, active, sort_order, optional `vendor_id` (`ON DELETE SET NULL`). Partial unique index on
     `(business_id, lower(btrim(name))) WHERE active`: two LIVE teams cannot share a name; a retired one may keep it.
   - `team_members` — 🔴 **NAMES, no `user_id`, no invitation** (David's ruling). A 1099 crew comes and goes.

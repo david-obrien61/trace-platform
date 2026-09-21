@@ -12,7 +12,7 @@
 // OUTPUTS:      saveRouteOrder · routeOrderLine (what a reader is told about the plan) · dayRoutedAt
 //               · routeRefusalText (the server's refusal, in the words the person needs)
 //
-// 🔴 ONE TEAM AT A TIME ([[R-169]], David 2026-09-22 — ledger #362 piece 2). Saturday 2026-09-19:
+// 🔴 ONE TEAM AT A TIME ([[R-169]], David 2026-09-21 — ledger #362 piece 2). Saturday 2026-09-19:
 //    Lauren routed Team 1's four stops and Team 2's saved order vanished, twice. The cause was one
 //    clause of `save_route_order` clearing every stop ON THE DAY that was not in the list. The
 //    writer is now team-scoped, and this caller PASSES THE TEAM it is routing. Two refusals it

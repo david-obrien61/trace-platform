@@ -1,6 +1,6 @@
 # Handoff Archive — TRACE Platform
 
-<!-- MOVED FROM CLAUDE.md §3 on 2026-09-22 by the N=3 retention rule (ledger #362 piece 2 merge). Verbatim. -->
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-21 by the N=3 retention rule (ledger #362 piece 2 merge). Verbatim. -->
 
 ### 2026-09-21 — THUNDER **THE PANEL FOLLOWS THE CATALOGUE, AND A COMMITTED CONFLICT MARKER NOW FAILS THE BUILD. #366. #367.** David, 2026-09-21: after an Undo removed all 631 products the Starting-numbers panel **still read "44 of your 631"**, and Set then tried to write to 44 ids the undo had deleted — blaming his permissions for it. The panel now **clears first and re-reads** when the import panel says the catalogue moved (import or undo, never preview), and a refused write **reads back whether those ids still exist** and names what it found instead of offering two causes. 🔴 **AND THE MARKER HISTORY FOUND ON `main` WAS MINE** — #364's header rebuild kept the region below the header verbatim. `verify:conflict-markers` now runs FIRST in the chain; `=======` is matched **only between an open and a close**, because a bare row of equals signs is ordinary text here and a naive filter once mangled `CLAUDE.md` itself. 16 probes, 12 negative controls, proven red on all three forms.
 
@@ -9,7 +9,7 @@
 **FLAGGED FOR DAVID:** **(a)** 🔴 **CARD 17 IS THE PROOF AND IT NEEDS NO CONSOLE** — undo, import, Set, with **no browser reload**; the panel must never show the pre-undo count. **(b)** ⚠️ **TWO STALE `# Last updated:` LINES REMAIN IN `built-inventory.md`** (line 45, dated 2026-09-09, another session's) — **left for HISTORY on your instruction**, and the new cap does not flag them because they are not markers. **(c)** ⚠️ **THE CAP SKIPS ITSELF AND ITS TEST BY NAME**, not by a `scripts/` pattern — a broad skip would hide a real marker in a real script.
 
 
-<!-- MOVED FROM CLAUDE.md §3 on 2026-09-22 by the N=3 retention rule (ledger #362 piece 2 merge). Verbatim, not summarised. -->
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-21 by the N=3 retention rule (ledger #362 piece 2 merge). Verbatim, not summarised. -->
 
 ### 2026-09-21 — THUNDER **THE NOT-STOCK LIST SHIPS EMPTY, AND THE FIRST RUN IS WHY. #365. TECH-DEBT #356.** `20260922` created a legitimate per-business setting **and seeded four LAWNS rows into it**. David's V1 and V4 disagreed: **two of the four ids were mistyped** — `1006` is Backyard Delivery, `1007` is *Tree installation without warranty* — because they were typed by hand from a list of names. He stopped before seeding, which is the only reason a Deposit and a Gift Certificate were not quietly left unheld. 🔴 **THIRD INSTANCE IN ONE DAY of a hand-written id↔name mapping nobody re-derived**, and the first to reach a database. David ruled the SHAPE wrong rather than the data: `20260922b` deletes all four and **no migration seeds that table for anyone**. The four items take what the rule gives them — **10 each in today's test data**, acceptable because the real repair is Lauren's QuickBooks retype list. The seed still refuses when it cannot READ the table; empty is a fine answer.
 
@@ -18,7 +18,7 @@
 **FLAGGED FOR DAVID:** **(a)** 🔴 **DELETE `20260922b_fix_not_stock_override_ids.sql` FROM YOUR FOLDER IF YOU STILL HAVE IT** — it was my first correction, right data and wrong shape, never applied. I removed the copy I had put there. **(b)** ⚠️ **EXPECT 511 SEEDED, NOT 509** — with the list empty, all four of those rows take a starting number. **(c)** 🟡 **TECH-DEBT #356 — the setting has a table, a rule and no screen**, so the capability exists and nobody can use it. Filed, not built, on your instruction.
 
 
-<!-- MOVED FROM CLAUDE.md §3 on 2026-09-22 by the N=3 retention rule (ledger #362 close-out). Verbatim, not summarised. -->
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-21 by the N=3 retention rule (ledger #362 close-out). Verbatim, not summarised. -->
 
 ### 2026-09-21 — THUNDER **A GOODS ACCOUNT IS STOCK, AND THE OWNER CAN SAY "THIS ONE IS NOT". #364. TECH-DEBT #352.** David's two rulings: a bag of compost booked to *Sales of Product Income* **is** stock for the seed — the services review's ambiguity is about pricing a service, not about whether a bag is on the shelf — and the four misbooked rows are held back by a **per-business setting with a recorded reason**, never by names in code. `business_not_stock_items` (`20260922`, WRITTEN not applied) carries the four with David's own wording and a `fix_at_source` flag; all four are on Lauren's retype list so the repair happens in QuickBooks. 🔴 **THE MEASUREMENT FOUND A THIRD DEFECT NOBODY HAD NAMED: three real trees called "Discounted Live Oak" — $200, $250 and $300, booked to Nursery Stock — were being skipped because the classifier tests the NAME for discount words BEFORE it reads the account.** That is the opposite of the rule, so a positively-priced row on a stock account is now stock, and a real discount (priced 0 or below) still is not. **Predicted for today's reload: 509 seeded · 43 not stock · 75 under production · 4 marked.**
 
