@@ -87,6 +87,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#366 / #367 — the panel follows the catalogue; a committed marker fails the build (built, NOT MERGED)**
+- 🔴 **OPEN — CARD 17**: undo → import → Set with **no browser reload**. The panel must never show the pre-undo count. Owner: ledger #366.
+- ⚠️ **LEFT TO HISTORY ON DAVID'S INSTRUCTION — two stale `# Last updated:` lines in `built-inventory.md`** (line 45, 2026-09-09, another session's). Not markers, so the new cap is silent on them. Owner: HISTORY.
+
 **#365 — the not-stock list ships empty (migration WRITTEN, not applied)**
 - 🔴 **OPEN — APPLY `20260922b` BEFORE SEEDING**, and delete any copy of `20260922b_fix_not_stock_override_ids.sql` unapplied. Owner: ledger #365.
 - 🟡 **OPEN — TECH-DEBT #356: the setting has no screen.** Lauren cannot mark an item as not stock herself, so the capability exists and cannot be used. Owner: tech-debt #356.

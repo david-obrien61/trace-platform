@@ -74,6 +74,11 @@ export async function seedQtyWithoutLedger(
       // rows were GONE — and the message sent her looking at permissions. One read settles it:
       // if the ids are not there, the catalogue moved; if they are, it is the policy. A guess
       // dressed as a diagnosis costs more than no diagnosis (D-9).
+      // RETIRED-FILTER-EXEMPT: this asks whether the ROWS STILL EXIST, not what a person may
+      // see. A retired row is still in the table — filtering it out here would make the message
+      // say "no longer in your catalogue" about a product that is merely hidden, which is a
+      // different and wrong answer. The question is "did the undo delete these", and only an
+      // unfiltered read answers it.
       const { data: still, error: stillErr } = await db.from('business_inventory')
         .select('id').eq('business_id', businessId).in('id', ids);
       const present = stillErr ? null : (still ?? []).length;

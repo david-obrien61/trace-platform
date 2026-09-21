@@ -27,7 +27,7 @@ const BIZ = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 const RUN = 'eab7fbd2-04cd-45e5-b771-cbb07f662f6f';
 
 // ── a double with an inventory store and a ledger store ──────────────────────────────────────
-function fakeDb(rows: any[], opts: { refuse?: boolean; failAt?: number } = {}) {
+function fakeDb(rows: any[], opts: { refuse?: boolean; failAt?: number; readFails?: boolean } = {}) {
   const inventory = rows.map(r => ({ ...r }));
   const ledger: any[] = [];
   const calls: { verb: string; filters: [string, string, any][]; payload?: any }[] = [];
@@ -37,6 +37,27 @@ function fakeDb(rows: any[], opts: { refuse?: boolean; failAt?: number } = {}) {
     from(table: string) {
       if (table !== 'business_inventory') throw new Error(`unexpected table ${table}`);
       return {
+        // 🔴 THE DOUBLE CAN NOW BE READ, because the writer reads (#366): on a refused chunk it
+        // asks whether those ids are still there, so it can say WHICH refusal it hit instead of
+        // naming two causes and letting the owner pick. A double that cannot answer that read
+        // cannot test the message (§6 r19 — model what the real client does, or prove nothing).
+        select(_cols?: string) {
+          const filters: [string, string, any][] = [];
+          calls.push({ verb: 'select', filters });
+          const b: any = {
+            eq(c: string, v: any) { filters.push([c, 'eq', v]); return b; },
+            in(c: string, v: any[]) { filters.push([c, 'in', v]); return b; },
+            then(res: any) {
+              if (opts.readFails) return Promise.resolve({ data: null, error: { message: 'read refused' } }).then(res);
+              const hits = inventory.filter(r => filters.every(([c, op, v]) =>
+                op === 'eq' ? String(r[c]) === String(v)
+                : op === 'in' ? (v as any[]).map(String).includes(String(r[c]))
+                : false));
+              return Promise.resolve({ data: hits.map(r => ({ id: r.id })), error: null }).then(res);
+            },
+          };
+          return b;
+        },
         update(payload: any) {
           const filters: [string, string, any][] = [];
           calls.push({ verb: 'update', filters, payload });
@@ -204,6 +225,74 @@ async function main(): Promise<void> {
     'S3f2 🔴 NEGATIVE CONTROL — the match comes from the query, not from prose earlier in the file');
   ok(/You are in test mode\./.test(src) && /Nothing is written to your stock record/.test(src),
     'S3g the screen SAYS which mode it is in and what that means');
+
+  // ── §S4 · #366 — A REFUSED WRITE SAYS WHICH REFUSAL IT WAS ─────────────────────────────────
+  // David, 2026-09-21: he pressed Undo, then Set starting numbers, and was told "your permissions
+  // refused it, or those products changed since this screen loaded". The rows had been DELETED by
+  // his own Undo. The message named two causes and sent him to the wrong one.
+  {
+    const r4 = [lot('a'), lot('b')];
+    const p4 = planOpeningStockSeed(r4.map(x => ({ id: x.id, name: x.name, qty: 0, hasHistory: false, imported: true })), 10, 'test');
+    if (!p4.ok) throw new Error('fixture');
+
+    // ① the rows are GONE — what an Undo leaves behind
+    const gone = fakeDb(r4, { refuse: true });
+    gone.inventory.length = 0;
+    const rg = await seedQtyWithoutLedger(gone.db as any, BIZ, p4.steps);
+    ok(rg.ok === false, 'S4a a refused write is still a refusal');
+    ok(/no longer in your catalogue/.test(rg.error ?? ''),
+       `S4b 🔴 IT SAYS THE CATALOGUE MOVED, because it looked: the ids are not there (${rg.error})`);
+    ok(!/permissions/.test(rg.error ?? ''),
+       'S4c 🔴 …and it does NOT also blame permissions — naming both is what sent David to the wrong one');
+
+    // ② the rows are still there — then it really is the policy
+    const kept = fakeDb(r4, { refuse: true });
+    const rk = await seedQtyWithoutLedger(kept.db as any, BIZ, p4.steps);
+    ok(/permissions refusing the change/.test(rk.error ?? ''),
+       `S4d the rows ARE there, so it names the permissions — the opposite branch, proven separately (${rk.error})`);
+    ok(/still there/.test(rk.error ?? ''), 'S4e …and says how many it found, so the claim is checkable');
+
+    // ③ 🔴 NEGATIVE CONTROL — when it cannot tell, it says so rather than guessing either way
+    const blind = fakeDb(r4, { refuse: true, readFails: true });
+    const rb = await seedQtyWithoutLedger(blind.db as any, BIZ, p4.steps);
+    ok(/could not tell/.test(rb.error ?? ''),
+       `S4f an unreadable check reports that it could not tell, rather than falling back to a guess (${rb.error})`);
+  }
+
+
+  // ── §S5 · #366 — THE PANEL IS TOLD WHEN THE CATALOGUE MOVES, AND CLEARS BEFORE IT RE-READS ──
+  // The defect had three parts and this asserts all three: the panel never re-read, it showed the
+  // old counts while it did, and the import panel never told it anything. Source-level, because
+  // these are wiring facts — but each one carries a NEGATIVE CONTROL, because a probe that greps
+  // for prose passes on a comment (#182: a check that cannot reach its target reports success).
+  {
+    const seed = readFileSync('packages/shared/src/components/OpeningStockSeed.tsx', 'utf8');
+    const imp  = readFileSync('packages/shared/src/components/QboCatalogueImport.tsx', 'utf8');
+    const set  = readFileSync('packages/shared/src/pages/Settings.tsx', 'utf8');
+
+    ok(/catalogueVersion\s*=\s*0\s*}\s*:/.test(seed) || /catalogueVersion\s*=\s*0/.test(seed),
+       'S5a the panel accepts a catalogueVersion');
+    const effect = seed.slice(seed.indexOf('firstSignal'), seed.indexOf('async function apply'));
+    ok(/setPhase\(\{ k: 'loading' \}\)/.test(effect) && /setCandidates\(\[\]\)/.test(effect),
+       'S5b 🔴 IT CLEARS FIRST — the stale "44 of your 631" is what David acted on, so re-reading alone is not the fix');
+    ok(/void load\(\)/.test(effect), 'S5c …and then re-reads');
+    ok(/\[catalogueVersion, load\]/.test(effect), 'S5d …driven by the signal, not by a timer or a focus event');
+    ok(/firstSignal\.current/.test(effect),
+       'S5e and it does NOT fire on mount, which would double every first read');
+
+    const call = imp.slice(imp.indexOf("async function call("), imp.indexOf('finally'));
+    ok(/onCatalogueChanged\?\.\(\)/.test(call), 'S5f the import panel tells the page when something lands');
+    ok(/step === 'import' \|\| step === 'undo'/.test(call) && /body\.ok/.test(call),
+       'S5g 🔴 ON IMPORT AND UNDO, AND ONLY WHEN IT LANDED — an undo that refused changed nothing');
+    ok(!/step === 'preview'[^)]*onCatalogueChanged/.test(call),
+       'S5h 🔴 NEGATIVE CONTROL — preview does not fire it: preview changes no product row');
+
+    ok(/onCatalogueChanged=\{\(\) => setCatalogueVersion/.test(set) && /<OpeningStockSeed catalogueVersion=/.test(set),
+       'S5i the page wires the two together');
+    ok(!/<OpeningStockSeed \/>/.test(set),
+       'S5j 🔴 NEGATIVE CONTROL — the unwired mount is gone, so the fix cannot be half-applied');
+  }
+
 }
 
 main().then(() => {
