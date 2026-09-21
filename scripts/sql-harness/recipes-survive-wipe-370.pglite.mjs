@@ -12,7 +12,9 @@
  *               W6 a component linked by ROW ID blocks the undo, and the refusal NAMES the table ·
  *               W7 a BUILD RUN's ledger rows block the undo (`held_lots`) — the collision that
  *               matters, reported rather than worked around.
- * DEPENDENCIES: @electric-sql/pglite via PGLITE_DIR · the live function text in fixtures/.
+ * DEPENDENCIES: @electric-sql/pglite via PGLITE_DIR · the live function text in fixtures/, RE-PULLED
+ *               2026-09-21 after HISTORY applied 20260921b (the capture re-link) — the probe answers
+ *               for the function as it is TODAY, not as it was when this file was written.
  * OUTPUTS:      PASS/FAIL per probe; exit 1 on any failure, 2 if PGlite is missing.
  * ⚠️ NOT in `npm run verify` — PGlite is Postgres 18; Supabase runs an older major.
  *
@@ -78,7 +80,8 @@ async function fresh() {
       customer_id uuid REFERENCES public.customers(id) ON DELETE CASCADE, business_id uuid, import_run_id uuid, phone text);
     CREATE TABLE public.orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid,
       customer_id uuid REFERENCES public.customers(id) ON DELETE RESTRICT, order_kind text, import_run_id uuid,
-      created_at timestamptz DEFAULT now());
+      -- added by HISTORY's 20260921b (capture re-link, ledger #372): the undo now unlinks captures first
+      relinked_from_customer_id uuid, created_at timestamptz DEFAULT now());
     CREATE TABLE public.order_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       order_id uuid REFERENCES public.orders(id) ON DELETE CASCADE,
       business_inventory_id uuid REFERENCES public.business_inventory(id) ON DELETE SET NULL, quantity int);

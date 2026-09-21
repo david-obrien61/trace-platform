@@ -1,5 +1,5 @@
--- PULLED FROM THE LIVE DATABASE 2026-09-21 with pg_get_functiondef — the function as it actually is.
--- Used by recipes-survive-wipe-370.pglite.mjs so the wipe probe runs the REAL undo, not a lookalike.
+-- PULLED FROM THE LIVE DATABASE 2026-09-21 (re-pulled after HISTORY applied 20260921b, the capture re-link)
+-- with pg_get_functiondef — the function as it actually is. Used by recipes-survive-wipe-370.pglite.mjs.
 CREATE OR REPLACE FUNCTION public.undo_import_run(p_business_id uuid, p_run_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -18,6 +18,7 @@ DECLARE
   v_n             int;
   r               record;
   v_p_orders      int;
+  v_unlinked      int;                       -- captures put back on their twin (ledger #372)
   v_h_orders      int;                       -- history orders this load wrote (ledger #363)
   v_h_lines       int;                       -- and their lines
   v_p_lines       int;
@@ -151,6 +152,31 @@ BEGIN
       'other_references', v_other);
   END IF;
 
+  -- ①0 🔴 PUT THE CAPTURES BACK BEFORE ANYTHING IS DELETED (R-165's re-link half, ledger #372).
+  --   A re-linked capture is a PHOTOGRAPHED invoice moved onto the reloaded customer and stamped
+  --   with this run. It must survive the wipe (R-160: only live captures are never removed) — but
+  --   while it carries the run id, ①b below would DELETE it. So it is unlinked FIRST:
+  --   `customer_id` goes back to the row it came from and the run id is cleared, and by the time
+  --   ①b runs there is nothing of it left for the run to claim.
+  --
+  -- 🔴 `relinked_from_customer_id` IS WHY THIS IS POSSIBLE AND WHY IT IS A COLUMN. The twin cannot
+  --   be DERIVED after the fact — a capture's previous customer is recorded nowhere else, and
+  --   guessing it by NAME is exactly what the link itself refuses to do (two of the nineteen
+  --   differ in spelling: David Ferraro/Ferrara, Luis Gomez Candanoza/Luis Candanoza). The link
+  --   writes down where it came from; the wipe reads it back.
+  --
+  -- ⚠️ THE TWIN IS NEVER DELETED, which is what makes this safe: it carries no import_run_id, so
+  --   the customer delete below cannot see it. It is the capture's home between loads.
+  WITH u AS (UPDATE public.orders
+                SET customer_id = relinked_from_customer_id,
+                    import_run_id = NULL,
+                    relinked_from_customer_id = NULL
+              WHERE business_id = p_business_id
+                AND import_run_id = p_run_id
+                AND relinked_from_customer_id IS NOT NULL
+             RETURNING 1)
+    SELECT count(*) INTO v_unlinked FROM u;
+
   -- ── WRITES — one transaction; any failure below rolls back every one of them ─────────────
   -- ① the run's PRACTICE orders and their children (the same children handleDelete removes,
   --   plus the delivery stop checkout scheduled for a delivery order — practice too).
@@ -246,7 +272,7 @@ BEGIN
     'refused', false,
     'practice_orders_deleted', v_p_orders, 'practice_lines_deleted', v_p_lines,
     'practice_deliveries_deleted', v_p_stops,
-    'history_orders_deleted', v_h_orders, 'history_lines_deleted', v_h_lines,
+    'captures_unlinked', v_unlinked, 'history_orders_deleted', v_h_orders, 'history_lines_deleted', v_h_lines,
     'inventory_deleted', v_inventory, 'customers_deleted', v_customers,
     'contact_rows_deleted', v_contacts, 'unretired', v_unretired);
 END;

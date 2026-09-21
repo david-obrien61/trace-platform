@@ -23,7 +23,8 @@ if (!pgliteDir) { console.error('Set PGLITE_DIR to a node_modules folder contain
 const { PGlite } = await import(process.cwd() + '/' + pgliteDir.replace(/\/$/, '') + '/@electric-sql/pglite/dist/index.js');
 
 const MIG = process.cwd() + '/supabase/migrations/';
-const RECIPES = readFileSync(MIG + '20260921_recipes_made_items.sql', 'utf8');
+const RECIPES = readFileSync(MIG + '20260921_recipes_made_items.sql', 'utf8')
+  + '\n' + readFileSync(MIG + '20260921c_build_run_says_when_the_ledger_did_not_record.sql', 'utf8');
 const L = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74', T = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
 const MEMBER = '11111111-1111-1111-1111-111111111111', OUTSIDER = '22222222-2222-2222-2222-222222222222';
 let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
@@ -35,8 +36,8 @@ async function fresh(mig = RECIPES, permission = 'select true') {
     CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       $f$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $f$;
-    CREATE TABLE public.businesses (id uuid PRIMARY KEY, name text NOT NULL);
-    INSERT INTO public.businesses VALUES ('${L}', 'LAWNS Tree Farm, LLC'), ('${T}', 'Test Dave''s Tree Nest');
+    CREATE TABLE public.businesses (id uuid PRIMARY KEY, name text NOT NULL, qbo_writes_enabled boolean DEFAULT true);
+    INSERT INTO public.businesses VALUES ('${L}', 'LAWNS Tree Farm, LLC', true), ('${T}', 'Test Dave''s Tree Nest', true);
     CREATE TABLE public.business_members (business_id uuid, user_id uuid, active boolean);
     INSERT INTO public.business_members VALUES ('${L}', '${MEMBER}', true);
     CREATE FUNCTION public.is_active_member(p_business_id uuid) RETURNS boolean
@@ -57,6 +58,15 @@ async function fresh(mig = RECIPES, permission = 'select true') {
       kind text, reason text, source_type text, source_id uuid, actor_user_id uuid,
       occurred_at timestamptz DEFAULT now(), created_at timestamptz DEFAULT now());
   `);
+  // the live test-mode trigger, created after the ledger table exists: in test mode a ledger row
+  // is DISCARDED, silently — which is exactly what 20260921c has to notice and report.
+  await db.exec(`
+    CREATE FUNCTION public.discard_ledger_row_in_test_mode() RETURNS trigger LANGUAGE plpgsql AS $f$
+      DECLARE v boolean; BEGIN
+        SELECT b.qbo_writes_enabled INTO v FROM public.businesses b WHERE b.id = NEW.business_id;
+        IF v IS TRUE THEN RETURN NEW; END IF; RETURN NULL; END; $f$;
+    CREATE TRIGGER trg_ledger_test_mode_guard BEFORE INSERT ON public.business_inventory_ledger
+      FOR EACH ROW EXECUTE FUNCTION public.discard_ledger_row_in_test_mode();`);
   await db.exec(mig);
   return db;
 }
@@ -187,9 +197,11 @@ async function seedSpm(db) {
   await db.close();
 }
 {
-  const m2 = RECIPES.replace(`      v_unlinked := v_unlinked || jsonb_build_object('name', v_component.name,
+  // ⚠️ splitAll, not replace: the function is defined TWICE (20260921, then 20260921c). Patching
+  // only the first leaves the live body untouched and the mutant proves nothing.
+  const m2 = RECIPES.split(`      v_unlinked := v_unlinked || jsonb_build_object('name', v_component.name,
         'quantity', v_component.quantity * p_batches, 'unit', v_component.unit);
-      CONTINUE;`, '      CONTINUE;');
+      CONTINUE;`).join('      CONTINUE;');
   ok(m2 !== RECIPES, 'M2 applied');
   const db = await fresh(m2);
   await seedSpm(db);
@@ -200,13 +212,58 @@ async function seedSpm(db) {
   await db.close();
 }
 {
-  const m3 = RECIPES.replace('  IF NOT public.is_active_member(p_business_id) THEN', '  IF false THEN');
+  const m3 = RECIPES.split('  IF NOT public.is_active_member(p_business_id) THEN').join('  IF false THEN');
   ok(m3 !== RECIPES, 'M3 applied');
   const db = await fresh(m3);
   await seedSpm(db);
   await as(db, OUTSIDER);
   const r = await one(db, `SELECT public.record_build_run('${L}', (SELECT id FROM public.item_recipes WHERE qb_item_id='SPM1'), 1) AS j`);
   ok(r.j.ok === true, '🔴 M3 CAUGHT — without the membership test an outsider moves another business\'s stock, so P16 would fail');
+  await db.close();
+}
+
+// ══ T — TEST MODE MUST NOT LOOK LIKE SUCCESS (20260921c) ══════════════════════════════════════
+{
+  const db = await fresh();
+  await seedSpm(db);
+  await as(db, MEMBER);
+  await db.exec(`UPDATE public.businesses SET qbo_writes_enabled = false WHERE id = '${L}'`);
+  const r = await one(db, `SELECT public.record_build_run('${L}',
+    (SELECT id FROM public.item_recipes WHERE qb_item_id='SPM1'), 1) AS j`);
+  ok(r.j.ok === true && r.j.ledger_recorded === false && r.j.test_mode === true,
+    `🔴 T1 in TEST MODE the build reports ledger_recorded FALSE and test_mode TRUE (got ${JSON.stringify(r.j).slice(0, 150)})`);
+  ok(/not recorded/.test(r.j.message ?? ''), '🔴 T2 …and says so in a sentence a screen can print');
+  ok((await one(db, `SELECT count(*)::int n FROM public.business_inventory_ledger`)).n === 0,
+    'T3 the ledger really is empty — the trigger discarded every row, silently, as it does live');
+  ok(Number((await one(db, `SELECT qty::float q FROM public.business_inventory WHERE qb_item_id='SPM1'`)).q) === 2.5,
+    'T4 …while the quantity DID move, which is the platform\'s existing test-mode behaviour (adjust_inventory_manual does the same)');
+
+  await db.exec(`UPDATE public.businesses SET qbo_writes_enabled = true WHERE id = '${L}'`);
+  const on = await one(db, `SELECT public.record_build_run('${L}',
+    (SELECT id FROM public.item_recipes WHERE qb_item_id='SPM1'), 1) AS j`);
+  ok(on.j.ledger_recorded === true && on.j.test_mode === false && on.j.message === null,
+    '🔴 T5 with writes ON the same call records, says test_mode false, and has nothing to warn about');
+  await db.close();
+}
+
+// ══ V3 — THE CORRECTED PROBE FOR THE APPLIED MIGRATION'S CHECK ════════════════════════════════
+// The shipped V3 could not reach `item_recipes_one_identity`: every live product carries an
+// import_run_id, so the wipe guard fired first. This runs the CORRECTED text — a row with no run —
+// and proves it reaches the CHECK. David runs the same SQL live.
+{
+  const db = await fresh();
+  let msg = '';
+  try {
+    await db.exec(`WITH probe AS (
+        INSERT INTO public.business_inventory (business_id, name, qty)
+        VALUES ('${L}', 'V3 probe row — rolled back', 0) RETURNING id)
+      INSERT INTO public.item_recipes (business_id, qb_item_id, inventory_id, yield_quantity, yield_unit)
+      SELECT '${L}', 'V3-PROBE', probe.id, 1, 'each' FROM probe`);
+  } catch (e) { msg = String(e.message); }
+  ok(/item_recipes_one_identity/.test(msg),
+    `🔴 V3 the corrected probe REACHES the identity CHECK (got: ${msg.slice(0, 90)})`);
+  ok(!/came from a catalogue load/.test(msg),
+    '🔴 V3b …and is not stopped by the wipe guard first, which is what made the shipped V3 unprovable');
   await db.close();
 }
 
