@@ -1,6 +1,7 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
 # Last updated: 2026-09-22 — #365 the not-stock list ships empty — see §3
+# Last updated: 2026-09-21 — #360 the books review records its run — see §3
 
 # Last updated: 2026-09-18 — #356 caliper on the ladder — see §3
 # Last updated: 2026-09-20 — #357 the seeded 10 comes off 41 non-product rows — see §3
@@ -275,11 +276,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > **The preamble above is the test: §3's value is being LOADED, not being stored.** A proof narrative is not what a session needs loaded; it is what it needs to be able to FIND.
 > ⚠️ **AND THE ENTRY IS NOT OPTIONAL — a ledger row with no §3 entry is an INCOMPLETE CLOSE-OUT**, asserted by `npm run verify:handoff-retention` (check 5).
 ### 2026-09-22 — THUNDER **THE NOT-STOCK LIST SHIPS EMPTY, AND THE FIRST RUN IS WHY. #365. TECH-DEBT #356.** `20260922` created a legitimate per-business setting **and seeded four LAWNS rows into it**. David's V1 and V4 disagreed: **two of the four ids were mistyped** — `1006` is Backyard Delivery, `1007` is *Tree installation without warranty* — because they were typed by hand from a list of names. He stopped before seeding, which is the only reason a Deposit and a Gift Certificate were not quietly left unheld. 🔴 **THIRD INSTANCE IN ONE DAY of a hand-written id↔name mapping nobody re-derived**, and the first to reach a database. David ruled the SHAPE wrong rather than the data: `20260922b` deletes all four and **no migration seeds that table for anyone**. The four items take what the rule gives them — **10 each in today's test data**, acceptable because the real repair is Lauren's QuickBooks retype list. The seed still refuses when it cannot READ the table; empty is a fine answer.
-
-**Type:** MIGRATION (1, WRITTEN not applied) + FILING, on `feat/seed-goods-and-overrides`, **own worktree (§6 r20)**, **one ledger id**. No app code beyond what #364 already merged.
-
-**FLAGGED FOR DAVID:** **(a)** 🔴 **DELETE `20260922b_fix_not_stock_override_ids.sql` FROM YOUR FOLDER IF YOU STILL HAVE IT** — it was my first correction, right data and wrong shape, never applied. I removed the copy I had put there. **(b)** ⚠️ **EXPECT 511 SEEDED, NOT 509** — with the list empty, all four of those rows take a starting number. **(c)** 🟡 **TECH-DEBT #356 — the setting has a table, a rule and no screen**, so the capability exists and nobody can use it. Filed, not built, on your instruction.
-
 ### 2026-09-22 — THUNDER **A GOODS ACCOUNT IS STOCK, AND THE OWNER CAN SAY "THIS ONE IS NOT". #364. TECH-DEBT #352.** David's two rulings: a bag of compost booked to *Sales of Product Income* **is** stock for the seed — the services review's ambiguity is about pricing a service, not about whether a bag is on the shelf — and the four misbooked rows are held back by a **per-business setting with a recorded reason**, never by names in code. `business_not_stock_items` (`20260922`, WRITTEN not applied) carries the four with David's own wording and a `fix_at_source` flag; all four are on Lauren's retype list so the repair happens in QuickBooks. 🔴 **THE MEASUREMENT FOUND A THIRD DEFECT NOBODY HAD NAMED: three real trees called "Discounted Live Oak" — $200, $250 and $300, booked to Nursery Stock — were being skipped because the classifier tests the NAME for discount words BEFORE it reads the account.** That is the opposite of the rule, so a positively-priced row on a stock account is now stock, and a real discount (priced 0 or below) still is not. **Predicted for today's reload: 509 seeded · 43 not stock · 75 under production · 4 marked.**
 
 **Type:** BUILD (two exported predicates + one planner rule + one screen read) + MIGRATION (1, WRITTEN not applied), on `feat/seed-goods-and-overrides`, **own worktree (§6 r20)**, **one ledger id**. `api/` 12/12.

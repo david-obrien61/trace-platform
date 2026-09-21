@@ -101,6 +101,9 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — THE RULE SKIPS 43 REAL GOODS.** Compost scoops, fertiliser bags, bubblers, staking kits and T-posts are booked to *Sales of Product Income*, which the Services review treats as ambiguous by design (*"where you also book bags and containers"*), so they stay at 0. One predicate changes it. Owner: ledger #361.
 - 🔴 **OPEN — AND IT RE-SEEDS 4 OF THE 44 YOU ZEROED:** Deposit · Gift Certificate · Arizona Cypress Blue Ice Replacement · Custom Amount. Three are booked to *Sales of Nursery Stock*, so the books call them stock. Owner: ledger #361.
 - 🟡 **OPEN — THE (UNDER PRODUCTION) MARKER IS A NAME MATCH.** No column says a plant is still growing, so a rename silently changes behaviour. Replace with the grow ladder's own state when it lands. Owner: ledger #361.
+**#360 — the books review records its run (built, NOT MERGED)**
+- 🔴 **OPEN — CARD 21's RED HALF NEEDS A MEMBER WITHOUT `books:write`.** Proving the green line is easy; proving the screen goes RED when nothing was stored is the half that matters. Owner: ledger #360.
+- 🟡 **OPEN — NOTHING READS THE STORED RUNS BACK YET except the opening-stock seed.** Comparing one month with the next is what the tables are for, and no screen does it. Owner: ledger #360.
 
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
