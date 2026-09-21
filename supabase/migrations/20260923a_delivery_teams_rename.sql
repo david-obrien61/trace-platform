@@ -12,6 +12,12 @@
 -- check will need one too. David, 2026-09-21: *"RENAME — but tomorrow, not today. Choose the name
 -- yourself; it is bookkeeping."*
 --
+-- ⚠️ SAID AND LIFTED THE SAME DAY. The quote above was said on the MORNING of 2026-09-21, when
+--    HISTORY's import held David's time. He lifted the hold that AFTERNOON, once the import
+--    finished, and applied this migration the same day. So "tomorrow, not today" sitting beside
+--    an APPLIED date of 2026-09-21 is the real sequence, not a stale date — recorded here so the
+--    next reader does not "correct" it. The FILENAME keeps its 20260923a stamp deliberately.
+--
 -- 🔴 IT IS CHEAP EXACTLY NOW AND NOT LATER. Measured before writing: zero rows on every tenant,
 --    one client file, one editor, one picker. A rename after Lauren has built her crew list is a
 --    data migration; today it is four ALTERs.
