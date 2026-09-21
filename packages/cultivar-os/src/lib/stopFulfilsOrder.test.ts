@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PURPOSE: prove tech-debt #319 — finishing a stop fulfils its order, undoing puts it back, and
-//   every half-completed case SAYS which half moved. David, 2026-09-22: *"say on screen when a
+//   every half-completed case SAYS which half moved. David, 2026-09-21: *"say on screen when a
 //   stop finished but the order could not be fulfilled for lack of orders:update; Undo done
 //   reverses the fulfil."*
 // DEPENDENCIES: stopFulfilsOrder (pure apart from the client and fetch, both injected here).

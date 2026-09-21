@@ -275,7 +275,7 @@ console.log('── §E  THE MEASUREMENT AND THE SUGGESTION AGREE ────�
 }
 
 
-// ── §K · DAVID'S TWO RULINGS OF 2026-09-22 ───────────────────────────────────────────────────
+// ── §K · DAVID'S TWO RULINGS OF 2026-09-21 ───────────────────────────────────────────────────
 {
   const row = (o: Partial<SeedCandidate>): SeedCandidate => ({
     id: 'x', name: 'Thing', qty: 0, hasHistory: false, imported: true,
@@ -292,7 +292,7 @@ console.log('── §E  THE MEASUREMENT AND THE SUGGESTION AGREE ────�
   if (plan.ok) {
     const ids = plan.steps.map(s => s.lotId).sort().join(',');
     ok(ids === 'bubbler,compost,staking',
-       `K2  🔴 A GOODS ACCOUNT IS STOCK FOR THE SEED (David, 2026-09-22) — compost, bubblers and staking kits get a number even though the services review calls that account ambiguous (got ${ids || '(none)'})`);
+       `K2  🔴 A GOODS ACCOUNT IS STOCK FOR THE SEED (David, 2026-09-21) — compost, bubblers and staking kits get a number even though the services review calls that account ambiguous (got ${ids || '(none)'})`);
     ok(plan.skipped.notAProduct === 1,
        `K3  …and the trip charge is still skipped: its account books WORK, which is not ambiguous at all (${plan.skipped.notAProduct})`);
   }

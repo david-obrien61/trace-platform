@@ -3,7 +3,7 @@
  * ── verify-conflict-markers — a merge that was never finished must not reach `main` ──────────
  *
  * PURPOSE:      HISTORY found `>>>>>>> origin/main` COMMITTED at `docs/built-inventory.md:7` on
- *               `main` (2026-09-22), and the whole of `npm run verify` had passed over it —
+ *               `main` (2026-09-21), and the whole of `npm run verify` had passed over it —
  *               128/128 files, zero net-new. Nothing in the chain looked for one. A human found
  *               it by reading, which is the definition of a gap a cap should close.
  *               ⚠️ It was MY marker: ledger #364's header rebuild kept the region below the
@@ -79,7 +79,7 @@ function main() {
   console.log(`\n❌ conflict-markers FAILED — ${hits.length} marker(s) committed:\n`);
   for (const h of hits) console.log(`  · ${h.file}:${h.line}  [${h.kind}]  ${h.text.slice(0, 60)}`);
   console.log('\n  A committed marker is a merge nobody finished. Resolve it, then re-run.');
-  console.log('  Found once on `main` by a human (2026-09-22) after the whole verify chain passed over it.');
+  console.log('  Found once on `main` by a human (2026-09-21) after the whole verify chain passed over it.');
   return 1;
 }
 

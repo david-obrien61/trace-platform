@@ -1,13 +1,14 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260922b — THE NOT-STOCK LIST SHIPS EMPTY · ledger #365
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
+-- ✅ APPLIED 2026-09-21 by David in the SQL EDITOR (§6 r17). Re-read live the same day:
+--    `business_not_stock_items` exists and holds 0 rows — the list ships empty, as ruled.
 --
 -- ⚠️ IF YOU ALREADY HAVE A FILE NAMED `20260922b_fix_not_stock_override_ids.sql`, DELETE IT
 --    UNAPPLIED. It corrected the two wrong ids and put four tenant rows back — the right data
 --    for the wrong shape. This file supersedes it. (It was never applied.)
 --
--- ── WHY (David, 2026-09-22) ─────────────────────────────────────────────────────────────────
+-- ── WHY (David, 2026-09-21) ─────────────────────────────────────────────────────────────────
 -- `20260922` created `business_not_stock_items` AND seeded four LAWNS rows into it. The table is
 -- legitimate — a per-business setting the owner controls. **The four rows are not.** David:
 -- *"the override list as built is a TENANT-SPECIFIC TARGET, not the load-wipe-load concept —

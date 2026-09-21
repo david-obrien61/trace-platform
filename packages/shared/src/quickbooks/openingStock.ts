@@ -286,7 +286,7 @@ export interface SeedCandidate {
   qbType?: string | null;
   qbIncomeAccount?: string | null;
   /** 🔴 THE OWNER'S OWN "this is not stock" OVERRIDE for this row, read from her settings — NOT a
-   *  list in code (David, 2026-09-22). Some rows are MISBOOKED in QuickBooks: a Gift Certificate
+   *  list in code (David, 2026-09-21). Some rows are MISBOOKED in QuickBooks: a Gift Certificate
    *  filed under Sales of Nursery Stock reads as a tree to any rule that believes the books. The
    *  override is how she says otherwise until the books are corrected at source, and each entry
    *  carries its reason so nobody later wonders why a row is held back. */
@@ -361,7 +361,7 @@ export function planOpeningStockSeed(candidates: SeedCandidate[], qty: number, m
         unitPrice: c.sellPrice ?? null, type: c.qbType ?? null,
         incomeAccountName: c.qbIncomeAccount ?? null,
       });
-      // 🔴 A GOODS ACCOUNT IS STOCK FOR THIS QUESTION (David, 2026-09-22). The Services review
+      // 🔴 A GOODS ACCOUNT IS STOCK FOR THIS QUESTION (David, 2026-09-21). The Services review
       // calls "Sales of Product Income" ambiguous and refuses to tick it, because it cannot tell
       // a bag from a service for PRICING. The seed asks something narrower — is it on a shelf —
       // and for 43 LAWNS rows (compost, fertiliser, bubblers, staking kits, T-posts) the answer

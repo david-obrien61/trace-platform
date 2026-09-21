@@ -1,8 +1,11 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 20260923 — A FINISHED STOP REMEMBERS WHAT ITS ORDER WAS · ledger #369 · tech-debt #319
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
--- ⚠️ NOT FOR TONIGHT. David, 2026-09-22: nothing to paste before Lauren's 08:00 start.
+-- ✅ APPLIED 2026-09-21 by David in the SQL EDITOR (§6 r17), after crew-link's 20260923a/20260923b.
+--    V1 text · YES · V2 45 stops / 0 filled · V5 ledger still 470 — David's run, and independently
+--    re-read live the same day by Thunder. V3/V4 need a live stop finished and undone: still OWED.
+-- ⚠️ THE FILENAME SAYS 23 AND THE DAY WAS THE 21st. Left as written on David's instruction —
+--    renaming an applied migration breaks the match to the database.
 --
 -- ── WHY ─────────────────────────────────────────────────────────────────────────────────────
 -- Finishing a stop now fulfils its order (tech-debt #319), and David ruled that **Undo done
@@ -14,7 +17,7 @@
 --     guard discards every row** (R-158 / ledger #342). So on the tenant where this is being
 --     proven, the event history is empty BY DESIGN and cannot be read back.
 --   · Guessing is what this platform keeps getting caught by. LAWNS's stop-bearing orders sit at
---     `invoiced` (33), `fulfilled` (10) and `cancelled` (1) — measured 2026-09-22 — so there is
+--     `invoiced` (33), `fulfilled` (10) and `cancelled` (1) — measured 2026-09-21 — so there is
 --     no single "the status before a delivery" to assume.
 --
 -- So the stop remembers it, in one nullable column, written at the moment of the fulfil and

@@ -131,7 +131,7 @@ export function useStopActions(
     // driver reported; the order's status is a consequence. If the consequence cannot be applied
     // — no permission, no order, the endpoint refused — the stop still stands and the screen SAYS
     // which half moved. Swallowing it is how a completed truck run leaves stock un-sold and
-    // nobody knows (David, 2026-09-22).
+    // nobody knows (David, 2026-09-21).
     //
     // ⚠️ OFFICE DOOR ONLY. The crew's Done keeps holding until teams land — David's ruling.
     if (kind === 'finish' || kind === 'undo') {
