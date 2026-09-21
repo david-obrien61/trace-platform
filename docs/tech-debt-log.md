@@ -4560,3 +4560,25 @@ stop; that is tech-debt #345's territory, not this item's.
 **What it would take to use it.** The hole size belongs to the install BOM, beside the mix and the posts: a figure per rung (or the standard's table), read at print time by the load list. It needs (a) David's ruling on whether LAWNS digs to the rule of thumb or to the table, and (b) a home — today the install figures are per-tree ratios in `business_operations_config` and per-size figures on `container_ladder`; a ball diameter is per size, so the rung is its natural home, exactly like caliper.
 
 **Blocker:** David's ruling. Nothing reads caliper yet (ledger #356), and the hole size is a step past it.
+
+## #355 — 🟡 THE ESTIMATE CANNOT LEARN YET: NO TAPS EXIST TO COMPARE IT WITH (NEW 2026-09-22, ledger #362 — David's loop, step 3, filed until there is data)
+
+**David's rule, 2026-09-22:** settings plus a formula do not learn, so the loop is (1) snapshot the estimate when a
+day is scheduled or routed, (2) keep the actual minutes the Start/Done taps give, **by tree size**, (3) SURFACE a
+comparison — *"the last N installs at 45 gal averaged M minutes; your setting is 30 — change it?"* — which Lauren
+accepts or declines, **nothing changing silently**, and (4) **X — the one-team/two-team threshold — is a POLICY: it
+never learns and is never suggested.** Only planting time does.
+
+**Steps 1 and 2 are built with piece 2.5. THIS ITEM IS STEP 3**, and it is filed rather than built for one measured
+reason: **there is nothing to compare.** Saturday 2026-09-19 produced **zero** Start/Done taps (the crew link was
+last opened the day before), so the platform holds no actual minutes for any tree size. A comparison card built now
+would have an empty population and would either say nothing or invent confidence.
+
+**What it takes when the taps exist.** A read over completed stops — actual minutes (`completed_at − started_at`)
+against that stop's trees and sizes — grouped by size, with a minimum count before anything is offered; a card in
+Settings → Operations that shows the average, the count and the current setting, and writes the setting only on
+Lauren's accept, through the existing settings writer, with an audit row. ⚠️ **A stop with several sizes cannot be
+attributed to one size**; the first cut counts only single-size stops and says so, rather than apportioning by a
+rule nobody has ruled. ⚠️ And a start that was never tapped, or one left from a previous day (tech-debt #344),
+poisons the average — #344 should land first or the comparison must exclude stops whose start and done are on
+different days.

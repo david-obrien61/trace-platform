@@ -46,3 +46,15 @@ threshold on its own** (10.8 h / 13.5 h). Lauren's split balanced the map, not t
 opened on Friday at 10:48. So the planting figure remains a stated default, not a measurement. David is asking
 Lauren for the actual finish times; that answer is the first real measurement and belongs in this file when it
 arrives. This is exactly why the per-tree minutes must be an editable per-business setting rather than a constant.
+
+## How the estimate learns (David, 2026-09-22) — and what is built when
+1. **SNAPSHOT THE ESTIMATE** when a day is scheduled or routed: trees, the minutes-per-tree used, the planting
+   total, drive minutes and miles. **Stored, never recomputed when a setting later changes** — history keeps what
+   was believed at the time. Built with piece 2.5.
+2. **THE TAPS GIVE THE ACTUAL MINUTES**, kept by tree size. Derived from `started_at`/`completed_at` and the stop's
+   own lines — computed on read, so there is no second copy to drift. Built with piece 2.5.
+3. **THE COMPARISON IS SURFACED, NEVER APPLIED** — *"the last N installs at 45 gal averaged M minutes; your setting
+   is 30 — change it?"* Lauren accepts or declines; nothing changes a setting silently. **Filed as tech-debt #355**
+   until there are taps to compare: Saturday produced none.
+4. **X IS A POLICY, NOT AN ESTIMATE.** The one-team/two-team threshold never learns and is never suggested. Only
+   planting time does.
