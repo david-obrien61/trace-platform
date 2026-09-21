@@ -1,5 +1,6 @@
 # TRACE — DECISIONS INDEX (read first)
 
+> ✅ Drift watch (2026-09-22 · #364 · 🧾 BUILD — a goods account is stock; per-business overrides): **No drift — abided by §6 r8 (one definition of each account test, exported and read by both screens), AC-1 (the four exceptions are tenant DATA in a table, never literals in platform code) and A8 (an unreadable setting stops the seed rather than reading as empty).**
 > ✅ Drift watch (2026-09-20 · #358 · 🌳 BUILD — the roll-up returns as the pick list; page only, no migration): **No drift. Followed the owner's own process over our inference (the reversal of #355 is recorded in both directions), D-9 (each list says what it is for), R-148 clause 4 (the later id claim renumbered, #357 → #358), R-149 and R-154.**
 
 > ✅ Drift watch (2026-09-18 · #356 · 📏 BUILD + MIGRATION WRITTEN — caliper on the ladder; no permission string, api/ 12/12): **No drift. Followed David's 2026-09-16 "one location, many reads" (caliper is a column on the rung, not a threshold), D-9 (an unrecorded caliper is NULL and the screen says "not recorded"; the ANSI height default is labelled a suggestion), R-133 (nothing deleted), R-149 and R-154. The Freehill sleeve contradiction is filed (tech-debt #349), not decided.**
