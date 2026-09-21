@@ -204,5 +204,58 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
   }
 }
 
+
+// ── H · 🔴 THE HARNESS CHECKS ITS OWN SCHEMA AGAINST THE LIVE ONE (tech-debt #357).
+//        This is the durable answer to the defect that cost a round trip this morning: instead of
+//        a human comparing two files, the harness DERIVES live's NOT NULL set from
+//        fixtures/live-schema-public.sql and fails if it does not enforce every one of them.
+//        It cannot drift, because nothing here is written down twice.
+//        ⚠️ IT CHECKS THE TABLES THIS HARNESS WRITES TO, not all of them — customers,
+//        business_inventory and deliveries are still hand-rolled and still short of live. That is
+//        #357's open half and it is NOT silently passed over: the count is printed.
+{
+  const { readFileSync: rf } = await import('node:fs');
+  const fixture = rf(process.cwd() + '/scripts/sql-harness/fixtures/live-schema-public.sql', 'utf8');
+  const L = rf(process.cwd() + '/scripts/sql-harness/history-undo-363.pglite.mjs', 'utf8').split('\n');
+  const a = L.findIndex(x => x.trim() === 'await db.exec(`');
+  const b = L.findIndex((x, i) => i > a && x.trim() === '`);');
+  const harnessSchema = L.slice(a + 1, b).join('\n');
+
+  const liveNotNull = (table) => {
+    const m = fixture.match(new RegExp('CREATE TABLE public\\."' + table + '" \\(([\\s\\S]*?)\\n\\);'));
+    if (!m) return null;
+    return m[1].split('\n')
+      .filter(l => /NOT NULL/i.test(l))
+      .map(l => (l.match(/"([a-z_]+)"/) || [])[1])
+      .filter(Boolean);
+  };
+  const harnessBlock = (table) => {
+    const m = harnessSchema.match(new RegExp('CREATE TABLE ' + table + ' \\(([\\s\\S]*?)\\);'));
+    return m ? m[1] : '';
+  };
+
+  for (const table of ['orders', 'order_items']) {
+    const live = liveNotNull(table);
+    ok(Array.isArray(live) && live.length > 0, `H1.${table} live NOT NULL set read from the fixture (${live?.length ?? 0} columns)`);
+    const blk = harnessBlock(table);
+    const missing = (live ?? []).filter(c => {
+      if (c === 'id') return false;                       // PRIMARY KEY implies it
+      // ⚠️ END OF LINE, NOT THE FIRST COMMA — `numeric(10,2)` carries a comma inside the TYPE,
+      // so a `[^,]*` match stops before reaching NOT NULL and reports a gap that is not there.
+      // The first version of this check did exactly that and flagged four sound columns.
+      const col = blk.split('\n').find(l => new RegExp('\\b' + c + '\\b').test(l));
+      return !col || !/NOT NULL/i.test(col);
+    });
+    ok(missing.length === 0,
+       `H2.${table} 🔴 the harness enforces every NOT NULL live has — missing: ${missing.join(', ') || 'none'}`);
+  }
+  // The open half, COUNTED rather than quietly skipped.
+  const stillShort = ['customers', 'business_inventory', 'deliveries'].filter(t => {
+    const live = liveNotNull(t) ?? []; const blk = harnessBlock(t);
+    return live.some(c => c !== 'id' && !/NOT NULL/i.test(blk.split('\n').find(l => new RegExp('\\b' + c + '\\b').test(l)) ?? ''));
+  });
+  console.log(`  note  H3 — ${stillShort.length} table(s) this harness does NOT write to are still short of live: ${stillShort.join(', ')} (tech-debt #357)`);
+}
+
 console.log(`\nPGlite: ${fails === 0 ? 'ALL PASS' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);

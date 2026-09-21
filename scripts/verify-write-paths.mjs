@@ -519,6 +519,21 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/api/orders/submit.ts',
             'packages/cultivar-os/api/customers/create.ts',
             'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            // ⚠️ DECLARED 2026-09-21 (ledger #363) — PENDING DAVID'S RATIFICATION (#223 precedent).
+            // FOURTH PATH, the SAME HISTORY ACT AT A DIFFERENT SCALE. historyOrderWriter.ts is
+            // anchored on a DELIVERY STOP — "which of the 19 stops need a load?"; historyLoad.ts
+            // is anchored on the INVOICE — "what has this business ever sold?", 1,510 of them.
+            // 🔴 IT COULD NOT RIDE THE THIRD PATH, and that was checked rather than assumed:
+            // readOrderIngestState reads `deliveries` carrying a qb_invoice_id and plans per STOP,
+            // so an invoice with no stop — 1,491 of the 1,510 — is invisible to it BY CONSTRUCTION.
+            // Making the stop optional through its planner, matcher and report is the same
+            // bypass-branch shape this entry rejects for submit.ts.
+            // ✅ INVARIANTS NOT RE-DERIVED: same buildHistoryOrder, same buildInvoiceOrderContent,
+            // so business_inventory_id is the literal null on every line (§6 r8).
+            // It owns ONE column neither other path sets: import_run_id, the LOAD's run — which is
+            // what lets undo_import_run remove history with the customers and products in ONE
+            // operation (R-165, as sharpened 2026-09-21).
+            'packages/shared/src/quickbooks/historyLoad.ts',
             // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
             // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
             // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with
@@ -538,6 +553,10 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/api/orders/submit.ts',
             'packages/cultivar-os/api/customers/create.ts',
             'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            // ledger #363 — same reasoning as `orders` above: the whole-history door, same
+            // buildHistoryOrder, and the only path that sets `qbo_item_id` (a VALUE join to
+            // business_inventory.qb_item_id, never the lot id D-52 would punish).
+            'packages/shared/src/quickbooks/historyLoad.ts',
             // ⚠️ DECLARED 2026-09-16 (ledger #342) — PENDING DAVID'S RATIFICATION (the #223 precedent:
             // Thunder records it, David grants it). The ONE-UNIT UNDO: `undo_import_run` (20260916c)
             // DELETES a run's PRACTICE orders — order_kind='test' AND this run id, nothing else — with
