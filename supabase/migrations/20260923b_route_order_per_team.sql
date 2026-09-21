@@ -237,9 +237,11 @@ GRANT EXECUTE ON FUNCTION public.save_route_order(uuid, date, uuid[], uuid, nume
 -- V-BLOCK — run AFTER the migration and paste the four results back. Reads the catalogue.
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 
--- V1 · the plan table exists, RLS is on with one policy, and BOTH unique indexes are there.
---      Two indexes, not one: a NULL team_id is not equal to itself, so the unsplit day needs its
---      own predicate or a day could quietly collect two "whole day" plans.
+-- V1 · the plan table exists, RLS is on with one policy, and both unique indexes are there.
+--      ⚠️ EXPECT `unique_indexes = 3`, not 2 — the count includes the PRIMARY KEY. The two that
+--      matter are the partial ones: a NULL team_id is not equal to itself, so the unsplit day
+--      needs its own predicate or a day could quietly collect two "whole day" plans.
+--      EXPECT: rls = true · policies = 1 · unique_indexes = 3.
 SELECT 'V1' v, c.relrowsecurity AS rls,
        (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid) AS policies,
        (SELECT count(*) FROM pg_index i WHERE i.indrelid = c.oid AND i.indisunique) AS unique_indexes

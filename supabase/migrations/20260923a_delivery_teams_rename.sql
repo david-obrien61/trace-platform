@@ -182,6 +182,7 @@ COMMENT ON COLUMN public.deliveries.team_id IS
 
 -- V1 · the new names exist and the OLD ones are gone. Both directions, because a rename that
 --      left a copy behind would read as success on the first half alone.
+--      EXPECT one row, all four columns TRUE.
 SELECT 'V1' v,
        to_regclass('public.delivery_teams')        IS NOT NULL AS delivery_teams_exists,
        to_regclass('public.delivery_team_members') IS NOT NULL AS delivery_team_members_exists,
@@ -210,7 +211,9 @@ SELECT 'V3' v, p.proname,
  ORDER BY 2;
 
 -- V4 · the foreign key on deliveries.team_id followed the rename and now points at delivery_teams,
---      and no stop lost its team. (Every tenant reads 0 today; that is the expected answer.)
+--      and no stop lost its team.
+--      EXPECT: team_id_points_at = delivery_teams · teams = 0 · members = 0 · stops_with_a_team = 0.
+--      (Zeros are the CORRECT answer today — nobody has built a crew list yet.)
 SELECT 'V4' v,
        (SELECT confrelid::regclass::text FROM pg_constraint
          WHERE conrelid = 'public.deliveries'::regclass AND contype = 'f'
