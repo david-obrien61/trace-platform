@@ -687,3 +687,33 @@ COVERS: #341
 - **PASS:** a file saved **after** this build shows **no** such sentence.
 - **FAIL:** "Loaded 673 products & services" with nothing else. That reads as the whole list, and it is not.
 
+
+---
+
+### CARD 21 — THE RUN IS RECORDED, AND THE SCREEN SAYS SO EITHER WAY
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #360
+
+1. **Settings → Accounting**, with QuickBooks connected. Press **Read my QuickBooks data** and
+   let all three walks finish.
+2. Press **Visualize**. The report opens in a new tab, as it always has.
+3. Come back to the Settings tab and read the line **under the Visualize button**.
+
+**PASS:** the line says the report opened **and** that the run was recorded, naming how many
+findings were stored — for example *"Report opened, and this run was recorded — 9 findings
+stored, so the next one can be compared with it."* The report itself is unchanged.
+
+**PASS (the honest-failure half, and the one worth having):** if the run cannot be stored, the
+line says so in those words — *"The report opened and is complete. This run was NOT recorded:
+…"* — in red, with the reason. **The report still opens and is still complete.** A failed save
+must never read as a failed report.
+
+**FAIL:** a green "recorded" line when nothing was stored. Through PostgREST a refusal returns
+no error and no rows, so a screen that trusts "no error" will claim a save that never happened.
+To check it for real: open **Settings → Accounting** while signed in as a member **without**
+`books:write`, press Visualize, and confirm the line goes RED rather than green.
+
+**FAIL:** the report window does not open, or opens empty, because of anything to do with saving.
+

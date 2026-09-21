@@ -1,5 +1,6 @@
 # TRACE — DECISIONS INDEX (read first)
 
+> ✅ Drift watch (2026-09-21 · #360 · 📓 BUILD — the books review records its run): **No drift — abided by A8/R-12 (a zero-row write is a refusal, so the verdict is counted not assumed), D-9 (the failed save says so in its own words rather than borrowing the report's), and §6 r8 (the mount passes its client exactly as `ServicesReview` does).**
 > ✅ Drift watch (2026-09-20 · #358 · 🌳 BUILD — the roll-up returns as the pick list; page only, no migration): **No drift. Followed the owner's own process over our inference (the reversal of #355 is recorded in both directions), D-9 (each list says what it is for), R-148 clause 4 (the later id claim renumbered, #357 → #358), R-149 and R-154.**
 
 > ✅ Drift watch (2026-09-18 · #356 · 📏 BUILD + MIGRATION WRITTEN — caliper on the ladder; no permission string, api/ 12/12): **No drift. Followed David's 2026-09-16 "one location, many reads" (caliper is a column on the rung, not a threshold), D-9 (an unrecorded caliper is NULL and the screen says "not recorded"; the ANSI height default is labelled a suggestion), R-133 (nothing deleted), R-149 and R-154. The Freehill sleeve contradiction is filed (tech-debt #349), not decided.**

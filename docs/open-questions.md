@@ -87,6 +87,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#360 — the books review records its run (built, NOT MERGED)**
+- 🔴 **OPEN — CARD 21's RED HALF NEEDS A MEMBER WITHOUT `books:write`.** Proving the green line is easy; proving the screen goes RED when nothing was stored is the half that matters. Owner: ledger #360.
+- 🟡 **OPEN — NOTHING READS THE STORED RUNS BACK YET except the opening-stock seed.** Comparing one month with the next is what the tables are for, and no screen does it. Owner: ledger #360.
+
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
 - 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
