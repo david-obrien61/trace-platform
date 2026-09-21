@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #361 close-out, OP-13 N=3) — verbatim, not summarized.
+     §3 holds the newest three by ledger id. entries-in == entries-out. -->
+
+### 2026-09-18 — THUNDER **CALIPER ON THE LADDER — EVERY SIZE CARRIES ITS TRUNK CALIPER, READ AT THE NURSERY'S OWN HEIGHT. #356. TECH-DEBT #349.** David: *"the trade measure LAWNS buys and sells on, and the real graduation test."* Min and max caliper per rung (nullable; a blank max = "and up"), LAWNS backfilled 3/5 1.0 · 15 1.25 · 30 1.5–2.5 · 45 2.5–3.5 · 65 3.5–4.5 · 95/100 4–5 · 200 5+, and the measuring height as a per-business Operations figure (LAWNS 12 in). Nothing reads caliper yet. **Trunk protection (item 3) filed as tech-debt #349:** the catalogue has one generic item; the product lives only in line text; and Saturday's Freehill order bills the over-4" mesh for two 30 gal trees.
+
+**Type:** BUILD + MIGRATION WRITTEN (NOT APPLIED), on `feat/ladder-caliper` stacked on `feat/load-list-bulk-first`, **own worktree (§6 r20)**, one ledger id. Migration executed on PGlite, ALL PASS. Proof narrative: ledger #356. **§3 RETENTION: 1 archived verbatim (#353), 1 written — entries-in == entries-out.**
+
+**FLAGGED FOR DAVID:** **(a)** ⛔ **APPLY `20260918c_container_ladder_caliper.sql` BEFORE MERGING** — the ladder reader asks for the new columns; merged first, every ladder read fails. Then paste V1–V4 · **(b)** 🔴 **MERGE ORDER: #355 (layout) first, then this** — they are stacked · **(c)** 🔴 **FREEHILL, SATURDAY: two 30 gal trees billed GREEN MESH (the over-4" sleeve)** — the caliper rule says 1.5–2.5 in. Ask Lauren which is right (tech-debt #349) · **(d)** ✅ **ANSWERED 2026-09-18 — the standard is SHOWN, never enforced:** 6 in from the soil line, 12 once the reading at 6 in is **4½** in or more (not 4 — read from the document); each size shows what the standard would measure it at; LAWNS's departure is recorded in its own words. Measured-at stays on the BUSINESS. Root ball filed as tech-debt **#351**, a large-tree rule of thumb rather than the standard's table · **(e)** ⚠️ **NOTHING READS CALIPER YET** — graduation (the under-production release) and the sleeve check are its first readers, neither built.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-20 (ledger #357 close-out, after merging origin/main —
      #356 and #358 landed while #357 was in flight — OP-13 N=3) — verbatim, not summarized.
      §3 holds the newest three by ledger id: #358 · #357 · #356; #355 and #354 overflowed.

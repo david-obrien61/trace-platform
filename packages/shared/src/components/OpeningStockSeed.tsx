@@ -61,7 +61,7 @@ type Phase =
   | { k: 'empty'; why: string }
   | { k: 'ready' }
   | { k: 'working'; done: number; of: number }
-  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number; notImported: number } };
+  | { k: 'done'; seeded: number; qty: number; skipped: { withStock: number; withHistory: number; notImported: number; notAProduct: number; underProduction: number } };
 
 /** What the books review last said, or why it said nothing. Never a silent absence. */
 interface Suggestion {
@@ -111,11 +111,14 @@ export function OpeningStockSeed(): React.ReactElement | null {
       // replaced, and giving it stock would put it back in front of people.
       const inv = await supabase
         .from('business_inventory')
-        .select('id,name,qty,import_run_id')
+        // qb_item_type / qb_income_account are what the books said this row IS (20260920b);
+        // description and sell_price are what a DISCOUNT row is recognised by.
+        .select('id,name,qty,import_run_id,qb_item_type,qb_income_account,description,sell_price')
         .eq('business_id', businessId)
         .is('retired_at', null);
       if (inv.error) { setPhase({ k: 'error', why: inv.error.message }); return; }
-      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null; import_run_id: string | null }[];
+      const rows = (inv.data ?? []) as { id: string; name: string | null; qty: number | null; import_run_id: string | null;
+        qb_item_type: string | null; qb_income_account: string | null; description: string | null; sell_price: number | null }[];
       setTotalProducts(rows.length);
 
       // ── which of them have ANY ledger history ─────────────────────────────
@@ -138,10 +141,18 @@ export function OpeningStockSeed(): React.ReactElement | null {
         qty: Number(r.qty ?? 0),
         hasHistory: withHistory.has(String(r.id)),
         imported: r.import_run_id != null,
+        qbType: r.qb_item_type,
+        qbIncomeAccount: r.qb_income_account,
+        description: r.description,
+        sellPrice: r.sell_price,
       }));
       setCandidates(cands);
 
-      const seedable = cands.filter(c => c.qty <= 0 && !c.hasHistory && (mode === 'live' || c.imported)).length;
+      // 🔴 COUNTED BY THE PLANNER ITSELF, NOT BY A SECOND COPY OF ITS RULES. This line used to
+      // re-implement the exclusions inline, so the moment the planner learned to skip fees the
+      // screen would have promised a number it was no longer going to do (STD-011).
+      const preview = planOpeningStockSeed(cands, SEED_MIN, mode);
+      const seedable = preview.ok ? preview.steps.length : 0;
       console.log('[TRACE:SEED] loaded', { products: rows.length, seedable, withHistory: withHistory.size, mode });
 
       if (seedable === 0) {
@@ -271,7 +282,8 @@ export function OpeningStockSeed(): React.ReactElement | null {
     );
   }
   if (phase.k === 'done') {
-    const skipped = phase.skipped.withStock + phase.skipped.withHistory + phase.skipped.notImported;
+    const skipped = phase.skipped.withStock + phase.skipped.withHistory + phase.skipped.notImported
+      + phase.skipped.notAProduct + phase.skipped.underProduction;
     return (
       <div style={card}>
         <h3 style={h}>Done — {phase.seeded.toLocaleString()} products start at {phase.qty}</h3>
@@ -297,7 +309,12 @@ export function OpeningStockSeed(): React.ReactElement | null {
             held stock and {phase.skipped.withHistory.toLocaleString()} had already been sold or
             counted, so their numbers are real and we did not touch them
             {phase.skipped.notImported > 0 && <>; {phase.skipped.notImported.toLocaleString()} were not
-            created by your QuickBooks import, and test mode leaves those alone</>}.
+            created by your QuickBooks import, and test mode leaves those alone</>}
+            {phase.skipped.notAProduct > 0 && <>; <b>{phase.skipped.notAProduct.toLocaleString()} are not
+            things you keep in stock</b> — your books put them under delivery, labour, a discount or
+            bookkeeping, so a starting number would read as stock you could sell</>}
+            {phase.skipped.underProduction > 0 && <>; {phase.skipped.underProduction.toLocaleString()} are
+            marked <b>(UNDER PRODUCTION)</b>, so they are still growing and are not sellable yet</>}.
           </p>
         )}
       </div>
