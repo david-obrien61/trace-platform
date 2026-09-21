@@ -245,6 +245,32 @@ export const CUSTOMER_SEARCH_FIELDS: readonly string[] = [
   'phone', 'email', 'billing_line1', 'billing_city', 'billing_state', 'billing_zip',
 ];
 
+/**
+ * 🔴 THE ROSTER'S OWN COLUMNS — WHAT THE LIST SHOWS, PLUS WHAT IT SEARCHES. NOTHING ELSE.
+ *
+ * MEASURED 2026-09-21 on LAWNS (2,005 customers): reading the FULL set is **1.44 MB and 1,890 ms**
+ * across three pages; this set is **178 KB and ~200 ms**. The roster renders about seven columns
+ * and was carrying twenty-eight to do it.
+ *
+ * 🔴 IT IS DERIVED FROM `CUSTOMER_SEARCH_FIELDS`, NOT TYPED BESIDE IT. A roster that displays a
+ * field it did not fetch renders blank; a roster that SEARCHES a field it did not fetch matches
+ * NOTHING AND SAYS NOTHING — the exact defect the search list's own comment records against the
+ * dropped address columns. Deriving makes that impossible: widen the search and the read widens
+ * with it, in one place.
+ *
+ * ⚠️ THE EDITOR DOES NOT USE THIS. `CustomerPartyEditor` opens on an explicit click and fetches the
+ * whole row itself (one ~100 ms read), because its job is every field. Paying 1.26 MB on every
+ * roster load so that a click can be instant is the wrong way round.
+ */
+export const CUSTOMER_SELECT_LIST: string = Array.from(new Set([
+  'id', 'business_id',                                   // identity + the RLS scope every read carries
+  'customer_type',                                       // decides which name the Name cell renders
+  'price_tier', 'tax_exempt', 'status', 'source', 'created_at',   // the grid's own columns
+  'lifetime_value',                                      // rendered as a column once it is populated
+  ...CUSTOMER_SEARCH_FIELDS,                             // everything the search box can match on
+])).join(',');
+
+
 /** The roster's search haystack for ONE row — the string `DataSheet` runs `.includes()` against.
  *
  *  🔴 A9 (absent is not empty): a field that is null, undefined, blank or non-string contributes

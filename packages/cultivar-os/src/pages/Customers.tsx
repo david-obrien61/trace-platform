@@ -37,7 +37,8 @@ import {
 } from '@trace/shared/components/datasheet/DataSheet';
 import { writeLanded, applyRowPatch } from '@trace/shared/components/datasheet/rowPatch';
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
-import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
+import { CUSTOMER_SELECT_LIST } from '../components/customers/customerFieldRegistry';
+import { CUSTOMER_SELECT_CORE, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
 
@@ -86,6 +87,23 @@ function fmtDate(iso: string) {
 const sourceStyle: React.CSSProperties = { fontSize: '0.72rem', fontWeight: 600, color: '#374151', background: '#f3f4f6', borderRadius: 6, padding: '2px 7px' };
 const tierSelectStyle = (): React.CSSProperties => ({ color: '#3730a3', fontWeight: 700 });
 
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 THE ROSTER IS HELD ACROSS NAVIGATION. Measured 2026-09-21: coming back from a customer's
+// profile re-read all three pages — 1.44 MB and ~1.9 s of server time — every single time,
+// because the effect keys on `businessId` and this component remounts on every route change.
+// Lauren moves between the list and a profile constantly; she was paying the whole read each way.
+//
+// ⚠️ A CACHE THAT CAN GO STALE IS WORSE THAN A SLOW READ, so every writer BUSTS it explicitly
+// (`bustRoster`): the inline tier and status edits, the editor's save, and the add form. There is
+// no timer and no background revalidation — what is on this screen is either what the last write
+// left or what the last read returned, never something in between that nobody asked for.
+//
+// ⚠️ MODULE SCOPE, NOT A CONTEXT, DELIBERATELY. It is a render cache for ONE screen; putting it in
+// a provider would make it look like shared state other screens may read.
+let ROSTER_CACHE: { businessId: string; rows: unknown[]; total: number | null } | null = null;
+/** Every path that writes a customer calls this. A stale roster is a lying roster. */
+function bustRoster() { ROSTER_CACHE = null; }
+
 export function Customers() {
   const { businessId, can } = useBusinessContext();
   // PRE-EMPTIVE, not apologetic (Phase 3, ruling 2026-07-30). These grid cells were among the only
@@ -127,7 +145,10 @@ export function Customers() {
     // E6 (Phase A): these were two hand-maintained column strings — the list most likely to silently
     // omit a field (a field added to the form but missed here reads back null forever). Now DERIVED.
     const CORE = CUSTOMER_SELECT_CORE;
-    const FULL = CUSTOMER_SELECT_FULL;
+    // ✏️ `CUSTOMER_SELECT_FULL` IS NO LONGER READ HERE (2026-09-21). The roster reads
+    // `CUSTOMER_SELECT_LIST`; the full set is the EDITOR's business and it fetches its own row.
+    // The binding is removed rather than prefixed with `_`: an unused import kept 'just in case'
+    // is a claim that something consumes it.
     // ══════════════════════════════════════════════════════════════════════════════════════
     // 🔴 THE READ IS PAGED AND THE TOTAL IS COUNTED — IT USED TO BE NEITHER.
     // ══════════════════════════════════════════════════════════════════════════════════════
@@ -144,17 +165,29 @@ export function Customers() {
     // `count: 'exact'` on the first page gives the TRUE total; `.range()` then pages until the
     // rows run out. The count and the rows come from the same filter, so they cannot disagree.
     const PAGE = 1000;
-    const run = (cols: string, from: number) => supabase
-      .from('customers')
-      .select(cols, { count: 'exact' })
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE - 1);
+    // 🔴 `count: 'exact'` ON THE FIRST PAGE ONLY. It ran on EVERY page, and a count is a full scan
+    // of the filtered set: three of them over 2,005 rows cost **1,293 ms of the read's 1,890 ms**,
+    // measured 2026-09-21. The total cannot change between pages of one read, so pages 2..n asked
+    // a question whose answer they already had.
+    const run = (cols: string, from: number) => {
+      const q = supabase
+        .from('customers')
+        .select(cols, from === 0 ? { count: 'exact' } : undefined)
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      return q;
+    };
 
     // Which column set ANSWERED is remembered, so the remaining pages are read with the same one —
     // paging page 2 with FULL after page 1 fell back to CORE would fail every page but the first.
-    let answered = FULL;
-    let { data, error, count } = await run(FULL, 0);
+    // 🔴 THE LIST READS WHAT THE LIST SHOWS. `CUSTOMER_SELECT_LIST` is derived from the grid's
+    // own columns plus `CUSTOMER_SEARCH_FIELDS`, so a field the roster can SEARCH is always a
+    // field it fetched — the silent-no-match defect the search list's own comment records.
+    // FULL/CORE are still the fallback pair: if a gated column is absent this retries with CORE,
+    // exactly as before, because LIST may name a column a pre-migration tenant does not have.
+    let answered = CUSTOMER_SELECT_LIST;
+    let { data, error, count } = await run(CUSTOMER_SELECT_LIST, 0);
     if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {
       console.log('[TRACE:customers] party/exemption cols absent — roster retrying with CORE (migration pending)', { code: (error as any).code });
       answered = CORE;
@@ -164,13 +197,19 @@ export function Customers() {
     // mis-sized page can never spin.
     if (!error) {
       const total = count ?? (data?.length ?? 0);
-      const all = [...((data ?? []) as any[])];
-      while (all.length < total) {
-        const next = await run(answered, all.length);
-        if (next.error) { console.log('[TRACE:customers] page read failed — showing what loaded', { got: all.length, total, message: next.error.message }); break; }
-        const rows = (next.data ?? []) as any[];
-        if (rows.length === 0) break;
-        all.push(...rows);
+      const first = (data ?? []) as any[];
+      // 🔴 THE REMAINING PAGES GO TOGETHER, NOT ONE AFTER ANOTHER. Page 0 returned the exact
+      // total, so how many pages there are is KNOWN — nothing here is speculative. Serially the
+      // tail cost 253 + 192 ms; in parallel it costs the slower of the two.
+      // ⚠️ `Promise.all`, not a loop with `await` inside it: the loop was correct and paid for
+      // every page in sequence for no reason once the total was in hand.
+      const offsets: number[] = [];
+      for (let from = first.length; from < total; from += PAGE) offsets.push(from);
+      const rest = offsets.length ? await Promise.all(offsets.map(from => run(answered, from))) : [];
+      const all = [...first];
+      for (const next of rest) {
+        if (next.error) { console.log('[TRACE:customers] page read failed — showing what loaded', { got: all.length, total, message: next.error.message }); continue; }
+        all.push(...((next.data ?? []) as any[]));
       }
       data = all as any;
       count = total;
@@ -189,11 +228,20 @@ export function Customers() {
       searchable: CUSTOMER_SEARCH_FIELDS.join(','),
     });
     setCustomers((data ?? []) as unknown as CustomerRow[]);
+    if (businessId) ROSTER_CACHE = { businessId, rows: (data ?? []) as unknown[], total: count ?? null };
     setListLoading(false);
   }, [businessId]);
 
   useEffect(() => {
     if (!businessId) return;
+    // Held roster: render it and do NOT re-read. Busted by every writer, so it cannot be stale.
+    if (ROSTER_CACHE && ROSTER_CACHE.businessId === businessId) {
+      setCustomers(ROSTER_CACHE.rows as CustomerRow[]);
+      setCustomerTotal(ROSTER_CACHE.total);
+      setListLoading(false);
+      console.log('[TRACE:customers] roster served from the held copy — no read', { rows: ROSTER_CACHE.rows.length });
+      return;
+    }
     void loadCustomers();
   }, [businessId, loadCustomers]);
 
@@ -220,6 +268,7 @@ export function Customers() {
       // A8 — a grid cell is a write too: without the affected-row check a refused tier change
       // silently repaints as if it landed, then reverts on the next load.
       const { data, error } = await supabase.from('customers').update({ price_tier: v }).eq('id', c.id).eq('business_id', bid).select('id');
+      bustRoster();   // the held roster must not out-live the write
       const verdict = writeLanded({ data, error }, 'That tier change was not saved — you may not have permission to edit this customer.');
       if (!verdict.landed) { setListError(verdict.message); return; }
       // The row is patched from the write's own proven response — no refetch, no flash (G11 pass,
@@ -249,6 +298,7 @@ export function Customers() {
     void (async () => {
       // A8 — see onTier.
       const { data, error } = await supabase.from('customers').update({ status: v }).eq('id', c.id).eq('business_id', bid).select('id');
+      bustRoster();   // the held roster must not out-live the write
       const verdict = writeLanded({ data, error }, 'That status change was not saved — you may not have permission to edit this customer.');
       if (!verdict.landed) { setListError(verdict.message); return; }
       setCustomers(prev => applyRowPatch(prev, c.id, { status: v }));
@@ -352,7 +402,7 @@ export function Customers() {
           customer={editor.row}
           tierOptions={tierOptions(editor.row.price_tier ?? null)}
           onClose={() => setEditor(null)}
-          onSaved={() => { void loadCustomers(); }}
+          onSaved={() => { bustRoster(); void loadCustomers(); }}
         />
       )}
     </>
