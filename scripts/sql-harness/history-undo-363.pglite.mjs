@@ -36,7 +36,7 @@ async function fresh(mineSql) {
     CREATE FUNCTION public.has_permission(uuid, text) RETURNS boolean LANGUAGE sql AS 'select true';
     CREATE FUNCTION public.set_updated_at_generic() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $f$;
     CREATE TABLE customers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid NOT NULL REFERENCES businesses(id),
-      import_run_id uuid, first_name text, phone text, email text, billing_line1 text, billing_line2 text, billing_city text,
+      import_run_id uuid, first_name text, last_name text, phone text, email text, billing_line1 text, billing_line2 text, billing_city text,
       billing_state text, billing_zip text, address_line1 text,
       created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT '2020-01-01');
     CREATE TRIGGER customers_updated_at BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
@@ -173,6 +173,36 @@ console.log('\n── 20260921 · the load\'s history leaves with it ───�
   ok(refused === false || threw !== null,
      `F1 🔴 UNDER THE MUTANT THE PROTECTION IS GONE — refused=${refused} threw=${threw ?? 'no'}`);
   ok(!(refused === true), 'F2 so D1 is a real assertion: it FAILS when the null-safe form is removed'); }
+
+
+// ── G · 🔴 THE V-BLOCKS DAVID PASTES ARE EXECUTED HERE, NOT JUST READ (ledger #363).
+//        This morning the first V5–V7 were handed over unvalidated and died on 23502 before
+//        reaching the undo. Nothing goes to the SQL editor again without being run first.
+//        The file under test is the one in David's folder, read from disk.
+{
+  const { readFileSync: rf } = await import('node:fs');
+  const path = '/Users/terrenceobrien/Desktop/trace-platform/V5-V7-results-363.sql';
+  let file = null;
+  try { file = rf(path, 'utf8'); } catch { /* not present */ }
+  ok(file !== null, 'G0 the hand-over file exists at the path David was given');
+  if (file) {
+    const blocks = file.split(/^DO \$verify\$/m).slice(1)
+      .map(b => 'DO $verify$' + b.split('$verify$;')[0] + '$verify$;');
+    ok(blocks.length === 3, `G1 three DO blocks parsed (got ${blocks.length})`);
+    const BIZ = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
+    for (let i = 0; i < blocks.length; i++) {
+      const { db } = await fresh(M(MINE_FILE));
+      // the file is written against LAWNS' id; this harness uses the same constant, so no rewrite
+      let msg = null;
+      try { await db.exec(blocks[i]); } catch (e) { msg = String(e.message); }
+      const v = 'V' + (5 + i);
+      ok(msg !== null, `G2.${v} the block raised, as designed (it rolls itself back)`);
+      ok(!!msg && msg.includes(`${v} PASSED`),
+         `G3.${v} 🔴 and the message reads "${v} PASSED" — the verdict is IN THE ERROR, where the editor shows it. Got: ${String(msg).slice(0, 150)}`);
+      ok(!!msg && !msg.includes('FAILED'), `G4.${v} and it does NOT read FAILED`);
+    }
+  }
+}
 
 console.log(`\nPGlite: ${fails === 0 ? 'ALL PASS' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);
