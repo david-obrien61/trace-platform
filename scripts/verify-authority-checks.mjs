@@ -121,6 +121,22 @@ const HAS_CAN_CALL = /\bcan\s*\(/;
 // carries the reason it is not authority. Keyed file:pattern so it cannot silently widen.
 const EXEMPT = [
   {
+    file: 'packages/shared/src/components/QboHistoryLoad.tsx',
+    match: /isOwner/,
+    why: 'DISPLAY, and the SERVER is the enforcement — `handleRelink` and `handleHistoryIngest` '
+       + 'both call `refuseUnlessOwner` before `callerCan`, so a manager who reached these routes '
+       + 'directly is refused by the endpoint whether or not this branch ever rendered. '
+       + 'It is the SAME interim gate `QboOrderIngest` carries and for the same recorded reason '
+       + '(David, 2026-09-08): owner authority here is `businesses.owner_id` OR the OWNER ROLE — '
+       + 'R-22 — and there is deliberately no permission string for it, because the alias table '
+       + 'would open importing a company\'s whole sales history to STAFF. R-80: ingesting a '
+       + 'customer\'s books is an owner act, not a delegable verb. '
+       + 'NOT the `isOwner ||` bypass the 2026-07-30 ruling retired: that was an OR that WIDENED '
+       + 'access past a permission check; this only decides what renders, and it NARROWS. '
+       + '⚠️ IF THIS EVER BECOMES DELEGABLE it turns into a permission string, a manifest entry '
+       + 'and a policy, and this exemption is what has to go first.',
+  },
+  {
     file: 'packages/cultivar-os/src/pages/ReceiptDetail.tsx',
     match: /isOwner/,
     why: 'DISPLAY, and the enforcement is the DATABASE. Editing a receipt line is OWNER-ONLY BY '
