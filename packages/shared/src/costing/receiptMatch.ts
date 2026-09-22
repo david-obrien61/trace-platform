@@ -112,6 +112,12 @@ export interface MatchProposal {
   landedPackCostProRataByValue: number | null;
   /** Said out loud when the receipt's own lines do not add up: no cost can be taken from it. */
   landedRefusal: string | null;
+  /** True for the most recent purchase of THIS product — the one a screen offers by default. */
+  isNewestForProduct?: boolean;
+  /** How many older purchases of the same product sit behind it, one tap away. */
+  otherPurchasesOfThisProduct?: number;
+  /** What changed since the purchase before it, when anything did. */
+  priceChange?: { was: number; now: number; direction: 'up' | 'down'; note: string } | null;
 }
 
 const STOP = new Set(['the', 'and', 'of', 'for', 'with', 'lb', 'lbs', 'bag', 'bags', 'gal', 'gallon', 'yard', 'yd', 'each', 'per']);
@@ -188,10 +194,43 @@ export function proposeMatches(
     });
   }
 
-  out.sort((a, b) => b.score - a.score
-    || String(b.purchasedOn ?? '').localeCompare(String(a.purchasedOn ?? ''))
-    || a.description.localeCompare(b.description));
-  return { proposals: out.slice(0, opts.limit ?? 8), collapsed };
+  // 🔴 ⑤ THE SCORE PICKS THE PRODUCT; THE DATE PICKS THE LINE (David, 2026-09-22).
+  // *"the match score picks WHICH product; among that product's lines, NEWEST is the default."*
+  // The old sort was score-first across everything, so a better-worded OLDER line outranked the
+  // most recent purchase of the same thing — and "what did we last pay" quietly meant "what did we
+  // once pay". Lines are now grouped by PRODUCT, the product groups ranked by their best score,
+  // and inside a group the newest purchase leads.
+  const productKey = (p: MatchProposal): string =>
+    norm(p.sku) || norm(p.description);
+  const groups = new Map<string, MatchProposal[]>();
+  for (const p of out) groups.set(productKey(p), [...(groups.get(productKey(p)) ?? []), p]);
+
+  const ranked: MatchProposal[] = [];
+  const byBest = [...groups.values()].sort((ga, gb) =>
+    Math.max(...gb.map(p => p.score)) - Math.max(...ga.map(p => p.score))
+    || ga[0].description.localeCompare(gb[0].description));
+  for (const group of byBest) {
+    const newestFirst = [...group].sort((a, b) =>
+      String(b.purchasedOn ?? '').localeCompare(String(a.purchasedOn ?? ''))
+      || b.score - a.score);
+    newestFirst.forEach((p, i) => {
+      // 🔴 A PRICE CHANGE IS CALLED OUT. The newest line carries the comparison against the one
+      // before it, in money and in direction — a rise nobody noticed is how a recipe's cost drifts.
+      const prev = newestFirst[i + 1];
+      const now = p.landedPackCostEqualPerItem;
+      const was = prev?.landedPackCostEqualPerItem ?? null;
+      ranked.push({
+        ...p,
+        isNewestForProduct: i === 0,
+        otherPurchasesOfThisProduct: i === 0 ? newestFirst.length - 1 : 0,
+        priceChange: i === 0 && now != null && was != null && Math.abs(now - was) >= 0.005
+          ? { was, now, direction: now > was ? 'up' : 'down',
+              note: `${now > was ? 'Up' : 'Down'} from $${was.toFixed(2)} on ${prev.purchasedOn ?? 'the previous receipt'} — a change of $${Math.abs(now - was).toFixed(2)} a pack.` }
+          : null,
+      });
+    });
+  }
+  return { proposals: ranked.slice(0, opts.limit ?? 8), collapsed };
 }
 
 /**
