@@ -110,6 +110,17 @@ interface DataSheetProps<T> {
    *  `available` and `price disagreement` mutually exclusive when a row is routinely both.
    *  Optional and additive — every existing consumer renders exactly as before. */
   extraFilter?: StatusFilterConfig<T>;
+  /** An A–Z strip over the rows: `get` returns the row's bucket (see `alphaIndex.alphaKeyFor`).
+   *  Optional and additive — a consumer that does not pass it renders exactly as before.
+   *
+   *  🔴 IT LIVES IN THE GRID BECAUSE THE GRID OWNS THE COUNT CLAIM. Filtering the rows OUTSIDE
+   *  and handing over the subset was the first design, and it was measured dishonest: with 77 of
+   *  LAWNS's 2,005 customers passed in, `countPillText` sees `loaded 77 < total 2005` and renders
+   *  **"showing 77 of 2005 customers"** — the sentence that means *the read was truncated*, which
+   *  is the exact lie `countPill.ts` exists to prevent (it shipped `1000 of 1000` over 1,964 rows).
+   *  A letter is a CHOICE the reader made, not a short read, and only the grid can tell those
+   *  apart because only the grid holds both numbers. */
+  indexFilter?: { get: (row: T) => string; keys: readonly string[]; label?: string };
   defaultSortKey?: string;
   defaultSortDir?: 'asc' | 'desc';
   /** Highlight + count rows (e.g. dup-size collisions). Evaluated against the FULL row set — a flag
@@ -154,7 +165,7 @@ interface DataSheetProps<T> {
 export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
-    statusFilter, extraFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
+    statusFilter, extraFilter, indexFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
     actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items', totalRows = null,
   } = props;
@@ -162,6 +173,8 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [extra, setExtra] = useState('all');
+  // The A–Z strip's selection. 'all' is not a letter, so the strip starts showing everyone.
+  const [indexKey, setIndexKey] = useState('all');
   const [sortKey, setSortKey] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir);
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
@@ -217,6 +230,8 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     // The second dimension is AND-ed with the first: they are different questions, so a row
     // must satisfy both to survive. Independent state, so clearing one does not clear the other.
     if (extraFilter && extra !== 'all') out = out.filter(r => extraFilter.get(r) === extra);
+    // AND-ed like the other two: a letter and a search are different questions about a row.
+    if (indexFilter && indexKey !== 'all') out = out.filter(r => indexFilter.get(r) === indexKey);
     if (q) out = out.filter(r => searchText(r).toLowerCase().includes(q));
     const col = columns.find(c => c.key === sortKey);
     if (col?.sortVal) {
@@ -228,13 +243,27 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       });
     }
     return out;
-  }, [rows, search, status, statusFilter, extra, extraFilter, sortKey, sortDir, columns, searchText]);
+  }, [rows, search, status, statusFilter, extra, extraFilter, indexKey, indexFilter, sortKey, sortDir, columns, searchText]);
 
   // Flagged rows, split by what the filter/search actually SHOWS. Computed AFTER `view` — deriving
   // it from `rows` (as it did) is exactly the defect: the count was of the whole catalog while the
   // banner rendered above the filtered view, so a clean screen still carried a red banner about a
   // collision somewhere else. The rule is pure and lives in flagCounts.ts, because it was
   // unreachable by any test while it lived inside this memo.
+  // How many rows sit under each letter. Computed from `rows` — the whole set the grid was handed
+  // — NOT from `view`: a count that changed as you filtered would make every letter read 0 the
+  // moment you picked one, which is the flag-banner defect (`flagCounts`) in a different control.
+  const indexCounts = useMemo(
+    () => {
+      const m = new Map<string, number>();
+      if (!indexFilter) return m;
+      for (const k of indexFilter.keys) m.set(k, 0);
+      for (const r of rows) { const k = indexFilter.get(r); m.set(k, (m.get(k) ?? 0) + 1); }
+      return m;
+    },
+    [rows, indexFilter],
+  );
+
   const flags = useMemo(
     () => (rowFlag ? partitionFlagged(rows, view, rowFlag, getRowId) : { inView: 0, elsewhere: 0 }),
     [rows, view, rowFlag, getRowId],
@@ -406,9 +435,60 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                   `1000 of 1000` over 1,964 rows. */}
               <span style={S.countPill}>{countPillText({
                 visible: view.length, loaded: rows.length, total: totalRows,
-                filtered: status !== 'all' || !!search, itemNoun,
+                // 🔴 EVERY DIMENSION THAT NARROWS THE VIEW COUNTS AS FILTERED, NOT JUST TWO.
+                // `extra` was missing here before the A–Z strip existed, so picking a value in the
+                // SECOND dropdown alone made the pill read `12 of 647 items` — the population
+                // sentence — while a filter was active (§6 r18: a header's assertion must hold for
+                // every row the section can contain). Live on /inventory today; fixed in passing
+                // because this build touches this exact claim (§1.6 fix-all-in-one-pass).
+                filtered: status !== 'all' || extra !== 'all' || indexKey !== 'all' || !!search, itemNoun,
               })}</span>
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════════════════════
+                A–Z STRIP. Rendered only when a consumer asks for one.
+
+                🔴 IT FILTERS; IT DOES NOT SCROLL TO A SECTION — A DELIBERATE DIVERGENCE (§6 r16).
+                The industry standard for an alphabetical index over a long list is a JUMP: the
+                iOS section index, the Windows jump list, Material's fast-scroll all scroll the
+                list to that letter's first row and leave the rest in place. Filtering is not
+                that, and the difference is recorded rather than discovered.
+                WHY THE DIVERGENCE: a jump needs the engine to hold a ref per row and expose a
+                scroll API — a change to the one grid /inventory, /assets and six other screens
+                render, for an ergonomic gain over a list that already has a search box. Filtering
+                reaches the same outcome ("show me the Ms") with a `filter` that cannot break the
+                frozen-column track, the sticky header or the bounded scroll box (§6 r14).
+                CONVERGE WHEN: the roster wants section headings inside ONE scroll, which filtering
+                genuinely cannot do — then the jump is the right build, on its own.
+
+                ⚠️ A LETTER NOBODY USES IS DISABLED, NOT HIDDEN. Hiding empty letters makes a
+                complete alphabet look like it has gaps; leaving them live is a control that does
+                nothing when pressed (§1.6 item 5, no dead affordance). It renders greyed with its
+                zero in the title, which is the honest third option.
+                ══════════════════════════════════════════════════════════════════════════════ */}
+            {indexFilter && (
+              <div style={S.alphaStrip} role="group" aria-label={indexFilter.label ?? 'Jump to a letter'}>
+                <button
+                  style={indexKey === 'all' ? S.alphaKeyOn : S.alphaKey}
+                  onClick={() => setIndexKey('all')}
+                  title={`All ${itemNoun}`}
+                >All</button>
+                {indexFilter.keys.map(k => {
+                  const n = indexCounts.get(k) ?? 0;
+                  const empty = n === 0;
+                  return (
+                    <button
+                      key={k}
+                      disabled={empty}
+                      aria-pressed={indexKey === k}
+                      style={empty ? S.alphaKeyOff : indexKey === k ? S.alphaKeyOn : S.alphaKey}
+                      onClick={() => setIndexKey(indexKey === k ? 'all' : k)}
+                      title={empty ? `No ${itemNoun} under ${k}` : `${n} under ${k}`}
+                    >{k}</button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* 🔴 ONE FLEX CHILD, NOT N — see `dupBannerText` for why. */}
             {rowFlag && flagBanner && (flags.inView > 0 || flags.elsewhere > 0) && (
@@ -585,6 +665,14 @@ const S = {
   colBtn: { display: 'flex', alignItems: 'center', gap: 6, border: '1.5px solid #d1d5db', borderRadius: 8, padding: '0.45rem 0.7rem', background: '#fff', color: '#374151', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
   colMenu: { position: 'absolute' as const, top: 'calc(100% + 6px)', right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', padding: '0.5rem', zIndex: 50, minWidth: 190, maxHeight: 320, overflowY: 'auto' as const } as React.CSSProperties,
   colMenuItem: { display: 'flex', alignItems: 'center', gap: 8, padding: '0.35rem 0.5rem', fontSize: '0.85rem', color: '#374151', cursor: 'pointer', borderRadius: 6 } as React.CSSProperties,
+  // A dense index control: 27 targets on one line. The 48px touch minimum (§1.6 item 5) is
+  // deliberately NOT applied here and the reason is arithmetic — 27 × 48px is 1,296px, wider than
+  // the screen, so the rule's own goal (a target you can hit) is better served by a compact strip
+  // on a surface that is desktop-first by ruling (capture = mobile, reconcile = desktop).
+  alphaStrip: { display: 'flex', flexWrap: 'wrap' as const, gap: 4, marginBottom: 12 } as React.CSSProperties,
+  alphaKey: { minWidth: 30, minHeight: 32, padding: '0.3rem 0.4rem', border: '1.5px solid #d1d5db', borderRadius: 7, background: '#fff', color: '#374151', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  alphaKeyOn: { minWidth: 30, minHeight: 32, padding: '0.3rem 0.4rem', border: '1.5px solid #27500A', borderRadius: 7, background: '#27500A', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  alphaKeyOff: { minWidth: 30, minHeight: 32, padding: '0.3rem 0.4rem', border: '1.5px solid #f3f4f6', borderRadius: 7, background: '#f9fafb', color: '#d1d5db', fontSize: '0.8rem', fontWeight: 700, cursor: 'not-allowed' } as React.CSSProperties,
   countPill: { fontSize: '0.8rem', color: '#6b7280', marginLeft: 'auto' } as React.CSSProperties,
   // 🔴 ONE FLEX CHILD, NOT N. `dupBanner` is `display:flex` with a gap, so EVERY element a consumer
   // puts in its banner — each emphasis tag, each text run — became its own flex item, and the

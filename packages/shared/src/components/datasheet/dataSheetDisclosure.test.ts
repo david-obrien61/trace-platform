@@ -77,5 +77,30 @@ ok(/ev\.stopPropagation\(\)/.test(SRC),
 ok(/aria-expanded=\{isOpen\}/.test(SRC),
   'G10j: the toggle reports its state to assistive tech — a disclosure that does not say whether it is open is a control with no readable state');
 
+// ── ④ THE A–Z STRIP, AND THE COUNT CLAIM IT MUST NOT BREAK (ledger #378) ────────────────────
+// Same instrument and same caveat as above: this proves the CODE SAYS it, not that a browser did.
+// The browser half is the owner-test card.
+
+ok(/indexFilter && indexKey !== 'all'/.test(SRC),
+  'AZ1: the letter narrows the view, AND-ed with the other dimensions rather than replacing them');
+
+ok(/filtered: status !== 'all' \|\| extra !== 'all' \|\| indexKey !== 'all' \|\| !!search/.test(SRC),
+  '🔴 AZ2: THE COUNT PILL COUNTS EVERY DIMENSION THAT NARROWS THE VIEW. With a letter picked and this flag false, the header renders the POPULATION sentence ("77 of 2005 customers") while a filter is active — §6 r18, and the same class as the `1000 of 1000` the pill exists to prevent. It also fixes `extra`, which was missing here and is live on /inventory today.');
+
+ok(/indexCounts = useMemo\(/.test(SRC) && /for \(const r of rows\)/.test(SRC),
+  '🔴 AZ3: the per-letter counts are computed over `rows` — the whole set the grid holds — NOT over `view`. Counting the filtered view makes every OTHER letter read 0 the moment you pick one, which is the flag-banner defect (flagCounts) in a new control');
+
+ok(/disabled=\{empty\}/.test(SRC),
+  '🔴 AZ4: a letter with nobody under it is DISABLED, not hidden and not live — hiding it makes a complete alphabet look like it has gaps, and leaving it live is a control that does nothing when pressed (§1.6 item 5)');
+
+ok(/onClick=\{\(\) => setIndexKey\(indexKey === k \? 'all' : k\)\}/.test(SRC),
+  'AZ5: pressing the active letter again clears it — the strip has a way back to everyone that is not "find the All button"');
+
+ok(/aria-pressed=\{indexKey === k\}/.test(SRC),
+  'AZ6: each letter reports whether it is the active one — a filter with no readable state is the disclosure defect (G10j) in a second control');
+
+ok(SRC.includes('{indexFilter && ('),
+  '🔴 AZ7: NEGATIVE CONTROL — the strip renders ONLY for a consumer that asked for one. The engine has 8 consumers; /inventory and /assets must look exactly as they did, or this build changed six screens nobody asked it to touch');
+
 console.log(`\ndataSheetDisclosure: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }
