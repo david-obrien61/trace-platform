@@ -13,11 +13,12 @@
  *               <Breadcrumb/>) + the matched child route via <Outlet/>.
  */
 import { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { AppHeader } from '@trace/shared/components/AppHeader';
 import { TestModeBanner } from '@trace/shared/components/TestModeBanner';
 import { useBusinessContext } from '@trace/shared/context';
 import { bindDevSurfaceIdentity, clearDevSurfaces } from '@trace/shared/devtools';
+import { markNavigation } from '@trace/shared/utils/navTiming';
 import { AppNav } from '../nav/AppNav';
 import { Breadcrumb } from '../nav/Breadcrumb';
 import { DebugPanel } from '../DebugPanel';
@@ -26,6 +27,13 @@ import { auth } from '../../lib/auth';
 
 export function AppLayout() {
   const navigate = useNavigate();
+  // 🔴 THE SOFT-NAVIGATION MARK. AppLayout wraps every private screen and does NOT remount on a
+  // route change, so this effect is the one place that sees every move a person makes inside the
+  // app. Core Web Vitals cannot: a route change creates no document, so it produces no LCP, and
+  // the wait David reported moving from a customer's profile back to the list was invisible to
+  // Speed Insights entirely. The screen reports the other end (see reportScreenReady).
+  const location = useLocation();
+  useEffect(() => { markNavigation(location.pathname); }, [location.pathname]);
   // userEmail is the identity key: the context does NOT expose a raw user id, and
   // email is unique per signed-in user. `role` here is the context's display-ready
   // role ('OWNER' | 'MANAGER' | 'STAFF'), not the nullable membership role.
