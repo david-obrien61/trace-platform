@@ -15,7 +15,8 @@
 //   a row id would be rubbish after the next reload, and the database now refuses to make one
 //   (`recipe_link_must_survive_a_wipe`). This file therefore never sends `component_inventory_id`.
 //
-// DEPENDENCIES: ./supabase · @trace/shared/costing (types only) · ./recipeDraft.
+// DEPENDENCIES: ./supabase · @trace/shared/costing (types only) · ./recipeDraft ·
+//               ../components/inventory/inventoryEdit (the ONE `business_inventory` writer).
 // OUTPUTS:      loadRecipe · saveRecipe · confirmComponentPurchase · setItemType · ITEM_TYPES ·
 //               componentIdsByPosition · readMadeItemLabel · readReceiptsForMatching ·
 //               DEFAULT_MADE_ITEM_LABEL.
@@ -24,6 +25,7 @@
 import { supabase } from './supabase';
 import { draftToComponentRows, draftToRecipeRow, type ComponentDraft, type RecipeDraft } from './recipeDraft';
 import type { CapturedReceipt } from '@trace/shared/costing/receiptMatch';
+import { persistInventoryPatch } from '../components/inventory/inventoryEdit';
 
 const TRACE = true; // [TRACE:RECIPE] STD-003 — ON until David owner-proves
 
@@ -210,9 +212,13 @@ export async function confirmComponentPurchase(
  * system knows the row needs a build list, and it is never parsed out of a SKU.
  */
 export async function setItemType(businessId: string, inventoryId: string, itemType: ItemType): Promise<Outcome> {
-  const { data, error } = await supabase.from('business_inventory')
-    .update({ item_type: itemType }).eq('id', inventoryId).eq('business_id', businessId).select('id');
-  if (error || !data || data.length === 0) return refused('That change', error);
+  // 🔴 THROUGH THE ONE INVENTORY WRITER, NOT A SECOND ONE (§6 r8 / §1.6 item 8). This first issued
+  // its own UPDATE on `business_inventory`, and `npm run verify:write-paths` refused it: that table
+  // already has a writer, and a second one is how two paths come to disagree about what a write to
+  // one table entails. `persistInventoryPatch` carries the unit projection, the deploy-gated-column
+  // retry and the zero-row refusal check that this copy would have had to grow for itself.
+  const { error } = await persistInventoryPatch({ id: inventoryId, businessId, patch: { item_type: itemType } });
+  if (error) return { ok: false, message: `${error} Nothing changed.` };
   if (TRACE) console.log('[TRACE:RECIPE] item type', { inventoryId, itemType });
   return { ok: true, message: itemType === 'manufactured'
     ? 'Marked as made here. Add what goes into it, and a build will take those out and put the finished units in.'

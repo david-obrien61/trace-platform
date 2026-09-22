@@ -251,6 +251,15 @@ function spm(): RecipeDraft {
   ok(!got.includes('ocr_raw') && !got.includes('image_url'),
     'G5d: …and does NOT drag the OCR blob or the image along — a matcher reads lines, not photographs');
 
+  // 🔴 G5e ONE WRITER PER TABLE (§6 r8). `setItemType` first issued its OWN update on
+  // `business_inventory` — a table that already has a writer — and `verify:write-paths` refused it
+  // as a new undeclared path. It now goes through `persistInventoryPatch`, which already carries
+  // the unit projection, the gated-column retry and the zero-row refusal check.
+  ok(/persistInventoryPatch\(\{ id: inventoryId/.test(CODE(WRITE)),
+    '🔴 G5e: the made-item flag is written through the ONE business_inventory writer, not a second one');
+  ok(!/from\('business_inventory'\)/.test(CODE(WRITE)),
+    '🔴 G5f: …and this file addresses that table NOWHERE directly — a forked writer is how two paths come to disagree');
+
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
 }
