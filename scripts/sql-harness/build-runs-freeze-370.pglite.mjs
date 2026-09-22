@@ -96,6 +96,9 @@ async function recipeWith(db, tag, typed = true) {
   const typed = await db.query(`SELECT count(*)::int n FROM information_schema.columns
      WHERE table_name='recipe_components' AND column_name LIKE 'typed_%'`);
   ok(typed.rows[0].n === 4, `V0c recipe_components gained its four typed-price columns (got ${typed.rows[0].n})`);
+  const act = await db.query(`SELECT count(*)::int n FROM information_schema.columns
+     WHERE table_name='item_recipes' AND column_name LIKE 'actual_yield%'`);
+  ok(act.rows[0].n === 2, `V0d item_recipes gained the measured-yield pair (got ${act.rows[0].n})`);
   await db.close();
 }
 

@@ -24,7 +24,7 @@
 // INSTRUMENTATION (STD-003): [TRACE:RECIPE] — ON.
 // ============================================================
 import { supabase } from './supabase';
-import { draftToComponentRows, draftToRecipeRow, type ComponentDraft, type RecipeDraft } from './recipeDraft';
+import { draftToComponentRows, draftToRecipeRow, NOT_TIMED, type ComponentDraft, type RecipeDraft } from './recipeDraft';
 import type { CapturedReceipt } from '@trace/shared/costing/receiptMatch';
 import { persistInventoryPatch } from '../components/inventory/inventoryEdit';
 import {
@@ -88,6 +88,10 @@ export async function loadRecipe(
       quantity: String(c.quantity),
       unit: c.unit,
       componentQbItemId: c.component_qb_item_id ?? null,
+      typedPrice: c.typed_pack_cost == null ? null : {
+        packCost: String(c.typed_pack_cost), packSize: String(c.typed_pack_size ?? ''),
+        packUnit: c.typed_pack_unit ?? '', because: c.typed_because ?? '',
+      },
       // ⚠️ The landed figures are NOT stored — they are recomputed from the receipt at read time, so
       // a corrected receipt corrects every recipe that reads it (20260921's header says why).
       purchase: l ? {
@@ -111,9 +115,15 @@ export async function loadRecipe(
       recipeId: data.id,
       draft: {
         qbItemId: data.qb_item_id, inventoryId: data.inventory_id,
-        yieldQuantity: String(data.yield_quantity), yieldUnit: data.yield_unit,
-        buildMinutes: data.build_minutes == null ? '' : String(data.build_minutes),
-        buildMinutesBecause: data.build_minutes_because, notes: data.notes ?? '',
+        // ⚠️ `yield_quantity` / `yield_unit` are NOT read back into the draft. They are a DERIVED
+        // SNAPSHOT the database function needs (see `draftToRecipeRow`); the modal re-derives from
+        // the components every time it opens. Reading them would create a second answer to a
+        // question that has one.
+        actualYieldCubicYards: data.actual_yield_cubic_yards == null ? '' : String(data.actual_yield_cubic_yards),
+        actualYieldBecause: data.actual_yield_because ?? '',
+        measuredBuildMinutes: data.build_minutes == null ? '' : String(data.build_minutes),
+        measuredBuildBecause: data.build_minutes_because === NOT_TIMED ? '' : (data.build_minutes_because ?? ''),
+        notes: data.notes ?? '',
         components,
       },
     },
@@ -130,8 +140,10 @@ export async function loadRecipe(
  */
 export async function saveRecipe(
   businessId: string, draft: RecipeDraft, existingRecipeId: string | null,
+  /** What the recipe currently derives, in cubic yards — the caller has already computed it. */
+  derivedYieldCubicYards: number | null,
 ): Promise<Outcome & { recipeId?: string }> {
-  const row = draftToRecipeRow(draft, businessId);
+  const row = draftToRecipeRow(draft, businessId, derivedYieldCubicYards);
   let recipeId = existingRecipeId;
 
   if (recipeId) {
@@ -174,7 +186,8 @@ export async function saveRecipe(
     if (error || !data || data.length !== rows.length) return refused('The components', error);
   }
   if (TRACE) console.log('[TRACE:RECIPE] saved', { businessId, recipeId, components: rows.length });
-  return { ok: true, recipeId: recipeId!, message: `Saved. This recipe is what a build of ${draft.yieldQuantity} ${draft.yieldUnit} consumes.` };
+  return { ok: true, recipeId: recipeId!, message:
+    `Saved. A batch makes about ${derivedYieldCubicYards == null ? 'an unknown amount' : `${Math.round((derivedYieldCubicYards) * 10) / 10} yards`} and this is what it consumes.` };
 }
 
 /**
@@ -283,4 +296,48 @@ export async function componentIdsByPosition(recipeId: string): Promise<Map<numb
   const { data } = await supabase.from('recipe_components')
     .select('id, position').eq('recipe_id', recipeId).order('position');
   return new Map((data ?? []).map(r => [Number(r.position), String(r.id)]));
+}
+
+/**
+ * 🔴 ④ THE ITEM PICKER'S SEARCH — WITHOUT THIS A BUILD RUN CONSUMES NOTHING.
+ * David, 2026-09-22: *"link each component to its product by qb_item_id so a build run consumes
+ * shelf stock."* `record_build_run` resolves what to take off the shelf via
+ * `COALESCE(component_inventory_id, lookup by component_qb_item_id)`. The modal set NEITHER, so
+ * every component saved from it had a NULL stock row and the run consumed nothing — it reported
+ * them as unlinked, honestly, and moved no stock. Osmocote and MicroMax are retail items at LAWNS;
+ * building mix has to take them off the shelf.
+ * ⚠️ RETIRED ROWS ARE EXCLUDED. A retired row still RESOLVES for history (R-133) but must never be
+ * OFFERED as the thing a future build consumes.
+ */
+export const PRODUCT_PICK_SELECT = 'id, name, sku, qb_item_name, qb_item_id, size, qty';
+
+export interface PickableProduct {
+  inventoryId: string;
+  qbItemId: string | null;
+  name: string;
+  sku: string | null;
+  size: string | null;
+  qty: number;
+}
+
+export async function searchProducts(
+  businessId: string, term: string,
+): Promise<{ ok: true; products: PickableProduct[] } | { ok: false; message: string }> {
+  const t = term.trim();
+  if (t.length < 2) return { ok: true, products: [] };
+  const like = `%${t.replace(/[%_]/g, m => '\\' + m)}%`;
+  const { data, error } = await supabase.from('business_inventory')
+    .select(PRODUCT_PICK_SELECT)
+    .eq('business_id', businessId)
+    .is('retired_at', null)
+    .or(`name.ilike.${like},sku.ilike.${like},qb_item_name.ilike.${like}`)
+    .order('name')
+    .limit(20);
+  if (error) return { ok: false, message: `Could not search your products — ${error.message}` };
+  const products = (data ?? []).map(r => ({
+    inventoryId: String(r.id), qbItemId: r.qb_item_id ?? null,
+    name: String(r.name), sku: r.sku ?? null, size: r.size ?? null, qty: Number(r.qty ?? 0),
+  }));
+  if (TRACE) console.log('[TRACE:RECIPE] product search', { term: t, found: products.length });
+  return { ok: true, products };
 }

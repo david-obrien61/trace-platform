@@ -31,12 +31,16 @@ export const ITEM_RECIPE_FIELDS = [
   'id', 'business_id', 'qb_item_id', 'inventory_id',
   'yield_quantity', 'yield_unit', 'build_minutes', 'build_minutes_because', 'notes',
   'created_at', 'updated_at',
+  // 20260922 §3b — what a real batch actually made (David, 2026-09-22).
+  'actual_yield_cubic_yards', 'actual_yield_because',
 ] as const;
 
 export const RECIPE_COMPONENT_FIELDS = [
   'id', 'recipe_id', 'position', 'name', 'quantity', 'unit',
   'component_qb_item_id', 'component_inventory_id', 'note',
   'created_at', 'updated_at',
+  // 20260922 §3 — a price typed because no receipt exists.
+  'typed_pack_cost', 'typed_pack_size', 'typed_pack_unit', 'typed_because',
 ] as const;
 
 export const COMPONENT_PURCHASE_LINK_FIELDS = [
@@ -82,11 +86,11 @@ export const SELECT_OMISSIONS = {
  * on it — reading a value back to confirm the filter you just applied is noise, not evidence.
  */
 export const ITEM_RECIPE_SELECT =
-  'id, qb_item_id, inventory_id, yield_quantity, yield_unit, build_minutes, build_minutes_because, notes';
+  'id, qb_item_id, inventory_id, yield_quantity, yield_unit, build_minutes, build_minutes_because, notes, actual_yield_cubic_yards, actual_yield_because';
 
 /** The components, in the order they were typed. */
 export const RECIPE_COMPONENT_SELECT =
-  'id, recipe_id, position, name, quantity, unit, component_qb_item_id, component_inventory_id';
+  'id, recipe_id, position, name, quantity, unit, component_qb_item_id, component_inventory_id, typed_pack_cost, typed_pack_size, typed_pack_unit, typed_because';
 
 /**
  * The confirmed purchase behind a component.

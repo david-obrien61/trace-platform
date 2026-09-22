@@ -20,6 +20,7 @@
 --   §1 `build_runs` — one row per build, with the cost frozen into it and the working kept.
 --   §2 `build_run_components` — what each run actually consumed, at the price used that day.
 --   §3 `recipe_components.typed_*` — a price somebody typed when no receipt exists.
+--   §3b `item_recipes.actual_yield_*` — what a real batch actually made.
 --   §4 `record_build_run` REDEFINED to write those rows. Every earlier behaviour is preserved.
 --
 -- ⚠️ APPEND-ONLY (§6 r1). `20260921` and `20260921c` are APPLIED and are not touched. §4 redefines
@@ -106,6 +107,27 @@ ALTER TABLE public.recipe_components
     (typed_pack_cost IS NULL AND typed_pack_size IS NULL AND typed_pack_unit IS NULL)
     OR (typed_pack_cost IS NOT NULL AND typed_pack_size IS NOT NULL AND typed_pack_unit IS NOT NULL)
   );
+
+-- ── §3b THE ACTUAL YIELD, MEASURED AFTER A REAL BATCH ───────────────────────────────────────
+-- David, 2026-09-22: *"an ACTUAL yield typed after a real batch replaces the estimate."*
+ALTER TABLE public.item_recipes
+  ADD COLUMN IF NOT EXISTS actual_yield_cubic_yards numeric NULL
+    CHECK (actual_yield_cubic_yards IS NULL OR actual_yield_cubic_yards > 0),
+  ADD COLUMN IF NOT EXISTS actual_yield_because text NULL;
+
+COMMENT ON COLUMN public.item_recipes.actual_yield_cubic_yards IS
+  'What one batch actually made, measured. REPLACES the derived estimate outright — not averaged with it (David, 2026-09-22).';
+
+-- 🔴 AND A NOTE ON THE TWO COLUMNS THIS DOES NOT TOUCH. `yield_quantity` / `yield_unit` are NOT
+-- NULL in 20260921, which is APPLIED and cannot be altered (§6 r1). Under the 2026-09-22 ruling the
+-- batch size is DERIVED and nobody types it — so what do those columns hold?
+--   They hold the yield the recipe LAST DERIVED, written on every save. Not because a screen reads
+--   it — no screen does; the modal re-derives from the components every time it opens — but because
+--   `record_build_run` reads `v_recipe.yield_quantity` to work out how many units a build produced,
+--   and that function runs in the database with no access to the model.
+-- ⚠️ SO IT IS A DERIVED SNAPSHOT AND IT CAN GO STALE: edit a component through any path that does
+--   not re-save the recipe and the column lags. Today there is only one such path — the modal, which
+--   always writes both together. Recorded here so the second one is written knowing this.
 
 -- ── RLS. Same shape as the tables these hang off (20260921 §6). ─────────────────────────────
 ALTER TABLE public.build_runs             ENABLE ROW LEVEL SECURITY;

@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   componentDraftProblems, draftCost, draftToComponentRows, draftToRecipeRow, emptyComponentDraft,
-  emptyRecipeDraft, maySuggestPrice, NOT_TIMED, recipeDraftProblems, type RecipeDraft,
+  emptyRecipeDraft, maySuggestPrice, recipeDraftProblems, type RecipeDraft,
 } from './recipeDraft';
 
 // Repo-root-relative, NOT __dirname: esbuild bundles this file elsewhere (receiptsList.test.ts:42).
@@ -51,11 +51,11 @@ const CATALOGUE = { qbItemId: 'qb-9001', inventoryId: 'row-1' };
 /** LAWNS's Special Planting Mix, as a person would type it in. */
 function spm(): RecipeDraft {
   const d = emptyRecipeDraft(CATALOGUE);
-  d.yieldQuantity = '2.5'; d.yieldUnit = 'yd'; d.buildMinutes = '38'; d.buildMinutesBecause = 'timed by Lauren';
+  d.measuredBuildMinutes = '38'; d.measuredBuildBecause = 'timed by Lauren';
   d.components = [
     { name: 'Shook Out Brown', quantity: '2', unit: 'yd', componentQbItemId: null,
-      purchase: { landedPackCostEqualPerItem: 30.88, landedPackCostProRataByValue: 30.88, packSize: 1, packUnit: 'yd' }, confirmed: null },
-    { name: 'MicroMax', quantity: '2', unit: 'lb', componentQbItemId: null, purchase: null, confirmed: null },
+      purchase: { landedPackCostEqualPerItem: 30.88, landedPackCostProRataByValue: 30.88, packSize: 1, packUnit: 'yd' }, confirmed: null, typedPrice: null },
+    { name: 'MicroMax', quantity: '2', unit: 'lb', componentQbItemId: null, purchase: null, confirmed: null, typedPrice: null },
   ];
   return d;
 }
@@ -79,16 +79,23 @@ function spm(): RecipeDraft {
   // The recipe row itself. `draftToRecipeRow` was imported and never asserted until eslint said so
   // — which is worth recording, because "unused import" was the only signal that the function
   // building the row nothing else checks had no probe at all.
-  const row = draftToRecipeRow(spm(), 'biz-1');
+  const row = draftToRecipeRow(spm(), 'biz-1', 2);
   ok(row.qb_item_id === 'qb-9001' && row.inventory_id === null,
     '🔴 A4b: the ROW carries the QuickBooks id and a null row id — the identity the wipe guard requires');
-  ok(row.yield_quantity === 2.5 && typeof row.yield_quantity === 'number',
-    'A4c: the typed yield becomes a number at the boundary');
+  // 🔴 A4c THE YIELD IS PASSED IN, DERIVED — NOT READ OFF THE DRAFT (David, 2026-09-22, ruling ①).
+  // The column is NOT NULL in an applied migration and `record_build_run` reads it, so the row
+  // carries what the recipe currently derives. No screen reads it back.
+  ok(row.yield_quantity === 2 && row.yield_unit === 'yd',
+    `A4c: the row stores the DERIVED yield handed to it, in yards (got ${row.yield_quantity} ${row.yield_unit})`);
+  ok(draftToRecipeRow(spm(), 'biz-1', null).yield_quantity === 1,
+    '🔴 A4c2: a recipe that derives nothing stores 1, not 0 — the CHECK demands > 0 and 0 would read as "makes nothing"');
   ok(row.build_minutes === 38 && row.build_minutes_because === 'timed by Lauren',
-    'A4d: build minutes and WHERE THEY CAME FROM travel together — a number with no provenance is the thing that gets believed');
-  ok(draftToRecipeRow({ ...spm(), buildMinutes: '' }, 'biz-1').build_minutes === null,
+    'A4d: a TIMED build and who timed it travel together — a number with no provenance is the thing that gets believed');
+  ok(draftToRecipeRow({ ...spm(), actualYieldCubicYards: '2.2', actualYieldBecause: 'Lauren measured the pile' }, 'biz-1', 2).actual_yield_cubic_yards === 2.2,
+    'A4d2: a measured yield is stored in its own column, beside the derived one — never overwriting it');
+  ok(draftToRecipeRow({ ...spm(), measuredBuildMinutes: '' }, 'biz-1', 2).build_minutes === null,
     '🔴 A4e: an untimed build stores NULL, never 0 — 0 minutes is a claim that it takes no time');
-  ok(draftToRecipeRow({ ...spm(), notes: '   ' }, 'biz-1').notes === null,
+  ok(draftToRecipeRow({ ...spm(), notes: '   ' }, 'biz-1', 2).notes === null,
     'A4f: whitespace-only notes store as null rather than as a value that looks like content');
 
   const rows = draftToComponentRows(spm(), 'rec-1');
@@ -104,11 +111,17 @@ function spm(): RecipeDraft {
 {
   const empty = emptyRecipeDraft(CATALOGUE);
   const p = recipeDraftProblems(empty);
-  ok(p.some(x => /How much does one batch make/.test(x)), 'B1: a batch with no yield is refused');
-  ok(p.some(x => /What does a batch make/.test(x)), 'B2: …and one with no unit');
-  ok(p.some(x => /no components is not a recipe/.test(x)), 'B3: …and one with nothing in it');
-  ok(empty.buildMinutesBecause === NOT_TIMED,
-    '🔴 B4: build time starts as "not timed — nobody has timed a build yet", NOT as a blank or a 0 — an untimed build must not read as a free one');
+  // 🔴 B1/B2 ASSERT AN ABSENCE NOW, AND THAT IS THE RULING. The form used to refuse a recipe with
+  // no typed yield — "How much does one batch make?" — and David removed the question: the answer
+  // is the sum of what goes in. Asking for a number the system can work out is how the two come to
+  // disagree. These assert the questions are GONE, so nobody reinstates them as a convenience.
+  ok(!p.some(x => /How much does one batch make/.test(x)),
+    '🔴 B1: the form does NOT ask how much a batch makes — it is derived (David, 2026-09-22, ruling ①)');
+  ok(!p.some(x => /What does a batch make/.test(x)),
+    '🔴 B2: …and does not ask for a yield unit either — a batch of mix makes cubic yards');
+  ok(p.some(x => /no components is not a recipe/.test(x)), 'B3: …but one with nothing in it is still refused');
+  ok(empty.actualYieldCubicYards === '' && empty.measuredBuildMinutes === '',
+    '🔴 B4: a new recipe measures NOTHING — both blanks mean "nobody has measured one", which is the normal state, not an error');
 
   const c = emptyComponentDraft();
   const cp = componentDraftProblems(c);
@@ -120,10 +133,12 @@ function spm(): RecipeDraft {
   ok(componentDraftProblems({ ...c, name: 'Osmocote', quantity: '25', unit: 'lb' }).length === 0,
     '🔴 B8: a component on NO PURCHASE is otherwise LEGAL — MicroMax and 12-24-12 are on no captured receipt at LAWNS, and refusing them would force somebody to invent a price');
 
-  const bad = { ...spm(), buildMinutes: '-5' };
-  ok(recipeDraftProblems(bad).some(x => /0 or more/.test(x)), 'B9: negative build minutes are refused');
-  ok(recipeDraftProblems({ ...spm(), buildMinutes: '' }).length === 0,
-    'B10: …but BLANK build minutes are fine — "nobody has timed it" is an answer');
+  ok(recipeDraftProblems({ ...spm(), measuredBuildMinutes: '-5' }).some(x => /0 or more/.test(x)),
+    'B9: negative timed minutes are refused');
+  ok(recipeDraftProblems({ ...spm(), measuredBuildMinutes: '', measuredBuildBecause: '' }).length === 0,
+    'B10: …but BLANK is fine — the minutes come from the mixer, and nobody has to time anything');
+  ok(recipeDraftProblems({ ...spm(), actualYieldCubicYards: '2.2', actualYieldBecause: '' }).some(x => /where the measured yield came from/.test(x)),
+    '🔴 B11: a measured yield with no provenance is refused — it OVERRIDES the derivation, so who measured it is the load-bearing half');
 }
 
 // ══ §C THE LIVE COST UNDER THE FORM ═══════════════════════════════════════════════════════════
@@ -133,11 +148,17 @@ function spm(): RecipeDraft {
   ok(cost.incomplete && cost.missing.includes('MicroMax'),
     '🔴 C2: the component on no purchase is NAMED as missing, not dropped from the total in silence');
   ok(cost.missing.includes('labour'), 'C3: labour is a named gap too — the labour table ships empty');
-  ok(cost.costPerYieldUnit === 24.7, `C4: $61.76 over 2.5 yd is $24.70 SO FAR (got ${cost.costPerYieldUnit})`);
+  // ✏️ 2 YARDS, NOT 2.5 — AND THE CHANGE IS THE RULING WORKING. This fixture is bark (2 yd) plus
+  // MicroMax (2 lb). Under the typed model somebody had written 2.5; derived, the batch is 2.0,
+  // because MicroMax is WEIGHT and adds cost without adding volume. The old figure was a person's
+  // estimate of a number the components already answer.
+  ok(cost.looseVolumeCubicYards === 2 && cost.yieldCubicYards === 2,
+    `C4: the batch derives to 2 yards — only the bark is volume (got ${cost.looseVolumeCubicYards})`);
+  ok(cost.costPerYieldUnit === 30.88, `C4b: $61.76 over 2 derived yards is $30.88 SO FAR (got ${cost.costPerYieldUnit})`);
 
-  const half = draftCost({ ...spm(), yieldQuantity: '', yieldUnit: '' });
-  ok(half.costPerYieldUnit === null,
-    'C5: a half-typed form gives NO per-unit figure rather than dividing by 0 — the panel is live from the first keystroke and must survive one');
+  const noVolume = draftCost({ ...spm(), components: spm().components.filter(c => c.unit !== 'yd') });
+  ok(noVolume.costPerYieldUnit === null && noVolume.yieldCubicYards === null,
+    '🔴 C5: a recipe with nothing measured by volume gives NO per-yard figure rather than dividing by nothing — the panel is live from the first keystroke and must survive one');
 }
 
 // ══ §D NO PRICE IS SUGGESTED WHILE THE COST IS INCOMPLETE (David, 2026-09-22) ═════════════════
@@ -147,14 +168,58 @@ function spm(): RecipeDraft {
 
   const complete = spm();
   complete.components[1].purchase = { landedPackCostEqualPerItem: 44, landedPackCostProRataByValue: 44, packSize: 50, packUnit: 'lb' };
-  complete.buildMinutes = '';
+  complete.measuredBuildMinutes = '';
+  // ⚠️ `ops` omitted, so there is no mixer output and therefore NO derived minutes — which is what
+  // makes labour a non-gap here. With a mixer configured, minutes exist and the empty labour table
+  // becomes the gap again; D3 is that case.
   const c = draftCost(complete);
   ok(!c.incomplete && maySuggestPrice(c),
     '🔴 D2: every component costed and no build time claimed — NOW a price may be suggested (the check can go both ways)');
 
-  const timed = draftCost({ ...complete, buildMinutes: '38' });
+  const timed = draftCost(complete, { ops: { mixerCubicYardsPerHour: 4, peopleMakingMix: 1 } });
   ok(timed.incomplete && !maySuggestPrice(timed),
-    '🔴 D3: …and adding a BUILD TIME with no labour rate makes it incomplete again — the minutes are real and the money for them is not');
+    '🔴 D3: …and once the MIXER gives it minutes, the empty labour table makes it incomplete again — the minutes are real and the money for them is not');
+}
+
+// ══ §J THE TYPED PRICE AND THE ITEM PICKER (David, 2026-09-22, ④ and ⑤) ══════════════════════
+{
+  // ⚠️ THE TIMED BUILD IS CLEARED HERE ON PURPOSE. `spm()` carries one, and a timed build with an
+  // empty labour table makes the batch incomplete for a reason that has nothing to do with typed
+  // prices — which is what J2 is about. Left in, J2 would have failed for the wrong reason and been
+  // "fixed" by weakening it.
+  const d = { ...spm(), measuredBuildMinutes: '', measuredBuildBecause: '' };
+  d.components = [...spm().components];
+  d.components[1] = { ...d.components[1],
+    typedPrice: { packCost: '60', packSize: '50', packUnit: 'lb', because: 'Lauren remembers the bag price' } };
+  const cost = draftCost(d);
+  const micro = cost.components.find(c => c.name === 'MicroMax')!;
+  ok(micro.cost === 2.4 && micro.priceSource === 'typed',
+    `🔴 J1: a typed price costs the component and is marked typed (got ${micro.cost}/${micro.priceSource})`);
+  ok(!cost.incomplete && cost.typedPrices.length === 1,
+    '🔴 J2: …so the batch is COMPLETE, with the typed figure named — that is how MicroMax gets costed at all');
+
+  const rows = draftToComponentRows(d, 'rec-1');
+  ok(rows[1].typed_pack_cost === 60 && rows[1].typed_pack_size === 50 && rows[1].typed_pack_unit === 'lb',
+    'J3: all three parts reach the row — the database CHECK refuses a half-typed one');
+  ok(rows[1].typed_because === 'Lauren remembers the bag price',
+    'J4: …with where the figure came from, like every other unmeasured number in this system');
+
+  const half = { ...d };
+  half.components = [...d.components];
+  half.components[1] = { ...d.components[1], typedPrice: { packCost: '60', packSize: '', packUnit: '', because: '' } };
+  ok(componentDraftProblems(half.components[1]).some(x => /How much is in one pack/.test(x)),
+    '🔴 J5: a half-typed price is refused IN WORDS before the write, naming the missing part rather than a constraint');
+
+  // 🔴 A RECEIPT BEATS A TYPED PRICE. If somebody types a price and later confirms a real match,
+  // the receipt is the better fact — the typed figure stays on the draft but stops being used.
+  const both = { ...d };
+  both.components = [...d.components];
+  both.components[1] = { ...d.components[1],
+    purchase: { landedPackCostEqualPerItem: 44, landedPackCostProRataByValue: 44, packSize: 50, packUnit: 'lb' } };
+  const bothCost = draftCost(both);
+  const m2 = bothCost.components.find(c => c.name === 'MicroMax')!;
+  ok(m2.priceSource === 'receipt' && m2.cost === 1.76,
+    `🔴 J6: a confirmed receipt WINS over a typed price — $44 a bag, not $60 (got ${m2.priceSource}/${m2.cost})`);
 }
 
 // ══ §E THE MODAL — WHAT ITS SOURCE MUST SAY ═══════════════════════════════════════════════════
@@ -179,6 +244,37 @@ function spm(): RecipeDraft {
     'E8: a component with no purchase says so on its own line — the person sees it before the total does');
   ok(/madeItemLabel/.test(MODAL) && !/homemade/.test(CODE(MODAL)),
     '🔴 E9: the modal carries NO literal "homemade" — the word is the business\'s, read from its config (AC-1)');
+
+  // ── 2026-09-22's rulings, asserted on the surface that carries them ──
+  ok(!/yieldQuantity|yieldUnit/.test(CODE(MODAL)),
+    '🔴 E10: the modal asks for NO typed yield — ruling ① removed the field, not just the requirement');
+  ok(/cost\.yieldNote/.test(MODAL) && /cost\.weightComponents/.test(MODAL),
+    '🔴 E11: it prints the DERIVATION — what the batch makes and which ingredients added cost without volume');
+  ok(/approx\(cost\.yieldCubicYards\)/.test(MODAL),
+    '🔴 E12: …through `approx`, so a tractor-bucket figure is never printed to four decimals (David: "this is approx, not exact science")');
+  ok(/costPerGallon.*toFixed\(4\)/.test(MODAL),
+    '🔴 E13: the per-GALLON figure is shown to four decimals — a gallon of mix is cents, and $0.20 loses a fifth of it');
+  // ⚠️ THE CALL, NOT THE WORD. A first draft matched `/resolveConfig/` and `/ops\b/` anywhere in the
+  // file, so removing `ops` from the draftCost call left it GREEN — both words survive in the state
+  // declaration and the comment. Third time on this branch; the probe must name the decision.
+  ok(/draftCost\(draft, \{ spread, ops \}\)/.test(CODE(MODAL)),
+    '🔴 E14: the operations figures are PASSED TO THE COST MODEL — without that, shrink is 0 and the mixer gives no minutes, silently');
+  ok(/resolveConfig/.test(CODE(MODAL)),
+    'E14b: …and they are read through resolveConfig, so a missing key shows its DEFAULT, never a 0 that means "no labour"');
+  // Same correction as E14: assert the RENDER CONDITION, not the word. `{p.priceChange && (` is
+  // what decides whether a person sees it; `priceChange` appears in three comments besides.
+  ok(/\{p\.priceChange && \(/.test(CODE(MODAL)) && /p\.priceChange\.note/.test(CODE(MODAL)),
+    '🔴 E15: the sheet RENDERS the price-change note when there is one — a rise nobody noticed is how a recipe drifts');
+  ok(/p\.isNewestForProduct === false \? 0\.72 : 1/.test(CODE(MODAL)),
+    'E15b: …and the newest purchase LOOKS like the default, with the older ones dimmed rather than hidden');
+  ok(/otherPurchasesOfThisProduct/.test(MODAL) && /older one/.test(MODAL),
+    'E16: …and says how many older purchases sit behind it — one tap away, never hidden');
+  ok(/Not linked to a product/.test(MODAL),
+    '🔴 E17: a component with no product link SAYS a build will not take it off the shelf — before the build, not after');
+  ok(/searchProducts/.test(CODE(MODAL)) && /Cannot link/.test(MODAL),
+    '🔴 E18: the picker exists and REFUSES a row with no QuickBooks id rather than hiding it');
+  ok(/No receipt for it\? Type what a pack costs/.test(MODAL) && /typedPricesNote/.test(MODAL),
+    '🔴 E19: a typed price can be entered and is named beside the TOTAL, not only on its own line');
 }
 
 // ══ §F THE FLAG ON THE INVENTORY ITEM ═════════════════════════════════════════════════════════
@@ -263,8 +359,15 @@ function spm(): RecipeDraft {
   // the unit projection, the gated-column retry and the zero-row refusal check.
   ok(/persistInventoryPatch\(\{ id: inventoryId/.test(CODE(WRITE)),
     '🔴 G5e: the made-item flag is written through the ONE business_inventory writer, not a second one');
-  ok(!/from\('business_inventory'\)/.test(CODE(WRITE)),
-    '🔴 G5f: …and this file addresses that table NOWHERE directly — a forked writer is how two paths come to disagree');
+  // ✏️ NARROWED 2026-09-22: this asserted the file addresses `business_inventory` NOWHERE. The item
+  // picker legitimately READS it (`searchProducts`) — and the rule, and the cap that enforces it,
+  // are about WRITES. A probe broader than its rule fails on correct code, which is how a correct
+  // rule gets weakened to shut it up. It now forbids exactly the writes.
+  ok(!/from\('business_inventory'\)[\s\S]{0,120}\.(update|insert|upsert|delete)\(/.test(CODE(WRITE)),
+    '🔴 G5f: …and this file never WRITES that table directly — a forked writer is how two paths come to disagree');
+  ok(/from\('business_inventory'\)[\s\S]{0,200}\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE))
+     || /\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE)),
+    'G5h: …while the item PICKER reads it, which is what lets a build run consume shelf stock at all');
 
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
@@ -277,16 +380,31 @@ function spm(): RecipeDraft {
 // checked against the DDL, and it fails BOTH ways: a column the migration creates and the registry
 // omits, and a column the registry claims that the migration never creates.
 {
-  const DDL = R('supabase/migrations/20260921_recipes_made_items.sql');
+  // ⚠️ BOTH MIGRATIONS, AND BOTH SHAPES. A column can arrive by CREATE TABLE or by a later
+  // ALTER TABLE … ADD COLUMN, and reading only the first file made H2 report the 2026-09-22 columns
+  // as INVENTED — the probe was right that they were not in what it read, and wrong about what it
+  // should read. A probe whose population is a single file quietly decides the schema is one file.
+  const DDL = R('supabase/migrations/20260921_recipes_made_items.sql')
+    + '\n' + R('supabase/migrations/20260922_build_runs_freeze_cost.sql');
+  const TYPES = '(uuid|text|numeric|integer|date|timestamptz|boolean|jsonb)';
   const columnsOf = (table: string): string[] => {
+    const out: string[] = [];
     const start = DDL.indexOf(`CREATE TABLE IF NOT EXISTS public.${table} (`);
-    if (start < 0) return [];
-    const body = DDL.slice(start + DDL.slice(start).indexOf('(') + 1);
-    const end = body.indexOf('\n);');
-    return body.slice(0, end < 0 ? undefined : end).split('\n')
-      .map(l => l.replace(/--.*$/, '').trim())
-      .filter(l => /^[a-z_][a-z0-9_]*\s+(uuid|text|numeric|integer|date|timestamptz|boolean|jsonb)/.test(l))
-      .map(l => l.split(/\s+/)[0]);
+    if (start >= 0) {
+      const body = DDL.slice(start + DDL.slice(start).indexOf('(') + 1);
+      const end = body.indexOf('\n);');
+      out.push(...body.slice(0, end < 0 ? undefined : end).split('\n')
+        .map(l => l.replace(/--.*$/, '').trim())
+        .filter(l => new RegExp(`^[a-z_][a-z0-9_]*\\s+${TYPES}`).test(l))
+        .map(l => l.split(/\s+/)[0]));
+    }
+    // every `ALTER TABLE public.<table> … ADD COLUMN IF NOT EXISTS <name> <type>` in either file
+    for (const m of DDL.matchAll(new RegExp(`ALTER TABLE public\\.${table}\\b([\\s\\S]*?);`, 'g'))) {
+      for (const a of m[1].matchAll(new RegExp(`ADD COLUMN IF NOT EXISTS\\s+([a-z_][a-z0-9_]*)\\s+${TYPES}`, 'g'))) {
+        out.push(a[1]);
+      }
+    }
+    return [...new Set(out)];
   };
   const pairs: Array<[string, readonly string[]]> = [
     ['item_recipes', ITEM_RECIPE_FIELDS],
