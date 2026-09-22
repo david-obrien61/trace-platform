@@ -18,7 +18,7 @@
 to a real purchase on a real receipt, and get a cost that **either is right or says why it is not**.
 David, 2026-09-21: *"show the working, suggest, Lauren decides."*
 
-**Board: 0 of 14.** Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
+**Board: 0 of 20.** ✏️ **2026-09-22 (David's seven recipe rulings): CARDS 4, 5, 6, 10 and 11 are REWRITTEN and CARDS 15–18 are new.** The batch size is no longer typed — it is derived from what goes in — so every card that asked you to type a yield has changed. `20260922_build_runs_freeze_cost.sql` is a SECOND migration, **written and HELD**, and GATE 0 ② now names both. Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
 (David, 2026-09-22: *"Build the surfaces tonight but HOLD them — David reviews on Test Dave's after
 Lauren's 08:00 start. They touch the inventory item, which she uses."*). Until the branch merges,
 **GATE 0 ③ will fail by design** and cards 1–12 run only on a preview deploy of
@@ -52,11 +52,16 @@ suggestion on an incomplete cost.
 
 - [ ] **① SHA is live** — the stamp at the foot of the screen matches `git log -1 --format=%h`, and
       its last token reads **`prod`** (an amber `PREVIEW <branch>` is the held state, see below).
-- [ ] **② THE MIGRATIONS ARE APPLIED — BOTH, AND THEY ALREADY ARE.**
+- [ ] **② TWO MIGRATIONS ARE APPLIED; A THIRD IS WRITTEN AND HELD.**
       `20260921_recipes_made_items.sql` (applied 2026-09-21, SHA `0e6f3d6d90b6bd07aa2244a5c238aa96998eab65061ec63750aecd213cafe3b8`)
       and `20260921c_build_run_says_when_the_ledger_did_not_record.sql` (applied, SHA
       `b258dbf5110b35cd94de1602aaf1c9e6fea6d4a7c1e1f114e0ea1cb06996c985`).
-      **Nothing further to apply for this board.** Recorded so nobody goes hunting.
+      🔴 **`20260922_build_runs_freeze_cost.sql` is WRITTEN, NOT APPLIED** (SHA
+      `21ac452fdab0ff467d65b6450dd1e4c652721e4bbe3cc3565ada60302617e6bb`). Its V0–V4 have been run
+      by the author on Postgres (`build-runs-freeze-370.pglite.mjs`, ALL PASS, 4/4 mutants caught).
+      **CARDS 15–18 need it applied; CARDS 1–14 do not.** ⚠️ Without it the typed-price boxes and
+      the measured-yield boxes will refuse to save, because their columns do not exist yet — that is
+      the expected failure, not a defect.
 - [ ] **③ the branch is merged.** `git merge-base --is-ancestor <sha> origin/main` (tech-debt #280).
       🔴 **THIS WILL FAIL UNTIL DAVID RELEASES THE HOLD.** That is the expected state on
       2026-09-22, not a defect — run on a preview of `feat/recipe-surfaces` and say so in the result.
@@ -111,7 +116,39 @@ On **Special Planting Mix** (or any item you build), set **How it is made → Ma
   🔴 **The reload is the card.** A flag that looks set and did not save is the failure this catches.
 **FAIL if** the dropdown springs back, or the change survives only until a reload.
 
-### CARD 4 — 🔴 A COMPONENT ON NO PURCHASE IS ALLOWED, AND SAYS SO
+### CARD 4 — 🔴 THE BATCH SIZE WORKS ITSELF OUT — NOBODY TYPES IT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's ruling ①, 2026-09-22
+SIGNAL: —
+
+Press **What goes into it**. Add two components: **Shook Out Brown · 2 · yd** and
+**Osmocote 21-4-8 · 25 · lb**.
+**PASS:**
+- **There is no box asking how much a batch makes.** The panel headed **One batch makes** says
+  **About 2 yards** and, underneath, *"2 yards loose. Bucket-measured, so treat it as approximate."*
+- A second line reads **Osmocote 21-4-8 add cost and no volume.**
+- Change the bark to **2.5** and the figure becomes **About 2.5 yards** as you type.
+**🔴 FAIL if** anywhere on this screen asks you for a yield, or if the 25 lb of Osmocote changes
+the yards. David, 2026-09-22: *"weight ingredients add cost, not volume."*
+
+### CARD 5 — 🔴 SETTLING IS APPLIED, AND THE FIGURE SAYS IT IS APPROXIMATE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's shrink ruling, 2026-09-22
+SIGNAL: —
+
+Go to **Settings → Operations → Volume** and set **Mix shrink and spill (share)** to **0.1**.
+Come back to the recipe.
+**PASS:** the batch now reads **About 2.3 yards** (2.5 loose, less 10%) and the sentence underneath
+says *"2.5 loose, less 10% settling. Bucket-measured, so treat it as approximate."*
+**FAIL if** the figure is unchanged, or if it prints something like **2.2500000000000004**.
+**Why:** David, 2026-09-22 — *"if 2 people drive the tractor you will get 2 different measures for a
+yard. This is approx, not exact science or math."* Set the share back to **0** when you are done.
+
+### CARD 4b — 🔴 A COMPONENT ON NO PURCHASE IS ALLOWED, AND SAYS SO
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
@@ -205,18 +242,21 @@ In **What a batch costs**, look at the two buttons.
 - pressing the other button changes which is which, and nothing else moves unexpectedly.
 **FAIL if** only one figure is ever visible.
 
-### CARD 10 — 🔴 LABOUR IS MINUTES AND NO MONEY
+### CARD 10 — 🔴 THE BUILD TIME COMES FROM YOUR MIXER, AND IT IS STILL NOT MONEY
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: David, 2026-09-21 — the labour table ships EMPTY
+COVERS: David's ruling ③, 2026-09-22 · the labour table ships EMPTY
 SIGNAL: —
 
-Put **38** in **Build time (minutes)**.
-**PASS:** the panel reads **Labour — 38 minutes, not costed yet — no rates entered**, the batch is
-still **incomplete**, and **labour is named among what is missing**.
-**🔴 FAIL if** labour contributes any dollar figure. Nobody has entered a rate; a rate we invented
-would be indistinguishable from one you set.
+With the mix at about 2.5 yards, read the **Labour** line in **What a batch costs**.
+**PASS:** it reads **38 minutes to build (2.5 loose yards at 4 yd³/hr) — labour not costed yet, no
+rates entered.** The 4 is **Settings → Operations → Mixer output (yd³/hr)**; change it to **2** and
+the minutes become **75**. Set **People making mix** to **2** and they double again.
+**🔴 FAIL if** labour contributes any dollar figure, or if there is a box asking you to type the
+minutes. Nobody has entered a rate; a rate we invented would be indistinguishable from one you set.
+⚠️ If Settings has **no** mixer output, the line must read *"Settings → Operations has no mixer
+output (yd³/hr) to work it out from"* — **never 0 minutes**, which would read as instant.
 
 ### CARD 11 — 🔴 SAVE IT, RELOAD, AND IT IS ALL STILL THERE
 STATUS: owed
@@ -225,7 +265,8 @@ DEVICE: desktop
 COVERS: ledger #370 · tech-debt #69's shape (a multi-step save)
 SIGNAL: `[TRACE:RECIPE] saved {components: 7}`
 
-Finish LAWNS's Special Planting Mix — all seven components — and press **Save recipe**.
+Finish LAWNS's Special Planting Mix — all seven components — **link each one to its product**
+(CARD 15) and press **Save recipe**.
 **PASS:**
 - it closes without an error.
 - **reload the page, open the item, press What goes into it** — every component, every quantity,
@@ -247,6 +288,73 @@ this card; **undo it afterwards** — CARD 4 is the true state) and **clear the 
 **whose decision the price is**: *"…a suggestion, not a price. You set the price."*
 **FAIL if** the suggestion reads as an applied price, or if the arithmetic is cost ÷ 0.60 rather
 than cost × 1.40. *(On $51.96 the right answer is **$72.74**, not $86.60.)*
+
+### CARD 15 — 🔴 EVERY COMPONENT IS LINKED TO A PRODUCT, OR IT SAYS IT IS NOT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's ruling ④, 2026-09-22
+SIGNAL: `[TRACE:RECIPE] product search {term: 'Osmocote', found: 3}`
+
+On a component, press **Link a product**, type **Osmocote**, press **Search**.
+**PASS:**
+- matching products list with their size, SKU and what is on hand.
+- pressing **This one** closes the sheet and the button now reads **Linked to a product**.
+- an **unlinked** component shows, in amber under its line: *"Not linked to a product — a build will
+  not take this off the shelf."*
+- a product with **no QuickBooks id** shows greyed with **Cannot link**, and a line explains that a
+  recipe keyed on a row id would not survive the next catalogue reload.
+**🔴 FAIL if** an unlinked component says nothing. Before this, every component the modal saved was
+unlinked and a build run moved **no stock at all** — it reported them honestly and did nothing.
+
+### CARD 16 — 🔴 NO RECEIPT? TYPE THE PRICE, AND IT IS FLAGGED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's ruling ⑤, 2026-09-22 · needs `20260922` applied
+SIGNAL: —
+
+On **MicroMax** — which is on no captured receipt at LAWNS at all — open **No receipt for it? Type
+what a pack costs** and enter **60 / 50 / lb / "Lauren remembers the bag price"**.
+**PASS:**
+- the line costs (**$2.40 a batch**) and carries **⚠ no receipt — this price was typed in, not read
+  off an invoice**.
+- under the total: *"One price was typed in rather than read off a receipt: MicroMax. Capture the
+  invoice and the figure corrects itself."*
+- leaving the pack SIZE blank refuses the save and says *"How much is in one pack of MicroMax?"*
+**🔴 FAIL if** a typed price shows as **$0.00**, or if it shows with no flag. David, 2026-09-22:
+*"never zero."*
+
+### CARD 17 — 🔴 THE NEWEST PURCHASE LEADS, AND A PRICE RISE IS CALLED OUT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's ruling ⑤, 2026-09-22
+SIGNAL: —
+
+Press **Find the purchase** on **Osmocote 21-4-8**. LAWNS has bought it more than once.
+**PASS:**
+- the **most recent** purchase is first, with a green border and **Most recent purchase · N older
+  ones below**; the older ones are below it, dimmed, **not hidden**.
+- if the price moved, a bold line says so in the newest card: *"Up from $68.24 on 2026-07-29 — a
+  change of $1.04 a pack."* — **red** for a rise, **green** for a fall.
+**FAIL if** an older purchase is offered first because its wording happened to match better. The
+score picks **which product**; the date picks **which line**.
+
+### CARD 18 — 🔴 A BUILD FREEZES WHAT IT COST (needs `20260922` applied)
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David's ruling ⑦, 2026-09-22
+SIGNAL: —
+
+⚠️ **RUN ON TEST DAVE'S.** With a complete, fully linked recipe, record a build run, then note the
+cost it shows. Now **change a component's price** (or capture a corrected receipt) and look again.
+**PASS:** the **recipe's** cost per yard moves, and the **build run's** frozen cost does **not**.
+**🔴 FAIL if** the run's figure moves with the recipe. A run is an EVENT — what it cost is a fact
+about that day. Re-valuing units already made is how the books stop reconciling.
+⚠️ **There is no screen for a build run yet** — this card is `needs-test` until one exists; the
+database side is proven by `build-runs-freeze-370.pglite.mjs` V1.
 
 ---
 
