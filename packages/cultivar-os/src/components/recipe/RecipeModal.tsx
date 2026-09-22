@@ -122,7 +122,7 @@ export function RecipeModal({ item, madeItemLabel, onClose, onSaved }: Props) {
    * been saved, the confirmation is held in the draft and written by the save below. That is said
    * out loud on the button rather than discovered when nothing persists.
    */
-  async function confirm(p: MatchProposal) {
+  function confirm(p: MatchProposal) {
     if (!matching) return;
     const i = matching.index;
     setComponent(i, {
@@ -265,7 +265,9 @@ export function RecipeModal({ item, madeItemLabel, onClose, onSaved }: Props) {
                         onClick={() => openProposals(i)} disabled={!!receiptsProblem}>
                         <Link2 size={13} /> {c.purchase ? 'Change the purchase' : 'Find the purchase'}
                       </button>
-                      {costed?.refusal && !c.purchase && null}
+                      {/* A refusal is shown only when a purchase IS linked — an UNLINKED component
+                          already says so on the amber line above, and printing both would be one
+                          fact in two places (STD-011), the second of which is the one that drifts. */}
                       {costed?.refusal && c.purchase && (
                         <span style={{ color: '#b91c1c' }}>{costed.refusal}</span>
                       )}
@@ -373,7 +375,7 @@ export function RecipeModal({ item, madeItemLabel, onClose, onSaved }: Props) {
                     : <p style={{ ...SS.muted, margin: '0 0 8px' }}>
                         Landed {money(p.landedPackCostEqualPerItem)} split evenly · {money(p.landedPackCostProRataByValue)} split by value
                       </p>}
-                  <button style={SS.primaryBtn} onClick={() => { void confirm(p); }}>Yes, that is it</button>
+                  <button style={SS.primaryBtn} onClick={() => confirm(p)}>Yes, that is it</button>
                 </div>
               ))}
             </div>
