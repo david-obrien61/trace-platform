@@ -24,7 +24,9 @@
 // page load is noise in the address bar and in every link anybody copies.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface ListViewState {
+// Not exported for the same reason as backTarget's `Journey`: the page holds it as `typeof view`
+// and never names the type, so an exported alias nobody imports is dead weight (knip is right).
+interface ListViewState {
   /** The search box. */
   q: string;
   /** The column key being sorted on ('' = the grid's own default). */

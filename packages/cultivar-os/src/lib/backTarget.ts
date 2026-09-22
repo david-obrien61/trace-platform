@@ -24,7 +24,10 @@
 // what today's hardcoded version does. The fallback is the OLD behaviour, kept as the floor.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface Journey {
+// Not exported: callers get it back from `backTarget`/`journeyTo` and never name it. An
+// exported type nobody imports is dead weight knip is right to flag — the same call as #319's
+// `StopOrderOutcome`. It stays a named interface because the functions below read better for it.
+interface Journey {
   /** What the back control says — "Regina & David O'Brien", "Customers", "Orders". */
   label: string;
   /** Where it goes. Carries the list's query string, so the filtered view is restored. */
@@ -32,7 +35,7 @@ export interface Journey {
 }
 
 /** The shape an origin page puts into `navigate(to, { state })`. */
-export interface JourneyState {
+interface JourneyState {
   from?: unknown;
 }
 

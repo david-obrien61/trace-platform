@@ -223,7 +223,6 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const setSearch = (v: string) => (controlled ? emit({ q: v }) : setSearchOwn(v));
   const setStatus = (v: string) => (controlled ? emit({ status: v }) : setStatusOwn(v));
   const setExtra  = (v: string) => (controlled ? emit({ extra: v }) : setExtraOwn(v));
-  const setSortKey = (v: string) => (controlled ? emit({ sort: v }) : setSortKeyOwn(v));
   const setSortDir = (v: 'asc' | 'desc') => (controlled ? emit({ dir: v }) : setSortDirOwn(v));
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
     const v: Record<string, boolean> = {};
