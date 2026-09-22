@@ -671,6 +671,15 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
  *  rules that carry a NUMBER are functions of the figures used, so the sentence can never state a
  *  figure the arithmetic did not use. */
 export const LOAD_LIST_COPY = {
+  // ── ONE SECTION PER TEAM (ledger #373, teams piece 4) ──────────────────────────────────
+  teamSectionsHeading: (sections: number, stops: number) =>
+    `This day is split across ${sections} section${sections === 1 ? '' : 's'} — ${stops} stop${stops === 1 ? '' : 's'} in total.`,
+  teamSectionsNote:
+    'Each section below is one team, and every total in it is that team\u2019s. Load one section, then the next — together they are the whole day.',
+  teamNoneHeading: 'These stops are not assigned to a team.',
+  teamNoneNote:
+    'Nobody has been given these yet, so they are listed last rather than left off. Assign them on the schedule or the route page, or load them with whichever team takes them.',
+
   mixFirst: 'Loads FIRST — trees on top.',
   mixRule: (ratio: number) =>
     `${ratio} gallons of mix per gallon of container — a 30 gallon tree takes ${30 * ratio} gallons. Container volumes are the ones set for each size.`,
