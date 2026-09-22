@@ -4821,11 +4821,35 @@ well as a defined one. **[[R-33]]: neither could have disagreed.**
 SUCCEEDED anyway** (`716eed9`, 16:38). A checker whose findings cannot fail a build is a log, not a gate — and
 32 standing errors is exactly the noise a real one hides in.
 
-**The fix, NOT taken here because it touches the verify chain (David's call):** add a root `tsconfig.json`
-covering `api/` and `packages/cultivar-os/api/**` with `strict: true`, and wire one `tsc -p` step into
-`npm run verify`. **It lands RED at 16 errors**, so it cannot merge as a gate on day one without either fixing
-the `res.json()` class or admitting those 16 to `quality-baseline.json` as declared debt and ratcheting down —
-**and a cap that is red on arrival does not survive (#73's lesson).** Sequence matters more than the config.
+✅ **BUILT 2026-09-22 AS A RATCHET — David's call, same day.** `tsconfig.api.json` (`include: ["api"]`,
+`strict: true` to match `packages/cultivar-os/tsconfig.json`) + `scripts/verify-api-types.mjs`, wired into
+`npm run verify` immediately after `verify:api-parses`. **Baselined at 16, so it lands GREEN; any NET-NEW
+error fails the build.**
+
+🔴 **IT KEYS ON ERROR IDENTITY, NOT ON A COUNT.** A count-only ratchet passes when one error is fixed and
+another introduced in the same commit — 16 in, 16 out, green, on a tree that regressed. The key is
+`path::TScode::message`, with **line and column deliberately excluded** so editing above an error is not a
+false regression (#78 re-keyed the quality ratchets on identity for the same reason). **PROVEN RED on the
+exact defect it exists to catch:** re-breaking `ingest.ts:34` back to a bare re-export produced
+`❌ 1 NET-NEW … TS2304: Cannot find name 'callerHoldsPermission'`, exit 1. **10 self-test probes, both
+directions**, including P7 (the fixed-one/new-one swap a count would miss) and P8 (the same error on a
+different line is the same key). Re-baselining UPWARD is refused outright — a baseline is debt and shrinks
+only (§6 r9).
+
+**THE 16 ARE ONE CLASS AND HERE ARE THE SITES — `await res.json()` returns `unknown`, then properties are
+read off it.** Fix over time; each fix shrinks the baseline via `node scripts/verify-api-types.mjs --update`.
+
+| File | Errors | `await res.json()` calls | What it parses |
+|---|---|---|---|
+| `packages/cultivar-os/api/qbo/router.ts` | 5 | 2 | Intuit token exchange (`access_token`, `refresh_token`, `expires_in`) + `CompanyInfo` |
+| `packages/cultivar-os/api/qbo/invoice/cultivar.ts` | 5 | 4 | Intuit `QueryResponse`, `Customer` ×3, `Invoice` |
+| `packages/shared/src/quickbooks/refresh.ts` | 4 | 1 | the token refresh body |
+| `packages/cultivar-os/api/receipts/ocr.ts` | 2 | 1 | Gemini `usageMetadata` / `candidates` |
+
+⚠️ **NONE OF THE 16 IS A RUNTIME BUG** — the parsed body does carry those keys and most reads are already
+`?.`/`??`-guarded. **But this is the class that HIDES bugs**: an unchecked external response gets no compiler
+help at all, which is exactly the condition under which a typo in a token field fails silently at 3am. The
+durable fix is a narrow response type (or a parse helper) per call, not a cast.
 
 ⚠️ **ONE THING I COULD NOT SETTLE WITHOUT THE RAW BUILD LOG:** whether Vercel's output also carried the
 `ingest.ts` TS2304. David's read of it listed the other ~15 and not this one. If it *was* there, the signal

@@ -1,0 +1,41 @@
+{
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PURPOSE: type-check the DEPLOYED SERVERLESS SURFACE — the repo-root `api/` shims
+  //   and the handlers they re-export from `packages/cultivar-os/api/**`. Until
+  //   2026-09-22 these files were in NO TypeScript project: `packages/cultivar-os/
+  //   tsconfig.json` declares `"include": ["src"]`, `packages/trace-app` covers its
+  //   own tree, and there is no root tsconfig. So `npm run verify` type-checked every
+  //   screen and not one handler, while Vercel compiled all twelve on every deploy.
+  // DEPENDENCIES: none — consumed by `scripts/verify-api-types.mjs` (ratcheted).
+  // OUTPUTS: diagnostics only (`noEmit`). Tech-debt #77.
+  //
+  // 🔴 WHY THIS EXISTS, IN ONE INCIDENT: `api/discovery/ingest.ts` shipped a BARE
+  //   RE-EXPORT of `callerHoldsPermission` and then called the name locally. A bare
+  //   re-export creates no local binding, so every cost-apply request threw
+  //   `ReferenceError`. A tsc over this project reports it as
+  //   `TS2304: Cannot find name 'callerHoldsPermission'` — measured, by re-breaking
+  //   the file. Nothing in the verify chain could see it, because the file was in no
+  //   project. The two checks aimed at that gate both passed on the crash ([[R-33]]).
+  //
+  // ⚠️ `strict: true` MATCHES `packages/cultivar-os/tsconfig.json` AND IS LOAD-BEARING,
+  //   NOT A PREFERENCE. Vercel finds no tsconfig and falls back to TypeScript's
+  //   defaults, i.e. `strict: false` — and `strictNullChecks` is what makes narrowing
+  //   on a BOOLEAN-LITERAL DISCRIMINANT work. Measured on this exact file set:
+  //   strict false → 32 errors, strict true → 16. All 16 of the difference are
+  //   discriminated-union false alarms (`if (!r.ok)` then `r.unmapped`) on code that
+  //   narrows correctly. Lowering this flag re-manufactures all sixteen.
+  // ─────────────────────────────────────────────────────────────────────────────
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true,
+    "types": ["node"]
+  },
+  "include": ["api"]
+}
