@@ -133,7 +133,7 @@ export function CrewLinkPanel({ businessId, date }: { businessId: string; date: 
       {/* 🔴 ONE ROW PER TEAM (ledger #374, teams piece 3 — David, 2026-09-21). Saturday 2026-09-19
           one link showed ALL EIGHT stops to whoever opened it. Each team now gets its own link
           showing only its own stops, and the DATABASE enforces that — `crew_day_stops` filters and
-          `crew_stop_act` REFUSES a stop off the team (20260923c), so hiding is not the whole of it.
+          `crew_stop_act` REFUSES a stop off the team (20260921d), so hiding is not the whole of it.
           ⚠️ A nursery with NO teams sees exactly one row, "The whole day", as it always did. */}
       {!loading && (
         <div style={{ display: 'grid', gap: 8 }}>

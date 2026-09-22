@@ -40,7 +40,7 @@ const MIGRATION = ['20260917c_crew_day_link.sql',
   // …and the PER-TEAM CREW LINK (ledger #374, piece 3). It REPLACES `crew_day_stops`,
   // `crew_day_read`, `create_crew_day_link` and `crew_stop_act` and DROPS the old arities of the
   // first two, so testing without it would prove functions that are about to stop existing.
-  '20260923c_crew_link_per_team.sql',
+  '20260921d_crew_link_per_team.sql',
 ].map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n');
 const ONLY = process.env.PATH_ONLY ? new Set(process.env.PATH_ONLY.split(',')) : null;
 

@@ -46,7 +46,7 @@ export function crewLinkUrl(origin: string, token: string): string {
  * Make a link for one day — for ONE TEAM, or for the whole day when `teamId` is null.
  *
  * 🔴 A TEAM'S LINK SHOWS ONLY THAT TEAM'S STOPS, and the rule is the DATABASE's, not this file's
- *    (`crew_day_stops` filters, `crew_stop_act` REFUSES a stop off the team — 20260923c). Saturday
+ *    (`crew_day_stops` filters, `crew_stop_act` REFUSES a stop off the team — 20260921d). Saturday
  *    2026-09-19 is the cost of not having it: one link showed all eight stops to whoever opened it.
  * ⚠️ Reissuing replaces only THIS team's live link. Another team's link keeps working — a crew does
  *    not lose its day because a second crew's link was remade.

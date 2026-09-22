@@ -1,5 +1,23 @@
+-- ############################################################################################
+-- 🛑 PARKED — DO NOT APPLY THIS MIGRATION. David's instruction, 2026-09-21.
+--
+-- It is NOT broken as far as anything has measured — its own V-blocks pass in PGlite against the
+-- real chain — but the crew PATH TESTS go red with it in the chain, and the cause is NOT FOUND.
+-- Applying it while that is unexplained would put a change on the live database whose effect on
+-- the crew endpoint nobody can account for, on the one surface a driver uses alone in a yard.
+--
+-- ⚠️ THE RED IS NOT LIMITED TO THE NEW TESTS. Four pre-existing, previously green guards —
+--    `crew.expired`, `crew.revoked`, `crew.other-day`, `crew.other-business` — fail the same way
+--    once this file is in the chain. That is why this is parked rather than shipped with a known
+--    gap: the blast radius is the whole crew door, not the new feature.
+--
+-- The full record of what was ruled out, and how, is in:
+--     docs/recon/2026-09-21-crew-link-per-team-parked.md
+-- Read that BEFORE resuming — it exists so the next session does not repeat four dead ends.
+-- ############################################################################################
+
 -- ============================================================================================
--- 20260923c — A CREW LINK BELONGS TO A TEAM, AND SHOWS ONLY THAT TEAM'S STOPS
+-- 20260921d — A CREW LINK BELONGS TO A TEAM, AND SHOWS ONLY THAT TEAM'S STOPS
 --             ledger #374 · teams piece 3 · tech-debt #345
 --
 -- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
@@ -28,7 +46,7 @@ ALTER TABLE public.crew_day_links
   ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES public.delivery_teams(id) ON DELETE CASCADE;
 
 COMMENT ON COLUMN public.crew_day_links.team_id IS
-  'Which team this link is for. NULL = the whole day, which is what every link was before 20260923c.';
+  'Which team this link is for. NULL = the whole day, which is what every link was before 20260921d.';
 
 -- ── 2. one live link per team per day ───────────────────────────────────────────────────────
 -- The old index was (business_id, service_date) WHERE revoked_at IS NULL — one live link per day,

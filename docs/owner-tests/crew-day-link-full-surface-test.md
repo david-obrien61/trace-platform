@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 2 of 15 covered** (0b, H). ✏️ **2026-09-21 (ledger #374): A CREW LINK NOW BELONGS TO A TEAM — CARDS I, J, K, L added, all `owed`.** 🔴 **CARDS 0, A, B, B2 and C are FLIPPED `covered` → `owed` and their LAST-PROVEN reset.** Migration `20260923c` REPLACES `crew_day_stops`, `crew_day_read`, `create_crew_day_link` and `crew_stop_act` and DROPS two superseded arities, and the crew-link panel is now one row per team — so the proofs David ran on 09-17/09-18 were performed against code that no longer exists. A green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). **CARD 0b is NOT flipped** — the office door (`stop_act`) is untouched by this migration. **CARD H is NOT flipped** — it is a dated read-only observation of LAWNS on 2026-09-19, not a claim about current code. **Nothing is merged or applied: David reviews on Test Dave's first.**
+**Board: 2 of 15 covered** (0b, H). ✏️ **2026-09-21 (ledger #374): A CREW LINK NOW BELONGS TO A TEAM — CARDS I, J, K, L added, all `owed`.** 🔴 **CARDS 0, A, B, B2 and C are FLIPPED `covered` → `owed` and their LAST-PROVEN reset.** Migration `20260921d` REPLACES `crew_day_stops`, `crew_day_read`, `create_crew_day_link` and `crew_stop_act` and DROPS two superseded arities, and the crew-link panel is now one row per team — so the proofs David ran on 09-17/09-18 were performed against code that no longer exists. A green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). **CARD 0b is NOT flipped** — the office door (`stop_act`) is untouched by this migration. **CARD H is NOT flipped** — it is a dated read-only observation of LAWNS on 2026-09-19, not a claim about current code. **Nothing is merged or applied: David reviews on Test Dave's first.**
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -39,7 +39,7 @@
 ---
 
 ## CARD 0 — the database update is in
-**STATUS:** owed · **DEVICE:** desktop · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)) — 20260923c REPLACES four of 20260917c’s functions and DROPS two old arities, so this V-block now describes a superseded state
+**STATUS:** owed · **DEVICE:** desktop · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)) — 20260921d REPLACES four of 20260917c’s functions and DROPS two old arities, so this V-block now describes a superseded state
 ✅ David ran V3 on apply: create/revoke → anon f · authed t · service t; the five crew functions → anon f · authed f · service t. Re-read live by Thunder the same hour (all nine functions, incl. `stop_act` and `stop_progress_apply`). **No need to run it again.**
 In the Supabase **SQL editor**, paste and run:
 
