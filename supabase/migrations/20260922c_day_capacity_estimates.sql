@@ -10,6 +10,11 @@
 --           until someone saves them, so LAWNS is still on the platform's 8 h, not its own 7 h.
 --   🔴 V3–V5 WERE NOT RUN AS WRITTEN AND MUST NOT BE — see the V3–V5 note further down. They are
 --      replaced by `docs/probes/20260922c-v3-v5-append-only.sql`, which leaves nothing behind.
+--   ✅ AND THAT PROBE HAS NOW BEEN RUN ON LIVE BY DAVID, 2026-09-22 — IT PASSED:
+--        rewrite refused · choice recorded once · second choice refused · delete refused ·
+--        probe row discarded. **The append-only property of this table is PROVEN on the real
+--        database, not only in PGlite** — which is the claim that matters, because PGlite is a
+--        double and a double can be more forgiving than the thing it stands in for.
 --
 -- ⚠️ THIS FILE LANDS ON `main` BY ITSELF (§6 r22, ledger #379): the migration is LIVE, so it belongs
 --    on the trunk the same day. **The capacity SCREENS are NOT here** — they stay held on
