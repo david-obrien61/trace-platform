@@ -77,5 +77,43 @@ ok(/ev\.stopPropagation\(\)/.test(SRC),
 ok(/aria-expanded=\{isOpen\}/.test(SRC),
   'G10j: the toggle reports its state to assistive tech — a disclosure that does not say whether it is open is a control with no readable state');
 
+// ── ④ A–Z SECTIONS INSIDE ONE SCROLL, AND AN INDEX THAT JUMPS (ledger #378) ─────────────────
+// David, 2026-09-22: the list is GROUPED like a contacts app — section headings within one
+// scroll, and a letter index that jumps to them. Same instrument and same caveat as above: this
+// proves the CODE SAYS it, not that a browser did it. The browser half is the owner-test card.
+
+ok(/const grouped = !!sectionIndex && sortKey === sectionIndex\.sortKey && sortDir === 'asc';/.test(SRC),
+  '🔴 AZ1: HEADINGS ONLY EXIST WHILE THE GRID IS SORTED THE WAY THEY GROUP. A section heading asserts that everything beneath it belongs to that letter (§6 r18); sort by Added and every heading becomes a false claim, so they are withdrawn instead');
+
+ok(/sectionIndex!\.keyOf\(view\[i - 1\]\) !== sectionKey/.test(SRC),
+  '🔴 AZ2: a heading is emitted where the section CHANGES BETWEEN CONSECUTIVE ROWS — derived from the order actually on screen, so a heading can never disagree with the rows under it. A second grouping pass could');
+
+ok(/filtered: status !== 'all' \|\| extra !== 'all' \|\| !!search/.test(SRC),
+  "🔴 AZ3: THE COUNT PILL COUNTS EVERY DIMENSION THAT NARROWS THE VIEW, AND `extra` WAS MISSING. Picking a value in the second dropdown alone made the header read `12 of 647 items` — the POPULATION sentence — while a filter was active. Live on /inventory today, found building this and fixed in passing (§1.6 fix-all-in-one-pass)");
+
+ok(!/indexKey !== 'all'/.test(SRC),
+  '🔴 AZ4: THE LETTER INDEX IS NOT IN THE FILTERED FLAG, because it JUMPS rather than filters — every row is still shown, and the pill must not claim a narrowed list. This probe fails the moment somebody turns the index back into a filter without revisiting the claim');
+
+ok(/if \(!grouped\) \{ setSortKey\(sectionIndex\.sortKey\); setSortDir\('asc'\); \}/.test(SRC),
+  'AZ5: pressing a letter under another sort RESTORES the grouping sort first, so the index never silently does nothing');
+
+ok(/sorted another way — a letter returns to A–Z order/.test(SRC),
+  'AZ6: …and the strip SAYS SO BEFORE the press, so the grid restoring the sort does not look like it undoing the reader’s choice by itself');
+
+ok(/const stick = headRowRef\.current\?\.getBoundingClientRect\(\)\.height \?\? 0;/.test(SRC),
+  '🔴 AZ7: the jump offset is MEASURED from the sticky header, not assumed from a row height — the header’s height is whatever the consumer’s columns make it, and a guessed offset hides the heading you jumped to underneath it');
+
+ok(/for \(const r of view\)/.test(SRC) && /sectionCounts/.test(SRC),
+  '🔴 AZ8: the per-letter counts are over `view` — the rows a reader can actually reach. A jump can only land on a heading that is RENDERED, so a letter whose rows the search has hidden must read 0 and refuse the press');
+
+ok(/disabled=\{empty\}/.test(SRC),
+  'AZ9: a letter with nobody under it is disabled, not hidden and not live (§1.6 item 5, no dead affordance)');
+
+ok(SRC.includes('{sectionIndex && ('),
+  '🔴 AZ10: NEGATIVE CONTROL — the strip renders ONLY for a consumer that passes `sectionIndex`. The engine has 8 consumers; /inventory, /assets and five more must look exactly as they did, or this build changed seven screens nobody asked it to touch');
+
+ok(/const sectionKey = grouped && sectionIndex \? sectionIndex\.keyOf\(row\) : null;/.test(SRC),
+  'AZ11: …and the heading row itself is gated on the same flag, so an opted-out grid cannot grow one');
+
 console.log(`\ndataSheetDisclosure: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }

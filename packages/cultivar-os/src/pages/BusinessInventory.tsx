@@ -33,6 +33,8 @@ import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2, Clipb
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { itemIdentifier, itemIdentifierSource } from '@trace/shared/quickbooks/itemIdentifier';
+import { searchHaystack } from '@trace/shared/components/datasheet/searchSpec';
+import { INVENTORY_SEARCH, INVENTORY_SEARCH_PLACEHOLDER } from './inventorySearchSpec';
 import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/dupSize';
 import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
@@ -500,8 +502,14 @@ export function BusinessInventory() {
         rowActions={rowActions}
         rowActionsHeader="Actions"
         rowActionsWidth={122}
-        searchText={r => [r.name, r.sku, r.size, r.variant_group, r.location, r.serial_number, r.notes].filter(Boolean).join(' ')}
-        searchPlaceholder="Search name, SKU, size, location…"
+        // 🔴 THE SEARCH READS WHAT THE GRID SHOWS, AND THE PLACEHOLDER IS GENERATED FROM IT.
+        // This was a hand-written field list beside a hand-written promise, and they drifted the
+        // day the SKU cell moved to `itemIdentifier` (ledger #357): the column rendered
+        // `sku ?? qb_item_name`, the search read `sku`, and `sku` is null on 1,078 of LAWNS's
+        // 1,079 rows. The grid displayed CSCM3UP and could not find CSCM3UP.
+        // Both now come from `INVENTORY_SEARCH`, one list, in a file a test can reach.
+        searchText={r => searchHaystack(INVENTORY_SEARCH, r)}
+        searchPlaceholder={INVENTORY_SEARCH_PLACEHOLDER}
         statusFilter={{ label: 'statuses', options: STATUS_FILTER_OPTIONS, get: r => r.status }}
         /* "a filter that shows only them" — R-101. A SECOND dimension, because status and
            needs-a-look are different questions and folding them into one control would make

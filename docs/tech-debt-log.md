@@ -286,6 +286,7 @@ NAMED GAP = honest shell intended to fill on a stated horizon. Don't conflate th
 
 | # | Workaround | Introduced | Correct Architecture | Trigger for Repair |
 |---|---|---|---|---|
+| 362 | 🔴 **THE IMPORT TYPED ~466 REAL PEOPLE AS ORGANIZATIONS, AND NOTHING LETS LAUREN CORRECT THEM IN BULK.** Measured live 2026-09-22 on LAWNS: **522 customers are `customer_type = 'organization'` and only 56 of them carry any business marker**; a random twenty reads *Tony Matson · John Kraft · Laura McFadden · Brian Finch · Barb & Mark Gleinser* — people, every one. **None of the 522 has a `last_name`**: the whole name sits in `organization_name`, so both structured name fields are empty for ~466 human beings. 🔴 **THE ONE THAT MATTERS: David's own filing example, "Jim & Virginia Patskowski", is one of these rows** — typed `organization`, `first_name` NULL, `last_name` NULL. The A–Z roster (#378) files it under P correctly, but only via the **last-word heuristic and `BUSINESS_NAME_MARKERS`**, because the record itself does not say it is a person. ⚠️ **THE ROSTER IS THE SYMPTOM, NOT THE DEFECT.** A wrong `customer_type` is not a sorting inconvenience: it decides whether a record reads as a company or a person on **every** surface — checkout, the order screen, the delivery stop, the invoice — and a mistyped row also means the surname is unavailable to search, to matching (#53's family) and to any future "same person?" question. ✏️ **RENUMBERED 361 → 362 UNDER [[R-148]] CLAUSE 4.** hold-list reserved 361 by pushing it to `main` (`2f6aea1`); mine was only ever on a branch, and under David's 2026-09-22 ruling an id is reserved ON MAIN — so the later-landing claim moves, and it is mine. Caught by merging `origin/main` before merging TO it, not by a cap. **FILED NOT BUILT, on David's instruction 2026-09-22: *"Propose how Lauren could correct them in bulk (a review list with the suggested type, she confirms) — surface, don't decide."*** **THE PROPOSAL, AS OPTIONS, NOT A DECISION:** **(A) A REVIEW LIST SHE CONFIRMS — the shape David described.** One screen listing every row whose stored type disagrees with what its name suggests, each with the SUGGESTED type, the suggested first/last split, and a tick. She confirms a page at a time; nothing is written until she does. The suggestion engine already exists and is proven — `customerFilingName`'s rules plus `BUSINESS_NAME_MARKERS` (personName.ts, 29 probes) — so this is a surface over a rule that is already tested, not new logic. **Est. 1 screen + 1 writer + its path test under §6 r21.** **(B) THE SAME LIST, BUT IT ALSO SPLITS THE NAME.** Confirming "person" on *"Barb & Mark Gleinser"* writes `first_name = 'Barb & Mark'`, `last_name = 'Gleinser'` and clears `organization_name`. Strictly better for search, matching and the roster — and strictly riskier, because it EDITS a name a human typed. Needs its own undo. **(C) DO NOTHING AND LET THE HEURISTIC CARRY IT.** Honest and free: the roster already files these rows correctly today. The cost is that every future surface inherits a type column that lies, and the heuristic has to be right forever. **WHAT I WOULD FLAG BEFORE EITHER (A) OR (B) IS BUILT, because they decide the shape:** ① **is a couple ("Jim & Virginia Patskowski", "Barb & Mark Gleinser" — a real population, not an edge case) ONE person record or two?** The contact model (#345) can hold two people; the roster cannot show one row for two without a rule. ② **does confirming a type write an `audit_log` row per record or per batch** — she may confirm hundreds in one sitting. ③ **is `customer_type` even the right column to fix, or is the real answer that a record with a `last_name` IS a person and the column is derived?** That would retire the disagreement instead of correcting it row by row. **None of these is Thunder's to answer.** ✏️ **ADDENDUM 2026-09-22, David's observation on `03bb38d` — A SECOND WAY THE NAME COLUMNS ARE WRONG, AND THE RENDER IS NOT AT FAULT.** *"Mark & Vanessa Ashcraft"* renders with the bold spanning BOTH names, because the row stores `first_name = 'mark'` and **`last_name = '& vanessa Ashcraft'`** — the partner's whole name is inside the surname field. The filing rule reads `last_name` and bolds it, which is correct behaviour on incorrect data. **MEASURED LIVE, same day:** of **1,444** LAWNS customers that have a surname at all, **33 carry a MULTI-WORD `last_name`** and **4 have a `last_name` that contains their own `first_name`** (2 rows are both). Samples: `Andrea` + `& Angel Navarrette` · `David` + `& Ivy` · `Leroy` + `& Lila Ludemann` · `John` + `Anastasia Johnson` · `Linda` + `Bill Dubelbeis`. **So the couple problem has TWO shapes, not one:** the ~466 rows with NO structured name at all (the original item), and these 33 where the structure exists and is wrong. Option (B) — the confirm-list that also splits the name — would have to handle both, and it is the reason question ① (*is a couple one record or two?*) has to be answered before either is built. **FILED, NOT FIXED.** | 2026-09-22 (#378's measurement) | `customer_type` agrees with the record, or is derived from it; the structured name fields hold the name for a person, so the filing rule needs no heuristic | **David picks A, B, C or the derived-column question.** Not blocking the A–Z roster, which ships correct either way — this is about every OTHER surface that reads the type |
 | 361 | 🔴 **A MIGRATION THAT IS APPLIED LIVE CARRIES `⚠️ NOT APPLIED` ON `main` — `20260921_recipes_made_items`.** **Measured live 2026-09-22** as `supabase_read_only_user`: its recipe table, `business_inventory.item_type`, `record_build_run` and `recipe_link_must_survive_a_wipe` are all present. **The file on `main` (line 36) still reads** *"⚠️ NOT APPLIED. Written, V-blocks run by Thunder against PGlite. David applies."* A reader answering *"can I rely on `record_build_run`?"* from the repo gets NO, and the database says yes. [[R-111]]: a migration label is not evidence. | Filed 2026-09-22, ledger #379, while adopting §6 r22 | The applied-state record is corrected the same day the migration is applied — the second half of §6 r22. Not edited here: §6 r1 forbids editing an applied migration, so the correction is **David's or the #370 session's**, either in the file's header by its owner or in the register. | Before anyone reasons about `undo_import_run`, `record_build_run` or the recipe tables from the repo. |
 | 358 | 🔴 **THE TRIP-CHARGE ZONE HAS NO DATA: THERE IS NO ZIP → CHARGE TABLE ANYWHERE.** Measured 2026-09-21, live and in the corpus: no `delivery_zones`, no zip-to-zone table, and every zip column is a plain address field. The only zip→zone rule in the whole platform is **USDA hardiness zone** (`DECISIONS.md:941`) — what will GROW, not what a delivery costs — which is almost certainly the collision behind the recollection that a zip table already existed. | 2026-09-21, ledger #369. David's analysis of 2026-09-10 measured it but never stored it: 519 TC lines, 502 with a usable zip, 80 distinct zips, each zip's MODAL charge (78641 agreeing 99/103, 78642 73/78). Del Valle $400 against Salado $250 proves the charge tracks DRIVE TIME, not distance — which is why the $3.50-per-loaded-mile formula is rejected (it prices the Hutto trip at ~$113 against the $250 actually charged). | A per-business **zip → charge settings table, editable by Lauren**, SEEDED from the tenant's own invoice history: modal TC charge per ship-to zip, **with n and agreement shown so it reads as measured rather than typed**. Outliers shown, never hidden. A zip with no row surfaces *"we can't place this — is it correct?"*, is **NOT priced**, and gets no guessed zone and no fallback. Surface, don't decide: show the charge and where it came from, and let her override. | **After the address check ①–⑤**, and derived from LIVE rows once the invoice history is loaded — not from the 2026-09-10 analysis, which is a number in a chat rather than a measurement anyone can re-run. |
 | 356 | 🟡 **THE "NOT STOCK" SETTING HAS A TABLE, A RULE AND NO SCREEN.** `business_not_stock_items` is read by the opening-stock seed and written by nobody: there is no surface where Lauren can say *"this one is not stock"*. It ships EMPTY (`20260922b`) because the alternative — a migration seeding one tenant's four rows — is platform code carrying tenant data, and two of those four ids were wrong on their first and only run. So the capability exists and cannot be used. | 2026-09-21, ledger #365. David: *"a screen where the manager adds an item to 'not stock' herself, recorded as her decision."* **File, do not build.** | A row in the inventory grid (or the seed screen's skipped list) offering **"this is not stock"**, writing `business_not_stock_items` under `settings:update` with a REQUIRED reason and the actor's id, so the record says WHO decided and WHY. It must show the catalogue name beside the id it is writing — the missing check that let a hand-typed list name the wrong items. The row is retired with `active = false`, never deleted, so the reason survives the fix. | **When an owner needs a row held back that her books call stock.** Not urgent for LAWNS today: the four affected rows take a starting number in test data, which David ruled acceptable, and the durable repair is a retype in QuickBooks — they are on Lauren's list. |
@@ -2165,6 +2166,27 @@ Nothing suggests it has been abused. It is still a billable endpoint on the publ
 ---
 
 ## #262 — 🔴 THE PMI SCREEN IS INERT FOR ANYONE HOLDING `pmi:*` WITHOUT `costs:read` — AND LAWNS'S MANAGER IS THAT PERSON TODAY (NEW 2026-09-11)
+
+🔴 **RULED 2026-09-22 (David, ledger #381) — LEAVE IT. JOEL DOES NOT GET `costs:read`, AND THAT IS A DECISION, NOT AN OVERSIGHT.**
+Re-measured live that day while checking whether anyone at LAWNS was wrongly blocked: **Lauren and David hold 59
+permissions each; Joel holds 25** — `inventory:read` yes, `costs:read` no, `inventory:import_price` no. So `/assets`
+and `/pmi` are both closed to him, and **David's ruling is that they stay closed**: his **2026-07-23 ruling stands —
+quantities yes, prices no**. A manager imports and counts stock; he does not see what it cost.
+
+⚠️ **THEREFORE THE DECISION RECORD IS THE THING THAT IS NOW STALE, NOT THE GRANT.**
+`scripts/verify-financial-permissions.mjs` still encodes `MANAGER: { view_costs, view_margin }` as its expectation —
+written under the pre-2026-07-23 model, and in the RETIRED vocabulary (`view_costs`, which since
+`20260910_permission_literal_merge.sql` made `has_permission` literal, **grants nothing to anyone**: measured
+2026-09-22, 0 of 3 LAWNS members hold it and 0 live RLS policies reference it). **Two records disagree about the
+manager's cost authority and the ruling is the one that is current.** Anyone reading that script to answer *"should
+Joel see costs?"* gets a confident wrong answer — **#178's shape, in our own tooling.**
+
+**WHAT IS STILL OWED HERE, AND IT IS NOW A COPY PROBLEM, NOT A PERMISSION ONE.** The original finding stands on its
+own terms: the PMI screen **returns before reading a single asset**, so Joel sees an empty screen rather than one that
+says *why* it is empty. Under the six-surface-states ruling, withheld data must ANNOUNCE its redaction — *"maintenance
+costs are hidden; cost access required"* — never render as nothing. **That is the fix: the honest empty state, not the
+grant.** Same for `/assets`.
+
 
 Measured live 2026-09-11, read-only: **LAWNS's active MANAGER holds `pmi:read` and `pmi:update` and not `costs:read`**, and so does the platform MANAGER floor. `pages/PMI.tsx` passes `canSeeCosts={can('costs:read')}`, and `PMI.tsx:176` returns before reading a single asset. With no row to open there is no **Log Service**, no **✦ Suggest Schedule** and no schedule to read: the member holds maintenance authority over nothing.
 
@@ -4456,6 +4478,40 @@ per action (as for every other tap) records who undid it.
 
 ## #347 — 🔴 A PUSH TO `main` CAN SIT UNBUILT FOR MINUTES OR HOURS, VERCEL REPORTS HEALTHY THROUGHOUT, AND NOTHING WE OWN NOTICES (NEW 2026-09-18, ledger #351 — the gap in #280, measured twice in two days)
 
+🔴 **RULE ADDED 2026-09-22 (David, ledger #383): READ THE STAMP TWICE, AT LEAST 60 SECONDS APART, BEFORE
+CALLING A STALL.** A single read of `/version.json` is NOT evidence of a stalled deploy, and this row's own
+subject is what makes that trap live: when you already believe a push can sit unbuilt, one stale read reads as
+confirmation.
+
+**MEASURED, on myself, the day the rule was made.** Production had genuinely served `9b2b30b` for 92 minutes
+while `main` ran 20 commits ahead — including the #383 hotfix that made `/orders/:id` render at all — so the
+premise was real and the escalation was reasonable. The sequence:
+
+| time (CDT) | event |
+|---|---|
+| 13:40:32 | pushed an empty commit `03bb38d5` to `main` |
+| 13:40:44 | **Vercel finished building it** — twelve seconds later (`builtAt` 18:40:44Z) |
+| 13:41:00 | read `/version.json` on both hosts → **still `9b2b30b`** |
+| 13:41:43 | concluded the hook had ignored the empty commit; pushed `7055ddcd`, touching `main.tsx` |
+| 13:44:21 | read again → **`03bb38d`**, built 13:40:44 |
+
+🔴 **THE BUILD HAD ALREADY SUCCEEDED SIXTEEN SECONDS BEFORE THE READ THAT I TREATED AS PROOF IT HAD NOT
+STARTED.** The gap is CDN propagation, not the build hook. The empty commit worked; the second push, the
+"empty commits are being ignored" diagnosis, and a four-line comment added to the app's ENTRY POINT to force a
+bundle change were all built on one sample taken too early. The comment was reverted the same hour; the wrong
+conclusion had already been written into a report and sent.
+
+⚠️ **AND IT WAS WRONG IN THE OTHER DIRECTION TOO, WHICH IS THE PART WORTH KEEPING:** a prior session had
+pushed its own trigger commit (`dffa6265`) minutes earlier. Seeing two trigger commits and a stale stamp, I
+reported *"empty commits have now been pushed twice with no build"* — an inference about someone else's push
+from the same single sample. **One read produced two confident wrong claims.**
+
+**THE RULE, stated so it is executable:** before reporting a stall, read `/version.json` **twice, ≥60s apart**,
+and report both reads with their timestamps. A stamp that has not moved across two spaced reads is a stall; one
+that has not moved across a single read is a stamp you read too early. ⚠️ This does not change
+[[feedback-dont-poll-production]] — two spaced reads is not a polling loop, and scripted loops still trip
+Vercel's bot protection.
+
 **What was seen, 2026-09-18 (times CT, from git and the app's own `/version.json`).** Production was built at
 **10:36** as `0bcb467`. Then four pushes to `main`: **10:42** `fb4f30e` · **10:45** `a9ec67f` (another window) ·
 **10:57** `429223b` (the box-follows-stop fix) · **11:13** `3cd3ac9`. **The first three produced no production
@@ -4766,3 +4822,95 @@ their own screen** — Lauren's follow-up list, not her order history.
 does in this product.
 
 **Blocker:** David's ruling on whether estimates are part of the product at all.
+
+## #77 — 🔴 `api/` IS IN NO TSCONFIG, SO NOBODY WHO CAN FAIL A BUILD TYPE-CHECKS IT — AND THE TWO CHECKERS THAT DO LOOK DISAGREE BECAUSE OF ONE FLAG (ENTRY WRITTEN 2026-09-22; the id was cited in three places and had no entry — #195's class)
+
+⚠️ **THIS ID WAS CITED BEFORE IT WAS WRITTEN.** `docs/built-inventory.md:1044`, `docs/CLOSE-OUT-LEDGER.md` (#341)
+and `docs/handoff-archive.md:1405` all cite *"tech-debt #77"* for exactly this gap; **no entry existed in this
+file.** That is the defect **#195** filed about #186–#191, in a range nobody re-checked. Entry written now, with
+the measurement it never had.
+
+**What — and it is simpler and worse than "a config difference."** `npm run verify` type-checks **two**
+projects (`scripts/quality-gate.mjs:37`): `packages/cultivar-os/tsconfig.json` and
+`packages/trace-app/tsconfig.json`. The first declares `"include": ["src"]`. **There is no `tsconfig.json` at
+the repo root at all.** So the repo-root `api/` shims and `packages/cultivar-os/api/**` — every serverless
+handler we deploy — are in **no TypeScript project**, and `npm run verify` has never type-checked one of them.
+Vercel compiles them on every deploy, finds no root tsconfig, and therefore falls back to **TypeScript's
+defaults, which means `strict: false`.**
+
+**The exact difference, MEASURED 2026-09-22** (same file set, same TypeScript, one flag changed):
+
+| `strict` | total errors | discriminated-union narrowing | `await res.json()` → `unknown` |
+|---|---|---|---|
+| `false` — what Vercel uses | **32** | **16** | 16 |
+| `true` — what this repo uses everywhere else | **16** | **0** | 16 |
+
+🔴 **ALL SIXTEEN UNION ERRORS ARE AN ARTIFACT OF THE FLAG, NOT DEFECTS.** Narrowing a **boolean-literal
+discriminant** needs `strictNullChecks`; without it `if (!resolved.ok)` stops narrowing and every access to the
+other arm is reported. The code is correct and correctly narrowed — `QboItemRefResult` really is
+`{ok:true; itemRef} | {ok:false; unmapped}` (`invoiceLineShapes.ts:115`) and the call site really does check
+`ok` first. This is the whole of the list David read off the Vercel build log: `unmapped` ×5 · `customerUpsert`
+`error` · `acceptInvitation` `email` on `never` · `campaigns/generate` `value` · `containerLadder` `reason` ×3 ·
+`customerImportWriter` `error` ×3 · `shipmentIngest` `reason`/`lines`. **Giving Vercel a `strict: true` tsconfig
+deletes all sixteen at a stroke, changing no application code.**
+
+**The other 16 are one class and are NOT runtime bugs either:** `await fetchRes.json()` returns `unknown` in
+this lib version, then properties are read off it (`qbo/invoice/cultivar.ts` ×5, `qbo/router.ts` ×5,
+`receipts/ocr.ts` ×2, `shared/src/quickbooks/refresh.ts` ×4). At run time the parsed body does carry those keys
+and most reads are already `?.`/`??`-guarded. They error under **both** settings — they are a genuine typing
+gap, and the honest thing to say about them is that they are **the class that HIDES bugs**, because an
+unchecked external response gets no compiler help at all.
+
+🔴 **WHY THIS IS RED RATHER THAN AMBER — IT HAS NOW COST US A PRODUCTION 500.** On 2026-09-22
+`api/discovery/ingest.ts` shipped `export { callerHoldsPermission } from '...'` — a bare re-export, which
+creates **no local binding** — while the `cost-apply` write-wall gate called that name directly. Every
+`cost-apply` request threw `ReferenceError: callerHoldsPermission is not defined`. **A tsc over `api/` reports
+it instantly, under EITHER setting: `ingest.ts(107,27): error TS2304: Cannot find name
+'callerHoldsPermission'` — measured, by re-breaking the file and re-running both configs.** Nothing in
+`npm run verify` could see it, because the file is in no project. The two checks that *were* aimed at that gate
+both passed on it: `scripts/verify-write-wall.ts:15` imports the symbol **from ingest.ts**, and a re-export
+does satisfy importers, so it proved the helper through a door that was never broken; `verify-universals.mjs`
+cap7 greps the literal string `callerHoldsPermission(req`, which an undefined identifier matches exactly as
+well as a defined one. **[[R-33]]: neither could have disagreed.**
+
+⚠️ **AND VERCEL'S OWN OUTPUT IS NOT A BACKSTOP: the 2026-09-22 build printed its TypeScript errors and
+SUCCEEDED anyway** (`716eed9`, 16:38). A checker whose findings cannot fail a build is a log, not a gate — and
+32 standing errors is exactly the noise a real one hides in.
+
+✅ **BUILT 2026-09-22 AS A RATCHET — David's call, same day.** `tsconfig.api.json` (`include: ["api"]`,
+`strict: true` to match `packages/cultivar-os/tsconfig.json`) + `scripts/verify-api-types.mjs`, wired into
+`npm run verify` immediately after `verify:api-parses`. **Baselined at 16, so it lands GREEN; any NET-NEW
+error fails the build.**
+
+🔴 **IT KEYS ON ERROR IDENTITY, NOT ON A COUNT.** A count-only ratchet passes when one error is fixed and
+another introduced in the same commit — 16 in, 16 out, green, on a tree that regressed. The key is
+`path::TScode::message`, with **line and column deliberately excluded** so editing above an error is not a
+false regression (#78 re-keyed the quality ratchets on identity for the same reason). **PROVEN RED on the
+exact defect it exists to catch:** re-breaking `ingest.ts:34` back to a bare re-export produced
+`❌ 1 NET-NEW … TS2304: Cannot find name 'callerHoldsPermission'`, exit 1. **10 self-test probes, both
+directions**, including P7 (the fixed-one/new-one swap a count would miss) and P8 (the same error on a
+different line is the same key). Re-baselining UPWARD is refused outright — a baseline is debt and shrinks
+only (§6 r9).
+
+**THE 16 ARE ONE CLASS AND HERE ARE THE SITES — `await res.json()` returns `unknown`, then properties are
+read off it.** Fix over time; each fix shrinks the baseline via `node scripts/verify-api-types.mjs --update`.
+
+| File | Errors | `await res.json()` calls | What it parses |
+|---|---|---|---|
+| `packages/cultivar-os/api/qbo/router.ts` | 5 | 2 | Intuit token exchange (`access_token`, `refresh_token`, `expires_in`) + `CompanyInfo` |
+| `packages/cultivar-os/api/qbo/invoice/cultivar.ts` | 5 | 4 | Intuit `QueryResponse`, `Customer` ×3, `Invoice` |
+| `packages/shared/src/quickbooks/refresh.ts` | 4 | 1 | the token refresh body |
+| `packages/cultivar-os/api/receipts/ocr.ts` | 2 | 1 | Gemini `usageMetadata` / `candidates` |
+
+⚠️ **NONE OF THE 16 IS A RUNTIME BUG** — the parsed body does carry those keys and most reads are already
+`?.`/`??`-guarded. **But this is the class that HIDES bugs**: an unchecked external response gets no compiler
+help at all, which is exactly the condition under which a typo in a token field fails silently at 3am. The
+durable fix is a narrow response type (or a parse helper) per call, not a cast.
+
+⚠️ **ONE THING I COULD NOT SETTLE WITHOUT THE RAW BUILD LOG:** whether Vercel's output also carried the
+`ingest.ts` TS2304. David's read of it listed the other ~15 and not this one. If it *was* there, the signal
+existed and was lost in the noise, which strengthens the case rather than weakening it — but I am not asserting
+it either way.
+
+**Owner:** David — whether `npm run verify` gains a step that starts red. **Blocks:** nothing today; it is the
+blind spot every future `api/` edit ships through.

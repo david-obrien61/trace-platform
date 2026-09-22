@@ -36,6 +36,7 @@
  */
 
 import { tokenSetsEqual } from './canonicalName';
+import { foldAccents } from './alphaIndex';
 
 /**
  * Normalize a party name to a SET of identity tokens.
@@ -133,4 +134,150 @@ export function customerDisplayName(
     || c.display_name?.trim()
     || c.organization_name?.trim()
     || fallback;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// FILING — WHERE A ROSTER FILES A RECORD, AND WHY THE EYE CAN SEE IT (David's ruling 2026-09-22)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// This is the CONTACTS-APP STANDARD, and it is David's domain call. An earlier pass filed people
+// under their FIRST name, on the argument that a list should read the way it is written; he
+// reversed it, and the reversal carries the part that makes it work: **the filing token is shown
+// in bold**, so a reader who finds "Jim & Virginia Patskowski" under P can see why in the row
+// itself. Sorting by a word nobody can see is what makes a list feel broken — showing the word is
+// the answer, not abandoning the surname.
+//
+// THE FOUR RULES, in order:
+//   1. A LAST NAME WINS WHEREVER IT IS PRESENT — whatever `customer_type` says. LAWNS's imported
+//      rows are not reliably typed (measured 2026-09-22: "Aaron Hunt" is stored as an
+//      ORGANIZATION), so trusting the type column here would file real people under their first
+//      name at random. A surname present in the record is better evidence than the label on it.
+//   2. NO SURNAME → the record files under its own name, with a LEADING ARTICLE IGNORED, so
+//      "The Oaks" sits under O with "The" still shown but not counted.
+//   3. A ONE-NAME PERSON files under that name — 39 of LAWNS's people carry a first name only.
+//   4. Anything that does not fold to A–Z files under '#' (see alphaIndex).
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+
+interface FilingParty {
+  customer_type?: string | null;
+  organization_name?: string | null;
+  display_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+const LEADING_ARTICLE = /^(the|a|an)\s+/i;
+
+/**
+ * 🔴 THE BUSINESS MARKERS — AND THE MEASUREMENT THAT MAKES THEM NECESSARY, NOT A GUESS.
+ *
+ * `customer_type` CANNOT BE TRUSTED HERE AND THE NUMBERS ARE BRUTAL. Measured live on LAWNS,
+ * 2026-09-22: **522 rows are typed `organization` and only 56 of them carry any business marker
+ * at all.** A random twenty reads *Tony Matson · John Kraft · Laura McFadden · Barb & Mark
+ * Gleinser · Dustin Miller* — people, every one, typed as companies by the QuickBooks import,
+ * and **not one of them has a `last_name`**. David's own worked example is one of these rows:
+ * "Jim & Virginia Patskowski" is stored as an ORGANIZATION with first_name and last_name both
+ * NULL, and it still has to file under P.
+ *
+ * So a record with no structured surname cannot be filed by its type column, and it cannot be
+ * filed under its first word either. It is filed under its LAST WORD — the contacts-app import
+ * rule — unless it looks like a business, and this list is what "looks like a business" means.
+ *
+ * ⚠️ IT IS A HEURISTIC AND IT IS SAID OUT LOUD RATHER THAN BURIED. It will be wrong for a
+ * business whose name carries no marker ("Stonehenge") — that row files under its last word.
+ * THE REAL FIX IS THE RECORD, NOT THE SORT: give the person a first and last name in the customer
+ * editor and rule 1 takes over, exactly and permanently. The heuristic only ever governs rows
+ * nobody has typed properly yet.
+ */
+export const BUSINESS_NAME_MARKERS: readonly string[] = [
+  'inc', 'llc', 'ltd', 'co.', 'company', 'corp', 'service', 'services', 'landscap', 'nurser',
+  'lawn', 'tree', 'garden', 'design', 'construct', 'builder', 'homes', 'properties', 'group',
+  'farm', 'farms', 'ranch', 'supply', 'management', 'maintenance', 'irrigation', 'outdoor',
+  'scapes', 'greenhouse', 'sod', 'turf', 'contractor', 'contractors', 'enterprise', 'enterprises',
+  'associates', 'partners', 'realty', 'church', 'school', 'city of', 'hoa', 'association',
+];
+
+function looksLikeABusiness(name: string): boolean {
+  const n = name.toLowerCase();
+  return BUSINESS_NAME_MARKERS.some(m => n.includes(m));
+}
+
+/** "The Oaks" → "Oaks". Applied ONLY where a record is filed under its own name — a surname is
+ *  never an article, so stripping one there could only corrupt a real name. Falls back to the
+ *  original when stripping would leave nothing, so "The" alone still files under T. */
+function withoutLeadingArticle(s: string): string {
+  return s.replace(LEADING_ARTICLE, '').trim() || s.trim();
+}
+
+/** The name a record is known by, before any filing decision — the same string the roster shows. */
+function ownName(c: FilingParty): string {
+  return (c.customer_type === 'organization'
+    ? (c.organization_name?.trim() || c.display_name?.trim() || c.first_name?.trim() || '')
+    : (c.first_name?.trim() || c.display_name?.trim() || c.organization_name?.trim() || ''));
+}
+
+/**
+ * The token this record FILES under. Five rules, in order — the first that answers wins:
+ *
+ *   1. `last_name` is present → THE SURNAME, whatever `customer_type` claims. 1,444 of LAWNS's
+ *      2,005 rows answer here, and this is the only rule that is evidence rather than inference.
+ *   2. The name starts with an article → the rest of it. "The Tree Place" files under T (Tree).
+ *   3. The name looks like a business → THE WHOLE NAME. "A.J. Landscaping" under A, "City of
+ *      Lakeway" under C.
+ *   4. Otherwise it is a person recorded as one string → ITS LAST WORD. "Jim & Virginia
+ *      Patskowski" under P, "Barb & Mark Gleinser" under G. ~466 LAWNS rows land here.
+ *   5. Nothing known → '' , which `alphaKeyFor` files under '#'.
+ */
+export function customerFilingName(c: FilingParty | null | undefined): string {
+  if (!c) return '';
+  const last = c.last_name?.trim();
+  if (last) return last;                                    // 1
+  const own = ownName(c);
+  if (!own) return '';                                      // 5
+  if (LEADING_ARTICLE.test(own)) return withoutLeadingArticle(own);   // 2
+  if (looksLikeABusiness(own)) return own;                  // 3
+  const words = own.split(/\s+/).filter(Boolean);           // 4
+  return words.length > 1 ? words[words.length - 1] : own;
+}
+
+/**
+ * The displayed name split so a surface can BOLD the filing token: `before` + `filing` + `after`.
+ *
+ * 🔴 THE BOLD IS NOT DECORATION — IT IS WHAT MAKES A SURNAME SORT LEGIBLE. Without it the roster
+ * orders itself by a word the reader has to infer, which is the complaint that started this work.
+ * With it, "Jim & Virginia **Patskowski**" filed under P explains itself at a glance.
+ *
+ * When the filing token cannot be found inside the displayed name — an organization whose
+ * `organization_name` differs from what the row displays, say — NOTHING is bolded rather than
+ * something arbitrary: a bold run on the wrong word is worse than none, because it asserts a
+ * reason that is not the real one.
+ */
+export function customerFilingParts(
+  c: FilingParty | null | undefined,
+  fallback: string,
+): { before: string; filing: string; after: string } {
+  const shown = customerDisplayName(c, fallback);
+  const filing = customerFilingName(c);
+  if (!filing) return { before: shown, filing: '', after: '' };
+  const i = shown.lastIndexOf(filing);
+  if (i < 0) return { before: shown, filing: '', after: '' };
+  return { before: shown.slice(0, i), filing, after: shown.slice(i + filing.length) };
+}
+
+/**
+ * The sort key that puts a roster in filing order: the filing token first, then the whole
+ * displayed name to break ties.
+ *
+ * ⚠️ THE TIEBREAK IS LOAD-BEARING, NOT TIDINESS. LAWNS has many rows sharing a surname; with only
+ * one term their order is whatever the sort happened to do, and a list that reorders itself
+ * between renders for no visible reason is the #377 symptom in a milder form. The separator is
+ * the NUL character because it sorts below every printable one, so a short surname can never sort
+ * into the middle of a longer one ("Ray" stays clear of "Rayburn").
+ */
+export function customerFilingSortKey(c: FilingParty | null | undefined, fallback = ''): string {
+  // 🔴 FOLDED WITH THE SAME FUNCTION THE BUCKET USES, AND THIS IS A FIX FOR A MEASURED DEFECT.
+  // The grid compares sort values with `<` / `>` — plain code-unit order — where every accented
+  // character sorts ABOVE 'z' (`'ñunez' < 'zz'` is FALSE, measured). An unfolded key therefore
+  // put "Ñuñez" after every Z name while its bucket said N, and the grid, which derives headings
+  // from the order actually on screen, would have rendered a SECOND "N" heading at the bottom.
+  return foldAccents(`${customerFilingName(c)}\u0000${customerDisplayName(c, fallback)}`).toLowerCase();
 }
