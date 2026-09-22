@@ -32,6 +32,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { alphaKeyFor, ALPHA_KEYS } from '@trace/shared/utils/alphaIndex';
+import { customerFilingName, customerFilingParts, customerFilingSortKey } from '@trace/shared/utils/personName';
 import {
   DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
@@ -291,13 +292,25 @@ export function Customers() {
   // ── Column config — the LEAN at-a-glance roster (name/type/tier/tax/status/added + Edit).
   //    The full field set lives in CustomerPartyEditor (opened via the name or the Edit button). ──
   const columns: DataSheetColumn<CustomerRow>[] = [
-    { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200, identifier: true,
-      render: r => (
-        <button onClick={() => navigate(`/customers/${r.id}`)} title="Open customer record + order history"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 600, color: '#1f2937' }}>
-          {displayName(r) || '—'}
-        </button>
-      ) },
+    // 🔴 THE NAME COLUMN SORTS BY THE FILING NAME AND SHOWS IT IN BOLD — the two halves of
+    // David's ruling, and they only work together. The roster files "Jim & Virginia Patskowski"
+    // under P, and the row itself says why by bolding **Patskowski**. Sorting by a surname the
+    // reader cannot see is what makes a list feel broken; showing it is the fix.
+    { key: 'first_name', header: 'Name', sortable: true, sortVal: r => customerFilingSortKey(r), frozen: true, frozenWidth: 200, identifier: true,
+      render: r => {
+        const { before, filing, after } = customerFilingParts(r, '');
+        return (
+          <button onClick={() => navigate(`/customers/${r.id}`)}
+            title={filing ? `Open customer record — filed under ${filing}` : 'Open customer record + order history'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 400, color: '#1f2937' }}>
+            {/* No filing token found → nothing is bolded rather than something arbitrary: a bold
+                run on the wrong word asserts a reason that is not the real one. */}
+            {filing
+              ? <>{before}<strong style={{ fontWeight: 800 }}>{filing}</strong>{after}</>
+              : (displayName(r) || '—')}
+          </button>
+        );
+      } },
     { key: 'customer_type', header: 'Type', sortable: true, sortVal: r => (r.customer_type ?? 'person'),
       render: r => <span style={sourceStyle}>{r.customer_type === 'organization' ? 'Organization' : 'Person'}</span> },
     { key: 'price_tier', header: 'Tier', sortable: true, sortVal: r => (r.price_tier ?? '').toLowerCase(),
@@ -348,19 +361,23 @@ export function Customers() {
         searchText={customerSearchHaystack}
         searchPlaceholder="Search name, phone, email, city…"
         statusFilter={{ label: 'sources', options: ['qr-scan', 'ocr-invoice', 'manual'], get: r => r.source ?? '' }}
-        // 🔴 THE ROSTER OPENS A–Z BY NAME, NOT NEWEST FIRST. 2,005 customers (measured live
+        // 🔴 THE ROSTER OPENS IN FILING ORDER, NOT NEWEST FIRST. 2,005 customers (measured live
         // 2026-09-22) ordered by when they were imported is an order nobody can navigate: every
         // one of LAWNS's arrived in the same reload, so "newest" is not even a real sequence —
-        // 500 of them share a single microsecond (#377). `first_name` is the Name column's key
-        // and its `sortVal` is the DISPLAYED name lowercased, so the list reads alphabetically
-        // exactly as it is written on the screen.
+        // 500 of them share a single microsecond (#377).
         // ⚠️ The Added column is still there and still sortable — this changes the DEFAULT, not
-        // the choice. One click returns the old order.
+        // the choice. One click returns the old order, and the A–Z headings withdraw when it does.
         defaultSortKey="first_name"
         defaultSortDir="asc"
-        // The A–Z strip. `alphaKeyFor` reads the same displayed name the Name column sorts on, so
-        // the letter a row files under and the place it appears in the list cannot disagree.
-        indexFilter={{ keys: ALPHA_KEYS, label: 'Jump to a letter', get: r => alphaKeyFor(displayName(r)) }}
+        // The A–Z sections and the index that jumps to them. `keyOf` reads the SAME filing name
+        // the Name column sorts and bolds, so the letter a row sits under, the place it appears
+        // in the list, and the bold word in the row can never disagree — they are one function.
+        sectionIndex={{
+          keys: ALPHA_KEYS,
+          label: 'Jump to a letter',
+          sortKey: 'first_name',
+          keyOf: (r: CustomerRow) => alphaKeyFor(customerFilingName(r)),
+        }}
         itemNoun="customers"
         totalRows={customerTotal}
         emptyIcon={<Users size={32} color="#d1d5db" style={{ marginBottom: 8 }} />}

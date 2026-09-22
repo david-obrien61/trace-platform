@@ -43,7 +43,7 @@
 // INSTRUMENTATION (STD-003): the engine is silent; consumers emit `[TRACE:<area>]` on their
 //               loads/writes (invsheet for inventory, assets for the asset grid).
 // ============================================================
-import { useState, useMemo, useEffect, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { countPillText } from './countPill';
 import { Plus, Minus, SlidersHorizontal, Search, Lock } from 'lucide-react';
 import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
@@ -110,17 +110,29 @@ interface DataSheetProps<T> {
    *  `available` and `price disagreement` mutually exclusive when a row is routinely both.
    *  Optional and additive — every existing consumer renders exactly as before. */
   extraFilter?: StatusFilterConfig<T>;
-  /** An A–Z strip over the rows: `get` returns the row's bucket (see `alphaIndex.alphaKeyFor`).
-   *  Optional and additive — a consumer that does not pass it renders exactly as before.
+  /** 🔴 GROUP THE LIST INTO A–Z SECTIONS INSIDE ONE SCROLL, with a letter index that JUMPS to
+   *  them — the contacts-app pattern (David, 2026-09-22). OPT-IN: a consumer that does not pass
+   *  this renders EXACTLY as it did, which is what keeps the engine's other seven screens out of
+   *  this build (probe AZ7 is the negative control).
    *
-   *  🔴 IT LIVES IN THE GRID BECAUSE THE GRID OWNS THE COUNT CLAIM. Filtering the rows OUTSIDE
-   *  and handing over the subset was the first design, and it was measured dishonest: with 77 of
-   *  LAWNS's 2,005 customers passed in, `countPillText` sees `loaded 77 < total 2005` and renders
-   *  **"showing 77 of 2005 customers"** — the sentence that means *the read was truncated*, which
-   *  is the exact lie `countPill.ts` exists to prevent (it shipped `1000 of 1000` over 1,964 rows).
-   *  A letter is a CHOICE the reader made, not a short read, and only the grid can tell those
-   *  apart because only the grid holds both numbers. */
-  indexFilter?: { get: (row: T) => string; keys: readonly string[]; label?: string };
+   *  · `keyOf`  — which section a row belongs to ('A'–'Z', '#').
+   *  · `keys`   — every section the index offers, in strip order (empty ones render disabled).
+   *  · `sortKey`— the COLUMN whose ascending sort actually produces those groups.
+   *
+   *  ⚠️ `sortKey` IS NOT BOOKKEEPING. A section heading is a claim that everything under it
+   *  belongs to that letter (§6 r18), and that is only true while the grid is sorted that way.
+   *  Sort by "Added" and the headings would be scattered lies, so they are WITHDRAWN instead —
+   *  and pressing a letter restores the grouping sort before it jumps, so the index never
+   *  silently does nothing.
+   *
+   *  🔴 IT LIVES IN THE GRID BECAUSE THE GRID OWNS THE COUNT CLAIM. Doing this outside — filtering
+   *  the rows and handing over the subset — was the first design and it was measured dishonest:
+   *  with 77 of LAWNS's 2,005 customers passed in, `countPillText` sees `loaded 77 < total 2005`
+   *  and renders **"showing 77 of 2005 customers"**, the sentence that means *the read was
+   *  truncated* — the exact lie `countPill.ts` exists to prevent (it shipped `1000 of 1000` over
+   *  1,964 rows). Only the grid holds both numbers, so only the grid can tell a reader's choice
+   *  from a short read. */
+  sectionIndex?: { keyOf: (row: T) => string; keys: readonly string[]; sortKey: string; label?: string };
   defaultSortKey?: string;
   defaultSortDir?: 'asc' | 'desc';
   /** Highlight + count rows (e.g. dup-size collisions). Evaluated against the FULL row set — a flag
@@ -165,7 +177,7 @@ interface DataSheetProps<T> {
 export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
-    statusFilter, extraFilter, indexFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
+    statusFilter, extraFilter, sectionIndex, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
     actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items', totalRows = null,
   } = props;
@@ -173,8 +185,10 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [extra, setExtra] = useState('all');
-  // The A–Z strip's selection. 'all' is not a letter, so the strip starts showing everyone.
-  const [indexKey, setIndexKey] = useState('all');
+  // The letter a press asked to reach. Held in state rather than scrolled immediately, because
+  // a press may first have to restore the grouping sort — the heading it wants does not exist in
+  // the DOM until that render has happened. Cleared by the effect that performs the jump.
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir);
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
@@ -230,8 +244,6 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     // The second dimension is AND-ed with the first: they are different questions, so a row
     // must satisfy both to survive. Independent state, so clearing one does not clear the other.
     if (extraFilter && extra !== 'all') out = out.filter(r => extraFilter.get(r) === extra);
-    // AND-ed like the other two: a letter and a search are different questions about a row.
-    if (indexFilter && indexKey !== 'all') out = out.filter(r => indexFilter.get(r) === indexKey);
     if (q) out = out.filter(r => searchText(r).toLowerCase().includes(q));
     const col = columns.find(c => c.key === sortKey);
     if (col?.sortVal) {
@@ -243,26 +255,58 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       });
     }
     return out;
-  }, [rows, search, status, statusFilter, extra, extraFilter, indexKey, indexFilter, sortKey, sortDir, columns, searchText]);
+  }, [rows, search, status, statusFilter, extra, extraFilter, sortKey, sortDir, columns, searchText]);
 
   // Flagged rows, split by what the filter/search actually SHOWS. Computed AFTER `view` — deriving
   // it from `rows` (as it did) is exactly the defect: the count was of the whole catalog while the
   // banner rendered above the filtered view, so a clean screen still carried a red banner about a
   // collision somewhere else. The rule is pure and lives in flagCounts.ts, because it was
   // unreachable by any test while it lived inside this memo.
-  // How many rows sit under each letter. Computed from `rows` — the whole set the grid was handed
-  // — NOT from `view`: a count that changed as you filtered would make every letter read 0 the
-  // moment you picked one, which is the flag-banner defect (`flagCounts`) in a different control.
-  const indexCounts = useMemo(
+  // 🔴 GROUPING IS A PROPERTY OF THE CURRENT SORT, NOT A SETTING. Headings may only appear while
+  // the grid is actually ordered by the column that produces them; under any other sort the
+  // sections would be scattered and each heading would be a false claim about the rows beneath it.
+  const grouped = !!sectionIndex && sortKey === sectionIndex.sortKey && sortDir === 'asc';
+
+  // How many rows sit under each letter — counted over `view`, the rows a reader can actually
+  // reach, because a jump can only land on a heading that is rendered. A letter holding rows that
+  // the search has hidden must read 0 and refuse the press, or it is a control that does nothing.
+  const sectionCounts = useMemo(
     () => {
       const m = new Map<string, number>();
-      if (!indexFilter) return m;
-      for (const k of indexFilter.keys) m.set(k, 0);
-      for (const r of rows) { const k = indexFilter.get(r); m.set(k, (m.get(k) ?? 0) + 1); }
+      if (!sectionIndex) return m;
+      for (const k of sectionIndex.keys) m.set(k, 0);
+      for (const r of view) { const k = sectionIndex.keyOf(r); m.set(k, (m.get(k) ?? 0) + 1); }
       return m;
     },
-    [rows, indexFilter],
+    [view, sectionIndex],
   );
+
+  // The scroll box and one ref per rendered heading, so a jump can measure rather than guess.
+  const scrollBoxRef = useRef<HTMLDivElement | null>(null);
+  const headRowRef = useRef<HTMLTableSectionElement | null>(null);
+  const sectionRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+
+  /** Press a letter: restore the grouping sort if it is not active, then jump once it renders. */
+  function jumpToSection(k: string): void {
+    if (!sectionIndex) return;
+    if (!grouped) { setSortKey(sectionIndex.sortKey); setSortDir('asc'); }
+    setPendingJump(k);
+  }
+
+  useEffect(() => {
+    if (!pendingJump) return;
+    const box = scrollBoxRef.current;
+    const row = sectionRefs.current.get(pendingJump);
+    // The heading is not in the DOM yet on the render that restored the sort — keep the request
+    // and let the next render satisfy it, rather than silently dropping the press.
+    if (!box || !row) return;
+    // Measured, not computed from row heights: the header is sticky and its height is whatever the
+    // consumer's columns make it, so the only honest offset is the one the browser reports.
+    const stick = headRowRef.current?.getBoundingClientRect().height ?? 0;
+    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - stick;
+    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    setPendingJump(null);
+  }, [pendingJump, grouped, view]);
 
   const flags = useMemo(
     () => (rowFlag ? partitionFlagged(rows, view, rowFlag, getRowId) : { inView: 0, elsewhere: 0 }),
@@ -435,13 +479,15 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                   `1000 of 1000` over 1,964 rows. */}
               <span style={S.countPill}>{countPillText({
                 visible: view.length, loaded: rows.length, total: totalRows,
-                // 🔴 EVERY DIMENSION THAT NARROWS THE VIEW COUNTS AS FILTERED, NOT JUST TWO.
-                // `extra` was missing here before the A–Z strip existed, so picking a value in the
-                // SECOND dropdown alone made the pill read `12 of 647 items` — the population
-                // sentence — while a filter was active (§6 r18: a header's assertion must hold for
-                // every row the section can contain). Live on /inventory today; fixed in passing
+                // 🔴 EVERY DIMENSION THAT NARROWS THE VIEW COUNTS AS FILTERED — `extra` WAS MISSING.
+                // Picking a value in the SECOND dropdown alone made the pill read `12 of 647 items`
+                // — the POPULATION sentence — while a filter was active (§6 r18: a header's
+                // assertion must hold for every row the section can contain). That is live on
+                // /inventory today, found while building the A–Z index and fixed in passing
                 // because this build touches this exact claim (§1.6 fix-all-in-one-pass).
-                filtered: status !== 'all' || extra !== 'all' || indexKey !== 'all' || !!search, itemNoun,
+                // ⚠️ THE LETTER INDEX IS DELIBERATELY NOT IN THIS LIST: it JUMPS, it does not
+                // filter, so every row is still shown and the pill must not claim otherwise.
+                filtered: status !== 'all' || extra !== 'all' || !!search, itemNoun,
               })}</span>
             </div>
 
@@ -466,27 +512,27 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                 nothing when pressed (§1.6 item 5, no dead affordance). It renders greyed with its
                 zero in the title, which is the honest third option.
                 ══════════════════════════════════════════════════════════════════════════════ */}
-            {indexFilter && (
-              <div style={S.alphaStrip} role="group" aria-label={indexFilter.label ?? 'Jump to a letter'}>
-                <button
-                  style={indexKey === 'all' ? S.alphaKeyOn : S.alphaKey}
-                  onClick={() => setIndexKey('all')}
-                  title={`All ${itemNoun}`}
-                >All</button>
-                {indexFilter.keys.map(k => {
-                  const n = indexCounts.get(k) ?? 0;
+            {sectionIndex && (
+              <div style={S.alphaStrip} role="group" aria-label={sectionIndex.label ?? 'Jump to a letter'}>
+                {sectionIndex.keys.map(k => {
+                  const n = sectionCounts.get(k) ?? 0;
                   const empty = n === 0;
                   return (
                     <button
                       key={k}
                       disabled={empty}
-                      aria-pressed={indexKey === k}
-                      style={empty ? S.alphaKeyOff : indexKey === k ? S.alphaKeyOn : S.alphaKey}
-                      onClick={() => setIndexKey(indexKey === k ? 'all' : k)}
-                      title={empty ? `No ${itemNoun} under ${k}` : `${n} under ${k}`}
+                      style={empty ? S.alphaKeyOff : S.alphaKey}
+                      onClick={() => jumpToSection(k)}
+                      title={empty ? `No ${itemNoun} under ${k}` : `Jump to ${k} — ${n} ${itemNoun}`}
                     >{k}</button>
                   );
                 })}
+                {!grouped && (
+                  // 🔴 SAY WHAT THE PRESS WILL DO, BEFORE IT DOES IT. The reader sorted by another
+                  // column; pressing a letter will put the list back in filing order. Doing that
+                  // silently would look like the grid undoing their sort by itself.
+                  <span style={S.alphaNote}>sorted another way — a letter returns to A–Z order</span>
+                )}
               </div>
             )}
 
@@ -498,22 +544,43 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
             {/* Table — bounded scroll box: sticky header (top) + frozen identifier column (left),
                 so the horizontal scrollbar sits at the bottom of the VIEWPORT-BOUNDED box (reachable
                 without scrolling past every row) and you never lose the header row or which row you're on. */}
-            <div style={S.scroll}>
+            <div style={S.scroll} ref={scrollBoxRef}>
               <table style={S.table}>
-                <thead>
+                <thead ref={headRowRef}>
                   <tr>
                     {plan.pinned.map(t => pinnedHeader(t))}
                     {scrollCols.map(headerCell)}
                   </tr>
                 </thead>
                 <tbody>
-                  {view.map(row => {
+                  {view.map((row, i) => {
                     const id = getRowId(row);
+                    // ── A–Z SECTION HEADING ────────────────────────────────────────────────
+                    // Emitted when the section CHANGES between two consecutive rows, so the
+                    // headings are derived from the order actually on screen rather than from a
+                    // second grouping pass that could disagree with it. Only while `grouped` —
+                    // under any other sort a heading would be a false claim (§6 r18).
+                    const sectionKey = grouped && sectionIndex ? sectionIndex.keyOf(row) : null;
+                    const startsSection = sectionKey !== null
+                      && (i === 0 || sectionIndex!.keyOf(view[i - 1]) !== sectionKey);
                     const flagged = rowFlag ? rowFlag(row) : false;
                     const isOpen = expanded.has(id);
                     const tdStyle = { ...S.td, ...(flagged ? S.tdDup : {}) };
                     return (
                       <Fragment key={id}>
+                        {startsSection && (
+                          <tr
+                            ref={el => { if (el && sectionKey) sectionRefs.current.set(sectionKey, el); }}
+                            style={S.sectionRow}
+                          >
+                            <td colSpan={scrollCols.length + pinnedCount} style={S.sectionCell}>
+                              {/* Pinned to the left edge of the BOX, not of the table, so the
+                                  letter stays readable when the grid is scrolled sideways — the
+                                  same reasoning as the frozen identifier column (§6 r14). */}
+                              <span style={S.sectionLabel}>{sectionKey}</span>
+                            </td>
+                          </tr>
+                        )}
                         {/* 🔴 G10 second half — THE ROW IS THE CLICK TARGET, and the guard is the
                             load-bearing part. `closest()` walks up from whatever was actually
                             clicked, so a click that STARTED in an input, button, link, select or
@@ -669,6 +736,10 @@ const S = {
   // deliberately NOT applied here and the reason is arithmetic — 27 × 48px is 1,296px, wider than
   // the screen, so the rule's own goal (a target you can hit) is better served by a compact strip
   // on a surface that is desktop-first by ruling (capture = mobile, reconcile = desktop).
+  sectionRow: { background: '#f3f6ee' } as React.CSSProperties,
+  sectionCell: { padding: 0, borderBottom: '1px solid #e5e7eb' } as React.CSSProperties,
+  sectionLabel: { position: 'sticky' as const, left: 0, display: 'inline-block', padding: '0.3rem 0.75rem', fontSize: '0.8rem', fontWeight: 800, color: '#27500A', letterSpacing: '0.04em' } as React.CSSProperties,
+  alphaNote: { alignSelf: 'center', marginLeft: 6, fontSize: '0.75rem', color: '#6b7280' } as React.CSSProperties,
   alphaStrip: { display: 'flex', flexWrap: 'wrap' as const, gap: 4, marginBottom: 12 } as React.CSSProperties,
   alphaKey: { minWidth: 30, minHeight: 32, padding: '0.3rem 0.4rem', border: '1.5px solid #d1d5db', borderRadius: 7, background: '#fff', color: '#374151', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
   alphaKeyOn: { minWidth: 30, minHeight: 32, padding: '0.3rem 0.4rem', border: '1.5px solid #27500A', borderRadius: 7, background: '#27500A', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,

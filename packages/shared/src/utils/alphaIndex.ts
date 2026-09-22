@@ -47,11 +47,26 @@ export const ALPHA_KEYS: readonly string[] = [...ALPHA_LETTERS, OTHER_KEY];
  * not empty). LAWNS has none today; the roster will have one the first time somebody saves a
  * customer with only a phone number.
  */
+
+/**
+ * Strip accents to their base letters. NFD splits an accented letter into base + combining mark;
+ * dropping the marks leaves the base.
+ *
+ * 🔴 EXPORTED BECAUSE THE SORT NEEDS THE SAME FOLD THE BUCKET USES, AND A MEASURED DEFECT PROVES
+ * IT. The grid sorts with `<` / `>` — plain code-unit order — in which every accented character
+ * sits ABOVE 'z'. So "Ñuñez" buckets under N (this function) while an UNFOLDED sort key puts the
+ * row after every Z name; and because the grid derives its headings from the order actually on
+ * screen, it then emits a SECOND "N" heading at the bottom of the list. Two folds would disagree
+ * silently. There is one fold, and both callers use it.
+ */
+export function foldAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 export function alphaKeyFor(name: string | null | undefined): string {
   const s = (name ?? '').trim();
   if (!s) return OTHER_KEY;
-  // NFD splits an accented letter into base + combining mark; dropping the marks leaves the base.
-  const first = s.normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toUpperCase();
+  const first = foldAccents(s).charAt(0).toUpperCase();
   return first >= 'A' && first <= 'Z' ? first : OTHER_KEY;
 }
 

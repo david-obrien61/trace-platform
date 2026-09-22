@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PURPOSE: prove the A–Z index files a name where the reader would look for it, and that the
-//   empty buckets survive — a strip that hides its zeros offers letters that do nothing.
+// PURPOSE: prove the A–Z BUCKETING — which letter a given token falls under, and that the empty
+//   buckets survive (a strip that hides its zeros offers letters that do nothing).
+//   ⚠️ WHICH token a customer is filed by is a SEPARATE decision and a separate file:
+//   `personName.customerFilingName`, proven in `customerFiling.test.ts`. Keeping them apart is
+//   what lets the filing rule be reversed — as it was on 2026-09-22 — without touching this one.
 // DEPENDENCIES: alphaIndex (pure).
 // OUTPUTS: assertions only.
 // Run: node scripts/run-tests.mjs
@@ -11,17 +14,20 @@ let passed = 0; const failures: string[] = [];
 const ok = (c: boolean, m: string) => { if (c) passed++; else failures.push(m); };
 
 // ── §A · the ordinary case, using REAL names read off LAWNS 2026-09-22 ──────────────────────
-ok(alphaKeyFor('Aaron Harlan') === 'A', 'A1 a person files under the name as displayed — Aaron Harlan is under A');
+ok(alphaKeyFor('Aaron Harlan') === 'A', 'A1 the bucket is the first letter of the TOKEN — this module never decides that a person files under "Aaron Harlan"; the filing rule does');
 ok(alphaKeyFor('ABC Home and Pest Services') === 'A', 'A2 an organization files under its own first letter');
-ok(alphaKeyFor('Highland Homes') === 'H', 'A3 the name David could not find is under H');
+ok(alphaKeyFor('Highland Homes') === 'H', 'A3 the business name David could not find is under H');
 ok(alphaKeyFor('zach wilson') === 'Z', 'A4 lowercase files under the uppercase letter — the strip has one Z, not two');
 ok(alphaKeyFor('  Molly Ray  ') === 'M', 'A5 surrounding whitespace does not change where a name files');
 
-// ── §B · 🔴 THE RULING THIS ENCODES: first name, not surname ────────────────────────────────
-ok(alphaKeyFor('Aaron Harlan') !== 'H',
-   'B1 🔴 A PERSON IS **NOT** FILED UNDER THEIR SURNAME — 522 of 2,005 LAWNS customers are organizations with no surname, so a surname index would sort half the list by a word that is not on the screen');
-ok(alphaKeyFor('The Oaks') === 'T',
-   'B2 🔴 A LEADING ARTICLE IS NOT STRIPPED — the eye starts at T, so the index does too');
+// ── §B · this module buckets a TOKEN; WHICH token is the filing rule's job ──────────────────
+// 🔴 THE EARLIER VERSION OF THIS SECTION ASSERTED THE OPPOSITE AND WAS WRONG. It claimed a person
+// is "NOT filed under their surname" — reasoned from the screen rather than from how a contacts
+// app works, and reversed by David on 2026-09-22. The surname rule now lives in
+// `personName.customerFilingName` and is proven in `customerFiling.test.ts`; this file stays
+// deliberately ignorant of it, and buckets whatever token it is handed.
+ok(alphaKeyFor('Patskowski') === 'P', 'B1 the bucket is taken from the token it is given, whatever chose it');
+ok(alphaKeyFor('Tree Place') === 'T', 'B2 …including a multi-word token');
 
 // ── §C · accents fold; the fold is a lookup key and is never stored ─────────────────────────
 ok(alphaKeyFor('Ángel Ruiz') === 'A', 'C1 an accented first letter folds to its base letter');
