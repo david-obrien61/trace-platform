@@ -23,7 +23,8 @@
 //               never PII, BENCH-C). ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { backTarget, backLabel, journeyTo } from '../lib/backTarget';
 import { ArrowLeft, ChevronRight, Package, Pencil, ShoppingBag, DollarSign, TrendingUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -60,6 +61,10 @@ const fmtDate = (iso: string) =>
 export function CustomerDetail() {
   const { id }         = useParams<{ id: string }>();
   const navigate       = useNavigate();
+  const location       = useLocation();
+  // Where this page was opened FROM — the customer list carries its filter in the href, so going
+  // back lands on the filtered list rather than the whole roster.
+  const back           = backTarget(location.state, { label: 'Customers', href: '/customers' });
   const { businessId } = useBusinessContext();
 
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
@@ -153,8 +158,8 @@ export function CustomerDetail() {
     <Shell>
       {/* Back */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button onClick={() => navigate('/customers')} style={backBtn} title="Back to customers"><ArrowLeft size={18} /></button>
-        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Customers</span>
+        <button onClick={() => navigate(back.href)} style={backBtn} title={backLabel(back)}><ArrowLeft size={18} /></button>
+        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{back.label}</span>
       </div>
 
       {/* Header card */}
@@ -206,7 +211,10 @@ export function CustomerDetail() {
                 ? `${first.quantity}× ${orderItemName(first)}${o.order_items.length > 1 ? ` +${o.order_items.length - 1} more` : ''}`
                 : null;
               return (
-                <div key={o.id} onClick={() => navigate(`/orders/${o.id}`)} style={orderRow}>
+                // 🔴 THE ORIGIN STATES WHERE IT IS SENDING YOU FROM. Without it the order page has
+                // nothing to read and falls back to "Orders" — the defect. The href carries THIS
+                // page's own back target, so order → customer → filtered list is two presses.
+                <div key={o.id} onClick={() => navigate(`/orders/${o.id}`, { state: journeyTo(name, `/customers/${id}${location.search}`) })} style={orderRow}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#111827' }}>

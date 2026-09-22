@@ -14,7 +14,8 @@
 //   and acting via `useStopActions` (STD-017). This screen's own axis is the money; the card adds none.
 // ============================================================
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { backTarget, backLabel } from '../lib/backTarget';
 import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -109,6 +110,12 @@ const ITEM_COLS_FULL = `${ITEM_COLS_CORE}, retail_unit, discount_pct, discount_a
 export function OrderDetail() {
   const { id }           = useParams<{ id: string }>();
   const navigate         = useNavigate();
+  const location         = useLocation();
+  // 🔴 DERIVED FROM THE JOURNEY, NEVER TYPED BESIDE THE BUTTON. This page is reachable from the
+  // orders list, from a customer, and from a delivery stop — so no hardcoded label can be right.
+  // With no journey (a pasted link, a bookmark, a refresh) it falls back to the orders list,
+  // which is exactly the behaviour this replaces.
+  const back             = backTarget(location.state, { label: 'Orders', href: '/orders' });
   const { businessId, can } = useBusinessContext();
   // `orders:update` — the fine string that replaced manage_orders. submit.ts enforces it on the
   // line-edit and status paths this flag gates. `isOwner ||` removed (ruling 2026-07-30): an
@@ -259,7 +266,11 @@ export function OrderDetail() {
     setBusy(true); setError(null);
     try {
       await post({ action: 'delete' });
-      navigate('/orders');
+      // Deleting lands where you CAME FROM, not always on the orders list — if you opened this
+      // order from a customer, that customer is where you were working. The record is gone, so
+      // there is nothing to come back to here; the journey is the only sensible destination, and
+      // with no journey it falls back to /orders exactly as before.
+      navigate(back.href);
     } catch (e: any) { setError(e.message); setBusy(false); }
   }
 
@@ -313,7 +324,7 @@ export function OrderDetail() {
     <Shell>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button onClick={() => navigate('/orders')} style={backBtn}><ArrowLeft size={18} /></button>
+        <button onClick={() => navigate(back.href)} style={backBtn} title={backLabel(back)}><ArrowLeft size={18} /></button>
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#27500A' }}>
             Order {order.notes ? `#${order.notes}` : ''}

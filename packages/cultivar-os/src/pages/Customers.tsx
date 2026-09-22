@@ -26,7 +26,9 @@
 //               ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { parseViewState, viewStateToSearch, listHref } from '../lib/listViewState';
+import { journeyTo } from '../lib/backTarget';
 import { Plus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -101,6 +103,15 @@ export function Customers() {
   // case; the A8 check catches the case the client got wrong. Removing either one loses something.
   const canEditCustomer = can('customers:update');
   const navigate = useNavigate();
+  // ── THE LIST'S VIEW LIVES IN THE URL ────────────────────────────────────────────────────────
+  // Filter to "dubec", open a customer, press Back — before this, the full unfiltered list came
+  // back, because the view lived in the grid's own useState and leaving the page destroyed it.
+  // The browser cannot restore what it was never shown. `replace: true` so typing in the search
+  // box does not stack one history entry per keystroke — Back should leave the list, not walk
+  // backwards through every letter of the word.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = parseViewState(searchParams);
+  const setView = (next: typeof view) => setSearchParams(viewStateToSearch(next), { replace: true });
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -300,7 +311,7 @@ export function Customers() {
       render: r => {
         const { before, filing, after } = customerFilingParts(r, '');
         return (
-          <button onClick={() => navigate(`/customers/${r.id}`)}
+          <button onClick={() => navigate(`/customers/${r.id}`, { state: journeyTo('Customers', listHref('/customers', view)) })}
             title={filing ? `Open customer record — filed under ${filing}` : 'Open customer record + order history'}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 400, color: '#1f2937' }}>
             {/* No filing token found → nothing is bolded rather than something arbitrary: a bold
@@ -367,6 +378,8 @@ export function Customers() {
         // 500 of them share a single microsecond (#377).
         // ⚠️ The Added column is still there and still sortable — this changes the DEFAULT, not
         // the choice. One click returns the old order, and the A–Z headings withdraw when it does.
+        viewState={view}
+        onViewStateChange={setView}
         defaultSortKey="first_name"
         defaultSortDir="asc"
         // The A–Z sections and the index that jumps to them. `keyOf` reads the SAME filing name
