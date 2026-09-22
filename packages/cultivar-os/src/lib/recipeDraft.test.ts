@@ -14,6 +14,9 @@
  *   node_modules/.bin/esbuild packages/cultivar-os/src/lib/recipeDraft.test.ts \
  *     --bundle --platform=node --format=cjs | node
  */
+import {
+  COMPONENT_PURCHASE_LINK_FIELDS, ITEM_RECIPE_FIELDS, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_FIELDS,
+} from './recipeFields';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -239,17 +242,18 @@ function spm(): RecipeDraft {
   // select list that silently omits a column no reader misses). Every one of these feeds a
   // decision — the document key is built from vendor + date + amount, the collapse prefers a
   // capture carrying `receipt_number`, and `line_items` IS the thing being matched.
-  // ⚠️ PARSED, NOT IMPORTED — and the reason is the same seam this whole file exists for.
-  // `recipeWrite.ts` imports the Supabase client, which cannot be constructed inside a bundled
-  // probe ("supabaseUrl is required"). Importing the constant to assert it drags the client in and
-  // the probe dies before its first assertion. So the list is read as TEXT, exactly as BASE_COLS is.
-  const wanted = ['id', 'vendor', 'date', 'amount', 'receipt_number', 'created_at', 'line_items'];
-  const selectSrc = (WRITE.match(/RECIPE_MATCH_RECEIPT_SELECT = '([^']+)'/) ?? [])[1] ?? '';
-  const got = selectSrc.split(',').map(c => c.trim());
+  // ✏️ IMPORTED NOW, NOT PARSED. An earlier version read this list out of `recipeWrite.ts` as text,
+  // because importing anything from that file drags in the Supabase client and kills the probe
+  // ("supabaseUrl is required"). The lists have since moved to `recipeFields.ts`, which is PURE —
+  // so the probe imports the real value instead of a regex's idea of it.
+  const wanted = ['id', 'vendor', 'date', 'amount', 'receipt_number', 'line_items'];
+  const got = MATCH_RECEIPT_SELECT.split(',').map(c => c.trim());
   ok(wanted.every(c => got.includes(c)),
     `🔴 G5c: the matcher's receipt read names every column it decides on (missing: ${wanted.filter(c => !got.includes(c)).join(', ') || 'none'})`);
   ok(!got.includes('ocr_raw') && !got.includes('image_url'),
     'G5d: …and does NOT drag the OCR blob or the image along — a matcher reads lines, not photographs');
+  ok(!/\.select\('[a-z_]+\s*,[^']*,[^']*'/.test(CODE(WRITE)),
+    '🔴 G5g: the writer hand-writes NO multi-column select — every one is DERIVED from recipeFields (A4)');
 
   // 🔴 G5e ONE WRITER PER TABLE (§6 r8). `setItemType` first issued its OWN update on
   // `business_inventory` — a table that already has a writer — and `verify:write-paths` refused it
@@ -262,6 +266,41 @@ function spm(): RecipeDraft {
 
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
+}
+
+// ══ §H THE FIELD REGISTRY AGAINST THE MIGRATION — BOTH DIRECTIONS ═════════════════════════════
+// 🔴 TECH-DEBT #179's FIX, APPLIED ON ARRIVAL. `VENDORS_SELECT` named 10 columns while its
+// migration created 14, and the four it missed were the ADDRESS — invisible to tsc, eslint, knip
+// and every probe, because a column with no reader and no writer has no other tell. So the list is
+// checked against the DDL, and it fails BOTH ways: a column the migration creates and the registry
+// omits, and a column the registry claims that the migration never creates.
+{
+  const DDL = R('supabase/migrations/20260921_recipes_made_items.sql');
+  const columnsOf = (table: string): string[] => {
+    const start = DDL.indexOf(`CREATE TABLE IF NOT EXISTS public.${table} (`);
+    if (start < 0) return [];
+    const body = DDL.slice(start + DDL.slice(start).indexOf('(') + 1);
+    const end = body.indexOf('\n);');
+    return body.slice(0, end < 0 ? undefined : end).split('\n')
+      .map(l => l.replace(/--.*$/, '').trim())
+      .filter(l => /^[a-z_][a-z0-9_]*\s+(uuid|text|numeric|integer|date|timestamptz|boolean|jsonb)/.test(l))
+      .map(l => l.split(/\s+/)[0]);
+  };
+  const pairs: Array<[string, readonly string[]]> = [
+    ['item_recipes', ITEM_RECIPE_FIELDS],
+    ['recipe_components', RECIPE_COMPONENT_FIELDS],
+    ['component_purchase_links', COMPONENT_PURCHASE_LINK_FIELDS],
+  ];
+  for (const [table, declared] of pairs) {
+    const created = columnsOf(table);
+    ok(created.length >= 8, `H0 (${table}): the migration's columns were actually FOUND — a probe that parses nothing passes everything (got ${created.length})`);
+    const missing = created.filter(c => !declared.includes(c));
+    const invented = declared.filter(c => !created.includes(c));
+    ok(missing.length === 0,
+      `🔴 H1 (${table}): every column the migration creates is in the registry — missing: ${missing.join(', ') || 'none'}`);
+    ok(invented.length === 0,
+      `🔴 H2 (${table}): and the registry claims NO column the migration never creates — invented: ${invented.join(', ') || 'none'}`);
+  }
 }
 
 console.log(`\nrecipeDraft + surfaces: ${passed} passed, ${failed} failed`);

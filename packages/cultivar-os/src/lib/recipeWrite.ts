@@ -15,7 +15,8 @@
 //   a row id would be rubbish after the next reload, and the database now refuses to make one
 //   (`recipe_link_must_survive_a_wipe`). This file therefore never sends `component_inventory_id`.
 //
-// DEPENDENCIES: ./supabase · @trace/shared/costing (types only) · ./recipeDraft ·
+// DEPENDENCIES: ./supabase · @trace/shared/costing (types only) · ./recipeDraft · ./recipeFields
+//               (the ONE field declaration — every select here is DERIVED, never hand-written) ·
 //               ../components/inventory/inventoryEdit (the ONE `business_inventory` writer).
 // OUTPUTS:      loadRecipe · saveRecipe · confirmComponentPurchase · setItemType · ITEM_TYPES ·
 //               componentIdsByPosition · readMadeItemLabel · readReceiptsForMatching ·
@@ -26,6 +27,9 @@ import { supabase } from './supabase';
 import { draftToComponentRows, draftToRecipeRow, type ComponentDraft, type RecipeDraft } from './recipeDraft';
 import type { CapturedReceipt } from '@trace/shared/costing/receiptMatch';
 import { persistInventoryPatch } from '../components/inventory/inventoryEdit';
+import {
+  COMPONENT_PURCHASE_LINK_SELECT, ITEM_RECIPE_SELECT, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_SELECT,
+} from './recipeFields';
 
 const TRACE = true; // [TRACE:RECIPE] STD-003 — ON until David owner-proves
 
@@ -54,7 +58,7 @@ export async function loadRecipe(
   item: { qbItemId: string | null; inventoryId: string },
 ): Promise<{ ok: true; recipe: LoadedRecipe | null } | { ok: false; message: string }> {
   const q = supabase.from('item_recipes')
-    .select('id, qb_item_id, inventory_id, yield_quantity, yield_unit, build_minutes, build_minutes_because, notes')
+    .select(ITEM_RECIPE_SELECT)
     .eq('business_id', businessId);
   const { data, error } = item.qbItemId
     ? await q.eq('qb_item_id', item.qbItemId).maybeSingle()
@@ -63,7 +67,7 @@ export async function loadRecipe(
   if (!data) return { ok: true, recipe: null };
 
   const { data: comps, error: compErr } = await supabase.from('recipe_components')
-    .select('id, position, name, quantity, unit, component_qb_item_id')
+    .select(RECIPE_COMPONENT_SELECT)
     .eq('recipe_id', data.id).order('position');
   if (compErr) return { ok: false, message: `Could not read the components — ${compErr.message}` };
 
@@ -71,7 +75,7 @@ export async function loadRecipe(
   const ids = (comps ?? []).map(c => c.id);
   const { data: links } = ids.length
     ? await supabase.from('component_purchase_links')
-        .select('component_id, receipt_id, document_key, receipt_line_index, pack_size, pack_unit, line_unit_price, purchased_on, freight_spread')
+        .select(COMPONENT_PURCHASE_LINK_SELECT)
         .in('component_id', ids).order('confirmed_at', { ascending: false })
     : { data: [] as Array<Record<string, unknown>> };
   const newest = new Map<string, Record<string, unknown>>();
@@ -244,10 +248,6 @@ export async function readMadeItemLabel(businessId: string): Promise<string> {
 }
 
 /** The receipt fields the matcher needs, and no more — it never pulls `ocr_raw` or the images. */
-// Not exported: nothing outside this file reads it, and its probe parses this line as TEXT rather
-// than importing it — importing anything from here drags in the Supabase client (tech-debt #134's
-// seam). An exported name nothing imports is a claim that something depends on it.
-const RECIPE_MATCH_RECEIPT_SELECT = 'id, vendor, date, amount, receipt_number, created_at, line_items';
 
 /**
  * The captured receipts a component's purchase could be on.
@@ -260,7 +260,7 @@ export async function readReceiptsForMatching(
   businessId: string,
 ): Promise<{ ok: true; receipts: CapturedReceipt[] } | { ok: false; message: string }> {
   const { data, error } = await supabase.from('receipts')
-    .select(RECIPE_MATCH_RECEIPT_SELECT)
+    .select(MATCH_RECEIPT_SELECT)
     .eq('business_id', businessId)
     .order('date', { ascending: false });
   if (error) return { ok: false, message: `Could not read your receipts — ${error.message}. No purchase can be proposed.` };
