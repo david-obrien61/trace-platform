@@ -103,6 +103,8 @@ interface DataSheetProps<T> {
   columns: DataSheetColumn<T>[];
   /** Concatenated text a row matches global search against. */
   searchText: (r: T) => string;
+  /** TEST SEAM ONLY — the search box's initial text. Omitted in the app; see useState below. */
+  initialSearch?: string;
   searchPlaceholder?: string;
   statusFilter?: StatusFilterConfig<T>;
   /** A SECOND, independent quick-filter. Added 2026-09-07 for R-101: "needs a look" and "status"
@@ -153,13 +155,24 @@ interface DataSheetProps<T> {
 
 export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
-    title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
+    title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder, initialSearch,
     statusFilter, extraFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
     actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items', totalRows = null,
   } = props;
 
-  const [search, setSearch] = useState('');
+  // 🔴 `initialSearch` IS A TEST SEAM AND IT IS LABELLED AS ONE (ledger #378, [[R-33]] clause d:
+  //   *prefer a seam that makes the condition reachable over more assertions aimed near it*).
+  //   The search box owns its text in state, which is right for the product and unreachable
+  //   from a render test: driving it needs a simulated `input` event, and jsdom + a plain
+  //   `Event` does NOT trip React's onChange — measured, the value lands on the node and the
+  //   count pill still reads the unfiltered total. `@testing-library`'s `fireEvent` is the
+  //   tool for that and was approved, but `node_modules` here is shared with three other live
+  //   sessions and installing into it mid-flight is not worth a query helper.
+  //   ⚠️ NO PRODUCT BEHAVIOUR CHANGES: every existing caller omits it, so it defaults to '' —
+  //   the same initial state as before. It is an INITIAL value, not a controlled prop: typing
+  //   still owns the field from the first keystroke.
+  const [search, setSearch] = useState(initialSearch ?? '');
   const [status, setStatus] = useState('all');
   const [extra, setExtra] = useState('all');
   const [sortKey, setSortKey] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
