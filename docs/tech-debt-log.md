@@ -2167,6 +2167,27 @@ Nothing suggests it has been abused. It is still a billable endpoint on the publ
 
 ## #262 — 🔴 THE PMI SCREEN IS INERT FOR ANYONE HOLDING `pmi:*` WITHOUT `costs:read` — AND LAWNS'S MANAGER IS THAT PERSON TODAY (NEW 2026-09-11)
 
+🔴 **RULED 2026-09-22 (David, ledger #381) — LEAVE IT. JOEL DOES NOT GET `costs:read`, AND THAT IS A DECISION, NOT AN OVERSIGHT.**
+Re-measured live that day while checking whether anyone at LAWNS was wrongly blocked: **Lauren and David hold 59
+permissions each; Joel holds 25** — `inventory:read` yes, `costs:read` no, `inventory:import_price` no. So `/assets`
+and `/pmi` are both closed to him, and **David's ruling is that they stay closed**: his **2026-07-23 ruling stands —
+quantities yes, prices no**. A manager imports and counts stock; he does not see what it cost.
+
+⚠️ **THEREFORE THE DECISION RECORD IS THE THING THAT IS NOW STALE, NOT THE GRANT.**
+`scripts/verify-financial-permissions.mjs` still encodes `MANAGER: { view_costs, view_margin }` as its expectation —
+written under the pre-2026-07-23 model, and in the RETIRED vocabulary (`view_costs`, which since
+`20260910_permission_literal_merge.sql` made `has_permission` literal, **grants nothing to anyone**: measured
+2026-09-22, 0 of 3 LAWNS members hold it and 0 live RLS policies reference it). **Two records disagree about the
+manager's cost authority and the ruling is the one that is current.** Anyone reading that script to answer *"should
+Joel see costs?"* gets a confident wrong answer — **#178's shape, in our own tooling.**
+
+**WHAT IS STILL OWED HERE, AND IT IS NOW A COPY PROBLEM, NOT A PERMISSION ONE.** The original finding stands on its
+own terms: the PMI screen **returns before reading a single asset**, so Joel sees an empty screen rather than one that
+says *why* it is empty. Under the six-surface-states ruling, withheld data must ANNOUNCE its redaction — *"maintenance
+costs are hidden; cost access required"* — never render as nothing. **That is the fix: the honest empty state, not the
+grant.** Same for `/assets`.
+
+
 Measured live 2026-09-11, read-only: **LAWNS's active MANAGER holds `pmi:read` and `pmi:update` and not `costs:read`**, and so does the platform MANAGER floor. `pages/PMI.tsx` passes `canSeeCosts={can('costs:read')}`, and `PMI.tsx:176` returns before reading a single asset. With no row to open there is no **Log Service**, no **✦ Suggest Schedule** and no schedule to read: the member holds maintenance authority over nothing.
 
 Two things on that screen are false today:
