@@ -18,7 +18,7 @@
 to a real purchase on a real receipt, and get a cost that **either is right or says why it is not**.
 David, 2026-09-21: *"show the working, suggest, Lauren decides."*
 
-**Board: 0 of 20.** ✏️ **2026-09-22 (David's seven recipe rulings): CARDS 4, 5, 6, 10 and 11 are REWRITTEN and CARDS 15–18 are new.** The batch size is no longer typed — it is derived from what goes in — so every card that asked you to type a yield has changed. `20260922_build_runs_freeze_cost.sql` is a SECOND migration, **written and HELD**, and GATE 0 ② now names both. Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
+**Board: 0 of 20.** ✏️ **2026-09-22 (David's seven recipe rulings): CARDS 4, 5, 6, 10 and 11 are REWRITTEN and CARDS 15–18 are new.** The batch size is no longer typed — it is derived from what goes in — so every card that asked you to type a yield has changed. `20260922d_build_runs_freeze_cost.sql` is a SECOND migration, **written and HELD**, and GATE 0 ② now names both. Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
 (David, 2026-09-22: *"Build the surfaces tonight but HOLD them — David reviews on Test Dave's after
 Lauren's 08:00 start. They touch the inventory item, which she uses."*). Until the branch merges,
 **GATE 0 ③ will fail by design** and cards 1–12 run only on a preview deploy of
@@ -56,7 +56,7 @@ suggestion on an incomplete cost.
       `20260921_recipes_made_items.sql` (applied 2026-09-21, SHA `0e6f3d6d90b6bd07aa2244a5c238aa96998eab65061ec63750aecd213cafe3b8`)
       and `20260921c_build_run_says_when_the_ledger_did_not_record.sql` (applied, SHA
       `b258dbf5110b35cd94de1602aaf1c9e6fea6d4a7c1e1f114e0ea1cb06996c985`).
-      🔴 **`20260922_build_runs_freeze_cost.sql` is WRITTEN, NOT APPLIED** (SHA
+      🔴 **`20260922d_build_runs_freeze_cost.sql` is WRITTEN, NOT APPLIED** (SHA
       `21ac452fdab0ff467d65b6450dd1e4c652721e4bbe3cc3565ada60302617e6bb`). Its V0–V4 have been run
       by the author on Postgres (`build-runs-freeze-370.pglite.mjs`, ALL PASS, 4/4 mutants caught).
       **CARDS 15–18 need it applied; CARDS 1–14 do not.** ⚠️ Without it the typed-price boxes and

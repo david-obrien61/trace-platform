@@ -1,5 +1,5 @@
 /**
- * -- build-runs-freeze-370.pglite -- 20260922_build_runs_freeze_cost EXECUTED --------------------
+ * -- build-runs-freeze-370.pglite -- 20260922d_build_runs_freeze_cost EXECUTED --------------------
  *
  * PURPOSE:      the REAL migration run on PGlite, so the file David applies has been EXECUTED by a
  *               Postgres engine rather than only read. These are the migration's OWN V-blocks
@@ -27,7 +27,7 @@ const { PGlite } = await import(process.cwd() + '/' + pgliteDir.replace(/\/$/, '
 const MIG = process.cwd() + '/supabase/migrations/';
 const BASE = readFileSync(MIG + '20260921_recipes_made_items.sql', 'utf8')
   + '\n' + readFileSync(MIG + '20260921c_build_run_says_when_the_ledger_did_not_record.sql', 'utf8');
-const THIS_ONE = readFileSync(MIG + '20260922_build_runs_freeze_cost.sql', 'utf8');
+const THIS_ONE = readFileSync(MIG + '20260922d_build_runs_freeze_cost.sql', 'utf8');
 
 const L = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 const MEMBER = '11111111-1111-1111-1111-111111111111';

@@ -385,7 +385,7 @@ function spm(): RecipeDraft {
   // as INVENTED — the probe was right that they were not in what it read, and wrong about what it
   // should read. A probe whose population is a single file quietly decides the schema is one file.
   const DDL = R('supabase/migrations/20260921_recipes_made_items.sql')
-    + '\n' + R('supabase/migrations/20260922_build_runs_freeze_cost.sql');
+    + '\n' + R('supabase/migrations/20260922d_build_runs_freeze_cost.sql');
   const TYPES = '(uuid|text|numeric|integer|date|timestamptz|boolean|jsonb)';
   const columnsOf = (table: string): string[] => {
     const out: string[] = [];

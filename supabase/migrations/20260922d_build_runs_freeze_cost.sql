@@ -1,4 +1,11 @@
--- supabase/migrations/20260922_build_runs_freeze_cost.sql
+-- supabase/migrations/20260922d_build_runs_freeze_cost.sql
+--
+-- ✏️ RENAMED 2026-09-22: `20260922_` → `20260922d_`. The bare `20260922` prefix was already taken
+--    by `20260922_not_stock_overrides.sql`, which is ON `main`, and `b` and `c` are taken too
+--    (`20260922b_not_stock_overrides_ship_empty`, `20260922c_day_capacity_estimates`). Under
+--    [[R-148]] clause 4 the LATER claim renumbers, and this is the later one. David named it
+--    `20260922d` before I found the collision. ⚠️ A file whose name collides is not a cosmetic
+--    problem: two migrations sorting to the same prefix apply in an order nobody chose.
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- BUILD RUNS FREEZE THEIR COST, AND A COMPONENT MAY CARRY A TYPED PRICE (ledger #370)
 --
