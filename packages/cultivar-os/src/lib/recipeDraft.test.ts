@@ -365,9 +365,15 @@ function spm(): RecipeDraft {
   // rule gets weakened to shut it up. It now forbids exactly the writes.
   ok(!/from\('business_inventory'\)[\s\S]{0,120}\.(update|insert|upsert|delete)\(/.test(CODE(WRITE)),
     '🔴 G5f: …and this file never WRITES that table directly — a forked writer is how two paths come to disagree');
-  ok(/from\('business_inventory'\)[\s\S]{0,200}\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE))
-     || /\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE)),
+  ok(/\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE)),
     'G5h: …while the item PICKER reads it, which is what lets a build run consume shelf stock at all');
+  // The picker's column list, parsed — every column it shows a person before they link a product.
+  const pick = (WRITE.match(/PRODUCT_PICK_SELECT = '([^']+)'/) ?? [])[1] ?? '';
+  const pickCols = pick.split(',').map(c => c.trim());
+  ok(['id', 'name', 'qb_item_id', 'qty'].every(c => pickCols.includes(c)),
+    `🔴 G5i: the picker reads the identity it links on and the stock it would consume (got ${pick || 'no list found'})`);
+  ok(!pickCols.includes('unit_cost') && !pickCols.includes('sell_price'),
+    '🔴 G5j: …and NOT a cost or a price — a picker that pulls cost columns hands them to a member without costs:read (tech-debt #81)');
 
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
