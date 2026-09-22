@@ -4478,6 +4478,40 @@ per action (as for every other tap) records who undid it.
 
 ## #347 — 🔴 A PUSH TO `main` CAN SIT UNBUILT FOR MINUTES OR HOURS, VERCEL REPORTS HEALTHY THROUGHOUT, AND NOTHING WE OWN NOTICES (NEW 2026-09-18, ledger #351 — the gap in #280, measured twice in two days)
 
+🔴 **RULE ADDED 2026-09-22 (David, ledger #383): READ THE STAMP TWICE, AT LEAST 60 SECONDS APART, BEFORE
+CALLING A STALL.** A single read of `/version.json` is NOT evidence of a stalled deploy, and this row's own
+subject is what makes that trap live: when you already believe a push can sit unbuilt, one stale read reads as
+confirmation.
+
+**MEASURED, on myself, the day the rule was made.** Production had genuinely served `9b2b30b` for 92 minutes
+while `main` ran 20 commits ahead — including the #383 hotfix that made `/orders/:id` render at all — so the
+premise was real and the escalation was reasonable. The sequence:
+
+| time (CDT) | event |
+|---|---|
+| 13:40:32 | pushed an empty commit `03bb38d5` to `main` |
+| 13:40:44 | **Vercel finished building it** — twelve seconds later (`builtAt` 18:40:44Z) |
+| 13:41:00 | read `/version.json` on both hosts → **still `9b2b30b`** |
+| 13:41:43 | concluded the hook had ignored the empty commit; pushed `7055ddcd`, touching `main.tsx` |
+| 13:44:21 | read again → **`03bb38d`**, built 13:40:44 |
+
+🔴 **THE BUILD HAD ALREADY SUCCEEDED SIXTEEN SECONDS BEFORE THE READ THAT I TREATED AS PROOF IT HAD NOT
+STARTED.** The gap is CDN propagation, not the build hook. The empty commit worked; the second push, the
+"empty commits are being ignored" diagnosis, and a four-line comment added to the app's ENTRY POINT to force a
+bundle change were all built on one sample taken too early. The comment was reverted the same hour; the wrong
+conclusion had already been written into a report and sent.
+
+⚠️ **AND IT WAS WRONG IN THE OTHER DIRECTION TOO, WHICH IS THE PART WORTH KEEPING:** a prior session had
+pushed its own trigger commit (`dffa6265`) minutes earlier. Seeing two trigger commits and a stale stamp, I
+reported *"empty commits have now been pushed twice with no build"* — an inference about someone else's push
+from the same single sample. **One read produced two confident wrong claims.**
+
+**THE RULE, stated so it is executable:** before reporting a stall, read `/version.json` **twice, ≥60s apart**,
+and report both reads with their timestamps. A stamp that has not moved across two spaced reads is a stall; one
+that has not moved across a single read is a stamp you read too early. ⚠️ This does not change
+[[feedback-dont-poll-production]] — two spaced reads is not a polling loop, and scripted loops still trip
+Vercel's bot protection.
+
 **What was seen, 2026-09-18 (times CT, from git and the app's own `/version.json`).** Production was built at
 **10:36** as `0bcb467`. Then four pushes to `main`: **10:42** `fb4f30e` · **10:45** `a9ec67f` (another window) ·
 **10:57** `429223b` (the box-follows-stop fix) · **11:13** `3cd3ac9`. **The first three produced no production
