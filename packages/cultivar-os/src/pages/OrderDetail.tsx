@@ -90,7 +90,7 @@ const SELECT_COLS = `
   subtotal, tax_amount, total_amount, addons_amount,
   tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref,
   leakage_flag, notes,
-  customers ( first_name, last_name, email, phone, billing_line1, billing_city, billing_state, billing_zip ),
+  customers!orders_customer_id_fkey ( first_name, last_name, email, phone, billing_line1, billing_city, billing_state, billing_zip ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
     is_manual_override, original_price, override_reason,

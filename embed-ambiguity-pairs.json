@@ -1,0 +1,57 @@
+{
+  "note": "Table pairs joined by MORE THAN ONE foreign key. PostgREST cannot guess which FK an embed means: it refuses the whole request with HTTP 300 / PGRST201 and the screen renders nothing. Every embed across a pair listed here must name its constraint \u2014 customers!orders_customer_id_fkey ( \u2026 ).",
+  "why_declared_and_not_derived": "\ud83d\udd34 THE FK TOPOLOGY IS IN NEITHER SOURCE A STATIC CHECK CAN READ. `orders.customer_id`'s foreign key is NOT in the migration corpus \u2014 the only mention in supabase/migrations is a COMMENTED-OUT line in 20260916b \u2014 because orders/customers predate version control (tech-debt #39, 'live schema not in version control'). And scripts/sql-harness/fixtures/live-schema-public.sql carries columns but no REFERENCES clauses (tech-debt #357, the harness schema is more forgiving than live). A first version of this cap derived pairs from the corpus alone and was GREEN ON THE LIVE DEFECT \u2014 it could not have failed, which is [[R-33]]. So the pairs are DECLARED, with the live measurement that produced them, and the corpus is still parsed and UNIONED in so a future double-FK written as a migration is caught with no edit here.",
+  "measured": "2026-09-22, live catalog (pg_constraint joined to pg_class, contype='f', grouped by child+parent HAVING count(*) > 1). Re-measure with that query when adding a foreign key.",
+  "pairs": [
+    {
+      "child": "orders",
+      "parent": "customers",
+      "constraints": [
+        "orders_customer_id_fkey",
+        "orders_relinked_from_customer_id_fkey"
+      ],
+      "default": "orders_customer_id_fkey",
+      "became_ambiguous": "20260921b_capture_relink.sql (2026-09-22) \u2014 added orders.relinked_from_customer_id REFERENCES customers(id). Six embed sites broke at once, none of them edited; /orders/:id rendered nothing."
+    },
+    {
+      "child": "customers",
+      "parent": "orders",
+      "constraints": [
+        "orders_customer_id_fkey",
+        "orders_relinked_from_customer_id_fkey"
+      ],
+      "default": "orders_customer_id_fkey",
+      "became_ambiguous": "THE SAME DOUBLE FK, READ FROM THE OTHER END \u2014 20260921b. PostgREST ambiguity is SYMMETRIC: a customers-based embed of orders also returns HTTP 300 (PGRST201, cardinality one-to-many), PROVEN LIVE 2026-09-22. Nothing embeds this direction today (CustomerDetail reads orders as a SEPARATE query), so this entry guards a hole rather than recording a break \u2014 which is the point of declaring it before someone writes it."
+    },
+    {
+      "child": "cost_object_edges",
+      "parent": "cost_objects",
+      "constraints": [
+        "cost_object_edges_child_id_fkey",
+        "cost_object_edges_parent_id_fkey"
+      ],
+      "default": null,
+      "became_ambiguous": "by design \u2014 an edge names a parent AND a child. No embed of this pair exists today."
+    },
+    {
+      "child": "cost_object_assignments",
+      "parent": "cost_objects",
+      "constraints": [
+        "cost_object_assignments_asset_id_fkey",
+        "cost_object_assignments_project_id_fkey"
+      ],
+      "default": null,
+      "became_ambiguous": "by design \u2014 an assignment names an asset AND a project. No embed of this pair exists today."
+    },
+    {
+      "child": "production_plan_lines",
+      "parent": "business_inventory",
+      "constraints": [
+        "production_plan_lines_source_inventory_id_fkey",
+        "production_plan_lines_target_inventory_id_fkey"
+      ],
+      "default": null,
+      "became_ambiguous": "by design \u2014 an uppot line names a source AND a target. No embed of this pair exists today."
+    }
+  ]
+}

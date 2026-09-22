@@ -101,7 +101,7 @@ export default async function handler(req: any, res: any) {
   // bare `.neq` would drop every ordinary checkout order (see orderKind.ts).
   const { data: orders } = await db
     .from('orders')
-    .select('id, customer_id, total, customers(first_name)')
+    .select('id, customer_id, total, customers!orders_customer_id_fkey(first_name)')
     .eq('business_id', business_id)
     .or(REAL_BUSINESS_PGRST)
     .gte('created_at', periodStart.toISOString())

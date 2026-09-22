@@ -54,7 +54,7 @@ function QBInvoicePreview() {
       // Order + customer (owner RLS — the preview is an owner-facing surface).
       const { data: order } = await supabase
         .from('orders')
-        .select('id, business_id, subtotal, tax_amount, total_amount, notes, tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref, customers(*)')
+        .select('id, business_id, subtotal, tax_amount, total_amount, notes, tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref, customers!orders_customer_id_fkey(*)')
         .eq('id', orderId)
         .maybeSingle();
 
