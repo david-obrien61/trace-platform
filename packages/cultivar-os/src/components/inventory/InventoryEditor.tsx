@@ -35,8 +35,8 @@
 //               shared FIX 5 errBorder/FieldError. NO migration, NO new dep, NO endpoint.
 // INSTRUMENTATION (STD-003): `[TRACE:INVENTORY]` via the shared helpers, ON by default.
 // ============================================================
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, ChefHat } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { variantGroupSlug, suggestSiblingSku, baseSkuOf } from '@trace/shared/inventory';
 import { findSizeTwin } from '@trace/shared/discovery/dupSize';
@@ -44,6 +44,8 @@ import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { sheetStyles as SS } from '@trace/shared/components/datasheet/DataSheet';
 import { insertInventory, persistInventoryPatch, renameVariety } from './inventoryEdit';
 import { statusSelectValue, resolveStatusSelection } from '../../lib/inventoryStates';
+import { DEFAULT_MADE_ITEM_LABEL, ITEM_TYPES, readMadeItemLabel, setItemType, type ItemType } from '../../lib/recipeWrite';
+import { RecipeModal } from '../recipe/RecipeModal';
 
 export type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
 
@@ -62,13 +64,19 @@ export interface EditorInventoryItem {
   location: string | null;
   status: string;
   notes: string | null;
+  /** purchased · grown · manufactured. THE FLAG IS THE IDENTIFIER (R-118) — it is how the system
+   *  knows the row needs a build list, and it is never parsed out of a SKU or a name. */
+  item_type?: string | null;
+  /** The QuickBooks item id, when the row came from a catalogue load. A recipe keys on THIS, never
+   *  on `id`, because the re-import of 2026-09-21 replaced all 632 row ids and kept every QB id. */
+  qb_item_id?: string | null;
 }
 
 /** A blank item for CREATE mode (the retired flat Add form's replacement start-state). */
 export const BLANK_INVENTORY_ITEM: EditorInventoryItem = {
   id: '', name: '', sku: null, qty: 0, size: null, variant_group: null,
   sell_price: null, unit_cost: null, cost_confidence: null, reorder_point: null,
-  location: null, status: 'available', notes: null,
+  location: null, status: 'available', notes: null, item_type: 'purchased', qb_item_id: null,
 };
 
 /** A peer inventory row, as the editor's guards need to see it. The editor is handed the tenant's
@@ -147,6 +155,33 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
   const [savingField, setSavingField] = useState<string | null>(null);
   // Once the owner edits the SKU by hand, stop auto-deriving it from the size (add-size mode).
   const [skuTouched, setSkuTouched] = useState(false);
+
+  // ── HOW IT IS MADE (ledger #370) ────────────────────────────────────────────────────────────
+  // The word for a made item is the BUSINESS's, read from its Operations config — "homemade" at
+  // LAWNS. Never a literal in this file (AC-1); the seeded default stands in until the read lands
+  // so the control is never briefly unlabelled.
+  const [madeItemLabel, setMadeItemLabel] = useState(DEFAULT_MADE_ITEM_LABEL);
+  const [showRecipe, setShowRecipe] = useState(false);
+  const [typeNotice, setTypeNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!businessId || creating) return;
+    let live = true;
+    void (async () => { const l = await readMadeItemLabel(businessId); if (live) setMadeItemLabel(l); })();
+    return () => { live = false; };
+  }, [businessId, creating]);
+
+  // The flag is saved on change, like every other field in EDIT mode. A refused write is REPORTED
+  // and the control goes back to what the database still holds — never left showing the new value.
+  async function saveItemType(next: ItemType) {
+    if (!businessId) return;
+    const was = (draft.item_type ?? 'purchased') as ItemType;
+    set({ item_type: next });
+    setSavingField('item_type');
+    const out = await setItemType(businessId, draft.id, next);
+    setSavingField(null);
+    if (!out.ok) { set({ item_type: was }); setError(out.message); return; }
+    setTypeNotice(out.message);
+  }
 
   // A SKU collision check (case-insensitive) — the typed SKU may not match any OTHER row's SKU.
   const skuCollides = (sku: string) => knownSkus.has(sku.trim().toLowerCase());
@@ -502,6 +537,47 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
           </div>
         </div>
 
+        {/* ── HOW IT IS MADE (ledger #370) ──
+            EDIT ONLY, and the reason is stated rather than left to be discovered: a recipe hangs off
+            a row, so there is nothing to hang one off until the item exists. A CREATE that offered
+            the control would have to buffer a recipe against an id it has not got. */}
+        {!creating && (
+          <>
+            <div style={groupTitle}>How it is made</div>
+            {typeNotice && <div style={SS.success}>{typeNotice}</div>}
+            <div style={SS.field}>
+              <label style={SS.label}>Where this item comes from</label>
+              <select style={SS.select} value={(draft.item_type ?? 'purchased') as string}
+                disabled={savingField === 'item_type'}
+                onChange={e => { void saveItemType(e.target.value as ItemType); }}>
+                {ITEM_TYPES.map(t => (
+                  <option key={t} value={t}>
+                    {t === 'purchased' ? 'Bought in — we buy it and sell it'
+                      : t === 'grown' ? 'Grown here'
+                      : `Made here — ${madeItemLabel}`}
+                  </option>
+                ))}
+              </select>
+              <p style={SS.hint}>
+                {draft.item_type === 'manufactured'
+                  ? `A ${madeItemLabel} item is built from other stock. Write what goes into it, and a build run takes those out and puts the finished units in.`
+                  : 'Mark an item made here when you build it from other things you hold — a planting mix, a water monitor kit.'}
+              </p>
+            </div>
+            {draft.item_type === 'manufactured' && (
+              <div style={{ ...SS.field, marginBottom: 8 }}>
+                <button type="button" style={SS.addBtn} onClick={() => setShowRecipe(true)}>
+                  <ChefHat size={15} /> What goes into it
+                </button>
+                <p style={SS.hint}>
+                  What a batch makes, what goes in, and what each component cost on a real receipt.
+                  Nothing is priced from a component we hold no purchase for — it says so instead.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
         {/* ── NOTES ── */}
         <div style={groupTitle}>Notes</div>
         <div style={{ ...SS.field, marginBottom: 8 }}>
@@ -537,6 +613,15 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
         )}
         </div>
       </div>
+
+      {showRecipe && (
+        <RecipeModal
+          item={{ id: draft.id, name: draft.name, qbItemId: draft.qb_item_id ?? null }}
+          madeItemLabel={madeItemLabel}
+          onClose={() => setShowRecipe(false)}
+          onSaved={onSaved}
+        />
+      )}
     </div>
   );
 }
