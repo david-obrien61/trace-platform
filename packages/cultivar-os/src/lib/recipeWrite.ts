@@ -135,10 +135,29 @@ export async function saveRecipe(
     recipeId = data[0].id;
   }
 
-  const { error: delErr } = await supabase.from('recipe_components').delete().eq('recipe_id', recipeId);
-  // A component row carries no history of its own; the BUILD RUN's ledger rows do, and they are
-  // untouched by this. If the delete is refused, the save stops here rather than doubling the list.
+  // 🔴 A REFUSED DELETE IS SILENT, AND THIS IS THE ONE PLACE IT WOULD DOUBLE THE DATA (A8 / R-12).
+  // A policy refusal returns NO error and removes NOTHING — and the insert below would then add a
+  // second copy of every component beside the ones still there. So the rows are COUNTED first and
+  // the delete is required to account for all of them. Checking `error` alone, which is what this
+  // first did, could not tell "deleted seven" from "deleted none". Found by
+  // `npm run verify:zero-row-writes`, which flagged the delete as UNCHECKABLE.
+  const { data: before, error: readErr } = await supabase.from('recipe_components')
+    .select('id').eq('recipe_id', recipeId);
+  if (readErr) return refused('The components', readErr);
+  const expected = (before ?? []).length;
+
+  const { data: removed, error: delErr } = await supabase.from('recipe_components')
+    .delete().eq('recipe_id', recipeId).select('id');
   if (delErr) return refused('The components', delErr);
+  if ((removed ?? []).length !== expected) {
+    // Stop BEFORE the insert. A half-cleared list plus a full insert is worse than no save at all,
+    // and the recipe row itself is already correct — so the person is told exactly that.
+    return {
+      ok: false,
+      message: `The components were not replaced: ${(removed ?? []).length} of ${expected} old rows could be removed, `
+        + 'which usually means permission was refused. Nothing was added, so the list is unchanged — try again or ask an owner.',
+    };
+  }
 
   const rows = draftToComponentRows(draft, recipeId!);
   if (rows.length > 0) {

@@ -186,10 +186,21 @@ function spm(): RecipeDraft {
 
 // ══ §G THE WRITER — EVERY WRITE COUNTS ITS ROWS ═══════════════════════════════════════════════
 {
-  const writes = WRITE.match(/\.(insert|update)\(/g) ?? [];
-  const selects = WRITE.match(/\.select\('(id|business_id)'\)/g) ?? [];
-  ok(writes.length > 0 && selects.length >= writes.length,
-    `🔴 G1: EVERY insert/update selects its row back and counts it — a refused write returns no error and no row (E5 / R-12) (writes ${writes.length}, select-backs ${selects.length})`);
+  // ⚠️ EACH WRITE IS CHECKED WHERE IT STANDS, NOT COUNTED. A first version compared the NUMBER of
+  // writes against the NUMBER of select-backs, and it stopped biting the moment an unrelated
+  // statement gained a `.select` — the mutant that removed an insert's select-back went GREEN,
+  // because the totals still balanced. A count with no stated expectation is tech-debt #182's
+  // class, and this file has now produced it twice (see F5). Each statement is its own assertion.
+  const code = CODE(WRITE);
+  const stmts = [...code.matchAll(/\.(insert|update)\(/g)];
+  ok(stmts.length >= 4, `G1a: the writer still has its writes to check (found ${stmts.length})`);
+  const unchecked = stmts.filter(m => {
+    // The statement runs to its terminating semicolon; a select-back must appear inside it.
+    const tail = code.slice(m.index!, code.indexOf(';', m.index!) + 1);
+    return !/\.select\(/.test(tail);
+  });
+  ok(unchecked.length === 0,
+    `🔴 G1: EVERY insert/update selects its row back — a refused write returns no error AND no row (E5 / R-12). Unchecked: ${unchecked.length}`);
   ok(/permission was refused/.test(WRITE),
     'G2: …and the message says what a zero-row result usually means, rather than "saved"');
   ok(!/component_inventory_id:\s*[^n]/.test(WRITE),
@@ -198,6 +209,17 @@ function spm(): RecipeDraft {
     '🔴 G4: a confirmed match records WHICH DOCUMENT it came from — the same invoice is captured twice on LAWNS and "what did we last pay" must tell them apart');
   ok(/DEFAULT_MADE_ITEM_LABEL/.test(WRITE) && /tech-debt #188/.test(WRITE),
     'G5: the label read falls back to the seeded word and says why a staff read returns no row');
+  // 🔴 G5b THE DELETE, WHICH IS THE ONE THAT WOULD DOUBLE THE DATA. `saveRecipe` REPLACES the
+  // component rows; a delete refused by policy returns no error and removes nothing, and the insert
+  // that follows would then add a second copy of every component. The first version of this writer
+  // checked `error` alone and could not tell "deleted seven" from "deleted none" —
+  // `npm run verify:zero-row-writes` flagged it UNCHECKABLE, and this is the assertion that keeps
+  // it fixed.
+  ok(/\.delete\(\)[\s\S]{0,80}\.select\('id'\)/.test(CODE(WRITE)),
+    '🔴 G5a: the component DELETE selects back what it removed — a refused delete returns no error');
+  ok(/removed \?\? \[\]\)\.length !== expected/.test(CODE(WRITE)),
+    '🔴 G5b: …and it is COUNTED against what was there, so a partial clear stops BEFORE the insert that would double the list');
+
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
 }
