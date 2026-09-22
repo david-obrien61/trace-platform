@@ -15,6 +15,12 @@ import { buildRouteHandoff, driverSmsBody, type HandoffStop } from '../lib/route
 // schedule and the order screen. This page adds only its own axis — the selection and the sequence.
 import { readStops, type StopRead } from '../lib/stopRead';
 import { saveRouteOrder, routeOrderLine, routeRefusalText } from '../lib/routeOrder';
+// ── THE DAY'S CAPACITY (ledger #375, teams piece 2.5 — David, 2026-09-21) ──────────────────
+import { buildLoadList } from '../lib/loadList';
+import { readLoadListSettings } from '../lib/loadListSettingsRead';
+import { OPERATIONS_DEFAULTS } from '@trace/shared/production';
+import { estimateDay, CAPACITY_COPY, type CapacityEstimate } from '../lib/capacityEstimate';
+import { inputsFromLoadModel, settingsFromConfig, snapshotEstimate, recordTeamChoice } from '../lib/dayEstimate';
 import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
@@ -639,6 +645,72 @@ export function DeliveryRoute() {
     })();
   }, [routeSummary, dateParam, teamParam, businessId, stopData]);
 
+  // ── THE DAY'S CAPACITY ESTIMATE (ledger #375, teams piece 2.5 — David, 2026-09-21) ─────────
+  // 🔴 TREES ARE COUNTED ONCE, BY THE LOAD MODEL. `buildLoadList` is the same function the load
+  // sheet prints from, so the number here and the number on paper cannot disagree (§6 r8).
+  // 🔴 IT SUGGESTS; LAUREN DECIDES. The override is recorded BESIDE the suggestion, never over it.
+  const [opsConfig, setOpsConfig] = useState<Record<string, unknown> | null>(null);
+  const [estimateId, setEstimateId] = useState<string | null>(null);
+  const [chosenTeams, setChosenTeams] = useState<number | null>(null);
+  const [estimateNote, setEstimateNote] = useState<string | null>(null);
+  const [loadSettings, setLoadSettings] = useState<Awaited<ReturnType<typeof readLoadListSettings>> | null>(null);
+
+  useEffect(() => {
+    if (!businessId) return;
+    void readLoadListSettings(businessId).then(r => { setLoadSettings(r); setOpsConfig(r.settings.ops as unknown as Record<string, unknown>); });
+  }, [businessId]);
+
+  const capacity = React.useMemo<{ estimate: CapacityEstimate; inputs: ReturnType<typeof inputsFromLoadModel> } | null>(() => {
+    if (!dateParam || !stopData || !loadSettings) return null;
+    const rows = teamParam ? stopData.stops.filter(x => x.team_id === teamParam) : stopData.stops;
+    if (rows.length === 0) return null;
+    const model = buildLoadList(dateParam, rows.map(x => ({
+      stopId: x.id,
+      customerName: customerDisplayName(x.customers ?? {}, 'Customer'),
+      address: '', serviceType: x.service_type, orderId: x.order_id,
+      canReadLines: stopData.canReadLines, linesRead: stopData.linesRead,
+      items: (x.order_id ? stopData.linesByOrderId.get(x.order_id) : undefined) ?? [],
+      installs: x.order_id ? stopData.transportByOrderId.get(x.order_id) === 'install' : false,
+      deerFence: null,
+    })), loadSettings.settings);
+    // 🔴 THE INPUTS TRAVEL WITH THE ESTIMATE. A first draft recovered the tree count by dividing
+    // planting minutes back out by the per-tree setting — arithmetic that is wrong the moment the
+    // setting is 0 and unreadable either way. The snapshot must record what was MEASURED, so the
+    // measured inputs are carried, not reconstructed.
+    const inputs = inputsFromLoadModel(model, { minutes: routeSummary?.minutes ?? null, miles: routeSummary?.miles ?? null });
+    return { estimate: estimateDay(inputs, settingsFromConfig(opsConfig, OPERATIONS_DEFAULTS)), inputs };
+  }, [dateParam, stopData, loadSettings, teamParam, routeSummary, opsConfig]);
+
+  // 🔴 SNAPSHOT AT ROUTE SAVE AND WHEN THE DAY'S INPUTS CHANGE (David's rule). The key is the
+  // INPUTS, so a snapshot is written when the day actually changes and not once per render — and
+  // NOT when a setting changes, because rewriting history on a settings edit is the one thing an
+  // append-only record exists to prevent.
+  const snapKeyRef = React.useRef('');
+  useEffect(() => {
+    if (!capacity || !businessId || !dateParam || !stopData) return;
+    const i = capacity.inputs;
+    const key = `${dateParam}|${teamParam ?? ''}|${i.stops}|${i.trees}|${i.gallons ?? 'x'}|${i.driveMinutes ?? 'x'}`;
+    if (snapKeyRef.current === key) return;
+    snapKeyRef.current = key;
+    void (async () => {
+      const r = await snapshotEstimate(
+        supabase, businessId, dateParam, teamParam ?? null,
+        routeSaved ? 'route_save' : 'inputs_changed',
+        i, settingsFromConfig(opsConfig, OPERATIONS_DEFAULTS));
+      // Bookkeeping must never block the day (§6 r6's rule applied to our own table): the refusal
+      // is SHOWN, the route and the plan are untouched.
+      if (r.ok) { setEstimateId(r.value.id); setChosenTeams(null); setEstimateNote(null); }
+      else setEstimateNote(r.message);
+    })();
+  }, [capacity, businessId, dateParam, teamParam, stopData, routeSaved, routeSummary, opsConfig]);
+
+  async function chooseTeams(n: number) {
+    if (!estimateId) { setChosenTeams(n); return; }
+    const r = await recordTeamChoice(supabase, estimateId, n);
+    if (r.ok) { setChosenTeams(n); setEstimateNote(null); }
+    else setEstimateNote(r.message);
+  }
+
   // 🔴 THE ONE DERIVATION. Link, SMS body, clipboard and the "Route ready — N stops" header all
   // read this object, and it is built from `displayStops` — the very array the numbered list below
   // renders. Optimised when Directions resolved, built order when it did not; either way the
@@ -854,6 +926,63 @@ export function DeliveryRoute() {
                   <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', color: GRAY, fontWeight: 600 }}>
                     Routing <strong style={{ color: GREEN }}>{teamLabel(teams, teamParam)}</strong> — one team at a time.
                   </p>
+                )}
+                {/* ── THE DAY'S CAPACITY (ledger #375, teams piece 2.5 — David, 2026-09-21) ──
+                    🔴 IT SUGGESTS; SHE DECIDES. The buttons record HER choice beside the
+                    suggestion, never over it, and the copy says so in as many words. A number
+                    that overruled the person who can see the yard would be worse than none. */}
+                {capacity && (
+                  <div style={{ margin: '0 0 10px', padding: '10px 12px', background: '#fff',
+                    border: `1px solid ${capacity.estimate.suggestedTeams === 2 ? '#e0b64a' : '#d6e3c4'}`, borderRadius: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: GREEN }}>
+                      {capacity.estimate.headline}
+                    </div>
+                    {!capacity.estimate.driveKnown && (
+                      <div style={{ fontSize: '0.75rem', color: '#8a6d1f', marginTop: 4 }}>{CAPACITY_COPY.floorNote}</div>
+                    )}
+                    {/* 🔴 EVERY ESTIMATE SHOWS ITS WORKING, including where each number came from —
+                        a figure nobody can check is a figure nobody should act on. */}
+                    <details style={{ marginTop: 6 }}>
+                      <summary style={{ fontSize: '0.75rem', color: GRAY, cursor: 'pointer' }}>How this was worked out</summary>
+                      <div style={{ marginTop: 6 }}>
+                        {capacity.estimate.working.map(w => (
+                          <div key={w.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12,
+                            fontSize: '0.75rem', padding: '3px 0', borderBottom: '1px solid #f0f0f0' }}>
+                            <span style={{ color: '#111827' }}>{w.label}</span>
+                            <span style={{ textAlign: 'right' }}>
+                              <strong>{w.value}</strong>
+                              <span style={{ color: GRAY, display: 'block' }}>{w.because}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                    <div style={{ fontSize: '0.75rem', color: GRAY, marginTop: 6 }}>{CAPACITY_COPY.suggestionOnly}</div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {[1, 2].map(n => {
+                        const picked = (chosenTeams ?? capacity.estimate.suggestedTeams) === n;
+                        return (
+                          <button key={n} type="button" onClick={() => { void chooseTeams(n); }}
+                            style={{ minHeight: 44, padding: '0 14px', borderRadius: 8, cursor: 'pointer',
+                              fontWeight: 700, fontSize: '0.8125rem',
+                              background: picked ? GREEN : '#fff', color: picked ? '#fff' : GREEN,
+                              border: `1.5px solid ${GREEN}` }}>
+                            {n === 1 ? 'One team' : 'Two teams'}
+                          </button>
+                        );
+                      })}
+                      {chosenTeams != null && chosenTeams !== capacity.estimate.suggestedTeams && (
+                        <span style={{ fontSize: '0.75rem', color: '#111827', fontWeight: 600 }}>
+                          Your choice is recorded — the suggestion was {capacity.estimate.suggestedTeams}.
+                        </span>
+                      )}
+                    </div>
+                    {estimateNote && (
+                      <p role="alert" style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#A32D2D' }}>
+                        {estimateNote} — the day and the route are unaffected.
+                      </p>
+                    )}
+                  </div>
                 )}
                 {/* The refusal, BEFORE the wait. The database refuses this set too and is the
                     authority; this only saves Lauren watching Directions run to be told no. */}

@@ -15,7 +15,7 @@
 **Tech debt this closes the first piece of:** **#345** — Saturday 2026-09-19, when routing Team 1's
 four stops wiped Team 2's order, because the day had one route and the platform had no teams.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 10 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–5 and 10–13 owed.** ✏️ **2026-09-21 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13 added.** Each team's stops sit under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is exactly what [[R-169]] refuses and a control that must fail is a dead affordance. **CARD 13 is the one that protects everyone else:** a day nobody has split is the flat list it always was. ⚠️ **CARD NUMBERS 6–9 ARE DELIBERATELY SKIPPED HERE — they belong to ledger #375 (the capacity estimate) on `feat/capacity-estimate`,** which is a separate held branch. Numbering around them rather than reusing them means the two branches can merge in either order without renumbering a card David may already have run. ⚠️ **This branch is based on `feat/load-list-per-team` (#373), not on `main`** — it reuses that branch's `groupStopsByTeam` rather than writing a second partition (§6 r8), so #373 merges first. **Nothing is merged.**
+**Board: 1 of 14 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–13 owed.** ✏️ **2026-09-22 (ledger #375): THE DAY'S CAPACITY ESTIMATE — CARDS 6–9.** The day suggests one team or two, shows its working, and Lauren overrides it; the estimate is SNAPSHOT append-only with the settings it used. ✅ **`20260922c` IS APPLIED, and its append-only guarantee is PROVEN ON LIVE** — David ran the probe: rewrite refused, choice recorded once, second choice refused, delete refused. ✏️ **2026-09-22 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13.** Each team's stops under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is what [[R-169]] refuses. 🔴 **CARD 13 and CARD 9 are the two that protect everyone else:** an unsplit day must look exactly as it always did, and an unrouted day must read as a FLOOR rather than as zero drive time.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **five**
 paths and **nine** guards through the real entry points on the live schema, RLS on; deliberate breaks
 are caught by `scripts/sql-harness/teams-362.mutants.py`.
@@ -179,3 +179,66 @@ Open a day where **no stop carries a team**.
 caption, and the day's own **Route this day** button unchanged.
 **🔴 FAIL if** a single-crew day grows a "No team" heading. A nursery that does not use teams must
 not be told about them.
+# THE DAY'S CAPACITY ESTIMATE (ledger #375, teams piece 2.5 — David, 2026-09-21)
+
+⚠️ **All four cards need migration `20260921e_day_capacity_estimates.sql` applied first.** It is
+WRITTEN and HELD; its V-blocks were run in PGlite but **David applies it.** Until then the panel
+still shows the estimate and its working — only the **snapshot** is refused, and it says so.
+
+## CARD 6 — 🔴 THE ESTIMATE SUGGESTS, AND IT SHOWS ITS WORKING
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — suggest one team until the day exceeds X hours
+SIGNAL: `[TRACE:CAPACITY] snapshot { hours, suggested, threshold }`
+
+On **Test Dave's**, open a delivery day with stops on it → **Route**.
+**PASS:** a panel reads *"This day looks like N h — within/longer than X h, so one/two teams are
+suggested."* Open **How this was worked out**: it lists **stops, trees, container gallons, planting
+time, drive time, miles, the estimated day, and the X it was measured against** — and every line
+says where its number came from.
+**PASS:** the trees figure **matches the load list for the same day**. They are the same count from
+the same function; if they disagree, that is the defect.
+**🔴 FAIL if** any line shows a number with no explanation, or if gallons change the hours — gallons
+are shown as a load signal and are deliberately **not** multiplied into time.
+
+## CARD 7 — 🔴 LAUREN DECIDES, AND HER CHOICE IS RECORDED BESIDE THE SUGGESTION
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — *"if she says one team, that stands"*
+SIGNAL: `[TRACE:CAPACITY] choice recorded { chosenTeams }`
+
+On a day the estimate says needs **two** teams, press **One team**.
+**PASS:** the button takes, and the panel says *"Your choice is recorded — the suggestion was 2."*
+**PASS (the part that matters):** run this SQL and see **both numbers on one row** —
+```sql
+SELECT service_date, suggested_teams, chosen_teams, total_hours, threshold_hours
+  FROM public.delivery_day_estimates ORDER BY created_at DESC LIMIT 5;
+```
+**🔴 FAIL if** `suggested_teams` changed to match her choice. The disagreement between the rule and
+the person is the only evidence the rule was ever wrong — it must survive.
+
+## CARD 8 — 🔴 A SNAPSHOT IS NOT REWRITTEN WHEN A SETTING CHANGES
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — append-only, carries the settings it used
+SIGNAL: —
+
+1. Note the newest row's `threshold_hours` from the SQL in CARD 7.
+2. Settings → Operations → change **Second team above** from 7 to 9, Save.
+3. Re-run the SQL.
+**PASS:** the OLD row still reads **7**. A NEW estimate (after re-opening the route page) reads 9.
+**🔴 FAIL if** the old row now reads 9 — history that moves under you is not a record, and the whole
+point of the snapshot is gone.
+4. Belt and braces, paste this — **it must RAISE**, not succeed:
+```sql
+UPDATE public.delivery_day_estimates SET total_hours = 99
+ WHERE id = (SELECT id FROM public.delivery_day_estimates ORDER BY created_at DESC LIMIT 1);
+```
+
+## CARD 9 — AN UNROUTED DAY SAYS IT IS A FLOOR, NOT AN ESTIMATE
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — unknown drive time is not zero drive time (D-9 / A9)
+SIGNAL: `[TRACE:CAPACITY] snapshot { driveKnown: false }`
+
+Open a day that has **not been routed yet**.
+**PASS:** drive time reads **"not known"** (never `0 h`), the headline says **"at least"**, and a
+note says the real day is longer.
+**🔴 FAIL if** an unrouted day shows `0 h` drive and therefore looks SHORTER than a routed one —
+that would suppress the two-team suggestion on exactly the days that most need it.

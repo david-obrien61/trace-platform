@@ -156,6 +156,10 @@ export interface OperationsConfig {
    * LAWNS measures at 12. Every caliper on the ladder (`container_ladder.caliper_*_inches`) is read
    * at this height — a 3.25 in tree at 6 in is a smaller tree at 12.
    */
+  /** X — above this many estimated hours, a day suggests a second team (ledger #375). */
+  dayHoursBeforeSecondTeam: number;
+  /** Minutes to plant one tree; 30 until Start/Done taps measure it here (ledger #375). */
+  plantingMinutesPerTree: number;
   caliperMeasuredAtInches: number;
   /**
    * Where that height came from, in the nursery's own words (David, 2026-09-18: the platform
@@ -197,6 +201,16 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   ropeFeetPerTPost: 4,
   bubblersPerTree: 1,
   deerFenceTPostsPerTree: 4,
+  // ── THE DAY'S CAPACITY (ledger #375, teams piece 2.5 — David, 2026-09-21) ──────────────
+  // 🔴 X. Above this many estimated hours the day SUGGESTS a second team. LAWNS is 7; this 8 is
+  //    the platform's standard, not LAWNS's number, and the estimate says which it used.
+  // 🔴 X NEVER LEARNS. David's rule: the threshold is the owner's judgement about her own day and
+  //    her own crews, and a figure that drifted under her would make the suggestion untrustworthy
+  //    exactly when it disagreed with her. Only planting time learns, and only by asking.
+  dayHoursBeforeSecondTeam: 8,
+  // Minutes to plant ONE tree. 30 until Start/Done taps have measured it here — and the surface
+  // says so rather than presenting a default as a measurement (D-9).
+  plantingMinutesPerTree: 30,
   caliperMeasuredAtInches: 6,
   caliperMeasuredAtBecause: '',
 };
@@ -228,6 +242,8 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
+  dayHoursBeforeSecondTeam: { basis: 'suggestion', because: "the owner's judgement about her own day and her own crews — LAWNS is 7; this never learns" },
+  plantingMinutesPerTree:  { basis: 'suggestion', because: 'a standard 30 minutes until Start and Done taps have measured it here' },
   caliperMeasuredAtInches: { basis: 'suggestion', because: CALIPER_STANDARD.sentence },
   caliperMeasuredAtBecause: { basis: 'fact', because: "the nursery's own words for why it measures where it does" },
 };
