@@ -17,7 +17,8 @@
 //
 // DEPENDENCIES: ./supabase · @trace/shared/costing (types only) · ./recipeDraft.
 // OUTPUTS:      loadRecipe · saveRecipe · confirmComponentPurchase · setItemType · ITEM_TYPES ·
-//               readMadeItemLabel · readReceiptsForMatching · RECIPE_MATCH_RECEIPT_SELECT.
+//               componentIdsByPosition · readMadeItemLabel · readReceiptsForMatching ·
+//               DEFAULT_MADE_ITEM_LABEL.
 // INSTRUMENTATION (STD-003): [TRACE:RECIPE] — ON.
 // ============================================================
 import { supabase } from './supabase';
@@ -38,7 +39,9 @@ const refused = (what: string, error: { message: string } | null): Outcome => ({
     : `${what} was not saved: the write returned no row, which usually means permission was refused. Nothing changed.`,
 });
 
-export interface LoadedRecipe {
+/** Not exported: `loadRecipe`'s callers destructure it and none names the type. Export it the day
+ *  one does — an exported name nothing imports is a claim that something depends on it. */
+interface LoadedRecipe {
   recipeId: string;
   draft: RecipeDraft;
 }
@@ -235,7 +238,10 @@ export async function readMadeItemLabel(businessId: string): Promise<string> {
 }
 
 /** The receipt fields the matcher needs, and no more — it never pulls `ocr_raw` or the images. */
-export const RECIPE_MATCH_RECEIPT_SELECT = 'id, vendor, date, amount, receipt_number, created_at, line_items';
+// Not exported: nothing outside this file reads it, and its probe parses this line as TEXT rather
+// than importing it — importing anything from here drags in the Supabase client (tech-debt #134's
+// seam). An exported name nothing imports is a claim that something depends on it.
+const RECIPE_MATCH_RECEIPT_SELECT = 'id, vendor, date, amount, receipt_number, created_at, line_items';
 
 /**
  * The captured receipts a component's purchase could be on.

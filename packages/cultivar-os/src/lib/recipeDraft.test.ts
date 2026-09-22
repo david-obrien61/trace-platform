@@ -71,6 +71,21 @@ function spm(): RecipeDraft {
   ok(recipeDraftProblems(neither).some(p => /exactly one item/.test(p)),
     'A4: …and so is none');
 
+  // The recipe row itself. `draftToRecipeRow` was imported and never asserted until eslint said so
+  // — which is worth recording, because "unused import" was the only signal that the function
+  // building the row nothing else checks had no probe at all.
+  const row = draftToRecipeRow(spm(), 'biz-1');
+  ok(row.qb_item_id === 'qb-9001' && row.inventory_id === null,
+    '🔴 A4b: the ROW carries the QuickBooks id and a null row id — the identity the wipe guard requires');
+  ok(row.yield_quantity === 2.5 && typeof row.yield_quantity === 'number',
+    'A4c: the typed yield becomes a number at the boundary');
+  ok(row.build_minutes === 38 && row.build_minutes_because === 'timed by Lauren',
+    'A4d: build minutes and WHERE THEY CAME FROM travel together — a number with no provenance is the thing that gets believed');
+  ok(draftToRecipeRow({ ...spm(), buildMinutes: '' }, 'biz-1').build_minutes === null,
+    '🔴 A4e: an untimed build stores NULL, never 0 — 0 minutes is a claim that it takes no time');
+  ok(draftToRecipeRow({ ...spm(), notes: '   ' }, 'biz-1').notes === null,
+    'A4f: whitespace-only notes store as null rather than as a value that looks like content');
+
   const rows = draftToComponentRows(spm(), 'rec-1');
   ok(rows.length === 2 && rows.every(r => r.component_inventory_id === null),
     '🔴 A5: a component NEVER carries a row id — the wipe guard refuses one, so the modal can never create a recipe that blocks a catalogue reload');
@@ -219,6 +234,22 @@ function spm(): RecipeDraft {
     '🔴 G5a: the component DELETE selects back what it removed — a refused delete returns no error');
   ok(/removed \?\? \[\]\)\.length !== expected/.test(CODE(WRITE)),
     '🔴 G5b: …and it is COUNTED against what was there, so a partial clear stops BEFORE the insert that would double the list');
+
+  // 🔴 G5c THE RECEIPT COLUMN LIST, NAMED AND ASSERTED (tech-debt #179's class: a declarative
+  // select list that silently omits a column no reader misses). Every one of these feeds a
+  // decision — the document key is built from vendor + date + amount, the collapse prefers a
+  // capture carrying `receipt_number`, and `line_items` IS the thing being matched.
+  // ⚠️ PARSED, NOT IMPORTED — and the reason is the same seam this whole file exists for.
+  // `recipeWrite.ts` imports the Supabase client, which cannot be constructed inside a bundled
+  // probe ("supabaseUrl is required"). Importing the constant to assert it drags the client in and
+  // the probe dies before its first assertion. So the list is read as TEXT, exactly as BASE_COLS is.
+  const wanted = ['id', 'vendor', 'date', 'amount', 'receipt_number', 'created_at', 'line_items'];
+  const selectSrc = (WRITE.match(/RECIPE_MATCH_RECEIPT_SELECT = '([^']+)'/) ?? [])[1] ?? '';
+  const got = selectSrc.split(',').map(c => c.trim());
+  ok(wanted.every(c => got.includes(c)),
+    `🔴 G5c: the matcher's receipt read names every column it decides on (missing: ${wanted.filter(c => !got.includes(c)).join(', ') || 'none'})`);
+  ok(!got.includes('ocr_raw') && !got.includes('image_url'),
+    'G5d: …and does NOT drag the OCR blob or the image along — a matcher reads lines, not photographs');
 
   ok(!/\.range\(/.test(CODE(WRITE)),
     '🔴 G6: no paged read — a matcher reading only the first page would propose off a subset while looking complete (verify-stable-paging\'s class)');
