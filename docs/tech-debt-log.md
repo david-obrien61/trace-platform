@@ -4766,3 +4766,71 @@ their own screen** — Lauren's follow-up list, not her order history.
 does in this product.
 
 **Blocker:** David's ruling on whether estimates are part of the product at all.
+
+## #77 — 🔴 `api/` IS IN NO TSCONFIG, SO NOBODY WHO CAN FAIL A BUILD TYPE-CHECKS IT — AND THE TWO CHECKERS THAT DO LOOK DISAGREE BECAUSE OF ONE FLAG (ENTRY WRITTEN 2026-09-22; the id was cited in three places and had no entry — #195's class)
+
+⚠️ **THIS ID WAS CITED BEFORE IT WAS WRITTEN.** `docs/built-inventory.md:1044`, `docs/CLOSE-OUT-LEDGER.md` (#341)
+and `docs/handoff-archive.md:1405` all cite *"tech-debt #77"* for exactly this gap; **no entry existed in this
+file.** That is the defect **#195** filed about #186–#191, in a range nobody re-checked. Entry written now, with
+the measurement it never had.
+
+**What — and it is simpler and worse than "a config difference."** `npm run verify` type-checks **two**
+projects (`scripts/quality-gate.mjs:37`): `packages/cultivar-os/tsconfig.json` and
+`packages/trace-app/tsconfig.json`. The first declares `"include": ["src"]`. **There is no `tsconfig.json` at
+the repo root at all.** So the repo-root `api/` shims and `packages/cultivar-os/api/**` — every serverless
+handler we deploy — are in **no TypeScript project**, and `npm run verify` has never type-checked one of them.
+Vercel compiles them on every deploy, finds no root tsconfig, and therefore falls back to **TypeScript's
+defaults, which means `strict: false`.**
+
+**The exact difference, MEASURED 2026-09-22** (same file set, same TypeScript, one flag changed):
+
+| `strict` | total errors | discriminated-union narrowing | `await res.json()` → `unknown` |
+|---|---|---|---|
+| `false` — what Vercel uses | **32** | **16** | 16 |
+| `true` — what this repo uses everywhere else | **16** | **0** | 16 |
+
+🔴 **ALL SIXTEEN UNION ERRORS ARE AN ARTIFACT OF THE FLAG, NOT DEFECTS.** Narrowing a **boolean-literal
+discriminant** needs `strictNullChecks`; without it `if (!resolved.ok)` stops narrowing and every access to the
+other arm is reported. The code is correct and correctly narrowed — `QboItemRefResult` really is
+`{ok:true; itemRef} | {ok:false; unmapped}` (`invoiceLineShapes.ts:115`) and the call site really does check
+`ok` first. This is the whole of the list David read off the Vercel build log: `unmapped` ×5 · `customerUpsert`
+`error` · `acceptInvitation` `email` on `never` · `campaigns/generate` `value` · `containerLadder` `reason` ×3 ·
+`customerImportWriter` `error` ×3 · `shipmentIngest` `reason`/`lines`. **Giving Vercel a `strict: true` tsconfig
+deletes all sixteen at a stroke, changing no application code.**
+
+**The other 16 are one class and are NOT runtime bugs either:** `await fetchRes.json()` returns `unknown` in
+this lib version, then properties are read off it (`qbo/invoice/cultivar.ts` ×5, `qbo/router.ts` ×5,
+`receipts/ocr.ts` ×2, `shared/src/quickbooks/refresh.ts` ×4). At run time the parsed body does carry those keys
+and most reads are already `?.`/`??`-guarded. They error under **both** settings — they are a genuine typing
+gap, and the honest thing to say about them is that they are **the class that HIDES bugs**, because an
+unchecked external response gets no compiler help at all.
+
+🔴 **WHY THIS IS RED RATHER THAN AMBER — IT HAS NOW COST US A PRODUCTION 500.** On 2026-09-22
+`api/discovery/ingest.ts` shipped `export { callerHoldsPermission } from '...'` — a bare re-export, which
+creates **no local binding** — while the `cost-apply` write-wall gate called that name directly. Every
+`cost-apply` request threw `ReferenceError: callerHoldsPermission is not defined`. **A tsc over `api/` reports
+it instantly, under EITHER setting: `ingest.ts(107,27): error TS2304: Cannot find name
+'callerHoldsPermission'` — measured, by re-breaking the file and re-running both configs.** Nothing in
+`npm run verify` could see it, because the file is in no project. The two checks that *were* aimed at that gate
+both passed on it: `scripts/verify-write-wall.ts:15` imports the symbol **from ingest.ts**, and a re-export
+does satisfy importers, so it proved the helper through a door that was never broken; `verify-universals.mjs`
+cap7 greps the literal string `callerHoldsPermission(req`, which an undefined identifier matches exactly as
+well as a defined one. **[[R-33]]: neither could have disagreed.**
+
+⚠️ **AND VERCEL'S OWN OUTPUT IS NOT A BACKSTOP: the 2026-09-22 build printed its TypeScript errors and
+SUCCEEDED anyway** (`716eed9`, 16:38). A checker whose findings cannot fail a build is a log, not a gate — and
+32 standing errors is exactly the noise a real one hides in.
+
+**The fix, NOT taken here because it touches the verify chain (David's call):** add a root `tsconfig.json`
+covering `api/` and `packages/cultivar-os/api/**` with `strict: true`, and wire one `tsc -p` step into
+`npm run verify`. **It lands RED at 16 errors**, so it cannot merge as a gate on day one without either fixing
+the `res.json()` class or admitting those 16 to `quality-baseline.json` as declared debt and ratcheting down —
+**and a cap that is red on arrival does not survive (#73's lesson).** Sequence matters more than the config.
+
+⚠️ **ONE THING I COULD NOT SETTLE WITHOUT THE RAW BUILD LOG:** whether Vercel's output also carried the
+`ingest.ts` TS2304. David's read of it listed the other ~15 and not this one. If it *was* there, the signal
+existed and was lost in the noise, which strengthens the case rather than weakening it — but I am not asserting
+it either way.
+
+**Owner:** David — whether `npm run verify` gains a step that starts red. **Blocks:** nothing today; it is the
+blind spot every future `api/` edit ships through.

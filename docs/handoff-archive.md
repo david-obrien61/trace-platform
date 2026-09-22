@@ -1,5 +1,14 @@
 # Handoff Archive — TRACE Platform
 
+<!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #381 close-out, OP-13 N=3) — verbatim, not summarized.
+     entries-in == entries-out. -->
+
+### 2026-09-21 — THUNDER **FINISHING A STOP FULFILS ITS ORDER, AND UNDO PUTS IT BACK. #369. TECH-DEBT #319 RESOLVED · TECH-DEBT #358.** A completed truck run left every order open — so nothing came off stock, and automatic mix consumption had nothing to hang on. The office door now fulfils through `/api/orders/submit`, **the one endpoint that owns the stock move** (its `adjustLotQty` calls take a required test-mode gate, so no stock logic is added here and none can drift). **Undo done reverses it.** 🔴 **RESTORING NEEDS A MEMORY, AND THERE WAS NONE:** order transitions live in the ledger and **the test-mode guard discards every row**, so on the tenant being proven the history is empty by design — and LAWNS's stop-bearing orders sit at three different statuses, so nothing was safe to guess. `20260923` adds one nullable column, read on ONE path and never added to the schedule's select, so the page works either side of the migration. **The crew door is untouched**, as ruled. ✏️ **AND ⑥ OF THE ADDRESS CHECK HAS NO DATA: there is no zip→charge table anywhere, live or in the corpus** — the only zip→zone rule in the platform is USDA **hardiness** zone, which is what will grow, not what a delivery costs. Filed as #358 with David's own 2026-09-10 measurements to seed it from live rows.
+
+**Type:** BUILD (one module + one call site + one banner) + MIGRATION (1, WRITTEN not applied) + FILING, on `feat/stop-finishes-order`, **own worktree (§6 r20)**, **one ledger id**. `api/` 12/12 — it calls an endpoint that already exists.
+
+**FLAGGED FOR DAVID:** **(a)** ⚠️ **`20260923` IS FOR THE MORNING, NOT TONIGHT** — you said nothing to paste before 08:00. Without it, finishing still fulfils; only the **Undo** half cannot restore automatically, and it says so rather than guessing. **(b)** 🔴 **CARD 18's LAST TWO STEPS NEED A SECOND LOGIN** — a member with `deliveries:update` but NOT `orders:update`, to prove the red line; and a crew link, to prove that door still holds. **(c)** 🟡 **TECH-DEBT #358 — the trip-charge zip table.** Your 2026-09-10 analysis measured it (519 TC lines, 80 zips, modal charge per zip) but nothing stored it; the build seeds from live invoice rows once HISTORY loads them, never from the analysis.
+
 <!-- MOVED FROM CLAUDE.md §3 2026-09-22 (ledger #379 close-out, OP-13 N=3) — verbatim, not summarized.
      entries-in == entries-out. -->
 
