@@ -167,6 +167,73 @@ export function collisionsOf(mine, held) {
   return out;
 }
 
+// ── THE STRANDED-FILING REPORT (CLAUDE.md §6 r22, 2026-09-22, ledger #379) ──────────────────────
+// r22 says a filing lands on `main` THE SAME DAY it is made, and a migration applied live reaches
+// `main` the same day it is applied. Nothing could SEE a breach of either half: this cap answered
+// "is my id claimed twice?" and never "is a filing stranded where no session reads it?".
+//
+// 🔴 WHY IT REPORTS AND NEVER FAILS. These findings are about OTHER PEOPLE'S branches. A cap that
+// fails my build because another session has an unmerged row is a cap that gets turned off — #73's
+// lesson, and the reason `OWNER_ONLY_PENDING` became unread noise. It prints, every run, and the
+// exit code is untouched.
+//
+// ⚠️ WHAT IT CANNOT DO, SAID PLAINLY: it CANNOT tell which migrations are applied live. Nothing in
+// this repo reads the database, so the dangerous case r22 exists for — applied live, absent from
+// main — is INVISIBLE here. What it lists is the population that case lives in: a migration file
+// on a branch and not on main. A human (or a live read) decides which of those are applied.
+
+// PURE — ids a ref claims that `main` does not, when that ref has been idle longer than the window.
+// An ACTIVE branch is a build in progress, which r22 permits; an IDLE one is a filing nobody can read.
+export function strandedIds(refs, mainIds, windowHours = 24) {
+  const out = [];
+  for (const r of refs) {
+    if (!(r.idleHours > windowHours)) continue;
+    const only = [...r.ids].filter(id => !mainIds.has(id)).sort((a, b) => a - b);
+    if (only.length) out.push({ ref: r.ref, idleHours: r.idleHours, ids: only });
+  }
+  return out;
+}
+
+// PURE — migration FILES on a ref and not on main. No age window: r22's migration half is same-DAY,
+// and a migration is the artefact where "not on main" has already cost us a silent superseded write.
+export function migrationsNotOnMain(refs, mainFiles) {
+  const byFile = new Map();
+  for (const r of refs) for (const f of r.files) {
+    if (mainFiles.has(f)) continue;
+    if (!byFile.has(f)) byFile.set(f, []);
+    byFile.get(f).push(r.ref);
+  }
+  return [...byFile.entries()].map(([file, onRefs]) => ({ file, refs: onRefs.sort() }))
+    .sort((a, b) => a.file.localeCompare(b.file));
+}
+
+// PURE — the TEXT of one claim, so a COPY can be told from a RIVAL. §6 r22 says a stranded filing is
+// copied onto `main` verbatim; the moment you do that, the id is claimed in two places and this cap
+// called it a COLLISION — which would make r22's own instruction unfollowable while the gate is green.
+// A copy and a rival look identical at the level of "an id in two files"; they differ in the TEXT.
+// A table row is its line; a `## #N` heading is its whole section, because an identical heading over
+// a different body is a DIFFERENT filing and must still collide.
+export function claimText(src, cfg, id) {
+  const lines = src.split('\n');
+  const heading = new RegExp(`^#{2,4} #${id}\\b`);
+  const tableRow = new RegExp(`^\\| (?:⏳ )?(?:\\*\\*#)?${id}(?:\\*\\*)? \\|`);
+  const ledgerRow = new RegExp(`^\\| (?:⏳ )?\\*\\*#${id}\\b`);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (heading.test(lines[i])) {
+      const sec = [lines[i]];
+      for (let j = i + 1; j < lines.length && !/^#{2,4} #\d+\b/.test(lines[j]); j++) sec.push(lines[j]);
+      out.push(sec.join('\n').trimEnd());
+    } else if (ledgerRow.test(lines[i]) || tableRow.test(lines[i])) {
+      out.push(lines[i].trimEnd());
+    }
+  }
+  return out.length ? out.join('\n').trim() : null;
+}
+
+// PURE — is this id the SAME filing in both places, or two different ones wearing one number?
+export const isCopyNotRival = (mineText, theirText) => !!mineText && !!theirText && mineText === theirText;
+
 // ── the cap's own probes (STD-022): each matcher shown refusing a crafted violation ──
 if (SELF_TEST) {
   const ok = (c, m) => { if (!c) { console.error('CAP PROBE FAILED: ' + m); process.exit(2); } };
@@ -233,8 +300,47 @@ if (SELF_TEST) {
   ok(fileClaims('| **#306** | x |\n', SPACES.ledger).has(306), 'fileClaims misses a filed row');
   ok(!fileClaims('see #306 in prose\n', SPACES.ledger).has(306), 'fileClaims counted a bare in-prose mention as a claim');
 
+  // ══ r22's two reports (ledger #378). Each shown SEEING a breach and REFUSING a clean tree — the
+  // §6 r19 bar: a check nobody has watched refuse is a claim. ══
+  const R = [
+    { ref: 'origin/feat/idle',   idleHours: 50, ids: new Set([348, 349]), files: ['20260917b_x.sql'] },
+    { ref: 'origin/feat/active', idleHours: 2,  ids: new Set([999]),      files: ['20260922a_y.sql'] },
+    { ref: 'origin/feat/merged', idleHours: 99, ids: new Set([300]),      files: ['20260901_z.sql'] },
+  ];
+  const stranded = strandedIds(R, new Set([300]));
+  ok(stranded.length === 1 && stranded[0].ref === 'origin/feat/idle', 'strandedIds cannot SEE a filing stranded on an idle branch');
+  ok(stranded[0].ids.join(',') === '348,349', 'strandedIds lost or invented an id');
+  ok(!stranded.some(x => x.ref === 'origin/feat/active'), 'strandedIds flagged an ACTIVE branch — a build in progress is what r22 permits');
+  ok(!stranded.some(x => x.ref === 'origin/feat/merged'), 'strandedIds flagged an id that IS on main — a merged filing is not stranded');
+  ok(strandedIds(R, new Set([300, 348, 349])).length === 0, 'strandedIds reported a stranded id when main holds every one of them');
+  // the window is the subject, so it is mutated: with a 1h window the ACTIVE branch must appear.
+  ok(strandedIds(R, new Set([300]), 1).some(x => x.ref === 'origin/feat/active'), 'the idle window is not applied — the threshold does nothing');
+  const mig = migrationsNotOnMain(R, new Set(['20260901_z.sql']));
+  ok(mig.length === 2, `migrationsNotOnMain found ${mig.length} of 2 files absent from main`);
+  ok(!mig.some(m => m.file === '20260901_z.sql'), 'migrationsNotOnMain listed a file that IS on main');
+  ok(migrationsNotOnMain(R, new Set(['20260917b_x.sql', '20260922a_y.sql', '20260901_z.sql'])).length === 0, 'migrationsNotOnMain reported a file main already holds');
+  // a file on TWO branches is ONE row naming both, not two rows — the reader needs the holders.
+  const two = migrationsNotOnMain([{ ref: 'origin/b', files: ['m.sql'] }, { ref: 'origin/a', files: ['m.sql'] }], new Set());
+  ok(two.length === 1 && two[0].refs.join(',') === 'origin/a,origin/b', 'a migration on two branches was not reported as one row naming both');
+
+  // ══ COPY vs RIVAL (§6 r22, ledger #379). r22 says copy a stranded filing onto `main` verbatim —
+  // which claims the id twice. If that read as a collision, following r22 would break this gate. ══
+  const LED = '| **#337** | the undo refuses | x |\n| **#336** | other | y |\n';
+  ok(claimText(LED, SPACES.ledger, 337) === '| **#337** | the undo refuses | x |', 'claimText did not return the ledger row');
+  ok(isCopyNotRival(claimText(LED, SPACES.ledger, 337), claimText(LED, SPACES.ledger, 337)), 'an identical row read as a RIVAL — r22 copies would fail the gate');
+  ok(!isCopyNotRival(claimText(LED, SPACES.ledger, 337), claimText('| **#337** | a DIFFERENT filing | z |\n', SPACES.ledger, 337)), 'two DIFFERENT filings under one id were excused as a copy — the collision this cap exists for');
+  ok(!isCopyNotRival(claimText(LED, SPACES.ledger, 337), null), 'a missing claim on the other side read as a copy');
+  // a heading is its WHOLE SECTION: same heading, different body is a different filing.
+  const secA = '## #307 — a thing\nbody one\n\n## #308 — next\n';
+  const secB = '## #307 — a thing\nbody TWO\n\n## #308 — next\n';
+  ok(claimText(secA, SPACES.techdebt, 307).includes('body one'), 'claimText read a heading without its body');
+  ok(!claimText(secA, SPACES.techdebt, 307).includes('#308'), 'claimText ran past the next heading');
+  ok(isCopyNotRival(claimText(secA, SPACES.techdebt, 307), claimText(secA, SPACES.techdebt, 307)), 'an identical tech-debt section read as a rival');
+  ok(!isCopyNotRival(claimText(secA, SPACES.techdebt, 307), claimText(secB, SPACES.techdebt, 307)), 'same heading over a DIFFERENT body was excused as a copy');
+
   console.log('SELF-TEST — every matcher refused its violation and accepted its clean input, and the');
-  console.log('            POPULATION probes (P1-P5, tech-debt #286) refused a filtered sweep. ✅');
+  console.log('            POPULATION probes (P1-P5, tech-debt #286) refused a filtered sweep, and the two');
+  console.log('            r22 reports refused both a stranded filing and a clean tree. ✅');
   process.exit(0);
 }
 
@@ -349,7 +455,7 @@ const subjectIdsOf = (ref) => {
   return subjCache.get(ref);
 };
 
-const fail = [], lines = [];
+const fail = [], lines = [], copies = [];
 
 for (const [space, cfg] of Object.entries(SPACES)) {
   const localSrc = existsSync(cfg.file) ? readFileSync(cfg.file, 'utf8') : '';
@@ -388,7 +494,11 @@ for (const [space, cfg] of Object.entries(SPACES)) {
       if (fileIds.has(id)) {
         // A FILE claim is inherited iff it was already in the file at our shared history.
         const inherited = idsAtBase(mergeBaseOf(ref), space, cfg).has(id);
-        held.push({ id, ref, inherited, via: 'row' });
+        // …or it is the SAME filing, copied here verbatim under §6 r22. Byte-identical text is a
+        // COPY; the same number over different text is the rival this cap exists to catch.
+        const copied = !inherited && isCopyNotRival(claimText(localSrc, cfg, id), claimText(src, cfg, id));
+        if (copied) copies.push({ id, ref, label: cfg.label });
+        held.push({ id, ref, inherited: inherited || copied, via: 'row' });
       } else if (subjIds.has(id)) {
         // A SUBJECT claim is inherited iff the claiming COMMIT is reachable from HEAD. Exact, and
         // it is the test the old lineage filter was approximating with a whole-branch guess.
@@ -423,6 +533,53 @@ lines.forEach(l => console.log(l));
 console.log(staleHours === null
   ? '  ⚠️ refs staleness UNKNOWN (origin/main unreadable) — treat this sweep as unverified.'
   : `  ${staleHours > STALE_HOURS ? '⚠️' : '·'} remote refs last updated ${staleHours.toFixed(1)}h ago${staleHours > STALE_HOURS ? ' — STALE. Run with --fetch; a sweep is only as true as the refs it read.' : ''}`);
+// ── r22 REPORT · what is filed where no session reads it. Never touches the exit code. ──────────
+const IDLE_WINDOW_H = 24;
+const refAgeH = (ref) => {
+  try { return (Date.now() / 1000 - +git('log', '-1', '--format=%ct', ref).trim()) / 3600; } catch { return null; }
+};
+const migrationsAt = (ref) => {
+  try {
+    return new Set(git('ls-tree', '--name-only', '-r', ref, 'supabase/migrations/')
+      .split('\n').map(x => x.trim()).filter(Boolean).map(x => x.replace(/^supabase\/migrations\//, '')));
+  } catch { return new Set(); }
+};
+
+const mainIdsAll = new Set();
+for (const [, cfg] of Object.entries(SPACES)) for (const id of fileClaims(show(MAIN, cfg.file), cfg)) mainIdsAll.add(`${cfg.label}:${id}`);
+const mainMigrations = migrationsAt(MAIN);
+
+const reportRefs = [];
+for (const ref of RIVAL_REFS) {
+  if (ref === MAIN) continue;
+  const idle = refAgeH(ref);
+  const ids = new Set();
+  for (const [, cfg] of Object.entries(SPACES)) {
+    for (const id of fileClaims(show(ref, cfg.file), cfg)) if (!mainIdsAll.has(`${cfg.label}:${id}`)) ids.add(`${cfg.label}:${id}`);
+  }
+  reportRefs.push({ ref, idleHours: idle === null ? 0 : idle, ids, files: [...migrationsAt(ref)] });
+}
+// The id spaces are labelled, so `strandedIds` is fed a already-main-filtered set and an EMPTY main
+// set — the numeric compare it does is over strings here, which is why the filtering happened above.
+const strandedRows = reportRefs
+  .filter(r => r.idleHours > IDLE_WINDOW_H && r.ids.size)
+  .map(r => ({ ref: r.ref, idleHours: r.idleHours, ids: [...r.ids].sort() }))
+  .sort((a, b) => b.idleHours - a.idleHours);
+const migRows = migrationsNotOnMain(reportRefs, mainMigrations);
+
+console.log('');
+console.log(`  📋 §6 r22 — FILINGS STRANDED OFF \`main\` (a register id on a branch idle > ${IDLE_WINDOW_H}h and absent from main):`);
+if (!strandedRows.length) console.log('     none — every register id on every idle branch is also on main.');
+for (const r of strandedRows) console.log(`     ${r.ref} (idle ${r.idleHours.toFixed(0)}h) — ${r.ids.join(' · ')}`);
+if (copies.length) {
+  console.log(`  📋 §6 r22 — CLAIMS HELD IN TWO PLACES AS AN IDENTICAL COPY, NOT A COLLISION (${copies.length}):`);
+  for (const c of copies) console.log(`     ${c.label} ${c.id} — byte-identical to ${c.ref}. Copied under r22; it stops being two once that branch merges or is deleted.`);
+}
+console.log(`  📋 §6 r22 — MIGRATION FILES ON A BRANCH AND NOT ON \`main\` (${migRows.length}):`);
+if (!migRows.length) console.log('     none.');
+for (const r of migRows) console.log(`     ${r.file} — ${r.refs.join(' · ')}`);
+console.log('     ⚠️ This cap CANNOT read the database, so it cannot say which of these are APPLIED LIVE —');
+console.log('        the case r22 exists for. It lists the population that case lives in; a live read decides.');
 console.log('  ℹ This sweep does NOT close the race (R-149): between it and your push, another session can take the id. RESERVE AND PUSH FIRST, then build.');
 
 if (staleHours !== null && staleHours > STALE_HOURS && STRICT) {
