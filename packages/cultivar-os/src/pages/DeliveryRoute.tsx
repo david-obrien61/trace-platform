@@ -455,7 +455,7 @@ export function DeliveryRoute() {
       .from('orders')
       .select(`
         id, created_at, notes,
-        customers ( first_name, last_name, phone, billing_line1, billing_city, billing_state, billing_zip ),
+        customers!orders_customer_id_fkey ( first_name, last_name, phone, billing_line1, billing_city, billing_state, billing_zip ),
         order_items ( description, sku, business_inventory ( name ) )
       `)
       .eq('business_id', businessId!)
