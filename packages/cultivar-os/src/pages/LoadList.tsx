@@ -48,10 +48,11 @@ import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readStops, type StopRow, type StopRead } from '../lib/stopRead';
-import { parseStopsParam, pickStops, stopsParamFor } from '../lib/loadListSubset';
+import { parseStopsParam, pickStops, stopsParamFor, groupStopsByTeam, sheetIsSectioned, type TeamSection } from '../lib/loadListSubset';
+import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
 import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
-import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem } from '../lib/loadList';
+import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem, type LoadStopInput } from '../lib/loadList';
 import { readLoadListSettings, type LoadListSettingsRead } from '../lib/loadListSettingsRead';
 
 const TRACE_LOADLIST = true; // [TRACE:LOADLIST] STD-003 — ON until David owner-proves
@@ -66,6 +67,10 @@ const PRINT_CSS = `
   body { background: #fff !important; }
   .sheet { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
   .ll-block { page-break-inside: avoid; }
+  /* 🔴 A TEAM'S SECTION STARTS ON ITS OWN PAGE (ledger #373) — a crew is handed ITS pages, and a
+     section that begins halfway down another team's sheet gets loaded onto the wrong trailer. */
+  .ll-team { page-break-before: always; }
+  .ll-team:first-of-type { page-break-before: auto; }
   .ll-headline { page-break-after: always; }
   /* The figures are REFERENCE, not load instructions — their own page, at the back (David, 2026-09-17). */
   .ll-figures { page-break-before: always; }
@@ -126,211 +131,54 @@ function ItemRow({ item }: { item: ResolvedLoadItem }) {
   );
 }
 
-export function LoadList() {
-  const [params, setParams] = useSearchParams();
-  const { businessId, business, can } = useBusinessContext();
-  const date = params.get('date') || todayYmd();
-  // 🔴 ONE SHEET PER CREW (ledger #354). `stops=` absent = the whole day; present = only those stops.
-  const stopsParam = params.get('stops');
-  const requested = useMemo(() => parseStopsParam(stopsParam), [stopsParam]);
+/**
+ * ── THE SHEET BODY — the bulk, the trees to pull, the stops, and the figures used. ───────────
+ *
+ * 🔴 EXTRACTED VERBATIM, NOT REWRITTEN (ledger #373, teams piece 4). This is the body the page has
+ *    always rendered, moved into a component so it can be rendered ONCE PER TEAM without a second
+ *    copy of it existing. A per-team sheet that re-stated any of this would be two representations
+ *    of one layout (STD-011) and the copy that drifts is always the one nobody prints.
+ * 🔴 IT TAKES A MODEL AND RENDERS IT — it does no arithmetic and reads no team. That is what makes a
+ *    section's totals correct by construction: the caller hands it `buildLoadList` over THAT team's
+ *    stops, so the allow-list and every roll-up rule are inherited rather than re-applied.
+ */
+/**
+ * One stop, as the load builder wants it.
+ *
+ * 🔴 ONE MAPPING, TWO CALLERS (§6 r8). The whole-day sheet and every per-team section build their
+ *    models from THIS function, so a team's section cannot describe a stop differently from the way
+ *    the day's sheet describes it. Two copies of this mapping is precisely how a per-crew sheet would
+ *    start quietly disagreeing with the day it came from.
+ */
+function loadInputFor(s: StopRow, dayRead: StopRead): LoadStopInput {
+  return {
+    stopId: s.id,
+    customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
+    address: shipToLine(s) || shipToLine(billingAsShipTo(s.customers)),
+    serviceType: s.service_type,
+    orderId: s.order_id,
+    canReadLines: dayRead.canReadLines,
+    linesRead: dayRead.linesRead,
+    items: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
+    // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
+    // `transport_method` is what says so; an absent value is never read as "install".
+    installs: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
+    // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
+    deerFence: null,
+  };
+}
 
-  // The day as read — every stop on the date, whatever this sheet carries.
-  const [dayRead, setDayRead] = useState<StopRead | null>(null);
-  const [settingsRead, setSettingsRead] = useState<LoadListSettingsRead | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!businessId) return;
-    setLoading(true);
-    const canReadLines = can('order_items:read');
-    const [res, sr] = await Promise.all([
-      readStops(supabase, businessId, { kind: 'day', date }, { readLines: canReadLines }),
-      readLoadListSettings(businessId),
-    ]);
-    setSettingsRead(sr);
-    if (!res.ok) { setError(res.error); setDayRead(null); setLoading(false); return; }
-    setError(null);
-    setDayRead(res.value);
-    setLoading(false);
-  }, [businessId, date, can]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  // Which of the day's stops this sheet carries. Ticking re-picks from the day already read — no re-fetch.
-  const pick = useMemo(() => (dayRead ? pickStops(dayRead.stops, requested) : null), [dayRead, requested]);
-  // The day's stops as read — kept only to say whether the stops on this sheet were planned (ledger #351).
-  const stopsRead: StopRow[] | null = pick ? pick.kept : null;
-
-  // 🔴 ONLY THE KEPT STOPS REACH THE MODEL. `buildLoadList` is pure over its input, so every total on
-  // a crew's sheet is for that crew's stops, and the day's totals are never computed for it.
-  const model = useMemo<LoadListModel | null>(() => {
-    if (!dayRead || !pick || !settingsRead) return null;
-    return buildLoadList(date, pick.kept.map(s => ({
-      stopId: s.id,
-      customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
-      address: shipToLine(s) || shipToLine(billingAsShipTo(s.customers)),
-      serviceType: s.service_type,
-      orderId: s.order_id,
-      canReadLines: dayRead.canReadLines,
-      linesRead: dayRead.linesRead,
-      items: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
-      // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
-      // `transport_method` is what says so; an absent value is never read as "install".
-      installs: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
-      // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
-      deerFence: null,
-    })), settingsRead.settings);
-  }, [dayRead, pick, settingsRead, date]);
-
-  useEffect(() => {
-    if (!TRACE_LOADLIST || !model || !pick || !settingsRead) return;
-    console.log('[TRACE:LOADLIST] built', {
-      date, stops: model.stopCount, trees: model.treeCount, mixYards: model.mixYards,
-      tPosts: model.tPosts, ropeFeet: model.ropeFeet, floors: model.totalsAreFloors,
-      bubblers: model.bubblers, waterMonitors: model.waterMonitors, installTrees: model.installTreeCount,
-      unresolved: model.unresolved.length, unreadStops: model.unreadStops,
-      offLadderTrees: model.offLadderTreeCount, noVolumeRows: model.noVolumeTrees.length,
-      deerFenceUnknownStops: model.deerFenceUnknownStops, sizes: settingsRead.sizes, figures: settingsRead.figures,
-      valuesUsed: model.valuesUsed,
-      subset: pick.isSubset, dayStops: pick.kept.length + pick.leftOff.length,
-      leftOff: pick.leftOff.length, unknownIds: pick.unknown.length,
-    });
-  }, [model, pick, settingsRead, date]);
-
-  /** Tick or untick one stop. All ticked drops `stops=` — the whole day, the same sheet as before. */
-  function toggleStop(id: string) {
-    if (!dayRead) return;
-    const dayIds = dayRead.stops.map(s => s.id);
-    const ticked = new Set(pick ? pick.kept.map(s => s.id) : dayIds);
-    if (ticked.has(id)) ticked.delete(id); else ticked.add(id);
-    const value = stopsParamFor(dayIds, ticked);
-    if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] stops ticked', { date, ticked: ticked.size, of: dayIds.length });
-    setParams(value === null ? { date } : { date, stops: value });
-  }
-  const dayStopCount = pick ? pick.kept.length + pick.leftOff.length : 0;
-  const planNo = useMemo(() => new Map((pick?.kept ?? []).map(s => [s.id, s.route_position ?? null])), [pick]);
-
+function SheetBody({ model, planNo, isSubset, settingsRead }: {
+  model: LoadListModel;
+  planNo: Map<string, number | null>;
+  isSubset: boolean;
+  // Where the per-tree figures came from — the same sentence on every section, because it is a fact
+  // about the NURSERY's settings, not about a team.
+  settingsRead: LoadListSettingsRead | null;
+}) {
+  const pick = { isSubset };
   return (
-    <div style={S.page}>
-      <style>{PRINT_CSS}</style>
-
-      <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 1rem',
-        display: 'flex', gap: '.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        <label style={{ fontWeight: 700 }}>
-          Delivery day{' '}
-          <input type="date" value={date} style={S.input}
-            onChange={e => setParams({ date: e.target.value })} />
-        </label>
-        <button type="button" style={S.btn} onClick={() => window.print()}
-          disabled={!model || model.stopCount === 0}>
-          <Printer size={18} /> {pick?.isSubset
-            ? `Print these ${model?.stopCount ?? 0} stop${model?.stopCount === 1 ? '' : 's'}`
-            : 'Print this day'}
-        </button>
-        {model && model.stopCount === 0 && !pick?.isSubset
-          ? <span style={{ color: '#666' }}>Nothing to print — no stops on this day.</span>
-          : null}
-      </div>
-
-      {/* 🔴 ONE SHEET PER CREW (ledger #354, David 2026-09-18: two crews Saturday). Tick the stops a
-          crew takes and print; tick the rest and print again. Screen only — never on the paper. */}
-      {dayRead && dayStopCount > 1 ? (
-        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 1rem', background: '#fff',
-          border: '1px solid #d6e3c4', borderRadius: 8, padding: '.75rem 1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
-            <strong>Stops on this sheet</strong>
-            <span style={{ color: '#444', fontSize: '.9rem' }}>
-              {LOAD_LIST_COPY.subsetHowTo}
-            </span>
-            {pick?.isSubset ? (
-              <button type="button" style={{ ...S.btn, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}` }}
-                onClick={() => setParams({ date })}>
-                Whole day
-              </button>
-            ) : null}
-          </div>
-          {dayRead.stops.map(s => {
-            const on = pick ? pick.kept.some(k => k.id === s.id) : true;
-            return (
-              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', minHeight: 48,
-                borderTop: '1px solid #eee', cursor: 'pointer' }}>
-                <input type="checkbox" checked={on} onChange={() => toggleStop(s.id)}
-                  style={{ width: 24, height: 24 }} />
-                <span>
-                  {s.route_position != null ? <strong>{s.route_position}. </strong> : null}
-                  {customerDisplayName(s.customers ?? {}, 'Customer')}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div style={S.sheet} className="sheet">
-        <h1 style={S.h1}>Load list — {longDate(date)}</h1>
-        {/* Stops print in the SAVED route order when there is one (ledger #351) — readStops orders
-            them — and the sheet says which, in the same words as the crew's phone. */}
-        {stopsRead && <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{routeOrderLine(dayRoutedAt(stopsRead), 'crew')}</p>}
-        <p style={{ margin: '.25rem 0 0', color: '#444' }}>
-          {business?.name ?? 'This business'}
-          {model ? <> · {model.stopCount} stop{model.stopCount === 1 ? '' : 's'}</> : null}
-          {model && pick?.isSubset ? <> {LOAD_LIST_COPY.subsetOfDay(dayStopCount)}</> : null}
-        </p>
-
-        {/* 🔴 A PARTIAL SHEET SAYS SO, AND NAMES WHAT IT DOES NOT CARRY (ledger #354). Every total on it
-            is for these stops only; the stops listed here are on another sheet — or on none, which is
-            exactly what laying the crews' sheets side by side should show. */}
-        {pick?.isSubset ? (
-          <div style={S.flag} className="ll-flag">
-            <strong>{LOAD_LIST_COPY.subsetHeading(model?.stopCount ?? 0, dayStopCount)}</strong>
-            <div style={S.note}>{LOAD_LIST_COPY.subsetTotalsNote}</div>
-            {pick.leftOff.length > 0 ? (
-              <div style={S.note}>
-                <strong>{LOAD_LIST_COPY.subsetLeftOffLabel}</strong>{' '}
-                {pick.leftOff.map(s => `${s.route_position != null ? `${s.route_position}. ` : ''}${customerDisplayName(s.customers ?? {}, 'Customer')}`).join(' · ')}
-              </div>
-            ) : null}
-            {pick.unknown.length > 0 ? (
-              <div style={S.note}><strong>{LOAD_LIST_COPY.subsetUnknown(pick.unknown.length)}</strong></div>
-            ) : null}
-          </div>
-        ) : null}
-        {model && pick?.isSubset && model.stopCount === 0 ? (
-          <p style={{ marginTop: '1rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.subsetNone}</p>
-        ) : null}
-
-        {loading ? <p style={{ marginTop: '2rem' }}>Loading the day…</p> : null}
-
-        {error ? (
-          <div style={S.flag} className="ll-flag">
-            <strong>Could not read this day.</strong>
-            <div style={S.note}>{error} — nothing below is a complete list. Reload before you load the trailer.</div>
-          </div>
-        ) : null}
-
-        {/* 🔴 THE SIZES' OWN TWO STATES (ledger #343) — above everything, because every tree below
-            depends on them. A failed read and "none set up" are different sentences. */}
-        {settingsRead?.sizes === 'failed' ? (
-          <div style={S.flag} className="ll-flag">
-            <strong><AlertTriangle size={16} /> Could not read container sizes.</strong>
-            <div style={S.note}>{LOAD_LIST_COPY.sizesFailed}</div>
-            {settingsRead.sizesMessage ? <div style={S.note}>{settingsRead.sizesMessage}</div> : null}
-          </div>
-        ) : null}
-        {settingsRead?.sizes === 'none' ? (
-          <div style={S.flag} className="ll-flag">
-            <strong><AlertTriangle size={16} /> No container sizes set up.</strong>
-            <div style={S.note}>{LOAD_LIST_COPY.sizesNone}</div>
-          </div>
-        ) : null}
-
-        {model && !loading && model.stopCount === 0 && !pick?.isSubset ? (
-          <p style={{ marginTop: '2rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.emptyDay}</p>
-        ) : null}
-
-        {model && model.stopCount > 0 ? (
-          <>
+    <>
             {/* ── THE HEADLINE. Consolidated, and it gets its own page. ───────────────── */}
             <div className="ll-headline">
               {model.unreadStops > 0 ? (
@@ -558,7 +406,274 @@ export function LoadList() {
               ))}
             </div>
 
-          </>
+    </>
+  );
+}
+
+export function LoadList() {
+  const [params, setParams] = useSearchParams();
+  const { businessId, business, can } = useBusinessContext();
+  const date = params.get('date') || todayYmd();
+  // 🔴 ONE SHEET PER CREW (ledger #354). `stops=` absent = the whole day; present = only those stops.
+  const stopsParam = params.get('stops');
+  const requested = useMemo(() => parseStopsParam(stopsParam), [stopsParam]);
+
+  // The day as read — every stop on the date, whatever this sheet carries.
+  const [dayRead, setDayRead] = useState<StopRead | null>(null);
+  // 🔴 NAMES ONLY (ledger #373). The stop carries `team_id`; the team's NAME lives in the team
+  // list, so the sheet reads it to LABEL a section. A failed team read never hides a stop — the
+  // sections are built from the stops themselves, and an unnamed team still prints its stops.
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [settingsRead, setSettingsRead] = useState<LoadListSettingsRead | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!businessId) return;
+    setLoading(true);
+    const canReadLines = can('order_items:read');
+    const [res, sr] = await Promise.all([
+      readStops(supabase, businessId, { kind: 'day', date }, { readLines: canReadLines }),
+      readLoadListSettings(businessId),
+    ]);
+    setSettingsRead(sr);
+    if (!res.ok) { setError(res.error); setDayRead(null); setLoading(false); return; }
+    setError(null);
+    setDayRead(res.value);
+    setLoading(false);
+  }, [businessId, date, can]);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!businessId) return;
+    void readTeams(supabase, businessId).then(r => { if (r.ok) setTeams(r.teams); });
+  }, [businessId]);
+
+  // Which of the day's stops this sheet carries. Ticking re-picks from the day already read — no re-fetch.
+  const pick = useMemo(() => (dayRead ? pickStops(dayRead.stops, requested) : null), [dayRead, requested]);
+  // The day's stops as read — kept only to say whether the stops on this sheet were planned (ledger #351).
+  const stopsRead: StopRow[] | null = pick ? pick.kept : null;
+
+  // 🔴 ONLY THE KEPT STOPS REACH THE MODEL. `buildLoadList` is pure over its input, so every total on
+  // a crew's sheet is for that crew's stops, and the day's totals are never computed for it.
+  const model = useMemo<LoadListModel | null>(() => {
+    if (!dayRead || !pick || !settingsRead) return null;
+    return buildLoadList(date, pick.kept.map(s => loadInputFor(s, dayRead)), settingsRead.settings);
+  }, [dayRead, pick, settingsRead, date]);
+
+  // 🔴 ONE SECTION PER TEAM (ledger #373, teams piece 4 — David, 2026-09-21). The stops this sheet
+  // CARRIES are grouped by the team that takes them, and each section's totals are `buildLoadList`
+  // over that section's stops — the same builder, so the allow-list and every roll-up rule are the
+  // ones the day's sheet already uses. Nothing here re-states a rule.
+  // ⚠️ A day where NOT ONE stop carries a team renders exactly as before: `sheetIsSectioned` is false
+  // and the page prints the single whole-day model, with no headers and no "No team" caption.
+  const sections = useMemo<TeamSection<StopRow>[]>(() => (pick ? groupStopsByTeam(pick.kept) : []), [pick]);
+  const sectioned = sheetIsSectioned(sections);
+  const sectionSheets = useMemo(() => {
+    if (!dayRead || !settingsRead || !sectioned) return null;
+    return sections.map(sec => ({
+      teamId: sec.teamId,
+      stopCount: sec.stops.length,
+      model: buildLoadList(date, sec.stops.map(s => loadInputFor(s, dayRead)), settingsRead.settings),
+    }));
+  }, [sections, sectioned, dayRead, settingsRead, date]);
+
+  useEffect(() => {
+    if (!TRACE_LOADLIST || !model || !pick || !settingsRead) return;
+    console.log('[TRACE:LOADLIST] built', {
+      date, stops: model.stopCount, trees: model.treeCount, mixYards: model.mixYards,
+      tPosts: model.tPosts, ropeFeet: model.ropeFeet, floors: model.totalsAreFloors,
+      bubblers: model.bubblers, waterMonitors: model.waterMonitors, installTrees: model.installTreeCount,
+      unresolved: model.unresolved.length, unreadStops: model.unreadStops,
+      offLadderTrees: model.offLadderTreeCount, noVolumeRows: model.noVolumeTrees.length,
+      deerFenceUnknownStops: model.deerFenceUnknownStops, sizes: settingsRead.sizes, figures: settingsRead.figures,
+      valuesUsed: model.valuesUsed,
+      subset: pick.isSubset, dayStops: pick.kept.length + pick.leftOff.length,
+      leftOff: pick.leftOff.length, unknownIds: pick.unknown.length,
+    });
+  }, [model, pick, settingsRead, date]);
+
+  // 🔴 STD-003, ON BY DEFAULT until David owner-proves CARDS 21-25. The emit names EVERY section and
+  // its stop count, and states the total, because the one defect worth catching here is a stop that
+  // is in no section — which is visible as sections summing to less than the sheet carries.
+  useEffect(() => {
+    if (!TRACE_LOADLIST || !sectionSheets || !model) return;
+    const counted = sectionSheets.reduce((n, x) => n + x.stopCount, 0);
+    console.log('[TRACE:LOADLIST] sections', {
+      date, sections: sectionSheets.length, sheetStops: model.stopCount, inSections: counted,
+      accountsForEveryStop: counted === model.stopCount,
+      each: sectionSheets.map(x => ({
+        team: x.teamId ?? 'no team', stops: x.stopCount,
+        trees: x.model.treeCount, tPosts: x.model.tPosts, mixYards: x.model.mixYards,
+      })),
+    });
+  }, [sectionSheets, model, date]);
+
+  /** Tick or untick one stop. All ticked drops `stops=` — the whole day, the same sheet as before. */
+  function toggleStop(id: string) {
+    if (!dayRead) return;
+    const dayIds = dayRead.stops.map(s => s.id);
+    const ticked = new Set(pick ? pick.kept.map(s => s.id) : dayIds);
+    if (ticked.has(id)) ticked.delete(id); else ticked.add(id);
+    const value = stopsParamFor(dayIds, ticked);
+    if (TRACE_LOADLIST) console.log('[TRACE:LOADLIST] stops ticked', { date, ticked: ticked.size, of: dayIds.length });
+    setParams(value === null ? { date } : { date, stops: value });
+  }
+  const dayStopCount = pick ? pick.kept.length + pick.leftOff.length : 0;
+  const planNo = useMemo(() => new Map((pick?.kept ?? []).map(s => [s.id, s.route_position ?? null])), [pick]);
+
+  return (
+    <div style={S.page}>
+      <style>{PRINT_CSS}</style>
+
+      <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 1rem',
+        display: 'flex', gap: '.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ fontWeight: 700 }}>
+          Delivery day{' '}
+          <input type="date" value={date} style={S.input}
+            onChange={e => setParams({ date: e.target.value })} />
+        </label>
+        <button type="button" style={S.btn} onClick={() => window.print()}
+          disabled={!model || model.stopCount === 0}>
+          <Printer size={18} /> {pick?.isSubset
+            ? `Print these ${model?.stopCount ?? 0} stop${model?.stopCount === 1 ? '' : 's'}`
+            : 'Print this day'}
+        </button>
+        {model && model.stopCount === 0 && !pick?.isSubset
+          ? <span style={{ color: '#666' }}>Nothing to print — no stops on this day.</span>
+          : null}
+      </div>
+
+      {/* 🔴 ONE SHEET PER CREW (ledger #354, David 2026-09-18: two crews Saturday). Tick the stops a
+          crew takes and print; tick the rest and print again. Screen only — never on the paper. */}
+      {dayRead && dayStopCount > 1 ? (
+        <div className="no-print" style={{ maxWidth: 800, margin: '0 auto 1rem', background: '#fff',
+          border: '1px solid #d6e3c4', borderRadius: 8, padding: '.75rem 1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+            <strong>Stops on this sheet</strong>
+            <span style={{ color: '#444', fontSize: '.9rem' }}>
+              {LOAD_LIST_COPY.subsetHowTo}
+            </span>
+            {pick?.isSubset ? (
+              <button type="button" style={{ ...S.btn, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}` }}
+                onClick={() => setParams({ date })}>
+                Whole day
+              </button>
+            ) : null}
+          </div>
+          {dayRead.stops.map(s => {
+            const on = pick ? pick.kept.some(k => k.id === s.id) : true;
+            return (
+              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', minHeight: 48,
+                borderTop: '1px solid #eee', cursor: 'pointer' }}>
+                <input type="checkbox" checked={on} onChange={() => toggleStop(s.id)}
+                  style={{ width: 24, height: 24 }} />
+                <span>
+                  {s.route_position != null ? <strong>{s.route_position}. </strong> : null}
+                  {customerDisplayName(s.customers ?? {}, 'Customer')}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div style={S.sheet} className="sheet">
+        <h1 style={S.h1}>Load list — {longDate(date)}</h1>
+        {/* Stops print in the SAVED route order when there is one (ledger #351) — readStops orders
+            them — and the sheet says which, in the same words as the crew's phone. */}
+        {stopsRead && <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{routeOrderLine(dayRoutedAt(stopsRead), 'crew')}</p>}
+        <p style={{ margin: '.25rem 0 0', color: '#444' }}>
+          {business?.name ?? 'This business'}
+          {model ? <> · {model.stopCount} stop{model.stopCount === 1 ? '' : 's'}</> : null}
+          {model && pick?.isSubset ? <> {LOAD_LIST_COPY.subsetOfDay(dayStopCount)}</> : null}
+        </p>
+
+        {/* 🔴 A PARTIAL SHEET SAYS SO, AND NAMES WHAT IT DOES NOT CARRY (ledger #354). Every total on it
+            is for these stops only; the stops listed here are on another sheet — or on none, which is
+            exactly what laying the crews' sheets side by side should show. */}
+        {pick?.isSubset ? (
+          <div style={S.flag} className="ll-flag">
+            <strong>{LOAD_LIST_COPY.subsetHeading(model?.stopCount ?? 0, dayStopCount)}</strong>
+            <div style={S.note}>{LOAD_LIST_COPY.subsetTotalsNote}</div>
+            {pick.leftOff.length > 0 ? (
+              <div style={S.note}>
+                <strong>{LOAD_LIST_COPY.subsetLeftOffLabel}</strong>{' '}
+                {pick.leftOff.map(s => `${s.route_position != null ? `${s.route_position}. ` : ''}${customerDisplayName(s.customers ?? {}, 'Customer')}`).join(' · ')}
+              </div>
+            ) : null}
+            {pick.unknown.length > 0 ? (
+              <div style={S.note}><strong>{LOAD_LIST_COPY.subsetUnknown(pick.unknown.length)}</strong></div>
+            ) : null}
+          </div>
+        ) : null}
+        {model && pick?.isSubset && model.stopCount === 0 ? (
+          <p style={{ marginTop: '1rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.subsetNone}</p>
+        ) : null}
+
+        {loading ? <p style={{ marginTop: '2rem' }}>Loading the day…</p> : null}
+
+        {error ? (
+          <div style={S.flag} className="ll-flag">
+            <strong>Could not read this day.</strong>
+            <div style={S.note}>{error} — nothing below is a complete list. Reload before you load the trailer.</div>
+          </div>
+        ) : null}
+
+        {/* 🔴 THE SIZES' OWN TWO STATES (ledger #343) — above everything, because every tree below
+            depends on them. A failed read and "none set up" are different sentences. */}
+        {settingsRead?.sizes === 'failed' ? (
+          <div style={S.flag} className="ll-flag">
+            <strong><AlertTriangle size={16} /> Could not read container sizes.</strong>
+            <div style={S.note}>{LOAD_LIST_COPY.sizesFailed}</div>
+            {settingsRead.sizesMessage ? <div style={S.note}>{settingsRead.sizesMessage}</div> : null}
+          </div>
+        ) : null}
+        {settingsRead?.sizes === 'none' ? (
+          <div style={S.flag} className="ll-flag">
+            <strong><AlertTriangle size={16} /> No container sizes set up.</strong>
+            <div style={S.note}>{LOAD_LIST_COPY.sizesNone}</div>
+          </div>
+        ) : null}
+
+        {model && !loading && model.stopCount === 0 && !pick?.isSubset ? (
+          <p style={{ marginTop: '2rem', fontSize: '1.1rem' }}>{LOAD_LIST_COPY.emptyDay}</p>
+        ) : null}
+
+        {/* 🔴 ONE SECTION PER TEAM (ledger #373, David 2026-09-21), or the sheet exactly as it was.
+            A day with no teams takes the `null` branch below and renders the single whole-day body —
+            the same component, the same model, the same paper. Nothing about a one-crew nursery's
+            sheet changes because teams exist. */}
+        {model && model.stopCount > 0 ? (
+          sectionSheets ? (
+            <>
+              {/* The sheet says up front how it is divided, so two crews' paper accounts for the day. */}
+              <div style={S.flag} className="ll-flag">
+                <strong>{LOAD_LIST_COPY.teamSectionsHeading(sectionSheets.length, model.stopCount)}</strong>
+                <div style={S.note}>{LOAD_LIST_COPY.teamSectionsNote}</div>
+              </div>
+              {sectionSheets.map(sec => (
+                <div key={sec.teamId ?? 'no-team'} className="ll-team">
+                  {/* 🔴 A SECTION IS NAMED, INCLUDING WHEN THE TEAM IS GONE. `teamLabel` says "No team",
+                      "(retired)" or "A team that is no longer listed" — never a blank heading, and never
+                      a silently missing section (D-9). The stops are here either way. */}
+                  <h2 style={{ ...S.h1, fontSize: '1.4rem', marginTop: '1.5rem',
+                    borderTop: `3px solid ${GREEN}`, paddingTop: '.75rem' }}>
+                    {teamLabel(teams, sec.teamId)} — {sec.stopCount} stop{sec.stopCount === 1 ? '' : 's'}
+                  </h2>
+                  {sec.teamId === null ? (
+                    <div style={S.flag} className="ll-flag">
+                      <strong>{LOAD_LIST_COPY.teamNoneHeading}</strong>
+                      <div style={S.note}>{LOAD_LIST_COPY.teamNoneNote}</div>
+                    </div>
+                  ) : null}
+                  <SheetBody model={sec.model} planNo={planNo} isSubset={!!pick?.isSubset} settingsRead={settingsRead} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <SheetBody model={model} planNo={planNo} isSubset={!!pick?.isSubset} settingsRead={settingsRead} />
+          )
         ) : null}
       </div>
     </div>

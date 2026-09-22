@@ -20,7 +20,7 @@ platform correct, and — the harder half — that **it never silently omits som
 compute.** David, 2026-09-12: *"Blank is indistinguishable from zero, and a yard person cannot tell
 the difference between 'no T-posts needed' and 'we could not work it out.'"*
 
-**Board: 0 of 20.** ✏️ **2026-09-20 (ledger #358): LAUREN PULLS BY VARIETY — the species roll-up is back, as "Trees to pull", between the bulk and the stops; the stops are the name check at staging (a tree's tag carries the customer's name). This REVERSES #355's one-line version.** ✏️ **2026-09-18 (ledger #355): the sheet reads the way the trailer is loaded — page 1 the date and the BULK (mix, T-posts, rope, bubblers, water monitor kits, trunk protection), the day's trees as ONE line ("29 trees across 8 stops"), then the stops from page 2. CARDS 1, 5, 6, 7, 13 and 19 are reworded to the new layout; the numbers do not change.** ✏️ **2026-09-18 (ledger #354): CARD 20 added — one sheet per crew. The page changed, so CARDS 6 and 19, which David ran and PASSED on paper today on `f9f3b8a · prod`, are `owed` again; the whole-day sheet is built the same way and should read exactly as it did.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
+**Board: 0 of 25.** ✏️ **2026-09-21 (ledger #373): ONE SECTION PER TEAM — CARDS 21–25 added.** A split day prints one headed section per team, each with its own bulk, its own trees to pull and its own stops; the stops carrying NO team are a section of their own, LAST, never dropped. 🔴 **CARD 23 is the one that protects everybody else: a nursery that never splits a day must see the sheet exactly as it was** — no headings, no captions. The existing cards are NOT re-flipped: the sheet body was extracted into one component and rendered unchanged for an unsplit day, so nothing they describe moved. **Nothing is merged — David reviews on Test Dave's first.** ✏️ **2026-09-20 (ledger #358): LAUREN PULLS BY VARIETY — the species roll-up is back, as "Trees to pull", between the bulk and the stops; the stops are the name check at staging (a tree's tag carries the customer's name). This REVERSES #355's one-line version.** ✏️ **2026-09-18 (ledger #355): the sheet reads the way the trailer is loaded — page 1 the date and the BULK (mix, T-posts, rope, bubblers, water monitor kits, trunk protection), the day's trees as ONE line ("29 trees across 8 stops"), then the stops from page 2. CARDS 1, 5, 6, 7, 13 and 19 are reworded to the new layout; the numbers do not change.** ✏️ **2026-09-18 (ledger #354): CARD 20 added — one sheet per crew. The page changed, so CARDS 6 and 19, which David ran and PASSED on paper today on `f9f3b8a · prod`, are `owed` again; the whole-day sheet is built the same way and should read exactly as it did.** ✏️ **2026-09-17 (ledger #350): CARDS 3, 5, 12, 13, 15, 19 changed after David ran CARD 19 live — the sheet is an ALLOW-LIST.** CARD 5 is rewritten; all stay `owed`. Every card is `STATUS: owed` except **CARD 11**, which is `needs-test` with its
 reason stated. ✏️ **2026-09-16 (ledger #343): CARDS 1, 2, 3, 5 and 13 CHANGED and stay owed; CARDS 14–18
 are new.** The page now reads every size from the nursery's container ladder and every figure from
 Settings → Operations, and it prints the figures it used.
@@ -443,3 +443,76 @@ SIGNAL: `[TRACE:LOADLIST] settings read {figures: 'stored'}` for the STAFF login
   Tree Bubbler line is recognised and left off). Nothing reconciles the two — the billed line is now
   invisible on this sheet, so a mismatch between what was billed and what the sheet says to load is
   **uncovered here**, by David's own instruction.
+
+---
+
+# ONE SECTION PER TEAM (ledger #373, teams piece 4 — David, 2026-09-21)
+
+### CARD 21 — 🔴 A SPLIT DAY PRINTS ONE SECTION PER TEAM, AND THE SECTIONS ADD UP TO THE DAY
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #373 — one section per team, same allow-list and roll-up rules
+SIGNAL: `[TRACE:LOADLIST] sections` naming each team and its stop count
+
+On **Test Dave's**, with a day whose stops are assigned across **two teams** (assign them on the
+schedule or the route page first — that is piece 1, already live).
+1. Open the load list for that day.
+**PASS:** the sheet opens with *"This day is split across N sections"*, then one headed block per
+team — **the team's name and its stop count** — each with its own bulk totals, its own trees to
+pull, and only its own stops.
+**PASS:** the two sections' **T-posts add up to the day's T-posts**, and so do the mix gallons.
+Add them by hand off the paper; the arithmetic is the check.
+**🔴 FAIL if** a section shows the DAY's totals rather than its own — that is the defect this
+exists to prevent, and it is the one that puts a whole day's mix on one crew's trailer.
+**🔴 FAIL if** any stop on the day is missing from every section, or appears in two.
+
+### CARD 22 — 🔴 A STOP WITH NO TEAM IS A SECTION, NOT A SILENT OMISSION
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #373 — D-9/A9, absent is not empty
+SIGNAL: `[TRACE:LOADLIST] sections` showing a `null` team with its count
+
+With the same day, leave **one stop unassigned** to any team.
+**PASS:** a **last** section headed *"No team"* carries that stop, above the note *"Nobody has been
+given these yet, so they are listed last rather than left off."*
+**🔴 FAIL if** the unassigned stop is nowhere on the sheet. A stop left off every sheet is the real
+risk this whole feature is built around — it would be loaded by nobody.
+
+### CARD 23 — 🔴 A NURSERY THAT NEVER SPLITS A DAY SEES NO CHANGE AT ALL
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #373 — the unsplit day is untouched
+SIGNAL: `[TRACE:LOADLIST] built` with no `sections` line
+
+On a day where **not one stop carries a team** (any ordinary LAWNS day before teams are assigned).
+**PASS:** the sheet is **exactly the one it has always been** — no team headings, no "split across"
+line, no "No team" caption. One bulk block, one trees-to-pull, the stops.
+**🔴 FAIL if** a single-crew day grows a "No team" heading. A nursery that does not use teams must
+not be told about them on its paper.
+
+### CARD 24 — TICKING STOPS AND TEAMS COMPOSE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #373 — grouping runs on the stops the sheet carries
+SIGNAL: `[TRACE:LOADLIST] stops ticked` then the sections rebuilt
+
+On a two-team day, **untick** one of Team 2's stops, then print.
+**PASS:** the unticked stop is in **no section**, Team 2's section is one stop lighter, its totals
+drop accordingly, and the unticked stop appears in the existing *"not on this sheet"* list.
+**FAIL if** the unticked stop comes back because it shares a team with one still ticked.
+
+### CARD 25 — A RETIRED TEAM STILL CARRIES ITS STOPS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #373 + [[R-133]] — retire, never delete
+SIGNAL: —
+
+Assign a stop to a team, then **retire that team** in Settings → TEAMS, then open the load list.
+**PASS:** the section is still there, headed **"<name> (retired)"**, carrying its stop.
+**FAIL if** the stops vanish with the team — history must stay true, and the trailer still has to
+be loaded.

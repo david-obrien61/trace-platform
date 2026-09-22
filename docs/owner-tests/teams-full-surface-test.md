@@ -15,7 +15,7 @@
 **Tech debt this closes the first piece of:** **#345** — Saturday 2026-09-19, when routing Team 1's
 four stops wiped Team 2's order, because the day had one route and the platform had no teams.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 6 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–5 owed.**
+**Board: 1 of 14 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–13 owed.** ✏️ **2026-09-22 (ledger #375): THE DAY'S CAPACITY ESTIMATE — CARDS 6–9.** The day suggests one team or two, shows its working, and Lauren overrides it; the estimate is SNAPSHOT append-only with the settings it used. ✅ **`20260922c` IS APPLIED, and its append-only guarantee is PROVEN ON LIVE** — David ran the probe: rewrite refused, choice recorded once, second choice refused, delete refused. ✏️ **2026-09-22 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13.** Each team's stops under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is what [[R-169]] refuses. 🔴 **CARD 13 and CARD 9 are the two that protect everyone else:** an unsplit day must look exactly as it always did, and an unrouted day must read as a FLOOR rather than as zero drive time.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **five**
 paths and **nine** guards through the real entry points on the live schema, RLS on; deliberate breaks
 are caught by `scripts/sql-harness/teams-362.mutants.py`.
@@ -128,3 +128,117 @@ says so.
 rewritten by a decision made afterwards.
 
 5. Press **Bring back** on Team 2, and confirm it is offered on the dropdown again.
+
+---
+
+# THE SCHEDULE SPLIT BY TEAM (ledger #376, teams piece 5 — David, 2026-09-21)
+
+## CARD 10 — 🔴 THE SCHEDULE SHOWS EACH TEAM'S STOPS UNDER ITS OWN HEADING
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — the schedule split by team
+SIGNAL: `[TRACE:DELIVERY] route team — <date> <teamId> N stops` when the button is pressed
+
+On **Test Dave's**, a day whose stops are split across **Team 1** and **Team 2**.
+1. Open the delivery schedule.
+**PASS:** under that day, the stops appear under **one heading per team** — the team's name and its
+stop count — and each team's own stops sit beneath it.
+**PASS:** the stop counts add up to the day's stops. **No stop is under two headings, and none has
+vanished.** This is the same partition the load sheet uses, so the screen and the paper agree.
+**🔴 FAIL if** a stop appears twice, or is missing from every section.
+
+## CARD 11 — 🔴 "ROUTE THIS TEAM" HANDS THE ROUTE PAGE A SET IT CAN ACTUALLY ROUTE
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 + [[R-169]] — one team at a time
+SIGNAL: the route page header reads *"Routing <team> — one team at a time."*
+
+Press **Route this team** on Team 1's heading.
+**PASS:** the route page opens with **only Team 1's stops preselected**, and says which team it is
+routing.
+**🔴 FAIL if** it opens the whole day, or opens a set spanning two teams — R-169 refuses that, so
+the button would be handing the page a set that must fail.
+
+## CARD 12 — A SECTION WITH NO TEAM IS SHOWN, AND IS NOT OFFERED A ROUTE BUTTON
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — D-9, and no dead affordance
+SIGNAL: —
+
+Leave one stop unassigned to any team.
+**PASS:** a section carries it, headed **"No team"**, with the note *"Not assigned to a team yet —
+give these to a team before routing."* and **no Route this team button**.
+**🔴 FAIL if** the unassigned stop is missing from the schedule entirely.
+**🔴 FAIL if** it DOES get a Route button — routing a teamless set is precisely what R-169 refuses,
+so the control would exist only to fail (§1.6 item 5: no dead affordance).
+
+## CARD 13 — A DAY NOBODY HAS SPLIT LOOKS EXACTLY AS IT ALWAYS DID
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — the unsplit day is untouched
+SIGNAL: —
+
+Open a day where **no stop carries a team**.
+**PASS:** a **flat list of stop cards**, exactly as before — no headings, no counts, no "No team"
+caption, and the day's own **Route this day** button unchanged.
+**🔴 FAIL if** a single-crew day grows a "No team" heading. A nursery that does not use teams must
+not be told about them.
+# THE DAY'S CAPACITY ESTIMATE (ledger #375, teams piece 2.5 — David, 2026-09-21)
+
+⚠️ **All four cards need migration `20260922c_day_capacity_estimates.sql` applied first.** It is
+WRITTEN and HELD; its V-blocks were run in PGlite but **David applies it.** Until then the panel
+still shows the estimate and its working — only the **snapshot** is refused, and it says so.
+
+## CARD 6 — 🔴 THE ESTIMATE SUGGESTS, AND IT SHOWS ITS WORKING
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — suggest one team until the day exceeds X hours
+SIGNAL: `[TRACE:CAPACITY] snapshot { hours, suggested, threshold }`
+
+On **Test Dave's**, open a delivery day with stops on it → **Route**.
+**PASS:** a panel reads *"This day looks like N h — within/longer than X h, so one/two teams are
+suggested."* Open **How this was worked out**: it lists **stops, trees, container gallons, planting
+time, drive time, miles, the estimated day, and the X it was measured against** — and every line
+says where its number came from.
+**PASS:** the trees figure **matches the load list for the same day**. They are the same count from
+the same function; if they disagree, that is the defect.
+**🔴 FAIL if** any line shows a number with no explanation, or if gallons change the hours — gallons
+are shown as a load signal and are deliberately **not** multiplied into time.
+
+## CARD 7 — 🔴 LAUREN DECIDES, AND HER CHOICE IS RECORDED BESIDE THE SUGGESTION
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — *"if she says one team, that stands"*
+SIGNAL: `[TRACE:CAPACITY] choice recorded { chosenTeams }`
+
+On a day the estimate says needs **two** teams, press **One team**.
+**PASS:** the button takes, and the panel says *"Your choice is recorded — the suggestion was 2."*
+**PASS (the part that matters):** run this SQL and see **both numbers on one row** —
+```sql
+SELECT service_date, suggested_teams, chosen_teams, total_hours, threshold_hours
+  FROM public.delivery_day_estimates ORDER BY created_at DESC LIMIT 5;
+```
+**🔴 FAIL if** `suggested_teams` changed to match her choice. The disagreement between the rule and
+the person is the only evidence the rule was ever wrong — it must survive.
+
+## CARD 8 — 🔴 A SNAPSHOT IS NOT REWRITTEN WHEN A SETTING CHANGES
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — append-only, carries the settings it used
+SIGNAL: —
+
+1. Note the newest row's `threshold_hours` from the SQL in CARD 7.
+2. Settings → Operations → change **Second team above** from 7 to 9, Save.
+3. Re-run the SQL.
+**PASS:** the OLD row still reads **7**. A NEW estimate (after re-opening the route page) reads 9.
+**🔴 FAIL if** the old row now reads 9 — history that moves under you is not a record, and the whole
+point of the snapshot is gone.
+4. Belt and braces, paste this — **it must RAISE**, not succeed:
+```sql
+UPDATE public.delivery_day_estimates SET total_hours = 99
+ WHERE id = (SELECT id FROM public.delivery_day_estimates ORDER BY created_at DESC LIMIT 1);
+```
+
+## CARD 9 — AN UNROUTED DAY SAYS IT IS A FLOOR, NOT AN ESTIMATE
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #375 — unknown drive time is not zero drive time (D-9 / A9)
+SIGNAL: `[TRACE:CAPACITY] snapshot { driveKnown: false }`
+
+Open a day that has **not been routed yet**.
+**PASS:** drive time reads **"not known"** (never `0 h`), the headline says **"at least"**, and a
+note says the real day is longer.
+**🔴 FAIL if** an unrouted day shows `0 h` drive and therefore looks SHORTER than a routed one —
+that would suppress the two-team suggestion on exactly the days that most need it.
