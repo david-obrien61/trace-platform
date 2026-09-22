@@ -93,7 +93,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 **#379 — §6 r22 adopted; the guard; the stranded filings copied onto `main` (docs + one report-only cap)**
 - 🔴 **OPEN — `20260921e_day_capacity_estimates` IS APPLIED LIVE AND ON NO MERGED BRANCH.** `delivery_day_estimates` exists with 3 policies; the file is only on `origin/feat/capacity-estimate` (#375). Under the rule just adopted it lands on `main` today. Owner: ledger #379 · that session.
-- 🔴 **OPEN — `20260921_recipes_made_items` IS APPLIED AND ITS FILE ON `main` SAYS `NOT APPLIED`.** Not edited here (§6 r1): its owner or you corrects it. Owner: tech-debt #361.
+- ✅ **ANSWERED 2026-09-22 (ledger #380) — tech-debt #361 RESOLVED.** The #370 session, which owns the file, corrected the header: apply date, David's V1–V8 results, the SHA, and the fact that V3 refused with the WIPE GUARD's message rather than the CHECK's — so the identity CHECK is proven by the CORRECTED V3 in `20260921c`'s footer, not by V3. Comment only; the SQL is byte-identical and that is asserted, not promised. ⚠️ `20260921c` was checked too and needed nothing — its header already read `✅ APPLIED 2026-09-21 by David`.
 - 🟡 **OPEN — LEDGER 373–378 SIT ON FOUR ACTIVE BRANCHES.** Not copied, deliberately: they are in-flight reservations and a copy would hand that session a duplicate row. They land when those branches merge. Owner: ledger #379.
 - ✅ **ANSWERED 2026-09-22 — §6 r22 IS ADOPTED** word for word, citing the two 2026-09-21 breaches, and `verify:id-sweep` now reports stranded filings and branch-only migrations on every run.
 

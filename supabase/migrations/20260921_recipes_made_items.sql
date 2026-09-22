@@ -33,7 +33,23 @@
 -- (`packages/shared/src/costing/landedCost.ts`), both ways, and the chosen spread is recorded per
 -- link. A stored cost would be a number nobody could re-derive when a receipt is corrected.
 --
--- ⚠️ NOT APPLIED. Written, V-blocks run by Thunder against PGlite. David applies.
+-- ✅ APPLIED 2026-09-21 by David, on live. V1–V8 run as reported.
+--    SHA at apply: 0e6f3d6d90b6bd07aa2244a5c238aa96998eab65061ec63750aecd213cafe3b8
+--
+-- 🔴 V3 IS THE ONE WORTH READING, AND IT DID NOT PROVE WHAT IT CLAIMED. It refused — but with the
+--    WIPE GUARD's message, not the CHECK's. As written it picked any `business_inventory` row, and
+--    every live row came from a catalogue load, so `recipe_link_must_survive_a_wipe` fired FIRST and
+--    `item_recipes_one_identity` was never reached. A refusal from the wrong guard reads exactly
+--    like a pass — tech-debt #182's class, in this file's own V-block.
+--    A CORRECTED V3 is written in the footer of `20260921c_build_run_says_when_the_ledger_did_not_
+--    record.sql`; it makes a probe row carrying no `import_run_id`, so the guard has nothing to
+--    refuse and the CHECK is reached. **It was run and it refused on `item_recipes_one_identity`,
+--    which is the PASS.** So the identity CHECK IS proven — by the corrected probe, not by V3.
+--
+-- ✏️ THIS BLOCK REPLACES "⚠️ NOT APPLIED. Written, V-blocks run by Thunder against PGlite. David
+--    applies." — which sat on `main` for a day after the apply. Filed by another session as
+--    tech-debt #361 and corrected here. **COMMENT ONLY: not one byte of SQL is changed** (§6 r1 —
+--    an applied migration is append-only), and that is asserted below rather than promised.
 -- ══════════════════════════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════ §1 — THE FLAG THAT SAYS "WE MAKE THIS" ═══════════════════════════════
