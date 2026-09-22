@@ -91,6 +91,10 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🔴 **OPEN — CARD 17**: undo → import → Set with **no browser reload**. The panel must never show the pre-undo count. Owner: ledger #366.
 - ⚠️ **LEFT TO HISTORY ON DAVID'S INSTRUCTION — two stale `# Last updated:` lines in `built-inventory.md`** (line 45, 2026-09-09, another session's). Not markers, so the new cap is silent on them. Owner: HISTORY.
 
+**#376 — teams piece 5: the schedule split by team (MERGED to `main`)**
+- 🔴 **OPEN — CARDS 10–13 on the teams board.** One heading per team and the stop counts ADD UP to the day; Route this team preselects only that team; the **No team** section is visible and has NO Route button; an unsplit day is the flat list it always was. Test Dave's, not LAWNS. Owner: ledger #376.
+- ⚠️ **NOTED — card numbers 6–9 are skipped on purpose**, belonging to #375, so the two pieces could merge in either order without renumbering a card David may already have run. Owner: ledger #376.
+
 **#375 — teams piece 2.5: the day's capacity estimate (built, HELD, migration NOT APPLIED)**
 - ✅ **ANSWERED 2026-09-22 — `20260922c` IS APPLIED AND ON `main`.** A byte-identical copy is in David's `supabase/migrations/` folder, uncommitted there. Renamed from `20260921e` on his instruction 2026-09-22 (a new file takes today's date; `20260922`/`20260922b` were taken). V-blocks RUN in PGlite, re-run after the rename. **CARDS 6–9 on the teams board need it applied first.** Owner: ledger #375.
 - ✅ **ANSWERED 2026-09-22 — THE APPEND-ONLY GUARANTEE IS PROVEN ON LIVE.** David ran the probe: rewrite refused, choice recorded once, second choice refused, delete refused, probe row discarded. This is the STORAGE half; the SCREEN half is still owed below. Owner: ledger #375.

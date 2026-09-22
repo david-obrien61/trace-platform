@@ -15,7 +15,7 @@
 **Tech debt this closes the first piece of:** **#345** — Saturday 2026-09-19, when routing Team 1's
 four stops wiped Team 2's order, because the day had one route and the platform had no teams.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 6 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–5 owed.**
+**Board: 1 of 10 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–5 and 10–13 owed.** ✏️ **2026-09-21 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13 added.** Each team's stops sit under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is exactly what [[R-169]] refuses and a control that must fail is a dead affordance. **CARD 13 is the one that protects everyone else:** a day nobody has split is the flat list it always was. ⚠️ **CARD NUMBERS 6–9 ARE DELIBERATELY SKIPPED HERE — they belong to ledger #375 (the capacity estimate) on `feat/capacity-estimate`,** which is a separate held branch. Numbering around them rather than reusing them means the two branches can merge in either order without renumbering a card David may already have run. ⚠️ **This branch is based on `feat/load-list-per-team` (#373), not on `main`** — it reuses that branch's `groupStopsByTeam` rather than writing a second partition (§6 r8), so #373 merges first. **Nothing is merged.**
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **five**
 paths and **nine** guards through the real entry points on the live schema, RLS on; deliberate breaks
 are caught by `scripts/sql-harness/teams-362.mutants.py`.
@@ -128,3 +128,54 @@ says so.
 rewritten by a decision made afterwards.
 
 5. Press **Bring back** on Team 2, and confirm it is offered on the dropdown again.
+
+---
+
+# THE SCHEDULE SPLIT BY TEAM (ledger #376, teams piece 5 — David, 2026-09-21)
+
+## CARD 10 — 🔴 THE SCHEDULE SHOWS EACH TEAM'S STOPS UNDER ITS OWN HEADING
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — the schedule split by team
+SIGNAL: `[TRACE:DELIVERY] route team — <date> <teamId> N stops` when the button is pressed
+
+On **Test Dave's**, a day whose stops are split across **Team 1** and **Team 2**.
+1. Open the delivery schedule.
+**PASS:** under that day, the stops appear under **one heading per team** — the team's name and its
+stop count — and each team's own stops sit beneath it.
+**PASS:** the stop counts add up to the day's stops. **No stop is under two headings, and none has
+vanished.** This is the same partition the load sheet uses, so the screen and the paper agree.
+**🔴 FAIL if** a stop appears twice, or is missing from every section.
+
+## CARD 11 — 🔴 "ROUTE THIS TEAM" HANDS THE ROUTE PAGE A SET IT CAN ACTUALLY ROUTE
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 + [[R-169]] — one team at a time
+SIGNAL: the route page header reads *"Routing <team> — one team at a time."*
+
+Press **Route this team** on Team 1's heading.
+**PASS:** the route page opens with **only Team 1's stops preselected**, and says which team it is
+routing.
+**🔴 FAIL if** it opens the whole day, or opens a set spanning two teams — R-169 refuses that, so
+the button would be handing the page a set that must fail.
+
+## CARD 12 — A SECTION WITH NO TEAM IS SHOWN, AND IS NOT OFFERED A ROUTE BUTTON
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — D-9, and no dead affordance
+SIGNAL: —
+
+Leave one stop unassigned to any team.
+**PASS:** a section carries it, headed **"No team"**, with the note *"Not assigned to a team yet —
+give these to a team before routing."* and **no Route this team button**.
+**🔴 FAIL if** the unassigned stop is missing from the schedule entirely.
+**🔴 FAIL if** it DOES get a Route button — routing a teamless set is precisely what R-169 refuses,
+so the control would exist only to fail (§1.6 item 5: no dead affordance).
+
+## CARD 13 — A DAY NOBODY HAS SPLIT LOOKS EXACTLY AS IT ALWAYS DID
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #376 — the unsplit day is untouched
+SIGNAL: —
+
+Open a day where **no stop carries a team**.
+**PASS:** a **flat list of stop cards**, exactly as before — no headings, no counts, no "No team"
+caption, and the day's own **Route this day** button unchanged.
+**🔴 FAIL if** a single-crew day grows a "No team" heading. A nursery that does not use teams must
+not be told about them.
