@@ -95,7 +95,7 @@ export async function snapshotEstimate(
     const code = (error as { code?: string }).code ?? 'error';
     if (TRACE_CAPACITY) console.log('[TRACE:CAPACITY] snapshot failed', { code, message: error.message });
     if (code === '42P01' || code === 'PGRST205') {
-      return { ok: false, code: 'needs_migration', message: 'The day estimate needs the database update (20260921e) — it has not been applied yet.' };
+      return { ok: false, code: 'needs_migration', message: 'The day estimate needs the database update (20260922c) — it has not been applied yet.' };
     }
     return { ok: false, code, message: error.message };
   }
@@ -112,7 +112,7 @@ export async function snapshotEstimate(
  * 🔴 IT DOES NOT OVERWRITE THE SUGGESTION. David: *"Lauren decides — if she says one team, that
  *    stands."* Both numbers stay side by side, because where the rule and the person DISAGREED is
  *    exactly the evidence anyone tuning X would need, and overwriting would erase it. The database
- *    enforces this too (20260921e's trigger), so no writer can forget.
+ *    enforces this too (20260922c's trigger), so no writer can forget.
  */
 export async function recordTeamChoice(
   db: SupabaseClient, estimateId: string, chosenTeams: number,

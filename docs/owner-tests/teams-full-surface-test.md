@@ -181,7 +181,7 @@ caption, and the day's own **Route this day** button unchanged.
 not be told about them.
 # THE DAY'S CAPACITY ESTIMATE (ledger #375, teams piece 2.5 — David, 2026-09-21)
 
-⚠️ **All four cards need migration `20260921e_day_capacity_estimates.sql` applied first.** It is
+⚠️ **All four cards need migration `20260922c_day_capacity_estimates.sql` applied first.** It is
 WRITTEN and HELD; its V-blocks were run in PGlite but **David applies it.** Until then the panel
 still shows the estimate and its working — only the **snapshot** is refused, and it says so.
 
