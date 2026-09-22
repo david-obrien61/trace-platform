@@ -2,6 +2,15 @@
 -- 20260921c_build_run_says_when_the_ledger_did_not_record — TEST MODE MUST NOT LOOK LIKE SUCCESS
 -- Ledger #370 · follows 20260921_recipes_made_items.sql (APPLIED 2026-09-21). ⚠️ NAMED 'c': HISTORY applied its own 20260921b (capture re-link) the same day.
 --
+-- ✅ APPLIED 2026-09-21 by David. W1 refused with not_a_member · W2 has_recorded/has_test_mode both
+--    true · W3 qbo_writes_enabled false (so a build run here reports ledger_recorded false and
+--    test_mode true, and the screen must say so) · and the CORRECTED V3 in this file's footer
+--    refused on item_recipes_one_identity — reaching the CHECK that 20260921's own V3 could not,
+--    because the wipe guard fired first on every imported row.
+-- ⚠️ HEADER-ONLY EDIT, ON DAVID'S INSTRUCTION (2026-09-21). §6 r1 says migrations are append-only;
+--    no SQL changed here, only this note, so what ran and what this file says still match. The
+--    copy in David's own folder predates this note and is otherwise identical.
+--
 -- 🔴 WHAT THIS FIXES, FOUND AFTER THE APPLY AND MEASURED, NOT SUPPOSED. `record_build_run` reported
 -- `ok: true` and moved quantities whether or not the movement was RECORDED. On this tenant that is
 -- not hypothetical: LAWNS is in TEST MODE right now (`businesses.qbo_writes_enabled = false`,
