@@ -92,7 +92,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - ⚠️ **LEFT TO HISTORY ON DAVID'S INSTRUCTION — two stale `# Last updated:` lines in `built-inventory.md`** (line 45, 2026-09-09, another session's). Not markers, so the new cap is silent on them. Owner: HISTORY.
 
 **#379 — §6 r22 adopted; the guard; the stranded filings copied onto `main` (docs + one report-only cap)**
-- 🔴 **OPEN — `20260921e_day_capacity_estimates` IS APPLIED LIVE AND ON NO MERGED BRANCH.** `delivery_day_estimates` exists with 3 policies; the file is only on `origin/feat/capacity-estimate` (#375). Under the rule just adopted it lands on `main` today. Owner: ledger #379 · that session.
+- ✅ **CLOSED 2026-09-22 — `20260922c_day_capacity_estimates.sql` IS NOW ON `main`.** ⚠️ It was filed under the name `20260922c` (filed that day as `20260921e`); renamed on David's instruction because a new file takes the day it was written, and `20260922`/`20260922b` were taken. WAS: `delivery_day_estimates` exists with 3 policies; the file is only on `origin/feat/capacity-estimate` (#375). Under the rule just adopted it lands on `main` today. Owner: ledger #379 · that session.
 - 🔴 **OPEN — `20260921_recipes_made_items` IS APPLIED AND ITS FILE ON `main` SAYS `NOT APPLIED`.** Not edited here (§6 r1): its owner or you corrects it. Owner: tech-debt #361.
 - 🟡 **OPEN — LEDGER 373–378 SIT ON FOUR ACTIVE BRANCHES.** Not copied, deliberately: they are in-flight reservations and a copy would hand that session a duplicate row. They land when those branches merge. Owner: ledger #379.
 - ✅ **ANSWERED 2026-09-22 — §6 r22 IS ADOPTED** word for word, citing the two 2026-09-21 breaches, and `verify:id-sweep` now reports stranded filings and branch-only migrations on every run.
