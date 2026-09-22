@@ -203,7 +203,16 @@ export async function readHistoryLoadState(db: any, businessId: string): Promise
   const page = async (table: string, select: string, filter: (q: any) => any) => {
     const rows: any[] = [];
     for (let from = 0; ; from += 1000) {
-      let q = db.from(table).select(select).eq('business_id', businessId).range(from, from + 999);
+      // 🔴 `.order('id')` IS REQUIRED, NOT TIDINESS. A `.range()` with NO ORDER BY is worse than
+      // an unstable one: Postgres guarantees NOTHING about row order between two queries, so a
+      // page boundary can repeat a row or skip it outright. Measured clean on LAWNS today, which
+      // is luck — heap order happens to be stable on an untouched table and stops being so after
+      // any UPDATE, VACUUM or plan change. A SKIPPED row here is the dangerous one: it drops an
+      // existing `qb_invoice_id` from `existingQbInvoiceIds`, and the import would then try to
+      // write that invoice a SECOND time. (`uidx_orders_business_qb_invoice` refuses it, so the
+      // index is what has been protecting this — not the read.)
+      let q = db.from(table).select(select).eq('business_id', businessId)
+        .order('id', { ascending: true }).range(from, from + 999);
       q = filter(q);
       const { data, error } = await q;
       if (error) throw new Error(`Could not read ${table}: ${error.message}`);

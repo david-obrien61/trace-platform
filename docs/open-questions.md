@@ -129,6 +129,14 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 **#358 — the species roll-up is the pick list (build, BUILDER-COMPLETE)**
 - ✅ **ANSWERED 2026-09-20 — LAUREN PULLS BY VARIETY.** The roll-up stays, as the pull list; the stops are the tag-name check. Reverses #355's one-line version.
 - 🟡 **OPEN — CAN ANYTHING HOLD THE TAG NAME AGAINST AN ORDER LINE?** Reported: nothing today. Committed stock is already derived from open orders (D-52). Owner: ledger #358 / `user_stories.md` *"A plant sold isn't a plant gone"*.
+**#377 — the customer list: pagination without a total order (fix + new cap, not merged at time of writing)**
+- 🔴 **OPEN — CHECK `highland`, `dubec`, `chatfield`, AND THE INVENTORY LIST** once the stamp moves. Owner: ledger #377.
+- 🔴 **OPEN — THE ROSTER HAS BEEN SILENTLY MISSING ~36 CUSTOMERS**, not only duplicating them. A row dropped at a page boundary is invisible: nothing on the screen or in the log said so. Whether anything downstream acted on the short list is unmeasured. Owner: ledger #377.
+- 🟡 **OPEN — A NEW DEPENDENCY IS YOUR CALL: jsdom + a render library.** The test that would have caught this in seconds — render 2,005 rows, type `highland`, assert exactly the matching rows and no repeated key — cannot be written today; the repo has no React render harness and all 132 test files are pure-logic scripts. Owner: tech-debt #359.
+- ⚠️ **NOTED — `historyLoad` was the dangerous one.** A skipped row drops an existing `qb_invoice_id`, and the import would write that invoice a second time; `uidx_orders_business_qb_invoice` is what has been protecting it, not the read. Fixed, and recorded because the index was load-bearing without anyone deciding it should be.
+- ⚠️ **NOTED — #371's speed fix stays OUT tonight.** It is cleared by measurement (the live bundle carried none of it while the fault persisted), but it is not a second change to this screen before 08:00.
+
+
 **#359 — three history-import rulings; the /orders defect did not exist (docs + rulings, no app code)**
 - 🔴 **OPEN — `20260908_books_report_runs.sql` IS APPLIED LIVE AND ITS SOURCE IS ON NO MERGED BRANCH.** Absent from `origin/main`; held by `origin/chore/books-report-runs-migration` and `origin/thunder/findings-report`; staged uncommitted in David's checkout. Land it on `main` as a docs-only commit, or merge one of the two. Owner: ledger #359.
 - 🔴 **OPEN — WEBHOOKS VERSUS POLLING**, held open deliberately by [[R-166]] and not to be answered by picking a default in code. Owner: `docs/RULINGS.md` R-166.

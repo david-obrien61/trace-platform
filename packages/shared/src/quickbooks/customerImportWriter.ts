@@ -230,6 +230,10 @@ async function existingQbIds(db: DbLike, businessId: string): Promise<Set<string
       .select('qb_customer_id')
       .eq('business_id', businessId)
       .not('qb_customer_id', 'is', null)
+      // `.order('id')` — a paged read with no ORDER BY can repeat or skip a row at a page
+      // boundary (see historyLoad.ts). A skipped qb_customer_id here makes the importer think a
+      // customer is new and insert a DUPLICATE of somebody the tenant already holds.
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`could not read existing customer ids: ${error.message}`);
     const rows = (data ?? []) as { qb_customer_id: string | null }[];
@@ -538,6 +542,7 @@ export async function undoCustomerImport(
     const { data, error } = await db.from('customers')
       .select('id, display_name')
       .eq('business_id', businessId).eq('import_run_id', runId)
+      .order('id', { ascending: true })
       .range(from, from + 999);
     if (error) throw new Error(`could not read this run's customers: ${error.message}`);
     const rows = (data ?? []) as { id: string; display_name: string | null }[];

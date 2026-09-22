@@ -197,7 +197,11 @@ export async function commitCaptureRelink(
     const rows: any[] = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await filter(
-        db.from(table).select(select).eq('business_id', businessId).range(from, from + 999));
+        // `.order('id')` — see historyLoad.ts: a paged read with no ORDER BY can repeat or skip a
+        // row at a page boundary. A skipped customer here makes a capture report `no-customer-row`
+        // when its customer exists; a skipped order makes it look un-linked.
+        db.from(table).select(select).eq('business_id', businessId)
+          .order('id', { ascending: true }).range(from, from + 999));
       if (error) throw new Error(`Could not read ${table}: ${error.message}`);
       rows.push(...(data ?? []));
       if ((data ?? []).length < 1000) break;
