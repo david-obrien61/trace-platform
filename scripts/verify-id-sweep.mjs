@@ -207,6 +207,33 @@ export function migrationsNotOnMain(refs, mainFiles) {
     .sort((a, b) => a.file.localeCompare(b.file));
 }
 
+// PURE — the TEXT of one claim, so a COPY can be told from a RIVAL. §6 r22 says a stranded filing is
+// copied onto `main` verbatim; the moment you do that, the id is claimed in two places and this cap
+// called it a COLLISION — which would make r22's own instruction unfollowable while the gate is green.
+// A copy and a rival look identical at the level of "an id in two files"; they differ in the TEXT.
+// A table row is its line; a `## #N` heading is its whole section, because an identical heading over
+// a different body is a DIFFERENT filing and must still collide.
+export function claimText(src, cfg, id) {
+  const lines = src.split('\n');
+  const heading = new RegExp(`^#{2,4} #${id}\\b`);
+  const tableRow = new RegExp(`^\\| (?:⏳ )?(?:\\*\\*#)?${id}(?:\\*\\*)? \\|`);
+  const ledgerRow = new RegExp(`^\\| (?:⏳ )?\\*\\*#${id}\\b`);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (heading.test(lines[i])) {
+      const sec = [lines[i]];
+      for (let j = i + 1; j < lines.length && !/^#{2,4} #\d+\b/.test(lines[j]); j++) sec.push(lines[j]);
+      out.push(sec.join('\n').trimEnd());
+    } else if (ledgerRow.test(lines[i]) || tableRow.test(lines[i])) {
+      out.push(lines[i].trimEnd());
+    }
+  }
+  return out.length ? out.join('\n').trim() : null;
+}
+
+// PURE — is this id the SAME filing in both places, or two different ones wearing one number?
+export const isCopyNotRival = (mineText, theirText) => !!mineText && !!theirText && mineText === theirText;
+
 // ── the cap's own probes (STD-022): each matcher shown refusing a crafted violation ──
 if (SELF_TEST) {
   const ok = (c, m) => { if (!c) { console.error('CAP PROBE FAILED: ' + m); process.exit(2); } };
@@ -295,6 +322,21 @@ if (SELF_TEST) {
   // a file on TWO branches is ONE row naming both, not two rows — the reader needs the holders.
   const two = migrationsNotOnMain([{ ref: 'origin/b', files: ['m.sql'] }, { ref: 'origin/a', files: ['m.sql'] }], new Set());
   ok(two.length === 1 && two[0].refs.join(',') === 'origin/a,origin/b', 'a migration on two branches was not reported as one row naming both');
+
+  // ══ COPY vs RIVAL (§6 r22, ledger #379). r22 says copy a stranded filing onto `main` verbatim —
+  // which claims the id twice. If that read as a collision, following r22 would break this gate. ══
+  const LED = '| **#337** | the undo refuses | x |\n| **#336** | other | y |\n';
+  ok(claimText(LED, SPACES.ledger, 337) === '| **#337** | the undo refuses | x |', 'claimText did not return the ledger row');
+  ok(isCopyNotRival(claimText(LED, SPACES.ledger, 337), claimText(LED, SPACES.ledger, 337)), 'an identical row read as a RIVAL — r22 copies would fail the gate');
+  ok(!isCopyNotRival(claimText(LED, SPACES.ledger, 337), claimText('| **#337** | a DIFFERENT filing | z |\n', SPACES.ledger, 337)), 'two DIFFERENT filings under one id were excused as a copy — the collision this cap exists for');
+  ok(!isCopyNotRival(claimText(LED, SPACES.ledger, 337), null), 'a missing claim on the other side read as a copy');
+  // a heading is its WHOLE SECTION: same heading, different body is a different filing.
+  const secA = '## #307 — a thing\nbody one\n\n## #308 — next\n';
+  const secB = '## #307 — a thing\nbody TWO\n\n## #308 — next\n';
+  ok(claimText(secA, SPACES.techdebt, 307).includes('body one'), 'claimText read a heading without its body');
+  ok(!claimText(secA, SPACES.techdebt, 307).includes('#308'), 'claimText ran past the next heading');
+  ok(isCopyNotRival(claimText(secA, SPACES.techdebt, 307), claimText(secA, SPACES.techdebt, 307)), 'an identical tech-debt section read as a rival');
+  ok(!isCopyNotRival(claimText(secA, SPACES.techdebt, 307), claimText(secB, SPACES.techdebt, 307)), 'same heading over a DIFFERENT body was excused as a copy');
 
   console.log('SELF-TEST — every matcher refused its violation and accepted its clean input, and the');
   console.log('            POPULATION probes (P1-P5, tech-debt #286) refused a filtered sweep, and the two');
@@ -413,7 +455,7 @@ const subjectIdsOf = (ref) => {
   return subjCache.get(ref);
 };
 
-const fail = [], lines = [];
+const fail = [], lines = [], copies = [];
 
 for (const [space, cfg] of Object.entries(SPACES)) {
   const localSrc = existsSync(cfg.file) ? readFileSync(cfg.file, 'utf8') : '';
@@ -452,7 +494,11 @@ for (const [space, cfg] of Object.entries(SPACES)) {
       if (fileIds.has(id)) {
         // A FILE claim is inherited iff it was already in the file at our shared history.
         const inherited = idsAtBase(mergeBaseOf(ref), space, cfg).has(id);
-        held.push({ id, ref, inherited, via: 'row' });
+        // …or it is the SAME filing, copied here verbatim under §6 r22. Byte-identical text is a
+        // COPY; the same number over different text is the rival this cap exists to catch.
+        const copied = !inherited && isCopyNotRival(claimText(localSrc, cfg, id), claimText(src, cfg, id));
+        if (copied) copies.push({ id, ref, label: cfg.label });
+        held.push({ id, ref, inherited: inherited || copied, via: 'row' });
       } else if (subjIds.has(id)) {
         // A SUBJECT claim is inherited iff the claiming COMMIT is reachable from HEAD. Exact, and
         // it is the test the old lineage filter was approximating with a whole-branch guess.
@@ -525,6 +571,10 @@ console.log('');
 console.log(`  📋 §6 r22 — FILINGS STRANDED OFF \`main\` (a register id on a branch idle > ${IDLE_WINDOW_H}h and absent from main):`);
 if (!strandedRows.length) console.log('     none — every register id on every idle branch is also on main.');
 for (const r of strandedRows) console.log(`     ${r.ref} (idle ${r.idleHours.toFixed(0)}h) — ${r.ids.join(' · ')}`);
+if (copies.length) {
+  console.log(`  📋 §6 r22 — CLAIMS HELD IN TWO PLACES AS AN IDENTICAL COPY, NOT A COLLISION (${copies.length}):`);
+  for (const c of copies) console.log(`     ${c.label} ${c.id} — byte-identical to ${c.ref}. Copied under r22; it stops being two once that branch merges or is deleted.`);
+}
 console.log(`  📋 §6 r22 — MIGRATION FILES ON A BRANCH AND NOT ON \`main\` (${migRows.length}):`);
 if (!migRows.length) console.log('     none.');
 for (const r of migRows) console.log(`     ${r.file} — ${r.refs.join(' · ')}`);
