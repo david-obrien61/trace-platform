@@ -15,7 +15,9 @@
  *     --bundle --platform=node --format=cjs | node
  */
 import {
-  COMPONENT_PURCHASE_LINK_FIELDS, ITEM_RECIPE_FIELDS, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_FIELDS,
+  COMPONENT_PURCHASE_LINK_FIELDS, COMPONENT_PURCHASE_LINK_SELECT, ITEM_RECIPE_FIELDS,
+  ITEM_RECIPE_SELECT, MATCH_RECEIPT_REGISTRY, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_FIELDS,
+  RECIPE_COMPONENT_SELECT, SELECT_OMISSIONS, sel,
 } from './recipeFields';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -301,6 +303,30 @@ function spm(): RecipeDraft {
     ok(invented.length === 0,
       `🔴 H2 (${table}): and the registry claims NO column the migration never creates — invented: ${invented.join(', ') || 'none'}`);
   }
+}
+
+// ══ §I EACH SELECT LITERAL EQUALS WHAT THE REGISTRY DERIVES ═══════════════════════════════════
+// 🔴 WHY THE LITERAL EXISTS AT ALL, since the registry could produce it: supabase-js parses the
+// select string AT THE TYPE LEVEL. A computed string collapses the returned row to
+// `GenericStringError` — deriving these took tsc from 4 errors to 31, every one a row whose fields
+// had become unreadable. So the literal ships and this section is what stops it drifting: the
+// derivation is the SPECIFICATION, the literal is the artefact, and they are compared every run.
+{
+  const pairs: Array<[string, string, readonly string[], readonly string[]]> = [
+    ['item_recipes', ITEM_RECIPE_SELECT, ITEM_RECIPE_FIELDS, SELECT_OMISSIONS.itemRecipe],
+    ['recipe_components', RECIPE_COMPONENT_SELECT, RECIPE_COMPONENT_FIELDS, SELECT_OMISSIONS.recipeComponent],
+    ['component_purchase_links', COMPONENT_PURCHASE_LINK_SELECT, COMPONENT_PURCHASE_LINK_FIELDS, SELECT_OMISSIONS.componentPurchaseLink],
+    ['receipts (narrowed)', MATCH_RECEIPT_SELECT, MATCH_RECEIPT_REGISTRY, SELECT_OMISSIONS.matchReceipt],
+  ];
+  for (const [name, literal, fields, omit] of pairs) {
+    const derived = sel(fields, omit);
+    ok(literal === derived,
+      `🔴 I1 (${name}): the select LITERAL equals what the registry derives.\n        literal: ${literal}\n        derived: ${derived}`);
+  }
+  // A negative control on the comparison itself: if `sel` ignored its omissions, every pair above
+  // would still have to disagree. This asserts the comparison has teeth before trusting its greens.
+  ok(sel(ITEM_RECIPE_FIELDS, ['business_id']) !== sel(ITEM_RECIPE_FIELDS),
+    'I2 NEGATIVE CONTROL: `sel` actually drops what it is told to — otherwise I1 compares two identical derivations and cannot fail');
 }
 
 console.log(`\nrecipeDraft + surfaces: ${passed} passed, ${failed} failed`);

@@ -54,25 +54,47 @@ const MATCH_RECEIPT_FIELDS = [
   'id', 'vendor', 'date', 'amount', 'receipt_number', 'created_at', 'line_items',
 ] as const;
 
-const sel = (fields: readonly string[], omit: readonly string[] = []): string =>
+/**
+ * 🔴 THE SELECTS BELOW ARE LITERALS, AND THAT IS FORCED BY THE CLIENT, NOT A PREFERENCE.
+ * supabase-js parses the select string AT THE TYPE LEVEL to infer the returned row. Hand it a
+ * computed string and the type collapses to `GenericStringError` — the first version of this file
+ * derived them with `.filter().join()` and took tsc from 4 errors to 31, every one of them a row
+ * whose fields had become unreadable. So the literal is what ships.
+ *
+ * ⚠️ WHICH RE-OPENS THE DRIFT THIS FILE EXISTS TO CLOSE — a literal can disagree with the registry
+ * above it. It cannot disagree SILENTLY: `sel()` is exported and `recipeDraft.test.ts` asserts each
+ * literal equals what the registry derives, so a column added to a list and not to its select fails
+ * the build. The derivation is the SPECIFICATION; the literal is the artefact it is checked against.
+ */
+export const sel = (fields: readonly string[], omit: readonly string[] = []): string =>
   fields.filter(f => !omit.includes(f)).join(', ');
+
+/** What each select omits, beside its literal — the probe's other half. */
+export const SELECT_OMISSIONS = {
+  itemRecipe: ['business_id', 'created_at', 'updated_at'],
+  recipeComponent: ['note', 'created_at', 'updated_at'],
+  componentPurchaseLink: ['id', 'business_id', 'matched_description', 'vendor_id', 'confirmed_by', 'confirmed_at', 'created_at'],
+  matchReceipt: [] as string[],
+} as const;
 
 /**
  * The recipe row as the modal reads it. `business_id` is omitted because the query already filters
  * on it — reading a value back to confirm the filter you just applied is noise, not evidence.
  */
-export const ITEM_RECIPE_SELECT = sel(ITEM_RECIPE_FIELDS, ['business_id', 'created_at', 'updated_at']);
+export const ITEM_RECIPE_SELECT =
+  'id, qb_item_id, inventory_id, yield_quantity, yield_unit, build_minutes, build_minutes_because, notes';
 
 /** The components, in the order they were typed. */
-export const RECIPE_COMPONENT_SELECT = sel(RECIPE_COMPONENT_FIELDS, ['note', 'created_at', 'updated_at']);
+export const RECIPE_COMPONENT_SELECT =
+  'id, recipe_id, position, name, quantity, unit, component_qb_item_id, component_inventory_id';
 
 /**
  * The confirmed purchase behind a component.
  * ⚠️ The LANDED figures are deliberately absent from this table and so from this list: they are
  * recomputed from the receipt at read time, so a corrected receipt corrects every recipe reading it.
  */
-export const COMPONENT_PURCHASE_LINK_SELECT = sel(COMPONENT_PURCHASE_LINK_FIELDS,
-  ['id', 'business_id', 'matched_description', 'vendor_id', 'confirmed_by', 'confirmed_at', 'created_at']);
+export const COMPONENT_PURCHASE_LINK_SELECT =
+  'component_id, receipt_id, document_key, receipt_line_index, pack_size, pack_unit, line_unit_price, purchased_on, freight_spread';
 
 /**
  * The receipts the matcher reads.
@@ -80,4 +102,7 @@ export const COMPONENT_PURCHASE_LINK_SELECT = sel(COMPONENT_PURCHASE_LINK_FIELDS
  * `image_url` are NOT here. A matcher reads lines, not photographs, and pulling the OCR blob for
  * every receipt to rank one component against them is a cost with no reader.
  */
-export const MATCH_RECEIPT_SELECT = sel(MATCH_RECEIPT_FIELDS);
+export const MATCH_RECEIPT_SELECT = 'id, vendor, date, amount, receipt_number, created_at, line_items';
+
+/** Exported for the probe only — it is the registry half of the `MATCH_RECEIPT_SELECT` check. */
+export const MATCH_RECEIPT_REGISTRY = MATCH_RECEIPT_FIELDS;
