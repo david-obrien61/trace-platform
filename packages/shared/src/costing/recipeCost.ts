@@ -113,6 +113,14 @@ export function convertQuantity(
 
 /** What a confirmed purchase says about one component — both spreads, as `landedCost` produces them. */
 export interface ComponentPurchase {
+  /**
+   * 🔴 WHERE THE PRICE CAME FROM (David, 2026-09-22): *"No receipt → a typed price flagged 'no
+   * receipt', never zero."* A typed price is a legitimate answer — somebody knows what a bag costs
+   * and no photograph of the invoice exists — but it is NOT the same kind of fact as a landed cost
+   * off a receipt, and a screen that shows them identically is hiding which is which.
+   * Absent means `'receipt'`, because every purchase that existed before this field was one.
+   */
+  source?: 'receipt' | 'typed';
   /** Landed cost of ONE pack, freight split evenly across the receipt's goods lines. */
   landedPackCostEqualPerItem: number | null;
   /** Landed cost of ONE pack, freight in proportion to line value. */
@@ -189,6 +197,10 @@ export interface CostedComponent {
   refusal: string | null;
   vendor: string | null;
   purchasedOn: string | null;
+  /** `'receipt'` · `'typed'` · null when it has no price at all. */
+  priceSource: 'receipt' | 'typed' | null;
+  /** The flag a screen prints beside a typed price. Null for a receipt-backed one. */
+  priceFlag: string | null;
 }
 
 export interface RecipeCostResult {
@@ -226,6 +238,13 @@ export interface RecipeCostResult {
   incomplete: boolean;
   /** What is missing, by name, for the sentence on screen. */
   missing: string[];
+  /**
+   * Components priced from a TYPED figure rather than a receipt. NOT missing — they have a cost —
+   * but a screen must say so, and a report built on them must carry the caveat up with it.
+   */
+  typedPrices: string[];
+  /** The sentence for those, or '' when every price came off a receipt. */
+  typedPricesNote: string;
   /** The sentence itself — empty when nothing is missing. */
   incompleteNote: string;
   spread: 'equal_per_item' | 'pro_rata_by_value';
@@ -261,6 +280,9 @@ export function costRecipeBatch(input: RecipeCostInput): RecipeCostResult {
       name: c.name, quantity: c.quantity, unit: c.unit,
       cost: null, costOtherSpread: null, unitCost: null, refusal: null,
       vendor: c.purchase?.vendor ?? null, purchasedOn: c.purchase?.purchasedOn ?? null,
+      priceSource: c.purchase == null ? null : (c.purchase.source ?? 'receipt'),
+      priceFlag: c.purchase?.source === 'typed'
+        ? 'no receipt — this price was typed in, not read off an invoice' : null,
     };
     if (!c.purchase) {
       return { ...base, refusal: `${c.name} is on no purchase we hold, so it has no cost yet.` };
@@ -373,6 +395,7 @@ export function costRecipeBatch(input: RecipeCostInput): RecipeCostResult {
   }
 
   const missing: string[] = components.filter(c => c.cost == null).map(c => c.name);
+  const typedPrices = components.filter(c => c.cost != null && c.priceSource === 'typed').map(c => c.name);
   if (minutes != null && rates.length === 0) missing.push('labour');
   const incomplete = missing.length > 0;
 
@@ -388,8 +411,13 @@ export function costRecipeBatch(input: RecipeCostInput): RecipeCostResult {
     `This total is incomplete — ${missing.length === 1 ? 'one part is' : `${missing.length} parts are`} missing: ${missing.join(', ')}. `
     + 'What is shown is only what we could cost.';
 
+  const typedPricesNote = typedPrices.length === 0 ? '' :
+    `${typedPrices.length === 1 ? 'One price was' : `${typedPrices.length} prices were`} typed in rather than read off a receipt: `
+    + `${typedPrices.join(', ')}. Capture the invoice and the figure corrects itself.`;
+
   return {
     components, materials, materialsOtherSpread: materialsOther,
+    typedPrices, typedPricesNote,
     labour, labourNote, buildMinutes: minutes, buildMinutesMeasured,
     looseVolumeCubicYards: looseVolume == null ? null : round2(looseVolume),
     volumeComponents, weightComponents,

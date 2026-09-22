@@ -234,5 +234,33 @@ const SPM: RecipeComponentInput[] = [
   ok(approx(2.25) === '2.3' || approx(2.25) === '2.2', 'H4b: …to one decimal, whichever way the half rounds');
 }
 
+
+// ══ §I A TYPED PRICE IS ALLOWED, FLAGGED, AND NEVER ZERO (David, 2026-09-22) ══════════════════
+{
+  const typed = costRecipeBatch({ ops: OPS, components: [
+    { name: 'Shook Out Brown', quantity: 2, unit: 'yd',
+      purchase: { landedPackCostEqualPerItem: 30.88, landedPackCostProRataByValue: 30.88, packSize: 1, packUnit: 'yd' } },
+    { name: 'MicroMax', quantity: 2, unit: 'lb', purchase: {
+      landedPackCostEqualPerItem: 60, landedPackCostProRataByValue: 60, packSize: 50, packUnit: 'lb', source: 'typed' } },
+  ] });
+  const micro = typed.components.find(c => c.name === 'MicroMax')!;
+  ok(micro.cost === 2.4,
+    `🔴 I1: a TYPED price costs the component — 2 lb off a $60 50 lb bag is $2.40, not nothing (got ${micro.cost})`);
+  ok(micro.priceSource === 'typed' && /no receipt/.test(micro.priceFlag ?? ''),
+    `🔴 I2: …and it is FLAGGED "no receipt", so a reader can see which figures were typed (got ${micro.priceFlag})`);
+  ok(!typed.missing.includes('MicroMax'),
+    'I3: a typed price is NOT a gap — it has a cost, which is the whole point of allowing it');
+  ok(typed.typedPrices.length === 1 && /Capture the invoice/.test(typed.typedPricesNote),
+    `🔴 I4: the batch names every typed price in one sentence, so the caveat travels UP with the figure (got "${typed.typedPricesNote}")`);
+
+  const bark = typed.components.find(c => c.name === 'Shook Out Brown')!;
+  ok(bark.priceSource === 'receipt' && bark.priceFlag === null,
+    'I5: a receipt-backed price carries NO flag — otherwise the flag means nothing');
+
+  const none = costRecipeBatch({ ops: OPS, components: [{ name: 'MicroMax', quantity: 2, unit: 'lb', purchase: null }] });
+  ok(none.components[0].cost === null && none.components[0].priceSource === null,
+    '🔴 I6: no purchase AND no typed price is still NO cost — "never zero" does not mean "invent one"');
+}
+
 console.log(`\nrecipeCost: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }
