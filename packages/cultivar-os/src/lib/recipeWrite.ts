@@ -28,7 +28,8 @@ import { draftToComponentRows, draftToRecipeRow, NOT_TIMED, type ComponentDraft,
 import type { CapturedReceipt } from '@trace/shared/costing/receiptMatch';
 import { persistInventoryPatch } from '../components/inventory/inventoryEdit';
 import {
-  COMPONENT_PURCHASE_LINK_SELECT, ITEM_RECIPE_SELECT, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_SELECT,
+  COMPONENT_PURCHASE_LINK_SELECT, ITEM_RECIPE_SELECT, MATCH_RECEIPT_SELECT, PRODUCT_PICK_SELECT,
+  RECIPE_COMPONENT_SELECT,
 } from './recipeFields';
 
 const TRACE = true; // [TRACE:RECIPE] STD-003 — ON until David owner-proves
@@ -309,11 +310,6 @@ export async function componentIdsByPosition(recipeId: string): Promise<Map<numb
  * ⚠️ RETIRED ROWS ARE EXCLUDED. A retired row still RESOLVES for history (R-133) but must never be
  * OFFERED as the thing a future build consumes.
  */
-// Not exported, and asserted by PARSING this line — the same treatment as the matcher's receipt
-// select, and for the same two reasons: nothing outside this file reads it, and importing anything
-// from here drags in the Supabase client (tech-debt #134's seam). `business_inventory` owns its
-// field declaration elsewhere (`BASE_COLS`); this is a narrowed read of it, not a second registry.
-const PRODUCT_PICK_SELECT = 'id, name, sku, qb_item_name, qb_item_id, size, qty';
 
 export interface PickableProduct {
   inventoryId: string;

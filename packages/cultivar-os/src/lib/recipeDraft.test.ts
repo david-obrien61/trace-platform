@@ -16,8 +16,8 @@
  */
 import {
   COMPONENT_PURCHASE_LINK_FIELDS, COMPONENT_PURCHASE_LINK_SELECT, ITEM_RECIPE_FIELDS,
-  ITEM_RECIPE_SELECT, MATCH_RECEIPT_REGISTRY, MATCH_RECEIPT_SELECT, RECIPE_COMPONENT_FIELDS,
-  RECIPE_COMPONENT_SELECT, SELECT_OMISSIONS, sel,
+  ITEM_RECIPE_SELECT, MATCH_RECEIPT_REGISTRY, MATCH_RECEIPT_SELECT, PRODUCT_PICK_SELECT,
+  RECIPE_COMPONENT_FIELDS, RECIPE_COMPONENT_SELECT, SELECT_OMISSIONS, sel,
 } from './recipeFields';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -367,9 +367,10 @@ function spm(): RecipeDraft {
     '🔴 G5f: …and this file never WRITES that table directly — a forked writer is how two paths come to disagree');
   ok(/\.select\(PRODUCT_PICK_SELECT\)/.test(CODE(WRITE)),
     'G5h: …while the item PICKER reads it, which is what lets a build run consume shelf stock at all');
-  // The picker's column list, parsed — every column it shows a person before they link a product.
-  const pick = (WRITE.match(/PRODUCT_PICK_SELECT = '([^']+)'/) ?? [])[1] ?? '';
-  const pickCols = pick.split(',').map(c => c.trim());
+  // The picker's column list. IMPORTED now, not parsed — it moved into the pure registry, which is
+  // the only place that satisfies knip and verify:field-lists at once (see recipeFields.ts).
+  const pickCols = PRODUCT_PICK_SELECT.split(',').map(c => c.trim());
+  const pick = PRODUCT_PICK_SELECT;
   ok(['id', 'name', 'qb_item_id', 'qty'].every(c => pickCols.includes(c)),
     `🔴 G5i: the picker reads the identity it links on and the stock it would consume (got ${pick || 'no list found'})`);
   ok(!pickCols.includes('unit_cost') && !pickCols.includes('sell_price'),

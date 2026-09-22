@@ -22,7 +22,7 @@
 //
 // DEPENDENCIES: none. Pure strings — importable from a probe without dragging in a database client.
 // OUTPUTS:      ITEM_RECIPE_FIELDS · RECIPE_COMPONENT_FIELDS · COMPONENT_PURCHASE_LINK_FIELDS,
-//               and the four selects derived from them. `MATCH_RECEIPT_FIELDS` is NOT exported —
+//               and the five selects derived from them. `MATCH_RECEIPT_FIELDS` is NOT exported —
 //               `receipts` owns its declaration elsewhere and this is a narrowed read of it.
 // ============================================================
 
@@ -107,6 +107,23 @@ export const COMPONENT_PURCHASE_LINK_SELECT =
  * every receipt to rank one component against them is a cost with no reader.
  */
 export const MATCH_RECEIPT_SELECT = 'id, vendor, date, amount, receipt_number, created_at, line_items';
+
+/**
+ * The item picker's read of `business_inventory` (ledger #370, ④).
+ *
+ * 🔴 IT LIVES HERE BECAUSE TWO CAPS PULL IN OPPOSITE DIRECTIONS, AND THIS IS THE ONLY SHAPE THAT
+ * SATISFIES BOTH. Declared and exported but unimported, `knip` calls it an unused export. Declared
+ * as a plain `const` inside `recipeWrite.ts`, `verify:field-lists` calls it a new hand-written
+ * enumeration on `business_inventory` — I made exactly that trade and it failed the build a second
+ * time, on the other cap. An IMPORTED constant is neither: the field cap treats it as derived, and
+ * knip sees it used. **Both caps are right; the resolution is where the constant lives.**
+ *
+ * ⚠️ `business_inventory` owns its field declaration elsewhere (`BASE_COLS` on the inventory grid).
+ * This is a NARROWED read of that table, not a second registry for it.
+ * 🔴 NO COST OR PRICE COLUMN. A picker that pulled `unit_cost` would hand the owner's cost basis to
+ * any member who can open the recipe modal — tech-debt #81's defect, fixed once on the grid.
+ */
+export const PRODUCT_PICK_SELECT = 'id, name, sku, qb_item_name, qb_item_id, size, qty';
 
 /** Exported for the probe only — it is the registry half of the `MATCH_RECEIPT_SELECT` check. */
 export const MATCH_RECEIPT_REGISTRY = MATCH_RECEIPT_FIELDS;
