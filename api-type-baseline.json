@@ -1,0 +1,23 @@
+{
+  "note": "Known api/ type errors, keyed on path::TScode::message. Fail-on-net-new. Tech-debt #77. Shrink only.",
+  "updated": "2026-09-22",
+  "count": 16,
+  "errors": [
+    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::TS2339::Property 'Customer' does not exist on type '{}'.",
+    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::TS2339::Property 'Customer' does not exist on type '{}'.",
+    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::TS2339::Property 'Customer' does not exist on type '{}'.",
+    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::TS2339::Property 'Invoice' does not exist on type '{}'.",
+    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::TS2339::Property 'QueryResponse' does not exist on type '{}'.",
+    "packages/cultivar-os/api/qbo/router.ts::TS18046::'tokens' is of type 'unknown'.",
+    "packages/cultivar-os/api/qbo/router.ts::TS18046::'tokens' is of type 'unknown'.",
+    "packages/cultivar-os/api/qbo/router.ts::TS18046::'tokens' is of type 'unknown'.",
+    "packages/cultivar-os/api/qbo/router.ts::TS18046::'tokens' is of type 'unknown'.",
+    "packages/cultivar-os/api/qbo/router.ts::TS2339::Property 'CompanyInfo' does not exist on type '{}'.",
+    "packages/cultivar-os/api/receipts/ocr.ts::TS18046::'data' is of type 'unknown'.",
+    "packages/cultivar-os/api/receipts/ocr.ts::TS2339::Property 'candidates' does not exist on type '{}'.",
+    "packages/shared/src/quickbooks/refresh.ts::TS18046::'data' is of type 'unknown'.",
+    "packages/shared/src/quickbooks/refresh.ts::TS18046::'data' is of type 'unknown'.",
+    "packages/shared/src/quickbooks/refresh.ts::TS18046::'data' is of type 'unknown'.",
+    "packages/shared/src/quickbooks/refresh.ts::TS18046::'data' is of type 'unknown'."
+  ]
+}

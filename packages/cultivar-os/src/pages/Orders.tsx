@@ -66,7 +66,7 @@ export function Orders() {
       .select(`
         id, created_at, total_amount, transport_method,
         leakage_flag, notes, status,
-        customers ( first_name, last_name, email ),
+        customers!orders_customer_id_fkey ( first_name, last_name, email ),
         order_items (
           quantity, business_inventory_id, description, sku,
           business_inventory ( name, size, sku )

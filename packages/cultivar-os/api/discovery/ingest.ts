@@ -5,9 +5,9 @@
 //   cost-apply). cost-apply WRITES protected financial data, so it is permission-gated.
 // DEPENDENCIES: @supabase/supabase-js (service key for writes, anon key for the
 //   caller permission check), shared discovery engine + costDiscovery, shared
-//   financialPermissions (VIEW_COSTS), shared notifications.
+//   permissionManifest, shared notifications.
 // OUTPUTS: JSON per action. cost-apply: writes business_inventory.unit_cost ONLY
-//   after the caller is proven to hold view_costs (MB_D-015 write-wall).
+//   after the caller is proven to hold costs:read (MB_D-015 write-wall).
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from '@supabase/supabase-js';
 import { fetchWebsiteContent } from '../../../shared/src/discovery/adapters/website';
@@ -19,9 +19,22 @@ import { reasonCostTurn, applyCostReasoning } from '../../../shared/src/discover
 import type { CostDiscoveryLine, CostAnswer, CostReasoning } from '../../../shared/src/discovery/costDiscovery';
 import { compareEnteredVsSite, type Discrepancy } from '../../../shared/src/discovery/compare';
 import { populateCatalog } from '../../../shared/src/discovery/populate';
-import { VIEW_COSTS } from '../../../shared/src/auth/permissionManifest';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import type { VerticalSchema, SilentPartnerAnalysis } from '../../../shared/src/discovery/types';
+
+// The cost-wall permission, named ONCE and used by BOTH the gate and the refusal it prints.
+//
+// 🔴 THEY DISAGREED, AND A REFUSAL NAMING A RETIRED STRING IS A WRONG ANSWER, NOT A TYPO —
+// found 2026-09-22 by the handler test, which asserted the refusal names the permission the gate
+// actually checked. The gate checked 'costs:read'; the message interpolated the legacy constant,
+// whose value is `'view_costs'` — listed under `legacy:` at `permissionManifest.ts:925`, with
+// 'costs:read' among its replacements. Since `20260910_permission_literal_merge.sql` made
+// `has_permission` test the array LITERALLY, with no alias expansion, that legacy string now
+// grants NOTHING to anyone — so a refused caller was being told to go and obtain a permission
+// that cannot open the door. D-9: a withheld action must announce a reason that is TRUE.
+//
+// Two spellings of one fact is STD-011, and the drift is the predictable cost. One constant.
+const COST_WALL_PERMISSION = 'costs:read';
 
 const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
   nursery: nurserySchema,
@@ -29,9 +42,27 @@ const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
 
 // WRITE-WALL gate (MB_D-015 — write-authority ≥ read-authority). The implementation lives in
 // the shared server-side gate module (one home, reused by the order CRUD handler too — CLAUDE.md
-// §6 rule 8); re-exported here so its importers (scripts/verify-write-wall.ts) and the cost-apply
-// call site below are unchanged.
-export { callerHoldsPermission } from '../../../shared/src/auth/callerPermission';
+// §6 rule 8).
+//
+// 🔴 IMPORTED **AND** RE-EXPORTED, AND THE TWO HALVES ARE NOT THE SAME THING — 2026-09-22.
+// This line read `export { callerHoldsPermission } from '...'` and its comment claimed that kept
+// both "its importers (scripts/verify-write-wall.ts) AND the cost-apply call site below"
+// unchanged. A bare re-export forwards the binding to IMPORTERS ONLY; it creates NO LOCAL
+// BINDING in this module. So the gate at the cost-apply branch below called an identifier that
+// did not exist here and threw `ReferenceError: callerHoldsPermission is not defined` on every
+// request — a 500 at try-depth 0, which failed CLOSED (the service-key write never ran) and is
+// the only reason this was a broken feature rather than a bypassed write-wall.
+//
+// It stayed green because nothing called the HANDLER: `scripts/verify-write-wall.ts:15` imports
+// this symbol FROM HERE — through the door the re-export does open — and `verify-universals.mjs`
+// cap7 greps the literal string `callerHoldsPermission(req`, which an undefined identifier
+// satisfies exactly as well as a defined one. `ingestCostApply.test.ts` now drives the default
+// export and asserts the service-key client is never constructed for a refused caller.
+//
+// The `import` is what the call site below needs; the `export` is what the importers need.
+// Removing either one breaks something, and neither substitutes for the other.
+import { callerHoldsPermission } from '../../../shared/src/auth/callerPermission';
+export { callerHoldsPermission };
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -71,13 +102,13 @@ export default async function handler(req: any, res: any) {
     if (!costLine?.id || !costLine?.businessId || !r) {
       return res.status(400).json({ error: 'line { id, businessId } and reasoning required' });
     }
-    // WRITE-WALL (MB_D-015): the caller must hold view_costs for THIS business, resolved from the
+    // WRITE-WALL (MB_D-015): the caller must hold costs:read for THIS business, resolved from the
     // auth context (never the body). The service-key write below runs ONLY after this gate passes —
     // closing the bypass where a service-key write tunneled under the cost-wall RLS.
-    const allowed = await callerHoldsPermission(req.headers?.authorization, costLine.businessId, 'costs:read');
+    const allowed = await callerHoldsPermission(req.headers?.authorization, costLine.businessId, COST_WALL_PERMISSION);
     if (!allowed) {
-      console.warn(`[TRACE:WRITEWALL] cost-apply REFUSED — caller lacks ${VIEW_COSTS} for business ${costLine.businessId}`);
-      return res.status(403).json({ ok: false, error: `forbidden: ${VIEW_COSTS} required` });
+      console.warn(`[TRACE:WRITEWALL] cost-apply REFUSED — caller lacks ${COST_WALL_PERMISSION} for business ${costLine.businessId}`);
+      return res.status(403).json({ ok: false, error: `forbidden: ${COST_WALL_PERMISSION} required` });
     }
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey  = process.env.SUPABASE_SERVICE_KEY;

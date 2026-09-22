@@ -80,6 +80,12 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 📏 FILED 2026-09-22 — #379 (`docs/r22-and-branch-sweep`) — **§6 r22: A FILING LANDS ON `main` THE SAME DAY, AND SO DOES AN APPLIED MIGRATION**
+
+- 🔴 **LIVE BREACH:** `delivery_day_estimates` is in the database while `20260922c` is only on `origin/feat/capacity-estimate` (#375).
+- 🔴 **tech-debt #361:** `20260921_recipes_made_items` is applied; its file on `main` still reads `NOT APPLIED` (not edited — §6 r1).
+- ✅ **Six stranded filings copied onto `main`** (ledger #284 · #319 · #334 · #337 · #340 · tech-debt #307). `npm run verify:id-sweep` now reports stranded ids and branch-only migrations, report-only.
+
 ### 🔴 FILED 2026-09-18 — #353 (`docs/hold-list-validation`) — **HOLD LIST CHECKED; FILINGS LIVE ONLY ON BRANCHES**
 
 - 🔴 **GO-LIVE, AFTER SATURDAY — tech-debt #342 / [[R-164]]:** the QuickBooks ingest infers install from the TC line; a delivery ↔ install control on the stop; every change recorded. Not built.

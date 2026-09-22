@@ -762,7 +762,7 @@ export async function pushQboInvoice(
     // Fetch order with customer
     const { data: order } = await db
       .from('orders')
-      .select('*, customers(*)')
+      .select('*, customers!orders_customer_id_fkey(*)')
       .eq('id', order_id)
       .single();
 
