@@ -629,6 +629,26 @@
         {
           "id": "route.unsplit-day-still-works",
           "what": "a business that has never split a day routes exactly as before — teams change nothing for it"
+        },
+        {
+          "id": "crew.link-shows-only-its-team",
+          "what": "a team's link shows that team's stops and no others; a stop with no team is not swept into it"
+        },
+        {
+          "id": "crew.link-cannot-act-on-another-teams-stop",
+          "what": "🔴 a team's token is REFUSED on another team's stop — the stop id travels in the request, so hiding it from the read is not enough"
+        },
+        {
+          "id": "crew.whole-day-link-unchanged",
+          "what": "a nursery that never splits a day keeps the link it always had, and it claims no team"
+        },
+        {
+          "id": "crew.one-live-link-per-team",
+          "what": "reissuing one team's link replaces only its own; another team does not lose its day"
+        },
+        {
+          "id": "crew.link-refuses-another-businesss-team",
+          "what": "a link cannot be minted against a team this business does not own (AC-3) — otherwise the read hands back an empty day that reads as 'nothing to do'"
         }
       ],
       "declared": []
