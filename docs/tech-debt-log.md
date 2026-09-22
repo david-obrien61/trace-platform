@@ -4723,7 +4723,27 @@ first paint, log it with the row count and whether the roster was served from th
 answer this question, and adopting it as though it did is the [[R-26]] shape — a written claim
 standing in for a measurement.
 
-**Blocker:** none. ① is a shared-grid change and wants its own build; ② is half a day.
+✏️ **2026-09-21, LATER — A THIRD ITEM, AND IT IS THE ONE THAT SHOULD HAVE EXISTED FIRST: A RENDER
+TEST.** Ledger #377 fixed a paging defect that presented as a broken search and a broken sort on
+`/customers` and cost most of an evening, including a revert of an innocent change (#371). **What
+would have caught it in seconds is a test that renders the grid with 2,005 rows, types `highland`,
+and asserts the rendered set is EXACTLY the matching rows with no repeated row key.** No such test
+exists, and none can today: **this repo has no React render harness at all** — no jsdom, no
+Testing Library, and every one of its 132 test files is a pure-logic script run by `tsx`.
+
+🔴 **THE MEASURED LESSON, WORTH MORE THAN THE FIX: I MEASURED THE READ AND NEVER ASSERTED THE
+RENDER.** #371 shipped with before/after timings on the live query, five mutants, and `verify` at
+exit 0 — and a screen that showed the wrong rows. Every probe I wrote was about the data going in.
+**The paging cap (`verify-stable-paging`) now guards the CAUSE, which is the durable half; a render
+test would guard the SYMPTOM, which is what a person actually sees.** Both are worth having, and
+the cause is the one that generalises.
+
+**What it needs:** jsdom + a render library as dev dependencies — **a new dependency, so David's
+call** (§6 r10: a standard is adopted on value for our scope, never because it is the standard).
+The value here is concrete rather than hypothetical: one evening lost, one good change reverted.
+
+**Blocker:** David's call on the dependency. ① is a shared-grid change and wants its own build; ②
+is half a day.
 
 ---
 

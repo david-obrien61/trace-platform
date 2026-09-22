@@ -148,7 +148,23 @@ export function Customers() {
       .from('customers')
       .select(cols, { count: 'exact' })
       .eq('business_id', businessId)
+      // 🔴 `id` IS A TIEBREAK, NOT A PREFERENCE — IT IS WHAT MAKES PAGING CORRECT.
+      // `created_at` IS NOT A TOTAL ORDER HERE. Measured 2026-09-21 on LAWNS: 2,005 customers
+      // across **46 distinct timestamps**, with **500 rows sharing a single microsecond** — the
+      // reload writes them in one burst. Postgres has no obligation to break a tie the same way
+      // twice, so two `.range()` calls can each return a row near the page boundary, or neither.
+      // MEASURED: `created_at.desc` alone fetched **2005 rows holding only 1969 distinct ids —
+      // 36 duplicated**, which also means ~36 customers were SILENTLY MISSING from the roster.
+      // With `id` appended: 2005 of 2005, stable across three consecutive runs.
+      //
+      // 🔴 AND THE SYMPTOM WAS NOT 'A DUPLICATE ROW', WHICH IS WHY IT COST A DAY. `getRowId` is
+      // `r.id`, so a duplicated id is a DUPLICATED REACT KEY, and React cannot diff a keyed list
+      // that has them. Searching `highland` shrank the list from 2,005 to 2 and left dozens of
+      // orphaned rows in the DOM — unsorted, repeated, not matching — while the count pill, a
+      // separate node reading `view.length`, correctly said 2. It reads as a broken filter and a
+      // broken sort; it is neither. `DataSheet`'s filter, sort and render are all correct.
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, from + PAGE - 1);
 
     // Which column set ANSWERED is remembered, so the remaining pages are read with the same one —
