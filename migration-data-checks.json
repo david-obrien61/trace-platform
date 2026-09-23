@@ -1,5 +1,5 @@
 {
- "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) \u00b7 invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) \u00b7 superseded (a later migration rewrote the same rows) \u00b7 unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
+ "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) · invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) · superseded (a later migration rewrote the same rows) · unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
  "checks": {
   "20260608_advert_channels_config.sql": {
    "kind": "evidence",
@@ -13,12 +13,12 @@
   },
   "20260614_cost_to_produce_trace_seed.sql": {
    "kind": "unverifiable",
-   "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists \u2014 its effect, if it ran, went with it",
+   "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists — its effect, if it ran, went with it",
    "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
   },
   "20260614_cost_to_produce_restore_truncated_lines.sql": {
    "kind": "unverifiable",
-   "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists \u2014 its effect, if it ran, went with it",
+   "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists — its effect, if it ran, went with it",
    "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
   },
   "20260727_align_floor_to_bundles.sql": {
@@ -36,7 +36,7 @@
   },
   "20260729_backfill_billing_from_legacy.sql": {
    "kind": "evidence",
-   "means": "\u270f\ufe0f ledger #346: the legacy column this backfill copied FROM is gone (20260915b, applied 2026-09-17), so the old invariant cannot be asked any more \u2014 and it had been false since 20260915 moved 475 phone-in-street values to the phone list. What stands is billing_* as the only address columns on customers",
+   "means": "✏️ ledger #346: the legacy column this backfill copied FROM is gone (20260915b, applied 2026-09-17), so the old invariant cannot be asked any more — and it had been false since 20260915 moved 475 phone-in-street values to the phone list. What stands is billing_* as the only address columns on customers",
    "sql": "(SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'address_line1') AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'billing_line1'))"
   },
   "20260730a_owner_holds_all_backfill.sql": {
@@ -72,12 +72,12 @@
   },
   "20260918a_clear_two_test_starts_lawns_saturday.sql": {
    "kind": "evidence",
-   "means": "it cleared the two TEST starts on LAWNS Saturday 2026-09-19 (Freehill, Sappal) and wrote one audit row per stop \u2014 the rows are its fingerprint (ledger #351, tech-debt #344)",
+   "means": "it cleared the two TEST starts on LAWNS Saturday 2026-09-19 (Freehill, Sappal) and wrote one audit row per stop — the rows are its fingerprint (ledger #351, tech-debt #344)",
    "sql": "(SELECT count(*) = 2 FROM audit_log WHERE action = 'crew_stop.test_start_cleared' AND detail->>'migration' = '20260918a')"
   },
   "20260918b_attribution_correction_test_taps.sql": {
    "kind": "evidence",
-   "means": "it recorded that the two crew taps typed 'Mauro' at 10:10 on 2026-09-18 were David testing, plus his test device \u2014 three append-only audit rows (ledger #351)",
+   "means": "it recorded that the two crew taps typed 'Mauro' at 10:10 on 2026-09-18 were David testing, plus his test device — three append-only audit rows (ledger #351)",
    "sql": "(SELECT count(*) = 3 FROM audit_log WHERE detail->>'migration' = '20260918b')"
   },
   "20260917a_keep_phone_notes_before_street_drop.sql": {
@@ -87,18 +87,23 @@
   },
   "20260915_backfill_legacy_customer_address.sql": {
    "kind": "evidence",
-   "means": "Paul (58e9e0f9\u2026) \u2014 the one real address whose state and ZIP were legacy-only \u2014 carries TX in billing_state. \u270f\ufe0f ledger #346: this check also required a ZIP; Paul never had one (corrected on CARD 3b 2026-09-17). Reads billing_* only, so it survives 20260915b dropping the legacy four",
+   "means": "Paul (58e9e0f9…) — the one real address whose state and ZIP were legacy-only — carries TX in billing_state. ✏️ ledger #346: this check also required a ZIP; Paul never had one (corrected on CARD 3b 2026-09-17). Reads billing_* only, so it survives 20260915b dropping the legacy four",
    "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX')"
   },
   "20260920_zero_seeded_qty_on_non_product_rows.sql": {
    "kind": "evidence",
-   "means": "the 44 non-product rows of run bffc7713 carry qty 0, and the 587 real products still hold the seeded 10 \u2014 the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
+   "means": "the 44 non-product rows of run bffc7713 carry qty 0, and the 587 real products still hold the seeded 10 — the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
    "sql": "(SELECT count(*) FILTER (WHERE qb_item_id IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 0) = 44 AND count(*) FILTER (WHERE qb_item_id NOT IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 10) = 587 FROM business_inventory WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9')"
   },
   "20260922b_not_stock_overrides_ship_empty.sql": {
    "kind": "evidence",
-   "means": "BOTH halves, because one file may carry one check and both are worth keeping: (1) none of the four rows 20260922 seeded for LAWNS remain \u2014 no migration-planted tenant data is left in the not-stock list; and (2) every active override still names the catalogue row its QuickBooks id points at, which is the check whose absence let 'Deposit' sit beside the id of 'Backyard Delivery'. Clause 2 holds vacuously while the list is empty and becomes load-bearing the moment an owner adds a row. \u26a0\ufe0f A row an OWNER adds is legitimate and breaks neither clause: clause 1 names the four seeded ids, not the table's emptiness.",
+   "means": "BOTH halves, because one file may carry one check and both are worth keeping: (1) none of the four rows 20260922 seeded for LAWNS remain — no migration-planted tenant data is left in the not-stock list; and (2) every active override still names the catalogue row its QuickBooks id points at, which is the check whose absence let 'Deposit' sit beside the id of 'Backyard Delivery'. Clause 2 holds vacuously while the list is empty and becomes load-bearing the moment an owner adds a row. ⚠️ A row an OWNER adds is legitimate and breaks neither clause: clause 1 names the four seeded ids, not the table's emptiness.",
    "sql": "(SELECT (SELECT count(*) = 0 FROM business_not_stock_items WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND qb_item_id IN ('603','1006','1007','1120')) AND (SELECT count(*) = 0 FROM business_not_stock_items o LEFT JOIN business_inventory i ON i.business_id = o.business_id AND i.qb_item_id = o.qb_item_id WHERE o.active AND (i.name IS NULL OR i.name NOT ILIKE '%' || o.item_name || '%')))"
+  },
+  "20260923c_manager_holds_order_discount_apply.sql": {
+   "kind": "evidence",
+   "means": "every MANAGER member row, and the system MANAGER floor, carries order_discount:apply — the two things this file UPDATEs. ledger #386, R-171 (a). ⚠️ It is `evidence` and not `invariant` because the floor could only have gained that string from this migration: before it, the floor held 25 strings without it (measured live 2026-09-23) and nothing else writes role_definitions",
+   "sql": "((SELECT bool_and(permissions ? 'order_discount:apply') FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true) AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'order_discount:apply')))"
   }
  }
 }
