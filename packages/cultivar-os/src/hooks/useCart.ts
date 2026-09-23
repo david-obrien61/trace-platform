@@ -146,7 +146,7 @@ export const useCart = create<CartStore>((set) => ({
               : sel
           );
       if (TRACE_CART) console.log('[TRACE:CART] transport branch', {
-        choice,
+        choice: `${choice.kind}:${choice.transportId}`,
         transport: selection.transport?.name ?? null,
         planting:  selection.planting?.name ?? null,
       });

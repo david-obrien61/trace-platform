@@ -4914,3 +4914,45 @@ it either way.
 
 **Owner:** David — whether `npm run verify` gains a step that starts red. **Blocks:** nothing today; it is the
 blind spot every future `api/` edit ships through.
+
+---
+
+## #363 — 🟡 LAUREN'S PRICE SHEET IS FIVE HARDCODED NUMBERS IN THE CONTAINER-SIZES EDITOR (NEW 2026-09-23, ledger #386 — filed by the build that created it, with its exit condition named)
+
+**What it is.** `SHEET_PRICE` in `packages/cultivar-os/src/components/settings/ContainerSizesSettings.tsx`:
+
+```ts
+const SHEET_PRICE: Record<string, number> = {
+  '15 gal': 150, '30 gal': 300, '45 gal': 450, '65 gal': 600, '95/100': 900,
+};
+```
+
+One tenant's install price list, in code that every tenant's Settings screen runs.
+
+**Why it exists.** David's ruling (b), 2026-09-23 ([[R-171]]): *"SEED FROM WHAT THEY ACTUALLY BILL …
+with Lauren's sheet shown BESIDE each rung and the gap named, for her to confirm or change."* The
+seeded prices come from LAWNS's own billed medians; her sheet is the thing they are compared
+against. Showing the gap is the deliverable, and the gap needs both numbers.
+
+🔴 **IT IS A COMPARISON, NEVER A PRICE — and that is what makes it LOW and not HIGH.** Nothing reads
+it to charge anybody: no checkout path, no migration, no seed, no export. It renders text beside an
+input. If it were deleted tomorrow the only loss would be the comparison.
+
+⚠️ **THE REAL DEFECT IS THE KEY, NOT THE VALUES.** It is keyed by **rung LABEL**, so it will render
+for any tenant whose ladder happens to use the strings `15 gal`, `30 gal`, `45 gal`, `65 gal` or
+`95/100` — which are not unusual labels. That is a coincidence waiting to happen: another grower
+would be shown *"Lauren's 2026-09-23 sheet says $300 for this size"* about their own business. **No
+other tenant has those labels today** (measured 2026-09-23: only LAWNS has a `container_ladder`),
+so it is latent rather than live.
+
+**The exit condition, and it is near.** It comes out the moment Lauren has confirmed or changed each
+of the five rungs, because the comparison has then done its job and **a stale sheet is worse than
+none**. If David wants the comparison to survive that, the durable form is a per-tenant
+`reference_price` column on the rung — a value, not a map in code (AC-1).
+
+**Registered:** `docs/decisions/HARDCODED-REGISTER.md` → *container sizes / Settings*, item **C1**,
+🟡 OPEN. **It caps the container-sizes capability at amber** (§6 r12), which costs nothing today —
+that board is already amber with 14 cards owed.
+
+**Trigger for repair:** Lauren's first pass over the five rungs, OR a second tenant gaining a
+`container_ladder` — whichever comes first. The second is the one that turns it from untidy to wrong.

@@ -14,7 +14,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveTransportRoles, availableChoices, choiceToSelection } from './transport';
+import { resolveTransportRoles, availableChoices, choiceToSelection, choiceMeta } from './transport';
 import type { ServiceOffering } from '../types/plant';
 
 let passed = 0, failed = 0;
@@ -42,16 +42,18 @@ const TRIP_CHARGE = row({ name: 'Trip Charge', transport_mode: null, price_type:
 // ── §A — a correctly bound set resolves every branch, and names nothing as unbound ───────────────
 {
   const roles = resolveTransportRoles([PLACEMENT, DELIVERY, PICKUP]);
-  ok(roles.self === PICKUP && roles.delivery === DELIVERY && roles.planting === PLACEMENT, '§A Test Dave\'s three rows fill self, delivery and planting');
+  ok(roles.self === PICKUP && roles.deliveries[0] === DELIVERY && roles.planting === PLACEMENT, '§A Test Dave\'s three rows fill self, delivery and planting');
   ok(roles.unbound.length === 0, '§A a set where every row has a mode has no unbound rows');
-  ok(JSON.stringify(availableChoices(roles)) === JSON.stringify(['delivery_planting', 'delivery_only', 'self']), '§A all three branches are offered');
-  ok(choiceToSelection('delivery_planting', roles).planting === PLACEMENT, '§A delivery + planting attaches the per-plant row');
+  ok(JSON.stringify(availableChoices(roles).map(c => c.kind)) === JSON.stringify(['delivery_planting', 'delivery_only', 'self']), '§A all three branches are offered');
+  ok(choiceToSelection({ kind: 'delivery_planting', transportId: DELIVERY.id }, roles).planting === PLACEMENT, '§A delivery + planting attaches the per-plant row');
+  ok(choiceMeta({ kind: 'delivery_only', transportId: DELIVERY.id }, roles).label === 'Delivery only',
+    '§A with ONE per-order row the generic label is still true, so it is still used (§6 r18)');
 }
 
 // ── §B — 🔴 THE 2026-09-09 SHAPE: A NULL MODE MATCHES NO ROLE, AND IS NOW NAMED ─────────────────
 {
   const roles = resolveTransportRoles([TRIP_CHARGE]);
-  ok(roles.self === null && roles.delivery === null && roles.planting === null && roles.fused === null,
+  ok(roles.self === null && roles.deliveries.length === 0 && roles.planting === null && roles.fused === null,
     '🔴 §B CONFIRMED: a transport row with NO mode fills NO role — the resolver is total over {self, staff}');
   ok(availableChoices(roles).length === 0, '§B …so no branch can be offered — the checkout had nothing to show');
   ok(roles.unbound.length === 1 && roles.unbound[0] === TRIP_CHARGE, '§B the row is COLLECTED as unbound rather than silently dropped');
@@ -62,20 +64,47 @@ const TRIP_CHARGE = row({ name: 'Trip Charge', transport_mode: null, price_type:
 // ── §C — beside a working set, the unbound row still does not take a branch, and still leads ────
 {
   const roles = resolveTransportRoles([PLACEMENT, DELIVERY, PICKUP, TRIP_CHARGE]);
-  ok(availableChoices(roles).length === 3 && roles.delivery === DELIVERY, '§C a mode-less row changes nothing the bound rows offer — no price is guessed onto an order');
+  ok(availableChoices(roles).length === 3 && roles.deliveries[0] === DELIVERY, '§C a mode-less row changes nothing the bound rows offer — no price is guessed onto an order');
   ok(roles.unbound.length === 1 && /"Trip Charge"/.test(roles.flags[0]), '§C and it is the FIRST flag, so the heads-up line under the radio names it');
 }
 
-// ── §D — CHARACTERISES tech-debt #251: ONE staff/flat row is offered, a second is silent ─────────
-// ⚠️ This asserts a KNOWN DEFECT so it cannot change unnoticed. When #251 is fixed this is expected to
-// flip, deliberately. It matters for LAWNS's pending data task: Trip Charge and Tailgate Delivery are
-// BOTH staff, both charged once per order — and the model below can offer only one of them.
+// ── §D — tech-debt #251 FIXED (ledger #386, David's ruling (e), 2026-09-23) ──────────────────────
+// ✏️ THIS SECTION WAS INVERTED ON PURPOSE. It used to assert the DEFECT — *"the SECOND staff/flat
+// row is offered nowhere and named in no flag"* — precisely so the day it changed would be a
+// deliberate act and not a silent one. This is that day; the old expectations are preserved in the
+// text above so the flip is readable, and the assertions below are their opposites.
+// It matters for LAWNS: Trip Charge and Tailgate Delivery are both staff, both once per order.
 {
   const TAILGATE = row({ name: 'Tailgate Delivery', transport_mode: 'staff', requires_address: true, price_type: 'flat', price_unit: 'order', price: 150, sort_order: 20 });
-  const roles = resolveTransportRoles([DELIVERY, TAILGATE, PICKUP]);
-  ok(roles.delivery === DELIVERY, '§D (#251) the FIRST staff/flat row by sort_order becomes "delivery"');
-  ok(roles.delivery !== TAILGATE && roles.unbound.length === 0 && !roles.flags.some(f => /Tailgate/.test(f)),
-    '§D (#251) the SECOND staff/flat row is offered nowhere and named in no flag — the open defect, pinned');
+  // PLACEMENT is in the fixture deliberately: with a planting row present this is exactly LAWNS's
+  // shape after step 0 — two per-order staff rows, one per-plant staff row, one self row — which is
+  // the case the five-branch count below is about. ✏️ A first draft omitted it and asserted five
+  // branches anyway; the run said three, and the ASSERTION was what was wrong, not the resolver.
+  const roles = resolveTransportRoles([DELIVERY, TAILGATE, PLACEMENT, PICKUP]);
+  ok(roles.deliveries.length === 2 && roles.deliveries[0] === DELIVERY && roles.deliveries[1] === TAILGATE,
+    '§D (#251 fixed) BOTH staff/flat rows are roles now, in the order the caller supplied');
+
+  const choices = availableChoices(roles);
+  const byId = (o: typeof DELIVERY, kind: string) => choices.some(c => c.transportId === o.id && c.kind === kind);
+  ok(byId(TAILGATE, 'delivery_only'), '§D (#251 fixed) 🔴 Tailgate Delivery IS offered — the defect this pins is gone');
+  ok(byId(DELIVERY, 'delivery_only'), '§D (#251 fixed) and Delivery is still offered beside it');
+  ok(choices.filter(c => c.kind === 'delivery_planting').length === 2,
+    '§D (#251 fixed) each per-order row also offers itself WITH planting — 2 rows × 2 shapes + self = 5');
+  ok(choices.length === 5, '§D (#251 fixed) five branches, where the old code offered three');
+
+  // 🔴 §6 r18 — A LABEL IS A CLAIM. "Delivery only" twice would name neither row. With more than
+  // one per-order row the branch takes the ROW'S OWN NAME, which is the only thing that tells a
+  // person which of the two they are choosing.
+  ok(choiceMeta({ kind: 'delivery_only', transportId: TAILGATE.id }, roles).label === 'Tailgate Delivery',
+    '§D (#251 fixed) with two rows the branch is labelled by the ROW, not by the generic shape');
+  ok(choiceMeta({ kind: 'delivery_only', transportId: DELIVERY.id }, roles).label === 'Delivery',
+    '§D (#251 fixed) …and so is the other one — neither is left saying "Delivery only"');
+
+  // The selections still resolve to the RIGHT row, which is the half that charges money.
+  ok(choiceToSelection({ kind: 'delivery_only', transportId: TAILGATE.id }, roles).transport === TAILGATE,
+    '§D (#251 fixed) choosing Tailgate charges the Tailgate row, not the first one');
+  ok(choiceToSelection({ kind: 'delivery_only', transportId: 'no-such-row' }, roles).transport === null,
+    '§D 🔴 an unknown id yields NULL, never a substitute row — a retired row must not silently become a different charge');
 }
 
 // ── §E — the checkout screen reads the unbound rows, instead of saying nothing is set up ────────

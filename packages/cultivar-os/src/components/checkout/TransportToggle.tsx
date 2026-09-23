@@ -1,11 +1,14 @@
 import type { TransportChoice, TransportRoles } from '../../lib/transport';
-import { CHOICE_META } from '../../lib/transport';
+import { choiceMeta, sameChoice } from '../../lib/transport';
+import type { LadderPricing } from '@trace/shared/business-logic';
 
 interface Props {
   choices:   TransportChoice[];        // which branches are available (resolved from roles)
   roles:     TransportRoles;           // the resolved role rows (for price hints)
   selected:  TransportChoice | null;
   onChange:  (choice: TransportChoice) => void;
+  /** The ladder price for THIS cart, when planting prices per size. Null ⇒ it does not. */
+  ladderPricing?: LadderPricing | null;
 }
 
 function money(n: number): string {
@@ -15,26 +18,45 @@ function money(n: number): string {
 // The price hint shown under each branch — composed from the SAME rows the charge uses,
 // so display and charge cannot drift. Shows unit prices (delivery flat, planting per-plant);
 // the ×N total is shown in the summary + CartReview.
-function priceHint(choice: TransportChoice, roles: TransportRoles): string {
-  switch (choice) {
+// The price hint shown under each branch — composed from the SAME rows the charge uses, so
+// display and charge cannot drift. Shows unit prices (delivery flat, planting per-plant); the ×N
+// total is shown in the summary + CartReview.
+//
+// 🔴 A LADDER-PRICED SERVICE HAS NO UNIT PRICE TO SHOW, AND SAYING "$0.00" WOULD BE A LIE.
+// When planting reads its price off the container ladder the number depends on what is in the
+// cart, so the hint reports the CART'S total (already computed once, upstream, and passed in) —
+// or, when a line's rung carries no price, says an amount is needed. Never a fabricated unit
+// figure, never a 0 (D-9 / R-171 (c)).
+function priceHint(choice: TransportChoice, roles: TransportRoles, ladderPricing: LadderPricing | null): string {
+  const row = [...roles.deliveries, roles.planting, roles.fused, roles.self]
+    .find(o => o && o.id === choice.transportId) ?? null;
+
+  const plantingHint = (): string => {
+    if (!ladderPricing) return roles.planting ? `${money(Number(roles.planting.price))}/plant` : '';
+    if (!ladderPricing.allPriced) {
+      return ladderPricing.pricedTotal > 0
+        ? `${money(ladderPricing.pricedTotal)} + amount needed`
+        : 'amount needed';
+    }
+    return money(ladderPricing.pricedTotal);
+  };
+
+  switch (choice.kind) {
     case 'delivery_planting': {
-      if (roles.delivery && roles.planting) {
-        const parts: string[] = [];
-        if (Number(roles.delivery.price) > 0) parts.push(`${money(Number(roles.delivery.price))} delivery`);
-        parts.push(`${money(Number(roles.planting.price))}/plant planting`);
-        return parts.join(' + ');
-      }
-      if (roles.fused) return `${money(Number(roles.fused.price))}/plant`;
-      return '';
+      const parts: string[] = [];
+      if (row && Number(row.price) > 0) parts.push(`${money(Number(row.price))} delivery`);
+      const p = plantingHint();
+      if (p) parts.push(`${p} planting`);
+      return parts.join(' + ');
     }
     case 'delivery_only':
-      return roles.delivery && Number(roles.delivery.price) > 0 ? money(Number(roles.delivery.price)) : 'No extra charge';
+      return row && Number(row.price) > 0 ? money(Number(row.price)) : 'No extra charge';
     case 'self':
       return 'No transport charge';
   }
 }
 
-export function TransportToggle({ choices, roles, selected, onChange }: Props) {
+export function TransportToggle({ choices, roles, selected, onChange, ladderPricing = null }: Props) {
   if (choices.length === 0) return null;
 
   return (
@@ -46,12 +68,14 @@ export function TransportToggle({ choices, roles, selected, onChange }: Props) {
         Transport
       </p>
       {choices.map((choice) => {
-        const isSelected = selected === choice;
-        const meta = CHOICE_META[choice];
-        const hint = priceHint(choice, roles);
+        // Compared by VALUE, never by reference: `choices` is rebuilt on every render while the
+        // selection is held in the cart store, so `===` would light up nothing.
+        const isSelected = sameChoice(selected, choice);
+        const meta = choiceMeta(choice, roles);
+        const hint = priceHint(choice, roles, ladderPricing);
         return (
           <button
-            key={choice}
+            key={`${choice.kind}:${choice.transportId}`}
             onClick={() => onChange(choice)}
             style={{
               display: 'flex',

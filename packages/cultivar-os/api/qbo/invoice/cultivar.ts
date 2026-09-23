@@ -509,7 +509,23 @@ export function buildQboInvoiceLines(args: {
       const svcNet    = Number(sel.subtotal) || 0;
       const svcRetail = Math.round(svcUnit * svcQty * 100) / 100;
       const svcAdj    = Math.round((svcRetail - svcNet) * 100) / 100;   // >0 giveaway · <0 surcharge
-      const svcOverridden = sel.is_manual_override === true && Math.abs(svcAdj) >= 0.005;
+      // 🔴 WIDENED 2026-09-23 (ledger #386, ruling (d)). WAS:
+      //     sel.is_manual_override === true && Math.abs(svcAdj) >= 0.005
+      // i.e. the retail + adjustment shape fired ONLY for an owner override, because an override
+      // was the only way a service line's net could differ from rate × qty. Ruling (d) made a
+      // second way: a tier-eligible service (the per-size install) takes the CUSTOMER'S TIER, so a
+      // contractor's $1,350 install is charged $1,215 with `is_manual_override` FALSE.
+      // Under the old condition that line would have pushed Amount 1215 beside UnitPrice 1350 ×
+      // Qty 1 — and QuickBooks rejects the WHOLE INVOICE with 6070 "Amount is not equal to
+      // UnitPrice * Qty". That is the same rejection D-48 was written to fix, arriving through a
+      // door D-48 could not see, and it would have appeared the first time a discounted customer
+      // bought an install rather than on any test order.
+      // 🔴 THE TEST IS NOW THE ARITHMETIC, NOT THE PROVENANCE: a line whose net differs from its
+      // baseline pushes as retail + a named adjustment, whatever made it differ. The provenance
+      // still matters for the TRACE line and for `override_reason`, and is read separately below.
+      const svcAdjusted   = Math.abs(svcAdj) >= 0.005;
+      const svcIsOverride = sel.is_manual_override === true;
+      const svcOverridden = svcAdjusted;
       // Historical override rows predate the required-reason rule → omit rather than invent (D-9).
       const svcReason = (sel.override_reason ?? '').trim();
 
@@ -563,6 +579,9 @@ export function buildQboInvoiceLines(args: {
           offering: offering.name, unitPrice: svcUnit, qty: svcQty, retail: svcRetail,
           adjustment: svcAdj, charged: svcNet, reason: svcReason || null,
           direction: svcAdj > 0 ? 'discount' : 'surcharge',
+          // WHICH of the two now-possible causes this was — an owner's concession, or the
+          // customer's standing tier reaching a tier-eligible service (ruling (d)).
+          cause: svcIsOverride ? 'owner override (D-48)' : 'customer tier on a tier-eligible service (R-171 (d))',
           reconciles: Math.abs((svcRetail - svcAdj) - svcNet) <= 0.005,
         });
       } else if (isTransport && Number(sel.subtotal) === 0) {

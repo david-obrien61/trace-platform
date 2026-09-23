@@ -509,6 +509,77 @@ function probesCanFail(): void {
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// J · 🔴 A SERVICE DISCOUNTED BY THE CUSTOMER'S TIER, WITH NO OVERRIDE — THE 6070 DOOR D-48 MISSED
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// Ruling (d), 2026-09-23: the per-size install is TIER-ELIGIBLE, so a contractor's install is
+// discounted with `is_manual_override` FALSE. Until this build the retail + adjustment shape fired
+// only on `is_manual_override === true`, so such a line would have pushed
+//     Amount 1215.00 beside UnitPrice 1350.00 × Qty 1
+// and QuickBooks rejects the WHOLE INVOICE with 6070 "Amount is not equal to UnitPrice * Qty" —
+// the identical rejection D-48 exists to prevent, arriving through a door D-48 could not see.
+//
+// 🔴 IT WOULD NOT HAVE APPEARED ON A TEST ORDER. It needs a customer on a discount tier AND an
+// install, which is the combination nobody rings up while checking a build. LAWNS has one
+// CD10% customer out of 2,007.
+function tierDiscountedServiceIsRetailPlusAdjustment(): void {
+  // A ladder-priced install: ONE unit at its own total (submit writes it that way precisely so
+  // rate × qty reconciles), tier-discounted 10%, and NOT an override.
+  const TIER_INSTALL = [
+    { quantity: 1, unit_price_at_time: 1350.00, subtotal: 1215.00,
+      is_manual_override: false, override_reason: null,
+      service_offerings: { name: 'Installation', category: 'transport', transport_mode: 'staff', trigger_transport_mode: null, ...MAP.placement } },
+  ];
+  const lines = linesOf(buildMapped({ serviceSelections: TIER_INSTALL }));
+
+  const svc = lines.find(l => String(l.Description ?? '').startsWith('Installation'));
+  ok(!!svc, 'J1 the install pushes a service line');
+  ok(Number(svc?.Amount) === 1350.00,
+     `J2 🔴 it pushes the RETAIL baseline 1350.00, not the discounted 1215.00 — got ${String(svc?.Amount)}`);
+
+  const adj = lines.find(l => l.DetailType === 'DiscountLineDetail');
+  ok(!!adj, 'J3 🔴 the tier discount rides a native DiscountLineDetail, exactly as an override does');
+  ok(Number(adj?.Amount) === 135.00,
+     `J4 the adjustment is the 10% — 135.00, got ${String(adj?.Amount)}`);
+
+  // THE ASSERTION THAT IS ACTUALLY ABOUT 6070: every revenue line must satisfy
+  // Amount === UnitPrice × Qty, because that is the equality QuickBooks itself checks.
+  for (const l of lines) {
+    if (l.DetailType !== 'SalesItemLineDetail') continue;
+    const d = (l as any).SalesItemLineDetail ?? {};
+    if (d.UnitPrice == null || d.Qty == null) continue;
+    ok(Math.abs(Number(l.Amount) - Number(d.UnitPrice) * Number(d.Qty)) <= 0.005,
+       `J5 🔴 6070 — "${l.Description}" has Amount ${String(l.Amount)} but UnitPrice ${String(d.UnitPrice)} × Qty ${String(d.Qty)}`);
+  }
+
+  // And the install's own two lines net to what the customer is charged for it. Scoped to the
+  // install rather than the whole invoice, because the fixture's ORDER totals belong to 436 and
+  // this case swapped its services out — asserting the grand total would be asserting the fixture.
+  // ⚠️ GUARDED, BECAUSE AN UNGUARDED READ TURNS A NAMED FAILURE INTO A CRASH. Against the pre-#386
+  // condition `adj` is undefined, and `netSum([svc, adj])` threw a TypeError — the file went red
+  // (so the mutant WAS caught) but the output said "Cannot read properties of undefined" instead
+  // of J3's sentence. Tech-debt #293's shape at the assertion level: a red that does not explain
+  // itself is worth less than one that does.
+  const installNet = netSum([svc, adj].filter(Boolean) as Line[]);
+  ok(Math.abs(installNet - 1215.00) <= 0.005,
+     `J6 the install's retail line minus its adjustment nets to the charged 1215.00 — got ${installNet}`);
+
+  // 🔴 THE NEGATIVE CONTROL, AND IT IS THE ONE THAT KEEPS J1–J6 HONEST. An UNdiscounted service
+  // must NOT grow a discount line — otherwise "we always emit an adjustment" would pass J3 while
+  // being obviously wrong, and the suite would be measuring nothing.
+  const PLAIN = [
+    { quantity: 1, unit_price_at_time: 1350.00, subtotal: 1350.00,
+      is_manual_override: false, override_reason: null,
+      service_offerings: { name: 'Installation', category: 'transport', transport_mode: 'staff', trigger_transport_mode: null, ...MAP.placement } },
+  ];
+  const plainLines = linesOf(buildMapped({ serviceSelections: PLAIN }));
+  ok(!plainLines.some(l => l.DetailType === 'DiscountLineDetail'),
+     'J7 🔴 a retail customer\'s install gets NO adjustment line — the control that stops J3 passing for the wrong reason');
+  const plainSvc = plainLines.find(l => String(l.Description ?? '').startsWith('Installation'));
+  ok(Math.abs(Number(plainSvc?.Amount) - 1350.00) <= 0.005, 'J8 …and its single line carries the full 1350.00');
+}
+
 function main(): void {
   reasonIsGone();
   shapeSurvives();
@@ -518,6 +589,7 @@ function main(): void {
   zeroLinesAreNotes();
   surchargeIsRevenue();
   tierDiscountIsNative();
+  tierDiscountedServiceIsRetailPlusAdjustment();
   probesCanFail();
   console.log(`\n  ${passed} passed, ${failed} failed`);
   if (failed) {
