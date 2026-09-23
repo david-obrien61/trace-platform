@@ -33,6 +33,8 @@ import {
   readPricingConfig, normalizeDiscountTypes, resolveTier, RETAIL_TIER_NAME, type DiscountType,
 } from '@trace/shared/business-logic';
 import { QrScanner } from '../components/inventory/QrScanner';
+import { needsDiscardConfirm, discardConfirmCopy } from '../lib/discardOrder';
+import { sheetStyles } from '@trace/shared/components/datasheet/DataSheet';
 import { CustomerSearch, customerDisplayName, type CustomerSearchHit } from '../components/customers/CustomerSearch';
 import { customerOrderInput } from '../components/customers/customerFieldRegistry';
 import { useCart } from '../hooks/useCart';
@@ -130,6 +132,7 @@ export function ScanOrder() {
   const [candidates, setCandidates] = useState<PickChoice[]>([]);
   const [pickerTitle, setPickerTitle] = useState('');
   const [pickerHint, setPickerHint]   = useState('');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [unknownTag, setUnknownTag] = useState('');
   const [readFailure, setReadFailure] = useState<ReadFailure | null>(null);
 
@@ -400,8 +403,29 @@ export function ScanOrder() {
     navigate('/checkout/addons');
   }
 
-  function exit() {
+  // 🔴 BACK IS BACK. It used to be `clear(); navigate('/orders')` — an `<ArrowLeft>` that discarded
+  // the entire order with no confirmation and nothing to go back to (David, 2026-09-23: *"a control
+  // that looks like 'back' and performs 'discard everything' … Lauren will lose a customer's order
+  // in front of them"*). It now only navigates. The cart lives in zustand module scope, so leaving
+  // and returning within the same page session brings the lines back.
+  // ⚠️ A REFRESH, A NEW TAB OR AN EVICTED TAB STILL LOSES IT — parked orders (ledger #389) is that
+  // fix and is a separate build. This one stops the button destroying work on purpose.
+  function back() {
+    navigate('/orders');
+  }
+
+  // The DISCARD act, now its own control and never the back arrow's job.
+  function requestDiscard() {
+    if (!needsDiscardConfirm(items)) { navigate('/orders'); return; }   // nothing to lose — just leave
+    setConfirmDiscard(true);
+  }
+
+  function doDiscard() {
+    if (TRACE_CART) console.log('[TRACE:CART] order discarded by the counter', {
+      lines: items.length, plants: plantCount,
+    });
     clear();
+    setConfirmDiscard(false);
     navigate('/orders');
   }
 
@@ -427,7 +451,7 @@ export function ScanOrder() {
   return (
     <div style={S.page}>
       <div style={S.header}>
-        <button style={S.backBtn} onClick={exit} aria-label="Cancel order"><ArrowLeft size={22} color="#1a2e0a" /></button>
+        <button style={S.backBtn} onClick={back} aria-label="Back to orders — the order is kept"><ArrowLeft size={22} color="#1a2e0a" /></button>
         <h1 style={S.title}>New order — scan items</h1>
         <div style={{ flex: 1 }} />
         {items.length > 0 && <span style={S.tally}>{items.length} item{items.length !== 1 ? 's' : ''} · {plantCount}</span>}
@@ -471,8 +495,41 @@ export function ScanOrder() {
             );
           })}
           <button style={S.reviewBtn} onClick={review}>Review order →</button>
+          {/* 🔴 DISCARD LIVES BESIDE WHAT IT DESTROYS, and only exists when there is something to
+              destroy. It is deliberately quiet — text, not a button — because it is the rarest act
+              on this screen and the most expensive to hit by accident. */}
+          <button style={S.discardBtn} onClick={requestDiscard}>Discard this order</button>
         </div>
       )}
+
+      {confirmDiscard && (() => {
+        const copy = discardConfirmCopy(items);
+        return (
+          <div style={sheetStyles.modal} role="dialog" aria-modal="true" aria-label={copy.title}>
+            <div style={{ ...sheetStyles.sheet, maxWidth: 420 }}>
+              <div style={sheetStyles.sheetHeader}>
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#1a2e0a' }}>{copy.title}</h2>
+              </div>
+              <div style={sheetStyles.sheetBody}>
+                <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.55, color: '#374151' }}>{copy.body}</p>
+              </div>
+              <div style={sheetStyles.sheetActions}>
+                {/* KEEP IS FIRST AND IS THE PRIMARY. The safe act gets the weight; the destructive
+                    one has to be chosen. Reversed, this dialog would be a speed bump, not a guard. */}
+                <button style={{ ...sheetStyles.submitBtn, flex: 1 }} onClick={() => setConfirmDiscard(false)}>
+                  {copy.keepLabel}
+                </button>
+                <button
+                  style={{ flex: 1, minHeight: 48, background: '#fff', color: '#A32D2D', border: '1.5px solid #A32D2D', borderRadius: 10, fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={doDiscard}
+                >
+                  {copy.confirmLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {items.length === 0 && phase === 'scanning' && (
         <div style={S.hintCard}>
@@ -668,6 +725,7 @@ const S = {
   header:     { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 } as React.CSSProperties,
   backBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' } as React.CSSProperties,
   title:      { fontSize: '1.25rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
+  discardBtn: { display: 'block', width: '100%', minHeight: 48, marginTop: 8, background: 'none', border: 'none', color: '#A32D2D', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
   tally:      { background: '#27500A', color: '#fff', borderRadius: 20, padding: '3px 12px', fontSize: '0.82rem', fontWeight: 700, whiteSpace: 'nowrap' } as React.CSSProperties,
   card:       { background: '#fff', borderRadius: 14, padding: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 14 } as React.CSSProperties,
   hintCard:   { background: '#fff', borderRadius: 14, padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' } as React.CSSProperties,
