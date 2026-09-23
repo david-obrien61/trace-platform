@@ -119,6 +119,15 @@ export async function commitPlan(
     qty_completed: 0,
     cover_months: b.split.coverMonthsUsed,
     cushion_pct: b.split.cushionPctUsed,
+    // 🔴 THESE TWO COLUMNS HAVE EXISTED SINCE `20260905_production_planning.sql` AND NOTHING HAS
+    // EVER WRITTEN THEM (ledger #390). The migration's own comment says why they are there —
+    // *"stored so the plan can be re-read and understood later rather than silently recomputed
+    // against constants that have since moved"* — and `grow_months` is the one that decides the
+    // sellable date, so a committed plan that omitted it could not reproduce its own graduation.
+    // ⚠️ `grow_months` is NULL when the target rung has no figure. That is the honest record of a
+    // plan committed against an unmeasured rung, and it round-trips as UNKNOWN rather than as 7.
+    grow_months: b.growMonths.known ? b.growMonths.months : null,
+    sales_per_month: b.split.salesPerMonthUsed,
     scheduled_date: b.completesOn,
   }));
 

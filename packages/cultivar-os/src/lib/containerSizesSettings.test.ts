@@ -20,7 +20,7 @@ import {
   resolveConfig,
 } from '@trace/shared/production';
 import {
-  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
+  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, GROW_NOT_SET, HOLD_NOT_SET, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
 } from './containerLadderDraft';
 
 let passed = 0, failed = 0;
@@ -35,6 +35,7 @@ const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Ru
   label, aliases: [], sortOrder, volumeGallons: null, handlingMinutes: null,
   handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice: null, installPriceBecause: 'not set',
+  growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [
@@ -266,6 +267,55 @@ const LAWNS: Ladder = [
   const blankTrip = draftFromRung({ ...LAWNS[3], installPrice: null, installPriceBecause: 'not priced' });
   ok(blankTrip.installPrice === '' && draftToRow({ ...blankTrip, label: LAWNS[3].label }).install_price === null,
     'F11 🔴 …and an UNPRICED rung round-trips as blank, never as 0 — the direction that would charge nothing');
+}
+
+// ══ §G GROW AND HOLD ON A RUNG (ledger #390) ═══════════════════════════════════════════════════
+// David, 2026-09-23: *"The other eight rungs are UNKNOWN and render as UNKNOWN. Never 7 by
+// default."* At the DRAFT layer that means three things: blank must survive a round-trip as NULL,
+// a typed 0 must be refused, and a new size must NOT inherit a neighbour's interval.
+{
+  const base = { ...draftForNewRung(LAWNS), label: '7 gal', volumeGallons: '7', installTPostsPerTree: '2', installTPostsBecause: 'Terry', postsCopiedFrom: null };
+
+  // 🔴 A NEW SIZE STARTS UNKNOWN AND SAYS SO. Contrast the T-posts, which ARE copied from the top
+  // rung: a post count travels between neighbouring sizes, an interval does not.
+  // 🔴 THE LADDER THIS RUNS AGAINST MUST HAVE INTERVALS ON ITS TOP RUNG, OR THE PROBE CANNOT FAIL.
+  // The first draft used the plain LAWNS fixture, whose rungs all carry null grow — so "was it
+  // copied?" had nothing to copy and MUTANT 5 (make `draftForNewRung` inherit the top rung's grow)
+  // SURVIVED. That is tech-debt #182: a probe that could not reach the thing it was about. This
+  // ladder's top rung carries 9 and 18, so an inheriting implementation is visibly wrong.
+  const WITH_INTERVALS = LAWNS.map((r, i) =>
+    i === LAWNS.length - 1 ? { ...r, growMonths: 9, growBecause: 'measured', holdMonths: 18, holdBecause: 'measured' } : r);
+  const fresh = draftForNewRung(WITH_INTERVALS);
+  ok(fresh.growMonths === '' && fresh.growBecause === GROW_NOT_SET,
+    '🔴 G1 a new size starts with NO grow figure and the "not set" reason — never copied from another rung');
+  ok(fresh.holdMonths === '' && fresh.holdBecause === HOLD_NOT_SET,
+    'G1 …and the same for hold');
+  ok(fresh.installTPostsPerTree !== '',
+    '⚠️ G1 SELF-CATCH: the T-posts ARE still copied — this probe would pass trivially if nothing were ever copied');
+  ok(WITH_INTERVALS[WITH_INTERVALS.length - 1].growMonths === 9,
+    '⚠️ G1 SELF-CATCH: the top rung of the ladder under test genuinely HAS a grow figure to copy');
+
+  ok(rungDraftProblems(base, LAWNS, null).length === 0,
+    'G2 (negative control): a new size with BOTH intervals blank has no problems — unknown is a legal draft');
+
+  ok(rungDraftProblems({ ...base, growMonths: '0' }, LAWNS, null).some(p => /sellable the day it is potted/.test(p)),
+    '🔴 G3 a GROW of 0 is refused, and the sentence says why rather than "invalid"');
+  ok(rungDraftProblems({ ...base, holdMonths: '0' }, LAWNS, null).some(p => /move up the day it becomes sellable/.test(p)),
+    'G3 …and a HOLD of 0 likewise');
+  ok(rungDraftProblems({ ...base, growMonths: '-2' }, LAWNS, null).some(p => /above 0/.test(p)),
+    'G3 …and a negative is refused too');
+  ok(rungDraftProblems({ ...base, growMonths: '6', growBecause: '   ' }, LAWNS, null).some(p => /where the grow figure came from/.test(p)),
+    '🔴 G4 a figure with no provenance is refused — an unlabelled number cannot exist');
+
+  // Round-trip, both directions. This is the pair that decides whether UNKNOWN survives a save.
+  ok(draftToRow({ ...base, growMonths: '', holdMonths: '' }).grow_months === null,
+    '🔴 G5 a BLANK grow is written as NULL, not 0 — the difference between "unknown" and "sellable immediately"');
+  ok(draftToRow({ ...base, growMonths: '', holdMonths: '' }).hold_months === null, 'G5 …and blank hold likewise');
+  ok(draftToRow({ ...base, growMonths: '6', growBecause: 'David 2026-09-18' }).grow_months === 6,
+    'G5 …and a typed 6 is written as 6');
+  const trip = draftFromRung({ ...LAWNS[1], growMonths: 6, growBecause: 'David 2026-09-18', holdMonths: null, holdBecause: 'not set' });
+  ok(trip.growMonths === '6' && trip.holdMonths === '',
+    '🔴 G6 rung → draft keeps a set grow as text and an unset hold as blank — opening the editor changes nothing');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);

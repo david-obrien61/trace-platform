@@ -172,6 +172,47 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
           <input style={input} value={draft.installPriceBecause} onChange={(e) => put('installPriceBecause', e.target.value)} />
         </Field>
       </div>
+      {/* ── THE GROWING SCHEDULE (ledger #390) ───────────────────────────────────────────────
+          Two numbers, and they are the whole grow ladder: GROW is how long after potting a tree on
+          this size can be SOLD; HOLD is how long it then stays before it must move up. David,
+          2026-09-01. Lauren's correction is why there are two and not one: *"It takes six to eight
+          months to grow into their pots, and then they can live in their pots for say a year."*
+          🔴 BLANK IS THE RIGHT ANSWER FOR A SIZE NOBODY HAS MEASURED, and the plan then prints
+          UNKNOWN beside that batch rather than borrowing a number from somewhere else. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Months to GROW — potted until sellable"
+          note={<>
+            After a tree is potted into this size, how many months before it can be <strong>sold</strong>?
+            The uppot plan adds this to the day a batch finishes to say when the trees become sellable.
+            <strong> Blank means nobody has measured it</strong> — the plan then says UNKNOWN instead of
+            showing a date built on a guess.
+          </>}
+        >
+          <input style={input} type="number" step="any" min={0} placeholder="unknown"
+            value={draft.growMonths} onChange={(e) => put('growMonths', e.target.value)} />
+        </Field>
+        <Field label="Where the grow figure came from">
+          <input style={input} value={draft.growBecause} onChange={(e) => put('growBecause', e.target.value)} />
+        </Field>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Months to HOLD — sellable until it must move up"
+          note={<>
+            Once sellable, how many months can a tree stay in this size before it has to be potted
+            up whether or not anyone bought it? <strong>Blank means nobody has measured it.</strong>
+            {' '}⚠️ Nothing schedules on this yet — it is recorded now so the figure is captured in
+            the same conversation as the grow months.
+          </>}
+        >
+          <input style={input} type="number" step="any" min={0} placeholder="unknown"
+            value={draft.holdMonths} onChange={(e) => put('holdMonths', e.target.value)} />
+        </Field>
+        <Field label="Where the hold figure came from">
+          <input style={input} value={draft.holdBecause} onChange={(e) => put('holdBecause', e.target.value)} />
+        </Field>
+      </div>
       {problems.length > 0 && (
         <ul style={{ color: RED, fontSize: 13, margin: '10px 0 0', paddingLeft: 18 }}>
           {problems.map((p) => <li key={p}>{p}</li>)}
