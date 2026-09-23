@@ -9,8 +9,11 @@ import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
   fetchAttachedCustomerTier,
   fetchTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
-  type PricingLineInput, type DiscountType, type OrderTaxExemption,
+  priceLinesFromLadder, usesLadderPricing,
+  type PricingLineInput, type DiscountType, type OrderTaxExemption, type LadderPricing,
 } from '@trace/shared/business-logic';
+import type { Ladder } from '@trace/shared/inventory';
+import { loadContainerLadder } from '../lib/containerLadderRead';
 import { supabase } from '../lib/supabase';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
@@ -125,6 +128,26 @@ export function CartReview() {
       return copy;
     });
 
+  // ── THE CONTAINER LADDER, for a service priced per size (ledger #386) ─────────────────────
+  // 🔴 `null` UNTIL IT IS KNOWN, AND A FAILED READ IS NOT AN EMPTY LADDER. `loadContainerLadder`
+  // already keeps those two apart; this keeps them apart on the screen too. While it is null the
+  // install line says it is still working the price out rather than showing a number it does not
+  // have — a "$0.00" that later becomes "$1,350" is worse than a moment of honest silence.
+  const [ladder, setLadder] = useState<Ladder | null>(null);
+  const [ladderFailed, setLadderFailed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    void (async () => {
+      const read = await loadContainerLadder(businessId);
+      if (cancelled) return;
+      if (read.phase === 'failed') { setLadderFailed(read.message); setLadder(null); return; }
+      setLadderFailed(null);
+      setLadder(read.rungs);
+    })();
+    return () => { cancelled = true; };
+  }, [businessId]);
+
   const plantCount = totalPlantCount(items);
   const isSelf     = selectedTransport?.transport_mode === 'self';
 
@@ -188,8 +211,31 @@ export function CartReview() {
 
   const plantingOn = plantingSelected && !!plantingOffering;
 
+  // ── PER-SIZE INSTALL PRICE — the SAME pure function submit.ts runs (D-39 / STD-012) ────────
+  // 🔴 IT IS A PREVIEW AND NOTHING MORE. submit recomputes it from the SERVER's sizes, so a
+  // tampered cart changes what is shown here and not what is charged. The two agree because they
+  // are the same function over the same rule, not because this number is trusted.
+  const plantingUsesLadder = !!plantingOffering && usesLadderPricing(plantingOffering);
+  const ladderPricing: LadderPricing | null = (plantingUsesLadder && ladder)
+    ? priceLinesFromLadder(ladder, items.map(l => ({
+        size: l.plant.current_container || null,
+        quantity: l.quantity,
+        name: l.plant.common_name ?? l.plant.species ?? null,
+      })))
+    : null;
+  // Which lines are still owed an amount, and whether the counter has supplied one.
+  const installNeedsAmount = !!ladderPricing && !ladderPricing.allPriced;
+  const installOverride    = plantingOffering ? serviceOverride[plantingOffering.id] : undefined;
+  const installAmountGiven = !!installOverride && installOverride.amount >= 0 && installOverride.reason.trim() !== '';
+  // 🔴 THE BLOCK IS ONLY LIVE WHILE THE INSTALL IS ACTUALLY ON THE ORDER. Turning planting off is
+  // a legitimate way past an unpriced rung, and the Send button must not stay dead after it.
+  const installBlocks = plantingOn && installNeedsAmount && !installAmountGiven;
+
   const transportComputed = selectedTransport ? computedAmt(selectedTransport) : 0;
-  const plantingComputed  = plantingOn && plantingOffering ? computedAmt(plantingOffering) : 0;
+  // A ladder-priced service has no unit price to multiply; its baseline is what the ladder summed.
+  const plantingComputed  = plantingOn && plantingOffering
+    ? (ladderPricing ? ladderPricing.pricedTotal : computedAmt(plantingOffering))
+    : 0;
   const nettingComputed   = nettingActive && nettingSel ? computedAmt(nettingSel.offering) : 0;
 
   const transportAmount = selectedTransport ? effAmt(selectedTransport, transportComputed) : 0;
@@ -228,9 +274,20 @@ export function CartReview() {
     overrideTotal: serviceOverride[o.id]?.amount ?? null,
     overrideReason: serviceOverride[o.id]?.reason ?? null,
   });
+  // The planting line when it prices per size: ONE unit at the ladder's total, and tier-eligible
+  // (ruling (d)) — LAWNS's install is billed inside the plant SKU today, where the tier has always
+  // reached it, so splitting it out must not quietly raise a contractor's price.
+  const plantingInput = (o: ServiceOffering): PricingLineInput => ladderPricing
+    ? {
+        kind: 'service', name: o.name,
+        unitPrice: ladderPricing.pricedTotal, qty: 1, tierEligible: true,
+        overrideTotal: serviceOverride[o.id]?.amount ?? null,
+        overrideReason: serviceOverride[o.id]?.reason ?? null,
+      }
+    : svcInput(o);
   const serviceInputs: PricingLineInput[] = [
     ...(selectedTransport ? [svcInput(selectedTransport)] : []),
-    ...(plantingOn && plantingOffering ? [svcInput(plantingOffering)] : []),
+    ...(plantingOn && plantingOffering ? [plantingInput(plantingOffering)] : []),
     ...(nettingActive && nettingSel ? [svcInput(nettingSel.offering)] : []),
     ...otherAddons.filter(s => s.selected).map(s => svcInput(s.offering)),
   ];
@@ -481,20 +538,45 @@ export function CartReview() {
         {/* Planting — the separate per-plant service attached by the "Delivery + planting" branch */}
         {plantingOffering && (
           plantingOn ? (
-            <ServiceRow
-              name={plantingOffering.name}
-              rule={`per plant · ×${effQty(plantingOffering)}`}
-              amount={plantingTotal}
-              editable
-              qty={effQty(plantingOffering)}
-              onQty={q => setQty(plantingOffering, q)}
-              included
-              onToggle={() => setPlantingSelected(false)}
-              canOverride={canOverride}
-              baseline={plantingComputed}
-              override={serviceOverride[plantingOffering.id]}
-              onOverride={next => setOverride(plantingOffering.id, next)}
-            />
+            <>
+              <ServiceRow
+                name={plantingOffering.name}
+                // 🔴 A LADDER-PRICED LINE IS NOT "per plant · ×N" AND SAYING SO WOULD BE FALSE:
+                // the trees cost different amounts, so one multiplier describes none of them.
+                // §6 r18 — a label is a claim, and it must hold for every row beneath it.
+                rule={ladderPricing ? 'per container size' : `per plant · ×${effQty(plantingOffering)}`}
+                amount={plantingTotal}
+                editable={!ladderPricing}
+                qty={effQty(plantingOffering)}
+                // No quantity stepper on a per-size line — the quantity IS the cart, and a second
+                // control that silently disagreed with it would be two answers to one question.
+                onQty={ladderPricing ? undefined : (q => setQty(plantingOffering, q))}
+                included
+                onToggle={() => setPlantingSelected(false)}
+                canOverride={canOverride}
+                baseline={plantingComputed}
+                override={serviceOverride[plantingOffering.id]}
+                onOverride={next => setOverride(plantingOffering.id, next)}
+              />
+              {/* SHOW THE WORK. Per-size pricing is invisible arithmetic otherwise: the customer
+                  sees one figure for trees that were each priced differently. Each line names its
+                  RUNG, so a wrong price is traceable to the row on the ladder that set it — and an
+                  unpriced one says "not set" in those words rather than showing nothing or a 0. */}
+              {ladderPricing && !serviceOverride[plantingOffering.id] && (
+                <div style={{ margin: '-6px 0 12px 12px', paddingLeft: 10, borderLeft: '2px solid #e5e7eb' }}>
+                  {ladderPricing.lines.map((l, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.8125rem', color: l.needsAmount ? '#b45309' : '#6b7280', lineHeight: 1.7 }}>
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {l.quantity} × {l.name ?? 'item'}{l.rungLabel ? ` · ${l.rungLabel}` : ''}
+                      </span>
+                      <span style={{ whiteSpace: 'nowrap', fontWeight: l.needsAmount ? 700 : 400 }}>
+                        {l.needsAmount ? 'not set' : `$${(l.lineTotal ?? 0).toFixed(2)}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <button onClick={() => setPlantingSelected(true)} style={linkBtn}>+ Add {plantingOffering.name}</button>
@@ -685,6 +767,44 @@ export function CartReview() {
         </div>
       )}
 
+      {/* 🔴 THE INSTALL HAS NO PRICE FOR SOME SIZES — ruling (c): offer it, require a typed amount,
+          never $0, never a guess, never refused. This names the ROWS and the RUNGS, because the
+          person reading it can fix either end: type an amount here, or set the rung's price in
+          Settings. The Send buttons are dead until one of those happens, which is what makes this
+          a refusal to GUESS rather than a refusal to sell. */}
+      {plantingOn && installNeedsAmount && ladderPricing && (
+        <div style={{ margin: '0 16px', padding: '10px 14px', background: installAmountGiven ? '#f0f7ea' : '#fffbeb', border: `1.5px solid ${installAmountGiven ? '#27500A' : '#b45309'}`, borderRadius: 8 }}>
+          <p style={{ fontSize: '0.875rem', color: installAmountGiven ? '#27500A' : '#7c2d12', fontWeight: 600, marginBottom: 4 }}>
+            {installAmountGiven
+              ? `${plantingOffering?.name ?? 'Install'} — amount entered, with a reason. Ready to send.`
+              : `${plantingOffering?.name ?? 'Install'} has no price for ${ladderPricing.quantityNeedingAmount} of these ${ladderPricing.quantityNeedingAmount === 1 ? 'tree' : 'trees'}.`}
+          </p>
+          {!installAmountGiven && (
+            <>
+              <ul style={{ margin: '4px 0 6px 16px', padding: 0 }}>
+                {ladderPricing.lines.filter(l => l.needsAmount).map((l, i) => (
+                  <li key={i} style={{ fontSize: '0.8125rem', color: '#7c2d12', lineHeight: 1.5 }}>
+                    <strong>{l.name ?? 'This line'}</strong>{l.size ? ` (${l.size})` : ''} — {l.reason}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontSize: '0.8125rem', color: '#7c2d12' }}>
+                {canOverride
+                  ? `Enter an amount for ${plantingOffering?.name ?? 'the install'} above, with a reason${ladderPricing.pricedTotal > 0 ? ` — it replaces the whole install line, not just the unpriced part (the rest comes to $${ladderPricing.pricedTotal.toFixed(2)})` : ''}.`
+                  : 'You do not have permission to enter a price here. Ask the owner, or set the price for these sizes in Settings → Container sizes.'}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* A FAILED LADDER READ IS NOT AN EMPTY LADDER — say which one happened (D-9). */}
+      {plantingOn && plantingUsesLadder && ladderFailed && (
+        <div style={{ margin: '0 16px', padding: '10px 14px', background: '#fff3f3', border: '1.5px solid #A32D2D', borderRadius: 8 }}>
+          <p style={{ fontSize: '0.875rem', color: '#7f1d1d' }}>{ladderFailed}</p>
+        </div>
+      )}
+
       {/* Error */}
       {submitError && (
         <div style={{ margin: '0 16px', padding: '10px 14px', background: '#fff3f3', border: '1.5px solid #A32D2D', borderRadius: 8 }}>
@@ -706,14 +826,14 @@ export function CartReview() {
         <button
           className="btn btn-primary"
           style={{ minHeight: 56 }}
-          disabled={submitting || noSalePrice}
+          disabled={submitting || noSalePrice || installBlocks}
           onClick={() => handleSubmit(true)}
         >
           {submitting && payOnline ? 'Sending…' : `Send invoice + pay online — $${total.toFixed(2)}`}
         </button>
         <button
           className="btn btn-secondary"
-          disabled={submitting || noSalePrice}
+          disabled={submitting || noSalePrice || installBlocks}
           onClick={() => handleSubmit(false)}
         >
           {submitting && !payOnline ? 'Creating order…' : "I'll pay at the office"}

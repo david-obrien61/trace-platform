@@ -133,6 +133,19 @@ interface DataSheetProps<T> {
    *  1,964 rows). Only the grid holds both numbers, so only the grid can tell a reader's choice
    *  from a short read. */
   sectionIndex?: { keyOf: (row: T) => string; keys: readonly string[]; sortKey: string; label?: string };
+  /** 🔴 LIFT THE VIEW OUT OF THE GRID so the consumer can put it in the URL. Optional: a grid
+   *  that does not pass it keeps its own state and behaves exactly as before.
+   *
+   *  WHY IT IS A PROP AND NOT A ROUTER CALL INSIDE THIS FILE: this engine is presentational by
+   *  contract — no supabase, no business context, no permission hook, NO ROUTER (see the header).
+   *  Reading `useSearchParams` here would put react-router into eight screens' shared dependency
+   *  for the sake of one of them. The page owns the URL; the grid owns the grid.
+   *
+   *  The defect it fixes: filter the customer list, open a customer, press Back — the full
+   *  unfiltered list returns, because the view lived in `useState` and leaving the page destroyed
+   *  it. The browser cannot restore state it was never shown. */
+  viewState?: { q: string; status: string; extra: string; sort: string; dir: 'asc' | 'desc' };
+  onViewStateChange?: (next: { q: string; status: string; extra: string; sort: string; dir: 'asc' | 'desc' }) => void;
   defaultSortKey?: string;
   defaultSortDir?: 'asc' | 'desc';
   /** Highlight + count rows (e.g. dup-size collisions). Evaluated against the FULL row set — a flag
@@ -177,20 +190,40 @@ interface DataSheetProps<T> {
 export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
-    statusFilter, extraFilter, sectionIndex, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
+    statusFilter, extraFilter, sectionIndex, viewState, onViewStateChange, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
     renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
     actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items', totalRows = null,
   } = props;
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('all');
-  const [extra, setExtra] = useState('all');
+  const [searchOwn, setSearchOwn] = useState('');
+  const [statusOwn, setStatusOwn] = useState('all');
+  const [extraOwn, setExtraOwn] = useState('all');
   // The letter a press asked to reach. Held in state rather than scrolled immediately, because
   // a press may first have to restore the grouping sort — the heading it wants does not exist in
   // the DOM until that render has happened. Cleared by the effect that performs the jump.
   const [pendingJump, setPendingJump] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir);
+  const [sortKeyOwn, setSortKeyOwn] = useState<string>(defaultSortKey ?? columns.find(c => c.sortable)?.key ?? '');
+  const [sortDirOwn, setSortDirOwn] = useState<'asc' | 'desc'>(defaultSortDir);
+
+  // ── CONTROLLED OR NOT, decided once, here ──────────────────────────────────────────────────
+  // With `viewState` the page is the source of truth (and puts it in the URL); without it the
+  // grid keeps its own. Every read below goes through these five names, so no call site has to
+  // know which mode it is in — and a half-controlled grid, where some controls write to the URL
+  // and others to local state, is not representable.
+  const controlled = !!viewState && !!onViewStateChange;
+  const search  = controlled ? viewState!.q : searchOwn;
+  const status  = controlled ? viewState!.status : statusOwn;
+  const extra   = controlled ? viewState!.extra : extraOwn;
+  // An empty `sort` in the URL means "the grid's default", not "no sort" — so a link that
+  // carries no sort still opens the list the way the page opens it.
+  const sortKey = controlled && viewState!.sort !== '' ? viewState!.sort : sortKeyOwn;
+  const sortDir = controlled ? viewState!.dir : sortDirOwn;
+  const emit = (patch: Partial<{ q: string; status: string; extra: string; sort: string; dir: 'asc' | 'desc' }>) =>
+    onViewStateChange!({ q: search, status, extra, sort: sortKey, dir: sortDir, ...patch });
+  const setSearch = (v: string) => (controlled ? emit({ q: v }) : setSearchOwn(v));
+  const setStatus = (v: string) => (controlled ? emit({ status: v }) : setStatusOwn(v));
+  const setExtra  = (v: string) => (controlled ? emit({ extra: v }) : setExtraOwn(v));
+  const setSortDir = (v: 'asc' | 'desc') => (controlled ? emit({ dir: v }) : setSortDirOwn(v));
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
     const v: Record<string, boolean> = {};
     for (const c of columns) v[c.key] = c.defaultVisible !== false;
@@ -230,8 +263,15 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   }
 
   function toggleSort(key: string) {
-    if (sortKey === key) { setSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return; }
-    setSortKey(key); setSortDir('asc');
+    // Value, not updater: the setters above may write to the page's URL state, which has no
+    // functional form — and reading `sortDir` here is equivalent because it is already resolved.
+    if (sortKey === key) { setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); return; }
+    // 🔴 ONE EMIT, NOT TWO. In controlled mode each setter sends the WHOLE view, built from the
+    // values of this render — so `setSortKey(key)` followed by `setSortDir('asc')` would send the
+    // new key, then immediately send the OLD key again with the new direction, silently undoing
+    // the first. Changing two fields at once has to be one message.
+    if (controlled) { emit({ sort: key, dir: 'asc' }); return; }
+    setSortKeyOwn(key); setSortDirOwn('asc');
   }
   function toggleExpand(id: string) {
     setExpanded(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -289,7 +329,10 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   /** Press a letter: restore the grouping sort if it is not active, then jump once it renders. */
   function jumpToSection(k: string): void {
     if (!sectionIndex) return;
-    if (!grouped) { setSortKey(sectionIndex.sortKey); setSortDir('asc'); }
+    if (!grouped) {
+      if (controlled) emit({ sort: sectionIndex.sortKey, dir: 'asc' });
+      else { setSortKeyOwn(sectionIndex.sortKey); setSortDirOwn('asc'); }
+    }
     setPendingJump(k);
   }
 

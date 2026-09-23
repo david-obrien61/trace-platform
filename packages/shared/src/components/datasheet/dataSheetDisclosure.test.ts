@@ -94,8 +94,14 @@ ok(/filtered: status !== 'all' \|\| extra !== 'all' \|\| !!search/.test(SRC),
 ok(!/indexKey !== 'all'/.test(SRC),
   '🔴 AZ4: THE LETTER INDEX IS NOT IN THE FILTERED FLAG, because it JUMPS rather than filters — every row is still shown, and the pill must not claim a narrowed list. This probe fails the moment somebody turns the index back into a filter without revisiting the claim');
 
-ok(/if \(!grouped\) \{ setSortKey\(sectionIndex\.sortKey\); setSortDir\('asc'\); \}/.test(SRC),
-  'AZ5: pressing a letter under another sort RESTORES the grouping sort first, so the index never silently does nothing');
+// ✏️ The shape changed when the view became optionally CONTROLLED by the page (ledger #385):
+// setting two fields now has to be ONE emit, or the second overwrites the first. The probe
+// asserts the BEHAVIOUR — the grouping sort is restored — rather than the exact statement, which
+// is what made it brittle here. Both branches are named so neither can quietly disappear.
+ok(/if \(!grouped\) \{/.test(SRC)
+   && /emit\(\{ sort: sectionIndex\.sortKey, dir: 'asc' \}\)/.test(SRC)
+   && /setSortKeyOwn\(sectionIndex\.sortKey\); setSortDirOwn\('asc'\)/.test(SRC),
+  'AZ5: pressing a letter under another sort RESTORES the grouping sort first — in BOTH modes (one emit when the page owns the view, local state when the grid does), so the index never silently does nothing');
 
 ok(/sorted another way — a letter returns to A–Z order/.test(SRC),
   'AZ6: …and the strip SAYS SO BEFORE the press, so the grid restoring the sort does not look like it undoing the reader’s choice by itself');

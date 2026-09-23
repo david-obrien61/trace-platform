@@ -275,6 +275,23 @@ export interface PricingLineInput {
    *  Empty/whitespace/absent ⇒ the override is REFUSED and the baseline is charged (money-safe:
    *  refusal charges MORE, never less). A concession with no recorded reason is unreconcilable. */
   overrideReason?: string | null;
+  /**
+   * SERVICE only — does the customer's TIER reach this line? Default FALSE, which is every
+   * service before 2026-09-23 and is why nothing existing moves.
+   *
+   * 🔴 IT EXISTS BECAUSE SPLITTING A FUSED SKU MUST NOT RAISE A CONTRACTOR'S PRICE (ledger #386,
+   * David's ruling (d), 2026-09-23): *"INSTALL STAYS DISCOUNTABLE for contractor tiers. Today it
+   * is fused into the plant SKU and does get the tier; splitting it out must not silently raise
+   * contractor prices."* LAWNS bills `Monterrey Oak - 45 gallon (Install & Warranty)` as ONE
+   * GOODS line, so the tier has always applied to the install inside it. Moving the install onto
+   * its own SERVICE line would have taken the discount away — invisibly, and only for the
+   * customers who get one.
+   *
+   * ⚠️ IT DOES NOT MAKE THE TIER AND THE OVERRIDE COMPETE. An override still wins outright: the
+   * owner naming a figure is a later and more specific act than a standing tier. The tier applies
+   * to the line only when no override does, and `discountSource` records which happened.
+   */
+  tierEligible?: boolean;
   /** TAXABILITY (D-40) — rides the D-39 goods/service line-kind seam. undefined ⇒ TRUE for BOTH
    *  goods and service (today's behavior — money-safety: no tenant's totals shift silently on ship;
    *  an owner opts a line out per jurisdiction later, e.g. labor exempt). This per-line flag is the
@@ -296,6 +313,13 @@ export interface PricedLine {
   basis: DiscountBasis;
   degraded: boolean;     // at_cost with no cost on file → charged at retail (D-9)
   taxable: boolean;      // D-40: whether this line is in the taxable subtotal (default true)
+  /**
+   * WHY this line's discountAmt is what it is. STD-011: the customer's TIER and the owner's
+   * discretionary CONCESSION are two different facts with different authorities and different
+   * audit trails, and a single number cannot say which one happened. Roll-ups filter on this
+   * rather than on `kind`, which is what let a tier reach a service without the two merging.
+   */
+  discountSource: 'tier' | 'override' | 'none';
   /** SERVICE only (D-48) — the owner's recorded reason, present ONLY when an override applied.
    *  Rides the line so every surface (Review/Confirmation/order-detail/QBO) can say WHY. */
   adjustmentReason?: string | null;
@@ -324,10 +348,15 @@ export interface OrderPricing {
   lines: PricedLine[];
   goodsRetailSubtotal: number; // Σ goods retailTotal (pre-discount) — for "show the work"
   discountTotal: number;       // Σ discountAmt (GOODS only) — the customer's TIER discount
-  /** Σ service discountAmt (D-48) — the owner's price concessions. SEPARATE from discountTotal: a
-   *  tier discount and an owner override are two different facts (STD-011). Negative = a surcharge. */
+  /** Σ TIER discountAmt on tier-eligible SERVICE lines (ledger #386, ruling (d)). Same FACT as
+   *  discountTotal, different BASE — discountTotal is rendered against goodsRetailSubtotal, so
+   *  service money must not be added to it. 0 for every order before 2026-09-23. */
+  serviceTierDiscountTotal: number;
+  /** Σ service discountAmt from an OWNER OVERRIDE (D-48) — the owner's price concessions. SEPARATE
+   *  from discountTotal: a tier discount and an owner override are two different facts (STD-011).
+   *  Negative = a surcharge. */
   serviceAdjustmentTotal: number;
-  discountedSubtotal: number;  // Σ netTotal (goods discounted + services full)
+  discountedSubtotal: number;  // Σ netTotal (goods discounted + tier-eligible services discounted)
   taxableSubtotal: number;     // Σ netTotal WHERE line.taxable (D-40; = discountedSubtotal when all taxable)
   tax: number;
   total: number;
@@ -388,7 +417,7 @@ export function computeOrderPricing(
       const netTotal = round2(netUnit * qty);
       const discountAmt = round2(retailTotal - netTotal);
       const discountPct = retailUnit > 0 ? round2((1 - netUnit / retailUnit) * 100) : 0;
-      return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded, taxable };
+      return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded, taxable, discountSource: discountAmt !== 0 ? 'tier' : 'none' };
     }
 
     // ── Service — NEVER tier-discounted. An owner OVERRIDE is expressed as this line's DISCOUNT
@@ -403,7 +432,12 @@ export function computeOrderPricing(
     // negative amount; it is refused too.
     const reason = (l.overrideReason ?? '').trim();
     const overrideApplies = l.overrideTotal != null && l.overrideTotal >= 0 && reason !== '';
-    const netTotal = overrideApplies ? round2(l.overrideTotal as number) : retailTotal;
+    // ✏️ 2026-09-23 (ledger #386, ruling (d)): a service that OPTS IN takes the tier when no
+    // override applies. `tierEligible` defaults false, so every service written before this date
+    // still passes through at retail and no tenant's totals move on ship.
+    const tierApplies = !overrideApplies && l.tierEligible === true;
+    const tierNet = tierApplies ? round2(applyTierPrice(retailUnit, null, resolvedTier).price * qty) : retailTotal;
+    const netTotal = overrideApplies ? round2(l.overrideTotal as number) : tierNet;
     const netUnit = qty > 0 ? round2(netTotal / qty) : netTotal;
     // discountAmt is NEGATIVE when the owner overrode UPWARD (a surcharge — a legitimate act, e.g. a
     // rocky site costing extra labor). Allowed deliberately: refusing would REGRESS an ability the
@@ -413,7 +447,12 @@ export function computeOrderPricing(
     // surface renders it as "% off" unless discountAmt > 0.
     const discountAmt = round2(retailTotal - netTotal);
     const discountPct = retailTotal > 0 ? round2((discountAmt / retailTotal) * 100) : 0;
-    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false, taxable, adjustmentReason: overrideApplies ? reason : null };
+    return {
+      kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt,
+      netUnit, netTotal, basis: 'retail_minus_percent', degraded: false, taxable,
+      adjustmentReason: overrideApplies ? reason : null,
+      discountSource: overrideApplies ? 'override' : (discountAmt !== 0 ? 'tier' : 'none'),
+    };
   });
 
   // ── THE D-43 INVARIANT, ENFORCED AT COMPUTE TIME (D-48) ────────────────────────────────────────
@@ -443,8 +482,20 @@ export function computeOrderPricing(
   // owner's per-service concession. They have different authorities, labels, and audit trails
   // (STD-013 reason) — STD-011 forbids collapsing two facts into one representation.
   const discountTotal          = round2(priced.filter(p => p.kind === 'goods').reduce((s, p) => s + p.discountAmt, 0));
-  /** The owner's service price-concessions (D-48) — its OWN roll-up, never merged into the tier's. */
-  const serviceAdjustmentTotal = round2(priced.filter(p => p.kind === 'service').reduce((s, p) => s + p.discountAmt, 0));
+  /**
+   * The TIER's discount on tier-eligible SERVICE lines (ledger #386, ruling (d)) — its own number
+   * because its BASE is different: `discountTotal` is measured against `goodsRetailSubtotal` and a
+   * surface renders the two together, so adding service money to it would make that subtraction
+   * wrong on screen. It is the SAME FACT as `discountTotal` (one customer, one tier) and a surface
+   * may present them as one line; it is a different BASE, which is why they are two fields.
+   * 0 for every order before 2026-09-23 and for every tenant that opts no service in.
+   */
+  const serviceTierDiscountTotal = round2(priced.filter(p => p.discountSource === 'tier' && p.kind === 'service').reduce((s, p) => s + p.discountAmt, 0));
+  /** The owner's service price-concessions (D-48) — its OWN roll-up, never merged into the tier's.
+   *  ✏️ Filters on `discountSource` now, not on `kind`: since ruling (d) a service line's discount
+   *  can be the TIER's rather than the owner's, and counting a tier discount as leakage would
+   *  report a concession nobody made. Identical result for every order written before that. */
+  const serviceAdjustmentTotal = round2(priced.filter(p => p.discountSource === 'override').reduce((s, p) => s + p.discountAmt, 0));
   const discountedSubtotal  = round2(priced.reduce((s, p) => s + p.netTotal, 0));
   // D-40: tax on the taxable lines only (default = every line taxable → == discountedSubtotal).
   const taxableSubtotal     = round2(priced.filter(p => p.taxable).reduce((s, p) => s + p.netTotal, 0));
@@ -460,7 +511,7 @@ export function computeOrderPricing(
   const total = round2(discountedSubtotal + tax);
 
   return {
-    lines: priced, goodsRetailSubtotal, discountTotal, serviceAdjustmentTotal, discountedSubtotal, taxableSubtotal, tax, total,
+    lines: priced, goodsRetailSubtotal, discountTotal, serviceTierDiscountTotal, serviceAdjustmentTotal, discountedSubtotal, taxableSubtotal, tax, total,
     taxStatus,
     taxExemptReason:  validExempt ? (exemption!.reason ?? null) : null,
     taxExemptCertRef: validExempt ? (exemption!.certRef ?? null) : null,

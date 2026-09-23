@@ -83,6 +83,18 @@ export interface ServiceOffering {
    */
   price_unit: string;
   price: number;
+  /**
+   * WHERE this service's price comes from (ledger #386, `20260923b`).
+   *   'fixed'            — the `price` column. Every row written before 2026-09-23.
+   *   'container_ladder' — per container size, read off the rung each cart line lands on; `price`
+   *                        is then unused, and a rung with no price makes the counter type an
+   *                        amount with a reason (R-171 (c)).
+   * ⚠️ OPTIONAL IN THE TYPE ON PURPOSE. The column is NOT NULL with a default in the database, so
+   * a row always has one — but a bundle deployed before `20260923b` is applied reads rows without
+   * it, and `usesLadderPricing` treats absent as 'fixed', which is the safe direction: the worst
+   * case is a service priced the way it was priced yesterday.
+   */
+  price_source?: 'fixed' | 'container_ladder' | string;
   transport_mode: 'self' | 'staff' | null;
   trigger_transport_mode: 'self' | 'staff' | null;
   recurrence_days: number | null;

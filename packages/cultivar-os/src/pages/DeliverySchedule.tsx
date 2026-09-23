@@ -36,6 +36,12 @@ import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
 import { CrewLinkPanel } from '../components/delivery/CrewLinkPanel';
+// ── THE SCHEDULE SPLIT BY TEAM (ledger #376, teams piece 5 — David, 2026-09-21) ────────────
+// 🔴 THE SAME PARTITION THE LOAD SHEET USES (ledger #373). One operation, one place (§6 r8): if
+//    the schedule grouped stops its own way, the office and the paper could disagree about who is
+//    taking a stop — and the paper is what the yard loads from.
+import { groupStopsByTeam, sheetIsSectioned } from '../lib/loadListSubset';
+import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { readStopEvents, stopActivity, type StopEvent } from '../lib/crewDayLink';
 import { ymd } from '../lib/dashboardWindows';
 import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
@@ -73,6 +79,15 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   // The crew link's record per stop. `null` = could not be read; `undefined` = not applied yet.
   const [crewEvents, setCrewEvents] = useState<Map<string, StopEvent[]> | null | undefined>(undefined);
   const [crewPanelDay, setCrewPanelDay] = useState<string | null>(null);
+  // 🔴 NAMES ONLY (ledger #376). A stop carries `team_id`; the NAME lives in the team list. A failed
+  // team read never hides a stop — the sections are built from the stops themselves, so an unnamed
+  // team still shows its work.
+  const [teams, setTeams] = useState<Team[]>([]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    void readTeams(supabase, businessId).then(r => { if (r.ok) setTeams(r.teams); });
+  }, [businessId]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -245,12 +260,61 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                 <CrewLinkPanel businessId={businessId} date={group.date} />
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {group.items.map(d => (
-                  <StopCard key={d.id} stop={d} read={read} actions={actions}
-                    crewActivity={crewEvents === undefined ? undefined : crewEvents === null ? null : stopActivity(crewEvents.get(d.id) ?? [], d)} />
-                ))}
-              </div>
+              {/* 🔴 ONE SECTION PER TEAM (ledger #376, teams piece 5). A day nobody has split shows
+                  exactly the flat list it always did — `sheetIsSectioned` is false and the map below
+                  runs once with no heading. Splitting a single-crew nursery's day would be telling
+                  it about a feature it does not use. */}
+              {(() => {
+                const sections = groupStopsByTeam(group.items);
+                const split = sheetIsSectioned(sections);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {sections.map(sec => (
+                      <div key={sec.teamId ?? 'no-team'} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {split && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                            marginTop: 4, paddingTop: 8, borderTop: '2px solid #e5edd8' }}>
+                            {/* `teamLabel` says "No team", "(retired)" or "A team that is no longer
+                                listed" — never a blank heading, and never a missing section (D-9). */}
+                            <strong style={{ fontSize: '0.875rem', color: GREEN }}>
+                              {teamLabel(teams, sec.teamId)}
+                            </strong>
+                            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                              {sec.stops.length} stop{sec.stops.length === 1 ? '' : 's'}
+                            </span>
+                            {/* 🔴 ROUTE THIS TEAM, NOT THE DAY ([[R-169]]). The route page refuses a
+                                set spanning two teams BY NAME, so the button hands it a set it can
+                                actually route. A teamless section gets NO button — routing it is
+                                exactly what R-169 refuses, and offering a control that must fail is
+                                a dead affordance (§1.6 item 5). */}
+                            {sec.teamId && group.date && (
+                              <button
+                                onClick={() => {
+                                  if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route team —', group.date, sec.teamId, sec.stops.length, 'stops');
+                                  navigate(`/deliveries?date=${group.date}&team=${sec.teamId}`);
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', minHeight: 36,
+                                  background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: 8,
+                                  fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                <Navigation size={13} /> Route this team
+                              </button>
+                            )}
+                            {sec.teamId === null && (
+                              <span style={{ fontSize: '0.75rem', color: '#8a6d1f' }}>
+                                Not assigned to a team yet — give these to a team before routing.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {sec.stops.map(d => (
+                          <StopCard key={d.id} stop={d} read={read} actions={actions}
+                            crewActivity={crewEvents === undefined ? undefined : crewEvents === null ? null : stopActivity(crewEvents.get(d.id) ?? [], d)} />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
