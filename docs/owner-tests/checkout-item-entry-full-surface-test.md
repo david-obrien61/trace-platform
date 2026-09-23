@@ -6,8 +6,8 @@
 > docs included, moves the stamp. *(OP-15.)*
 > 🔴 **AND THE LAST TOKEN MUST READ `prod`.** *(tech-debt #280 ②.)*
 
-**Capability:** 2.1 Cart / QR checkout · inventory roster · **Ledger:** #388 · **Ruling:** R-175
-**Board: 0 of 8 covered** (8 `owed`). Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
+**Capability:** 2.1 Cart / QR checkout · inventory roster · **Ledger:** #388 · #393 · **Rulings:** R-175 · R-176
+**Board: 0 of 9 covered** (9 `owed`). Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
 
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74`. **ACTOR:** anyone who can ring up an order.
 
@@ -123,3 +123,29 @@ returns `centre cherry court laurel` — **still not equal** to the Center spell
 **FAIL:** a tag resolves to a different row, or to an ambiguity it did not used to have. **Stop and
 report it** — that would mean the fold reached the resolution path.
 *(Provable without a console: it is the same scan you have always done.)*
+
+### CARD 9 — 🔴 EVERY ON-HAND NUMBER SAYS WHERE IT CAME FROM
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **TENANT:** LAWNS · **COVERS:** #393 · R-176
+
+Apply `supabase/migrations/20260923m_inventory_qty_provenance.sql`, then open a new order and type
+enough of a plant name to bring up a few rows.
+
+**PASS, all three:** ① **no row shows a bare number** — each reads **`10 · placeholder`**, and the
+figure is amber rather than grey; ② a row you have actually counted reads **`1 · counted 26 Aug`**;
+③ **placeholders are still listed and still sellable** — they are marked, not hidden.
+
+🔴 **WHY IT MATTERS MORE THAN IT LOOKS, MEASURED LIVE 2026-09-23:** **512 of LAWNS's 632 lots sit at
+exactly qty 10, 120 at 0, and not one lot at any other value.** All 512 were written by a single
+import run on 2026-09-21. The purchases-minus-sales derivation **has never run and has no inputs** —
+**zero** purchase-kind ledger rows, and **3,924 of 3,925** order lines unlinked to a lot. **Two lots
+have ever been counted.** So before this card, the number on Lauren's screen was a flat import
+default that looked exactly like a measured one.
+
+**FAIL:** a bare figure anywhere, OR a placeholder row missing from the list. 🔴 **Hiding it would be
+the worse failure** — David's ruling: *"the placeholder is deliberately low — the BLOCK AT SALE IS
+THE RECONCILE TRIGGER. Do not raise it, do not hide it."* Running out is the mechanism that sends
+somebody to count; a hidden row cannot run out.
+
+⚠️ **BEFORE the migration is applied, every row will read `basis unknown`.** That is correct and is
+not a failure — the bundle has not been told, which is a different fact from "nobody counted it".
