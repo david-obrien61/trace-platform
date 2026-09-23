@@ -47,8 +47,22 @@ for (const f of files) {
     }
   }
   const code = sql.split('\n').filter((l) => !l.trimStart().startsWith('--')).join('\n');
-  for (const m of code.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g)) created.add(m[1]);
-  for (const m of code.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\s+DROP COLUMN\s+(?:IF EXISTS\s+)?([a-z_]+)/g)) created.delete(m[1]);
+  // 🔴 EVERY COLUMN OF A MULTI-COLUMN ALTER, NOT JUST THE FIRST (ledger #386).
+  // WAS: /ALTER TABLE …container_ladder\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g — anchored
+  // on `ALTER TABLE`, so a statement of the legal and ordinary form
+  //     ALTER TABLE container_ladder
+  //       ADD COLUMN IF NOT EXISTS install_price numeric(10,2),
+  //       ADD COLUMN IF NOT EXISTS install_price_because text NOT NULL DEFAULT '';
+  // contributed ONLY `install_price`. Every ladder migration before 2026-09-23 used one ALTER per
+  // column, so the hole never bit — it was found by `20260923` walking into it, not by review.
+  // ⚠️ THE DANGEROUS DIRECTION IS §C, NOT §B. §B goes RED when a column the select READS is missed,
+  // which is loud. §C asks "is every created column read or declared?" — and a column this parser
+  // cannot see is a column §C cannot ask about, so a second ADD COLUMN could have introduced an
+  // unread field with the cap staying green. That is #179's exact shape, inside #179's own cap.
+  for (const stmt of code.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\b([\s\S]*?);/g)) {
+    for (const m of stmt[1].matchAll(/ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g)) created.add(m[1]);
+    for (const m of stmt[1].matchAll(/DROP COLUMN\s+(?:IF EXISTS\s+)?([a-z_]+)/g)) created.delete(m[1]);
+  }
 }
 
 ok(createdIn === '20260914_container_ladder.sql', `§A the replay found the migration that CREATES the table (found ${createdIn})`);
@@ -91,6 +105,31 @@ for (const c of Object.keys(NOT_READ)) {
 ok(LADDER_SELECT === LADDER_FIELDS.join(', '), '§D the select is derived from the list');
 ok(LADDER_SELECT.split(', ').length === LADDER_FIELDS.length, '§D …and loses nothing on the way');
 ok(!LADDER_SELECT.includes('*'), '🔴 §D the select never asks for `*` — a star cannot be checked against a migration at all');
+
+// ── §E — 🔴 THE PARSER CAN SEE A MULTI-COLUMN ALTER, PROVEN BOTH WAYS (§6 r19) ────────────────
+// A cap nobody has watched refuse is a claim. This runs the OLD matcher and the NEW one over the
+// same synthetic statement and asserts they DISAGREE, so if someone "simplifies" the parser back
+// to the anchored form this goes red and names exactly what was lost.
+{
+  const sample = `ALTER TABLE container_ladder
+  ADD COLUMN IF NOT EXISTS alpha numeric(10,2),
+  ADD COLUMN IF NOT EXISTS beta text NOT NULL DEFAULT '';`;
+
+  const oldWay = new Set<string>();
+  for (const m of sample.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g)) oldWay.add(m[1]);
+
+  const newWay = new Set<string>();
+  for (const stmt of sample.matchAll(/ALTER TABLE\s+(?:public\.)?container_ladder\b([\s\S]*?);/g)) {
+    for (const m of stmt[1].matchAll(/ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_]+)/g)) newWay.add(m[1]);
+  }
+
+  ok(oldWay.has('alpha') && !oldWay.has('beta'),
+    '🔴 §E the OLD matcher saw only the FIRST column of a multi-column ALTER — the hole, reproduced');
+  ok(newWay.has('alpha') && newWay.has('beta'),
+    '🔴 §E the NEW matcher sees both — this assertion is what stops the anchored form coming back');
+  ok(created.has('install_price') && created.has('install_price_because'),
+    '§E and on the real corpus both columns of 20260923\'s multi-column ALTER are in the replay');
+}
 
 console.log(`\n── containerLadderFields: ${passed} passed, ${failed} failed ──`);
 if (failed) { failures.forEach((f) => console.error('  ✗ ' + f)); process.exit(1); }

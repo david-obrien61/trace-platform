@@ -7,6 +7,8 @@ import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
 import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
+import { priceLinesFromLadder, usesLadderPricing } from '../../../shared/src/business-logic/ladderPricing';
+import { LADDER_SELECT, rungFromRow, type Ladder } from '../../../shared/src/inventory/containerLadder';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
 import { orderKindForMode, mayWriteStockRecord } from '../../../shared/src/business-logic/testMode';
@@ -703,7 +705,7 @@ async function handleCreate(req: any, res: any) {
     // D-43: each resolved line carries its NET (unitPrice/subtotal — what's charged) AND its stored
     // show-the-work breakdown (retailUnit/discountPct/discountAmt) — all written to order_items so
     // every downstream surface renders the stored fact, no recompute. Filled after computeOrderPricing.
-    const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; unitPrice: number; subtotal: number; retailUnit: number; discountPct: number; discountAmt: number }> = [];
+    const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; container: string | null; unitPrice: number; subtotal: number; retailUnit: number; discountPct: number; discountAmt: number }> = [];
     const goodsInputs: PricingLineInput[] = [];
     let anyLargeContainer = false;
 
@@ -726,6 +728,7 @@ async function handleCreate(req: any, res: any) {
       let serverSellPriceRaw: number | null | undefined;
       let serverUnitCost: number | null | undefined; // server-read cost (at_cost basis only; NEVER client)
       let stockLineSize: string | null = null;
+      let specimenContainer: string | null = null;
       let availableQty: number | null = null; // server-read on-hand for the pre-flight oversell guard (D-42)
 
       if (stockLineId) {
@@ -743,13 +746,19 @@ async function handleCreate(req: any, res: any) {
       } else {
         const { data: invRow } = await db
           .from('cultivar_plants')
-          .select('business_inventory ( sell_price, unit_cost, qty )')
+          .select('current_container, business_inventory ( sell_price, unit_cost, qty )')
           .eq('id', plant.id)
           .eq('business_id', businessId)
           .single();
         serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
         serverUnitCost     = (invRow as any)?.business_inventory?.unit_cost;
         availableQty       = (invRow as any)?.business_inventory?.qty ?? null;
+        // 🔴 SERVER-READ, ADDED 2026-09-23 (ledger #386). The size now SETS A PRICE, so it stops
+        // being a label and becomes money — and a money input read off the client is a tamper
+        // hole (§1.6 gate 10). The stock-line branch above already read `size` from the database;
+        // the specimen branch fell back to `plant.current_container`, which the caller supplies.
+        // A cart claiming "95 gal" on a 15 gal specimen would have bought a $800 install for $204.
+        specimenContainer  = (invRow as any)?.current_container ?? null;
         console.log('[TRACE:RESOLVE] order anchor — cultivar_plants (specimen)', { plantId: plant.id });
       }
 
@@ -810,7 +819,11 @@ async function handleCreate(req: any, res: any) {
       if (lotIdForCheck) claimedInThisCart.set(lotIdForCheck, cartClaimed + quantity);
 
       // D-34: for a stock-line order the container is the lot's size (server-fetched).
-      const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
+      // ✏️ BOTH BRANCHES ARE SERVER-FETCHED NOW (ledger #386) — the specimen branch used to take
+      // the client's `plant.current_container` with nothing to check it against. The client value
+      // survives only as a last fallback for a row that genuinely holds no size, where it is a
+      // label and not a price: `priceLinesFromLadder` refuses to price a size it cannot place.
+      const container = (stockLineId ? stockLineSize : specimenContainer) ?? plant.current_container;
       if (LARGE_CONTAINERS.includes(container)) anyLargeContainer = true;
 
       // GOODS line for the shared computation — the tier is applied there, once (D-39). The net
@@ -820,7 +833,7 @@ async function handleCreate(req: any, res: any) {
         name: plant.common_name ?? plant.species ?? 'this item',
         unitPrice: serverSellPrice, qty: quantity, unitCost: serverUnitCost,
       });
-      resolvedLines.push({ plant, quantity, stockLineId, unitPrice: 0, subtotal: 0, retailUnit: 0, discountPct: 0, discountAmt: 0 }); // net + breakdown filled after compute
+      resolvedLines.push({ plant, quantity, stockLineId, container, unitPrice: 0, subtotal: 0, retailUnit: 0, discountPct: 0, discountAmt: 0 }); // net + breakdown filled after compute
     }
 
     // ── 4. Service amounts (attach-rule netting over the WHOLE cart) ─────────
@@ -880,8 +893,94 @@ async function handleCreate(req: any, res: any) {
     // (delivery flat ×1 + planting per_unit ×N). Distinct from transport so both are charged.
     const plantingActive   = !!(plantingSelected && plantingOffering);
     const plantingQty      = plantingActive ? qtyFor(plantingOffering) : 0;
-    const plantingComputed = plantingActive ? lineSubtotal(plantingOffering, plantingQty) : 0;
+
+    // ── PER-SIZE PRICING, COMPUTED HERE AND NOT TRUSTED FROM THE CLIENT (ledger #386) ───────
+    // 🔴 §1.6 gate 10 — MONEY-SAFETY ON MUTATIONS: *"any mutation touching price … recomputes
+    // SERVER-AUTHORITATIVELY (tamper defense)."* CartReview shows the customer a per-size total;
+    // THIS is the number that is charged. Both call the identical pure function over the same
+    // inputs, so Review === submit by construction rather than by convention (D-39 / STD-012) —
+    // but the inputs here are the SERVER's sizes, read from the database a few lines above.
+    //
+    // ⚠️ THE LADDER IS READ ONLY WHEN IT IS NEEDED. A business whose services are all `fixed`
+    // issues no extra query; this is the checkout path and a round-trip nobody uses is a cost
+    // paid on every order.
+    let ladder: Ladder | null = null;
+    const plantingUsesLadder = plantingActive && usesLadderPricing(plantingOffering);
+    if (plantingUsesLadder) {
+      const { data: ladderRows, error: ladderErr } = await db
+        .from('container_ladder')
+        .select(LADDER_SELECT)
+        .eq('business_id', businessId)
+        .order('sort_order', { ascending: true });
+      // 🔴 AN UNREADABLE LADDER IS NOT AN EMPTY ONE. `?? []` here would price every line at
+      // "not set" and hand the whole order to the override path — which, for a caller WITHOUT
+      // `order_discount:apply`, silently becomes a $0 planting line. An empty array is a real
+      // answer (a business with no rungs); a failed read is not, and they must not look alike.
+      if (ladderErr) {
+        console.log('[TRACE:PRICE] container ladder read FAILED — refusing to price the install', {
+          businessId, error: ladderErr.message,
+        });
+        return res.status(503).json({
+          error: 'We could not read this business\'s container sizes, so the install price cannot be worked out. Nothing was charged. Try again in a moment.',
+        });
+      }
+      ladder = (ladderRows ?? []).map((r: any) => rungFromRow(r));
+    }
+
+    // Per-line install prices. `container` on each resolved line is the SERVER's size.
+    const ladderPricing = (plantingUsesLadder && ladder)
+      ? priceLinesFromLadder(ladder, resolvedLines.map(rl => ({
+          size: rl.container,
+          quantity: rl.quantity,
+          name: rl.plant?.common_name ?? rl.plant?.species ?? null,
+        })))
+      : null;
+
+    if (ladderPricing) {
+      console.log('[TRACE:PRICE] install priced per container size', {
+        offering: plantingOffering.name,
+        pricedTotal: ladderPricing.pricedTotal,
+        linesNeedingAmount: ladderPricing.linesNeedingAmount,
+        unitsNeedingAmount: ladderPricing.quantityNeedingAmount,
+        lines: ladderPricing.lines.map(l => ({ name: l.name, size: l.size, rung: l.rungLabel, unit: l.unitPrice, total: l.lineTotal })),
+      });
+    }
+
+    // 🔴 THE BASELINE FOR A LADDER-PRICED SERVICE IS WHAT THE LADDER COULD PRICE — NEVER
+    // `price × qty`. `plantingOffering.price` is meaningless on a ladder-priced row (the column
+    // is unused, which is what `price_source` says), so multiplying it would charge whatever
+    // scalar happened to be sitting there — most likely 0.
+    const plantingComputed = plantingActive
+      ? (ladderPricing ? ladderPricing.pricedTotal : lineSubtotal(plantingOffering, plantingQty))
+      : 0;
     const plantingRes      = plantingActive ? applyOverride(plantingOffering.id, plantingComputed) : null;
+
+    // 🔴 RULING (c) ENFORCED SERVER-SIDE: *"never $0, never a guess, never refused."* A line whose
+    // rung carries no price needs a TYPED AMOUNT, and the typed amount is the existing override
+    // (which already requires a reason and records the leakage). So: if any line is owed an
+    // amount and no honored override arrived for this service, the order is REFUSED with a
+    // message naming the lines — it is NOT quietly charged the priced subset.
+    //
+    // ⚠️ THE REFUSAL IS THE MONEY-SAFE DIRECTION AND IT IS THE THIRD OPTION, NOT A FOURTH.
+    // The ruling forbids refusing the CHOICE of install; it does not require accepting an order
+    // whose price nobody has stated. Charging `pricedTotal` and dropping the rest would be the
+    // silent $0 the ruling exists to prevent. The UI does not let this happen; this is the gate
+    // behind it, because the UI is not the control (STD-013's pattern, one field over).
+    if (ladderPricing && !ladderPricing.allPriced && !plantingRes?.isOverride) {
+      const owed = ladderPricing.lines.filter(l => l.needsAmount);
+      console.log('[TRACE:PRICE] install REFUSED — a line has no price and no typed amount', {
+        businessId, lines: owed.map(l => ({ name: l.name, size: l.size, rung: l.rungLabel, reason: l.reason })),
+        callerManages, hadOverride: !!honored[plantingOffering.id],
+      });
+      return res.status(422).json({
+        error: 'This install has no price for some of these sizes, so it cannot be totalled yet. '
+             + 'Enter an amount for the install, with a reason — or set a price for '
+             + [...new Set(owed.map(l => l.rungLabel ?? l.size ?? 'the missing size'))].join(', ')
+             + ' in Settings → Container sizes.',
+        linesNeedingAmount: owed.map(l => ({ name: l.name, size: l.size, rung: l.rungLabel, reason: l.reason })),
+      });
+    }
+
     const plantingAmount   = plantingRes?.amount ?? 0;
 
     const nettingSelection = (services ?? []).find(
@@ -935,7 +1034,22 @@ async function handleCreate(req: any, res: any) {
     // reason rule, so the two gates agree by construction rather than by convention.
     const serviceInputs: PricingLineInput[] = [];
     if (selectedTransport) serviceInputs.push({ kind: 'service', name: selectedTransport.name, unitPrice: Number(selectedTransport.price), qty: qtyFor(selectedTransport), overrideTotal: transportRes?.isOverride ? transportAmount : null, overrideReason: transportRes?.reason ?? null });
-    if (plantingActive && plantingOffering) serviceInputs.push({ kind: 'service', name: plantingOffering.name, unitPrice: Number(plantingOffering.price), qty: plantingQty, overrideTotal: plantingRes?.isOverride ? plantingAmount : null, overrideReason: plantingRes?.reason ?? null });
+    if (plantingActive && plantingOffering) serviceInputs.push({
+      kind: 'service', name: plantingOffering.name,
+      // 🔴 A LADDER-PRICED SERVICE HAS NO UNIT PRICE. Its baseline is the per-line sum the ladder
+      // produced, so it is fed as ONE unit at that total — feeding `offering.price × qty` would
+      // charge whatever scalar is sitting in an unused column. For a `fixed` service nothing
+      // changes: unit price × the netted quantity, exactly as before.
+      unitPrice: ladderPricing ? plantingComputed : Number(plantingOffering.price),
+      qty:       ladderPricing ? 1               : plantingQty,
+      // 🔴 RULING (d): the install takes the customer's tier. LAWNS bills install fused INTO the
+      // plant SKU today, where the tier has always reached it; moving it to its own line without
+      // this would quietly raise every contractor's price. Only a LADDER-PRICED service opts in —
+      // a tenant's existing flat services are untouched and must stay that way.
+      tierEligible: !!ladderPricing,
+      overrideTotal: plantingRes?.isOverride ? plantingAmount : null,
+      overrideReason: plantingRes?.reason ?? null,
+    });
     if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null, overrideReason: nettingRes?.reason ?? null });
     for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null, overrideReason: x.res.reason ?? null });
 
