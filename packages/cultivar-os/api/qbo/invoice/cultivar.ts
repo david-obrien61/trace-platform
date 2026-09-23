@@ -475,7 +475,19 @@ export function buildQboInvoiceLines(args: {
       amount:      lineAmount,
       unitPrice:   lineUnit,
       qty:         item.quantity,
-      backingRow:  item.business_inventory,
+      // 🔴 THE ORDER LINE IS THE BACKING ROW, NOT THE LOT (ledger #394). This read
+      // `item.business_inventory`, and the embed a few hundred lines below fetches
+      // `business_inventory ( name, size, sku )` — **no item id at all**. So
+      // `qboItemMappingOf` looked for `qbo_item_id` on an object holding three
+      // unrelated fields, found nothing, and EVERY GOODS LINE ON EVERY TENANT was
+      // refused `QBO_ITEM_UNMAPPED`. Not a column-name mismatch: the id was never
+      // fetched.
+      // ⚠️ `order_items.qbo_item_id` is the RIGHT source and not merely a convenient
+      // one — it is the id FROZEN AT CHARGE. Re-reading the lot's current mapping
+      // would re-point an old invoice at whatever the catalogue says today, which is
+      // the same class of mistake as recomputing a historic price (D-43).
+      // LIVE 2026-09-23: populated on 3,679 of 3,899 LAWNS order_items.
+      backingRow:  item,
       source:      'business_inventory',
     });
   }
