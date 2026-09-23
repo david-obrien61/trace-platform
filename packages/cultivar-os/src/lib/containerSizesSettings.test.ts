@@ -20,7 +20,7 @@ import {
   resolveConfig,
 } from '@trace/shared/production';
 import {
-  CALIPER_NOT_SET, COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
+  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
 } from './containerLadderDraft';
 
 let passed = 0, failed = 0;
@@ -224,6 +224,48 @@ const LAWNS: Ladder = [
   const mig = read('supabase/migrations/20260918c_container_ladder_caliper.sql');
   ok(/caliperMeasuredAtBecause/.test(mig) && /not corrected/.test(mig),
     '🔴 L6: the migration records WHY LAWNS measures at 12, in their own words');
+}
+
+// ══ §F — THE INSTALL PRICE: BLANK IS AN ANSWER, $0 IS NOT (ledger #386, ruling (c)) ═══════════
+// David, 2026-09-23: *"A RUNG WITH NO PRICE: offer install and REQUIRE A TYPED AMOUNT with a
+// reason — never $0, never a guess, never refused."* The editor is the OTHER end of that ruling:
+// if it let a 0 be saved, every screen downstream would faithfully charge nothing and every one of
+// them would be right to. Refusing it here is what makes the null path mean "nobody has said yet".
+{
+  const good = { ...draftForNewRung(LAWNS), label: '300 gal', volumeGallons: '300' };
+
+  ok(rungDraftProblems(good, LAWNS, null).length === 0,
+    'F1 (negative control): a new size with NO install price is perfectly valid — blank is the honest answer');
+  ok(draftToRow(good).install_price === null,
+    'F2 🔴 and it stores NULL, not 0 — the difference the whole ruling rests on');
+  ok(draftToRow(good).install_price_because === INSTALL_PRICE_NOT_SET,
+    'F3 …with a reason that says nobody has set it, so the screen can say WHY it is asking');
+
+  const zero = rungDraftProblems({ ...good, installPrice: '0' }, LAWNS, null);
+  ok(zero.some(p => /charge nothing/.test(p)),
+    'F4 🔴 a typed 0 is REFUSED, and the message says what it would do — "would charge nothing"');
+  ok(zero.some(p => /Leave it blank/.test(p)),
+    'F5 …and points at the honest alternative rather than just saying no');
+
+  ok(rungDraftProblems({ ...good, installPrice: '-50' }, LAWNS, null).some(p => /above \$0/.test(p)),
+    'F6 a negative price is refused too');
+  ok(rungDraftProblems({ ...good, installPrice: 'lots' }, LAWNS, null).some(p => /above \$0/.test(p)),
+    'F7 and so is a word');
+  ok(rungDraftProblems({ ...good, installPrice: '450', installPriceBecause: '  ' }, LAWNS, null)
+      .some(p => /where the install price came from/.test(p)),
+    'F8 🔴 a price with no reason is refused — the same rule every other figure on the rung obeys');
+
+  const priced = draftToRow({ ...good, installPrice: '450', installPriceBecause: "Lauren's sheet" });
+  ok(priced.install_price === 450 && priced.install_price_because === "Lauren's sheet",
+    'F9 a real price round-trips with its reason');
+
+  // A rung read back out of the database and straight into the editor must not lose the price.
+  const roundTrip = draftFromRung({ ...LAWNS[3], installPrice: 204, installPriceBecause: 'billed median' });
+  ok(roundTrip.installPrice === '204' && draftToRow({ ...roundTrip, label: LAWNS[3].label }).install_price === 204,
+    'F10 rung → draft → row keeps the price, so opening the editor and saving changes nothing');
+  const blankTrip = draftFromRung({ ...LAWNS[3], installPrice: null, installPriceBecause: 'not priced' });
+  ok(blankTrip.installPrice === '' && draftToRow({ ...blankTrip, label: LAWNS[3].label }).install_price === null,
+    'F11 🔴 …and an UNPRICED rung round-trips as blank, never as 0 — the direction that would charge nothing');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);
