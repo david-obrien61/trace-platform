@@ -17,7 +17,11 @@
 --         so the sales side cannot be joined to a lot either.
 --   · **445 of 446 `opening_balance` ledger rows assert `delta = 0`** — the opening
 --     balance was a no-op for essentially every lot.
---   · Only **2 distinct lots have ever been counted** (3 `inventory_counts` rows).
+--   · **NO LOT HAS EVER BEEN REALLY COUNTED.** There are 3 `inventory_counts` rows and
+--     they are a TEST: one never-completed session (`046394fc`, `status='in_progress'`),
+--     run from David's own account, three rows in 3.5 minutes, the same lot counted
+--     twice 27 seconds apart. **They seed as `placeholder`, not `counted`** — see the
+--     backfill. David's ruling 2026-09-23: *the entire inventory has never been counted.*
 --   · No provenance column exists. `cost_confidence` and `price_basis` are about
 --     COST and PRICE; `cost_confidence` is NULL on all 632 rows.
 --
@@ -54,21 +58,31 @@ COMMENT ON COLUMN business_inventory.qty_basis IS
 COMMENT ON COLUMN business_inventory.qty_basis_at IS
   'When the basis was established — the count date for counted, the derivation run for derived. NULL for a placeholder, which has no date because nothing happened.';
 
--- ── BACKFILL ① — EVERY LOT THAT HAS EVER BEEN COUNTED ─────────────────────────
--- Done FIRST so ② cannot claim these rows. The date is the real count date, not now().
-UPDATE business_inventory bi
-   SET qty_basis = 'counted',
-       qty_basis_at = c.counted_at,
-       qty_basis_because = 'Counted on the walk (inventory_counts ' || c.id::text || ').'
-  FROM (SELECT DISTINCT ON (inventory_id) inventory_id, id, counted_at
-          FROM inventory_counts ORDER BY inventory_id, counted_at DESC) c
- WHERE bi.id = c.inventory_id
-   AND bi.qty_basis = 'placeholder';   -- never demote or re-date an established basis
-
--- ── BACKFILL ② — EVERYTHING ELSE IS A PLACEHOLDER, AND SAYS WHY ──────────────
--- 🔴 IT SAYS *WHY* RATHER THAN JUST *WHAT*. "placeholder" alone invites the reader
--- to assume somebody estimated it. Nobody did: it is an import default, and the
--- reason names the run so the claim can be checked.
+-- ── BACKFILL — EVERYTHING IS A PLACEHOLDER, INCLUDING THE THREE "COUNTS" ─────
+-- 🔴 THE THREE `inventory_counts` ROWS ARE A TEST RUN, NOT A COUNT — AND SEEDING THEM
+--    AS `counted` WOULD HAVE BEEN THE EXACT TRUST FAILURE R-170 EXISTS TO STOP.
+--    A first draft of this migration marked them `counted` with their real date, which
+--    would have put **"1 · counted 26 Aug"** in front of Lauren on a lot nobody has
+--    counted. David's red-team caught it before it was applied.
+--
+--    MEASURED LIVE 2026-09-23, and every one of these says "test", not "walk":
+--      · all three belong to ONE session, `046394fc-c679-45db-b458-7746915e6c0d`
+--      · that session is **`status = 'in_progress'`, `completed_at` NULL** — it was
+--        never finished
+--      · `counted_by` = **david_obrien2016@outlook.com** — David's own account, not
+--        Lauren's and not Joel's
+--      · started 20:32:11, three rows by 20:35:48 — **3½ minutes**, `item_count` 3
+--      · the SAME lot (`5eb04bd1`, Brodie Juniper) was counted TWICE, 27 seconds apart
+--      · every `counted_qty` is 1; the ledger deltas are +1, 0, +1
+--      · neither lot came from the catalogue import (`import_run_id` NULL) and neither
+--        carries a `qb_item_name`
+--
+-- 🔴 AND IT AGREES WITH THE RULING RATHER THAN CONTRADICTING IT. David, 2026-09-23:
+--    **the entire inventory has NEVER been counted.** A migration that produced three
+--    `counted` rows would have quietly disagreed with that on Lauren's screen.
+--
+-- ⚠️ SO THERE IS NO `counted` BRANCH IN THIS MIGRATION AT ALL. The first real count
+--    writes one, through the count screen, at the moment somebody counts something.
 UPDATE business_inventory
    SET qty_basis_because =
        'Never counted and never derived. This number came from the product import, '
@@ -76,7 +90,20 @@ UPDATE business_inventory
        || '(no purchase-side ledger rows, and order lines are not linked to lots). '
        || 'It is deliberately low so that running out is what triggers a count (R-176).'
  WHERE qty_basis = 'placeholder'
-   AND qty_basis_because = '';
+   AND qty_basis_because = ''
+   AND id NOT IN (SELECT inventory_id FROM inventory_counts WHERE inventory_id IS NOT NULL);
+
+-- The two lots that carry a TEST count say so — a different reason, because a reader
+-- who finds a count row against the lot deserves to know why it was not honoured.
+UPDATE business_inventory
+   SET qty_basis_because =
+       'Test count, 2026-08-26 — NOT a real count. The three inventory_counts rows '
+       || 'against this business are one never-completed session (046394fc) run from '
+       || 'David''s own account in 3.5 minutes, counting the same lot twice. The entire '
+       || 'inventory has never been counted (David, 2026-09-23), so this stays a '
+       || 'placeholder until somebody walks it.'
+ WHERE qty_basis = 'placeholder'
+   AND id IN (SELECT inventory_id FROM inventory_counts WHERE inventory_id IS NOT NULL);
 
 COMMIT;
 
@@ -96,28 +123,42 @@ SELECT 'V1 qty_basis NOT NULL default placeholder; _at nullable' AS check,
  WHERE table_schema = 'public' AND table_name = 'business_inventory'
    AND column_name IN ('qty_basis', 'qty_basis_at', 'qty_basis_because');
 
--- V2 — 🔴 NO ROW IS SILENT. Expect: PASS, 0 silent. This is the whole point: a row
--- with no basis would render as a bare number on the till.
-SELECT 'V2 every LAWNS lot states a basis and a reason' AS check,
-       CASE WHEN count(*) FILTER (WHERE qty_basis_because = '') = 0 THEN 'PASS' ELSE 'FAIL' END AS verdict,
+-- V2 — 🔴 NO ROW IS SILENT, AND NOT ONE ROW CLAIMS TO HAVE BEEN COUNTED.
+-- Expect: PASS — 632 lots, 632 placeholder, **0 counted**, 0 derived, 0 silent.
+-- 🔴 THE ZERO IS THE ASSERTION. David's ruling, 2026-09-23: *the entire inventory has
+-- never been counted.* A migration that produced even one `counted` row would put
+-- "counted 26 Aug" in front of Lauren on a lot nobody has walked — the trust failure
+-- R-170 exists to stop, and what an earlier draft of this file would have done.
+SELECT 'V2 every lot states a basis; NONE claims to be counted' AS check,
+       CASE WHEN count(*) FILTER (WHERE qty_basis_because = '') = 0
+             AND count(*) FILTER (WHERE qty_basis = 'counted') = 0
+             AND count(*) FILTER (WHERE qty_basis = 'derived') = 0
+            THEN 'PASS' ELSE 'FAIL' END AS verdict,
        count(*) AS lots,
-       count(*) FILTER (WHERE qty_basis = 'placeholder') AS placeholder,
-       count(*) FILTER (WHERE qty_basis = 'counted')     AS counted,
-       count(*) FILTER (WHERE qty_basis = 'derived')     AS derived,
-       count(*) FILTER (WHERE qty_basis_because = '')    AS silent_should_be_zero
+       count(*) FILTER (WHERE qty_basis = 'placeholder') AS placeholder_expect_632,
+       count(*) FILTER (WHERE qty_basis = 'counted')     AS counted_expect_0,
+       count(*) FILTER (WHERE qty_basis = 'derived')     AS derived_expect_0,
+       count(*) FILTER (WHERE qty_basis_because = '')    AS silent_expect_0
   FROM business_inventory
  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND retired_at IS NULL;
 
--- V3 — THE COUNTED ROWS CARRY THEIR REAL DATE, NOT TODAY'S. Expect: PASS.
--- 🔴 A backfill that stamped now() would assert that every lot was counted the day
--- the migration ran — a fabricated fact, and the worst kind because it looks precise.
-SELECT 'V3 counted lots carry their real count date' AS check,
-       CASE WHEN count(*) = 0 OR bool_and(qty_basis_at::date = '2026-08-26')
+-- V3 — 🔴 THE TWO LOTS CARRYING A TEST COUNT SAY SO, AND ARE STILL PLACEHOLDERS.
+-- Expect: PASS, 2 lots, both `placeholder`, both naming the test.
+-- ⚠️ They get a DIFFERENT reason from the other 630 deliberately: a reader who finds an
+-- `inventory_counts` row against the lot deserves to be told why it was not honoured,
+-- rather than left to wonder whether the backfill missed it.
+SELECT 'V3 the two test-counted lots are placeholders that say why' AS check,
+       CASE WHEN count(*) = 2
+             AND bool_and(qty_basis = 'placeholder')
+             AND bool_and(qty_basis_because LIKE 'Test count, 2026-08-26%')
+             AND bool_and(qty_basis_at IS NULL)
             THEN 'PASS' ELSE 'FAIL' END AS verdict,
-       count(*) AS counted_lots,
-       string_agg(DISTINCT qty_basis_at::date::text, ', ') AS dates
+       count(*) AS lots_expect_2,
+       string_agg(DISTINCT qty_basis, ',') AS basis_expect_placeholder,
+       count(*) FILTER (WHERE qty_basis_at IS NOT NULL) AS dated_expect_0
   FROM business_inventory
- WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND qty_basis = 'counted';
+ WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
+   AND id IN (SELECT inventory_id FROM inventory_counts WHERE inventory_id IS NOT NULL);
 
 -- V4 — 🔴 NOT ONE QUANTITY MOVED. The control that matters most: this migration
 -- describes numbers, it does not change them. Expect: PASS — still 512 at 10, 120 at 0.

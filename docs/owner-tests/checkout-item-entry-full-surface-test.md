@@ -132,8 +132,17 @@ Apply `supabase/migrations/20260923m_inventory_qty_provenance.sql`, then open a 
 enough of a plant name to bring up a few rows.
 
 **PASS, all three:** ① **no row shows a bare number** — each reads **`10 · placeholder`**, and the
-figure is amber rather than grey; ② a row you have actually counted reads **`1 · counted 26 Aug`**;
-③ **placeholders are still listed and still sellable** — they are marked, not hidden.
+figure is amber rather than grey; ② 🔴 **EVERY row reads `placeholder` — not one says `counted`**,
+because the entire inventory has never been counted (David, 2026-09-23); ③ **placeholders are still
+listed and still sellable** — they are marked, not hidden.
+
+✏️ **THIS CARD USED TO SAY A COUNTED ROW WOULD READ `1 · counted 26 Aug`, AND THAT WAS THE DEFECT
+DAVID'S RED-TEAM CAUGHT BEFORE THE MIGRATION WAS APPLIED.** There are three `inventory_counts` rows
+on LAWNS and they are a **TEST**: one session (`046394fc`) that is still `status='in_progress'` with
+`completed_at` NULL, run from **David's own account**, three rows in **3½ minutes**, the **same lot
+counted twice 27 seconds apart**. Seeding those as `counted` would have put *"counted 26 Aug"* in
+front of Lauren on a lot nobody has walked — **exactly the trust failure R-170 exists to stop.** They
+now seed as placeholders whose reason names the test.
 
 🔴 **WHY IT MATTERS MORE THAN IT LOOKS, MEASURED LIVE 2026-09-23:** **512 of LAWNS's 632 lots sit at
 exactly qty 10, 120 at 0, and not one lot at any other value.** All 512 were written by a single
