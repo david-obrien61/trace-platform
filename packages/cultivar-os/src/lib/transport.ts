@@ -22,6 +22,17 @@
 // AC-1:     generic — no vertical noun leaks here; the Ch.725 copy lives in the row's
 //           compliance_title/compliance_body, not in code.
 //
+// 🔴 #251 FIXED 2026-09-23 (ledger #386, David's ruling (e)). EVERY staff/flat row is now offered,
+//    not just the first. WAS: `staff.find(o => o.price_type === 'flat')` — a single `find`, so a
+//    business with TWO per-order staff services had its second one offered NOWHERE and named in NO
+//    flag. LAWNS has exactly that: Trip Charge AND Tailgate Delivery are both staff, both charged
+//    once per order, and under the old shape whichever sorted second simply did not exist at
+//    checkout. David, 2026-09-23: *"without it tailgate, backyard and Trip Charge are three
+//    staff/flat rows and only the first is ever offered."*
+//    THE CONSEQUENCE FOR THE TYPE: a branch can no longer be a bare string, because
+//    "delivery only" no longer names one thing. A TransportChoice now carries the ID of the row it
+//    charges, which is what it always meant and what the old three-string union could not say.
+//
 // 🔴 THE PREDICATE IS THE MODE AND NOTHING ELSE (R-120, confirmed 2026-09-11). A transport row is
 //    a role only if `transport_mode` is 'self' or 'staff'. A row with NO mode matches neither, so
 //    before this date it fell out of every role WITH NO FLAG NAMING IT — LAWNS's Trip Charge on
@@ -31,18 +42,40 @@
 // ============================================================
 import type { ServiceOffering } from '../types/plant';
 
-/** The three mutually-exclusive transport branches (the radio). */
-export type TransportChoice = 'delivery_planting' | 'delivery_only' | 'self';
+/** The SHAPE of a branch. Which ROW it charges is the other half — see TransportChoice. */
+export type TransportKind = 'delivery_planting' | 'delivery_only' | 'self';
+
+/**
+ * One option on the radio: a shape AND the row it charges.
+ *
+ * 🔴 `transportId` IS NOT DECORATION — IT IS WHAT MAKES #251 FIXABLE. With two staff/flat rows
+ * there are two distinct "delivery only" branches and two distinct "delivery + planting"
+ * branches, and nothing but the id tells them apart. A three-string union could only ever name
+ * one of each, which is exactly how Tailgate Delivery came to be invisible.
+ */
+export interface TransportChoice {
+  kind: TransportKind;
+  /** `service_offerings.id` of the transport row this branch charges. */
+  transportId: string;
+}
+
+/** Are these the same branch? Compared by VALUE — a choice round-trips through the cart store. */
+export function sameChoice(a: TransportChoice | null, b: TransportChoice | null): boolean {
+  return !!a && !!b && a.kind === b.kind && a.transportId === b.transportId;
+}
 
 /** service_offerings rows classified into transport ROLES by shape. */
 export interface TransportRoles {
   /** transport_mode === 'self' — the "haul it myself" branch that triggers netting. */
   self:     ServiceOffering | null;
-  /** staff transport, price_type 'flat' / price_unit 'order' — the per-order delivery fee (×1). */
-  delivery: ServiceOffering | null;
-  /** staff transport, price_type 'per_unit' / price_unit 'plant' — the per-plant planting fee (×N). */
+  /**
+   * EVERY staff transport row charged once per order (price_type 'flat'), in sort order.
+   * ✏️ #251: this was `delivery: ServiceOffering | null` — ONE row. The plural is the fix.
+   */
+  deliveries: ServiceOffering[];
+  /** staff transport, price_type 'per_unit' — the per-plant planting fee (×N). */
   planting: ServiceOffering | null;
-  /** the single fused legacy "delivery + planting" per-plant row, present when delivery is absent. */
+  /** the single fused legacy "delivery + planting" per-plant row, present when no delivery row is. */
   fused:    ServiceOffering | null;
   /** transport rows that say NOTHING about who transports — never offered, always named (R-120). */
   unbound:  ServiceOffering[];
@@ -62,8 +95,9 @@ export function resolveTransportRoles(transportOfferings: ServiceOffering[]): Tr
   const self  = transportOfferings.find(o => o.transport_mode === 'self') ?? null;
   const staff = transportOfferings.filter(o => o.transport_mode === 'staff');
   const unbound = transportOfferings.filter(o => o.transport_mode !== 'self' && o.transport_mode !== 'staff');
-  const delivery = staff.find(o => o.price_type === 'flat')     ?? null; // per-order
-  const planting = staff.find(o => o.price_type === 'per_unit') ?? null; // per-plant
+  // #251: filter, not find. The array order is the caller's (useServices sorts by sort_order).
+  const deliveries = staff.filter(o => o.price_type === 'flat');     // per-order
+  const planting   = staff.find(o => o.price_type === 'per_unit') ?? null; // per-plant
 
   const flags: string[] = [];
   let fused: ServiceOffering | null = null;
@@ -82,10 +116,10 @@ export function resolveTransportRoles(transportOfferings: ServiceOffering[]): Tr
   // FLAG: only a per-plant staff row exists (the fused "We deliver and plant" legacy shape).
   // "Delivery + planting" runs on that one row (scales ×N) but there's no separate per-order
   // delivery fee, and "Delivery only" cannot be offered. Owner splits it via the editor.
-  if (planting && !delivery) {
+  if (planting && deliveries.length === 0) {
     fused = planting;
     flags.push(
-      'no per-order delivery row (staff · flat/order): "Delivery + planting" runs on a single ' +
+      'no per-order delivery row (staff · flat): "Delivery + planting" runs on a single ' +
       'fused per-plant row (no separate delivery fee) and "Delivery only" is unavailable — ' +
       'split it into a delivery + a planting service in Settings.',
     );
@@ -93,41 +127,87 @@ export function resolveTransportRoles(transportOfferings: ServiceOffering[]): Tr
   if (!self) {
     flags.push('no self-transport row (transport_mode=self): the "No thank you / netting" branch is unavailable.');
   }
-  if (!delivery && !planting) {
+  if (deliveries.length === 0 && !planting) {
     flags.push('no staff transport row: neither delivery nor planting is available.');
   }
 
-  return { self, delivery, planting, fused, unbound, flags };
+  return { self, deliveries, planting, fused, unbound, flags };
 }
 
-/** Which of the three branches can be assembled from the resolved roles. */
+/**
+ * Which branches can be assembled from the resolved roles — ONE PER ROW, not one per shape.
+ *
+ * 🔴 THE COUNT IS THE POINT. With LAWNS's four transport rows after step 0 (Trip Charge, Tailgate,
+ * Installation, self-collect) this returns FIVE branches: each of the two per-order rows on its
+ * own and with planting attached, plus self-collect. The old code returned three and silently
+ * dropped Tailgate.
+ */
 export function availableChoices(roles: TransportRoles): TransportChoice[] {
   const out: TransportChoice[] = [];
-  if (roles.delivery && roles.planting) out.push('delivery_planting');
-  else if (roles.fused)                 out.push('delivery_planting'); // fused fallback (flagged)
-  if (roles.delivery)                   out.push('delivery_only');
-  if (roles.self)                       out.push('self');
+  for (const d of roles.deliveries) {
+    if (roles.planting) out.push({ kind: 'delivery_planting', transportId: d.id });
+    out.push({ kind: 'delivery_only', transportId: d.id });
+  }
+  // Fused fallback (flagged above): the per-plant row IS the whole "delivery + planting".
+  if (roles.deliveries.length === 0 && roles.fused) {
+    out.push({ kind: 'delivery_planting', transportId: roles.fused.id });
+  }
+  if (roles.self) out.push({ kind: 'self', transportId: roles.self.id });
   return out;
 }
 
-/** Map a branch to the concrete service selections it attaches. */
-export function choiceToSelection(choice: TransportChoice, roles: TransportRoles): TransportSelection {
-  switch (choice) {
-    case 'self':
-      return { transport: roles.self, planting: null };
-    case 'delivery_only':
-      return { transport: roles.delivery, planting: null };
-    case 'delivery_planting':
-      if (roles.delivery && roles.planting) return { transport: roles.delivery, planting: roles.planting };
-      // Fused fallback: the single per-plant row IS the whole "delivery + planting" (scales ×N).
-      if (roles.fused)                      return { transport: roles.fused, planting: null };
-      return { transport: roles.delivery ?? roles.planting, planting: null };
-  }
+/** Every row a branch could name, so a lookup by id never has to know which role it came from. */
+function rowsOf(roles: TransportRoles): ServiceOffering[] {
+  const rows = [...roles.deliveries];
+  if (roles.planting) rows.push(roles.planting);
+  if (roles.fused && !rows.includes(roles.fused)) rows.push(roles.fused);
+  if (roles.self) rows.push(roles.self);
+  return rows;
 }
 
-/** Static branch presentation (label + sub). Prices are appended from the resolved rows. */
-export const CHOICE_META: Record<TransportChoice, { label: string; sub: string }> = {
-  delivery_planting: { label: 'Delivery + planting',      sub: 'We deliver and plant it in for you' },
-  delivery_only:     { label: 'Delivery only',            sub: 'We bring it to your property' },
-  self:              { label: "No thank you — I'll haul it myself", sub: 'Pick up today — secure-your-load notice applies' },
-};
+/**
+ * Map a branch to the concrete service selections it attaches.
+ *
+ * ⚠️ AN UNKNOWN id YIELDS A NULL TRANSPORT RATHER THAN A SUBSTITUTE. It can happen honestly — the
+ * offerings reload while a choice is held in the cart, and the row was retired in between. Falling
+ * back to "some other delivery row" would put a price on an order nobody agreed to, which is the
+ * same failure R-120 was written about one field over.
+ */
+export function choiceToSelection(choice: TransportChoice, roles: TransportRoles): TransportSelection {
+  const transport = rowsOf(roles).find(o => o.id === choice.transportId) ?? null;
+  if (choice.kind === 'delivery_planting') {
+    // The fused row IS both halves; it must not also attach itself as planting (that would charge twice).
+    const isFused = !!roles.fused && transport?.id === roles.fused.id;
+    return { transport, planting: isFused ? null : roles.planting };
+  }
+  return { transport, planting: null };
+}
+
+/**
+ * What the radio shows for a branch.
+ *
+ * 🔴 §6 r18 — A LABEL IS A CLAIM. "Delivery only" is a true and sufficient label when a business
+ * has ONE per-order row. With two it is false twice over, because it names neither. So the row's
+ * own name is used the moment there is more than one to tell apart, and the generic wording
+ * survives only where it is still true. This is the same rule that says a section header must
+ * hold for every row beneath it.
+ */
+export function choiceMeta(choice: TransportChoice, roles: TransportRoles): { label: string; sub: string } {
+  const row = rowsOf(roles).find(o => o.id === choice.transportId) ?? null;
+  const many = roles.deliveries.length > 1;
+  const name = row?.name ?? 'Transport';
+  switch (choice.kind) {
+    case 'self':
+      return { label: row?.name ?? "No thank you — I'll haul it myself", sub: 'Pick up today — secure-your-load notice applies' };
+    case 'delivery_only':
+      return many
+        ? { label: name, sub: row?.description || 'We bring it to your property' }
+        : { label: 'Delivery only', sub: 'We bring it to your property' };
+    case 'delivery_planting': {
+      const plantingName = roles.planting?.name ?? 'planting';
+      return many
+        ? { label: `${name} + ${plantingName.toLowerCase()}`, sub: 'We deliver and plant it in for you' }
+        : { label: 'Delivery + planting', sub: 'We deliver and plant it in for you' };
+    }
+  }
+}

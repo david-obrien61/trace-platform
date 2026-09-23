@@ -37,7 +37,7 @@
  * DEPENDENCIES: ./transport, ../../api/orders/submit (both real, neither stubbed).
  * Run: node scripts/run-tests.mjs transportStep0
  */
-import { resolveTransportRoles, availableChoices, choiceToSelection } from './transport';
+import { resolveTransportRoles, availableChoices, choiceToSelection, choiceMeta } from './transport';
 import { deriveTransportMethod, deliveryServiceType } from '../../api/orders/submit';
 import type { ServiceOffering } from '../types/plant';
 
@@ -101,7 +101,7 @@ const AFTER  = bySortOrder([TRIP_CHARGE, TAILGATE, INSTALL, SELF_COLLECT]);
 {
   const roles   = resolveTransportRoles(BEFORE);
   const choices = availableChoices(roles);
-  ok(choices.length === 1 && choices[0] === 'delivery_only',
+  ok(choices.length === 1 && choices[0].kind === 'delivery_only',
     '§A today LAWNS is offered exactly ONE branch — "Delivery only", $50');
   ok(roles.self === null && roles.planting === null,
     '§A there is no self row and no planting row, so neither branch can be assembled');
@@ -120,11 +120,16 @@ const AFTER  = bySortOrder([TRIP_CHARGE, TAILGATE, INSTALL, SELF_COLLECT]);
 {
   const roles   = resolveTransportRoles(AFTER);
   const choices = availableChoices(roles);
-  ok(choices.length === 3, '§B step 0 turns one branch into three');
-  ok(choices.includes('delivery_planting'), '§B "Delivery + planting" is now offered');
-  ok(choices.includes('delivery_only'),     '§B "Delivery only" is still offered');
-  ok(choices.includes('self'),              '§B "No thank you — I\'ll haul it myself" is offered for the first time');
-  ok(roles.delivery === TRIP_CHARGE, '§B the per-order delivery fee resolves to Trip Charge ($50)');
+  // ✏️ WAS THREE, IS NOW FIVE, AND THE DIFFERENCE IS #251. When this file was written the
+  // resolver offered one branch per SHAPE, so LAWNS's two per-order rows collapsed into one and
+  // Tailgate was invisible (§D below pinned that). #251 is fixed in this same build, so each of
+  // the two per-order rows now offers itself alone and with planting: 2 × 2 + self = 5.
+  ok(choices.length === 5, '§B step 0 turns one branch into FIVE — two per-order rows × (alone | with planting) + self');
+  ok(choices.some(c => c.kind === 'delivery_planting'), '§B "Delivery + planting" is now offered');
+  ok(choices.some(c => c.kind === 'delivery_only'),     '§B "Delivery only" is still offered');
+  ok(choices.some(c => c.kind === 'self'),              '§B "No thank you — I\'ll haul it myself" is offered for the first time');
+  ok(roles.deliveries[0] === TRIP_CHARGE && roles.deliveries.length === 2,
+    '§B BOTH per-order rows resolve — Trip Charge ($50) first by sort_order, Tailgate ($150) beside it');
   ok(roles.planting === INSTALL,     '§B the per-plant role resolves to Installation ($450/plant)');
   ok(roles.self === SELF_COLLECT,    '§B the self role resolves to the $0 pickup row');
   ok(roles.fused === null,           '§B nothing is running on the fused legacy shape');
@@ -135,7 +140,7 @@ const AFTER  = bySortOrder([TRIP_CHARGE, TAILGATE, INSTALL, SELF_COLLECT]);
 {
   const roles = resolveTransportRoles(AFTER);
 
-  const planting = choiceToSelection('delivery_planting', roles);
+  const planting = choiceToSelection({ kind: 'delivery_planting', transportId: TRIP_CHARGE.id }, roles);
   ok(planting.transport === TRIP_CHARGE && planting.planting === INSTALL,
     '§C "Delivery + planting" attaches BOTH rows — the $50 trip charge ×1 and the install ×N plants');
   const mPlanting = deriveTransportMethod(planting.transport!, planting.planting !== null);
@@ -143,33 +148,39 @@ const AFTER  = bySortOrder([TRIP_CHARGE, TAILGATE, INSTALL, SELF_COLLECT]);
   ok(deliveryServiceType(mPlanting) === 'planting',
     '§C 🔴 AND THE STOP: deliveries.service_type = planting — an install job on the truck');
 
-  const dropOff = choiceToSelection('delivery_only', roles);
+  const dropOff = choiceToSelection({ kind: 'delivery_only', transportId: TRIP_CHARGE.id }, roles);
   const mDrop   = deriveTransportMethod(dropOff.transport!, dropOff.planting !== null);
   ok(mDrop === 'delivery' && deliveryServiceType(mDrop) === 'delivery_only',
     '§C "Delivery only" still writes a drop-off stop — step 0 does not reclassify their existing work');
 
-  const self  = choiceToSelection('self', roles);
+  const self  = choiceToSelection({ kind: 'self', transportId: SELF_COLLECT.id }, roles);
   const mSelf = deriveTransportMethod(self.transport!, self.planting !== null);
   ok(mSelf === 'self', '§C self-collect writes transport_method = self');
   ok(deliveryServiceType(mSelf) === null,
     '§C 🔴 and NO stop is written — our truck does not go out, so there is nothing to schedule');
 }
 
-// ── §D — WHAT STEP 0 DOES NOT FIX, ASSERTED SO IT CANNOT BE MISREAD AS WORKING ────────────────
-// 🔴 tech-debt #251, on David's own data. Two staff/flat rows; `staff.find(price_type==='flat')`
-// takes the first by sort_order. Trip Charge (100) wins, Tailgate (101) is offered NOWHERE and
-// named in NO flag. This is the defect David ruled (e) must be fixed — pinned here so that when
-// it IS fixed, this section goes red deliberately rather than quietly passing.
+// ── §D — WHAT STEP 0 DOES NOT FIX, AND WHAT THIS BUILD THEN FIXED ────────────────────────────
+// ✏️ INVERTED IN THE SAME BUILD, DELIBERATELY. When step 0 was written this section asserted the
+// DEFECT: Trip Charge (sort_order 100) took the only "delivery" role and Tailgate (101) was
+// offered NOWHERE and named in NO flag, so David would paste the step-0 SQL and simply not see
+// Tailgate. That was true of the tree step 0 was written against, and it is why the SQL file
+// still tells him to expect it. David then ruled (e) *"FIX #251"*, and it is fixed below.
+// 🔴 THE STEP-0 SQL'S OWN WARNING IS NOW OUT OF DATE IF BOTH LAND TOGETHER — recorded in the
+// close-out and on the file, because a stale instruction that reads as current is R-26's shape.
 {
-  const roles = resolveTransportRoles(AFTER);
-  ok(roles.delivery === TRIP_CHARGE,
-    '§D (#251) Trip Charge wins the delivery role on sort_order — it is first at 100');
-  ok(roles.delivery !== TAILGATE,
-    '§D (#251) 🔴 Tailgate Delivery is NOT offered after step 0 — the second staff/flat row loses');
-  ok(!roles.flags.some(f => /Tailgate/.test(f)),
-    '§D (#251) 🔴 and NOTHING names it: no flag, no heads-up line. David will not see it on screen');
-  ok(availableChoices(roles).length === 3,
-    '§D (#251) the radio shows three branches while FOUR rows are set up — the count is the tell');
+  const roles   = resolveTransportRoles(AFTER);
+  const choices = availableChoices(roles);
+  ok(roles.deliveries.length === 2,
+    '§D (#251 fixed) both of LAWNS\'s per-order staff rows are roles — Trip Charge AND Tailgate');
+  ok(choices.some(c => c.transportId === TAILGATE.id),
+    '§D (#251 fixed) 🔴 Tailgate Delivery IS on the radio — the thing step 0 predicted would be missing');
+  ok(choiceMeta({ kind: 'delivery_only', transportId: TAILGATE.id }, roles).label === 'Tailgate Delivery',
+    '§D (#251 fixed) and it is labelled by its own name, because "Delivery only" would name neither row (§6 r18)');
+  ok(choiceToSelection({ kind: 'delivery_only', transportId: TAILGATE.id }, roles).transport === TAILGATE,
+    '§D (#251 fixed) choosing it charges $150, not Trip Charge\'s $50 — the half that moves money');
+  ok(choices.length === 5,
+    '§D (#251 fixed) five branches for four rows; step 0 alone would have shown three');
 }
 
 // ── §E — the install price step 0 uses is PROVISIONAL, and the code must not come to rely on it ─

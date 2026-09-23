@@ -34,6 +34,7 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(
 const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Rung> = {}): Rung => ({
   label, aliases: [], sortOrder, volumeGallons: null, handlingMinutes: null,
   handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
+  installPrice: null, installPriceBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [

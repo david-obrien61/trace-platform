@@ -19,9 +19,15 @@
 --    ✅ Self-collect exists for the first time, and re-enables the netting branch.
 --    ❌ It does NOT price install per size. $450 is ONE flat price at every size and
 --       is WRONG at four of the five sizes Lauren prices. That is ledger #386's job.
---    ❌ It does NOT make Tailgate reachable — tech-debt #251 means the SECOND
---       staff/flat row is offered nowhere and named in no flag. Expect to NOT see
---       Tailgate on the radio after running this. That is the defect, visible.
+--    ⚠️ TAILGATE: IT DEPENDS ON WHETHER THE CODE HAS SHIPPED YET, AND THIS FILE
+--       SAYS SO RATHER THAN GUESSING. Written against `main`, where tech-debt #251
+--       meant the SECOND staff/flat row was offered nowhere and named in no flag —
+--       so on `main` you will NOT see Tailgate on the radio, and that absence is
+--       the defect made visible. ✏️ CORRECTED LATER THE SAME DAY: #251 is FIXED on
+--       `feat/checkout-install-price` (ledger #386, David's ruling (e)). If that
+--       branch is deployed when you run this, you WILL see Tailgate, labelled by
+--       its own name. Both outcomes are correct; which one you get tells you which
+--       bundle you are on.
 --
 -- PROVEN BEFORE YOU PASTE IT: every row below is driven through the real
 --    resolveTransportRoles → availableChoices → choiceToSelection →
@@ -127,15 +133,16 @@ SELECT 'V2 all three transport roles resolve' AS check,
  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
    AND category = 'transport' AND is_active AND timing = 'at_checkout';
 
--- V3 — 🔴 THE DEFECT, MEASURED RATHER THAN DESCRIBED. tech-debt #251.
--- Expect: PASS, and `staff_flat_rows = 2` with `offered = 1`. PASS here means
--- "the defect is present exactly as predicted", NOT "everything is fine".
+-- V3 — 🔴 THE TWO PER-ORDER ROWS. tech-debt #251.
+-- Expect: PASS, `staff_flat_rows = 2`. What the APP does with them depends on the
+-- bundle: on `main` only the first is reachable (the defect); on
+-- `feat/checkout-install-price` both are. This V-block measures the DATA, which is
+-- the same either way — it deliberately does not claim to know which code is live.
 SELECT 'V3 #251 — two staff/flat rows exist, ONE is reachable' AS check,
        CASE WHEN count(*) = 2 THEN 'PASS (defect present as predicted)' ELSE 'FAIL (unexpected shape)' END AS verdict,
        count(*) AS staff_flat_rows,
-       1        AS offered_by_resolveTransportRoles,
-       (array_agg(name ORDER BY sort_order))[1] AS the_one_that_wins,
-       (array_agg(name ORDER BY sort_order))[2] AS the_one_that_vanishes
+       (array_agg(name ORDER BY sort_order))[1] AS first_by_sort_order,
+       (array_agg(name ORDER BY sort_order))[2] AS second_reachable_only_after_251
   FROM service_offerings
  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
    AND category = 'transport' AND is_active AND timing = 'at_checkout'

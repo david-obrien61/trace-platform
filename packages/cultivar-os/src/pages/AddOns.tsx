@@ -4,7 +4,7 @@ import { useCart } from '../hooks/useCart';
 import { useServices } from '../hooks/useServices';
 import { totalPlantCount, nettedQuantity } from '../lib/netting';
 import {
-  resolveTransportRoles, availableChoices, choiceToSelection, CHOICE_META,
+  resolveTransportRoles, availableChoices, choiceToSelection, choiceMeta,
 } from '../lib/transport';
 import { TransportToggle } from '../components/checkout/TransportToggle';
 import { CompliancePrompt } from '../components/checkout/CompliancePrompt';
@@ -56,11 +56,14 @@ export function AddOns() {
   // Regina default), else the first available branch.
   useEffect(() => {
     if (transportChoice || choices.length === 0) return;
+    // ✏️ #251: `choices` now holds one entry PER ROW, so a branch is matched on its KIND, not
+    // found by string equality. `find` over kinds keeps the pre-selected row's intent (self, or a
+    // staff branch with planting) while letting the id come from whichever row actually offers it.
     const preSelectedMode = transportOfferings.find(o => o.pre_selected)?.transport_mode;
     const initial =
-      (preSelectedMode === 'self' && choices.includes('self')) ? 'self'
-      : (preSelectedMode === 'staff' && choices.includes('delivery_planting')) ? 'delivery_planting'
-      : choices[0];
+      (preSelectedMode === 'self'  ? choices.find(c => c.kind === 'self') : undefined)
+      ?? (preSelectedMode === 'staff' ? choices.find(c => c.kind === 'delivery_planting') : undefined)
+      ?? choices[0];
     setTransportChoice(initial, choiceToSelection(initial, roles));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transportChoice, choices, roles, transportOfferings]);
@@ -275,7 +278,7 @@ export function AddOns() {
           </div>
           {selectedTransport && transportAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>{CHOICE_META[transportChoice ?? 'delivery_only'].label.split(' — ')[0]}{selectedTransport.price_type === 'per_unit' ? ` (×${plantCount})` : ''}</span>
+              <span>{(transportChoice ? choiceMeta(transportChoice, roles).label : selectedTransport.name).split(' — ')[0]}{selectedTransport.price_type === 'per_unit' ? ` (×${plantCount})` : ''}</span>
               <span>+${transportAmount.toFixed(2)}</span>
             </div>
           )}

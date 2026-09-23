@@ -285,3 +285,10 @@ export {
 export type {
   CustomerAddress, SiteAddress, SiteAddressField, ShipToInput, SavePlan, SaveOutcome,
 } from './customerAddresses';
+
+// Ladder pricing — a per-unit service priced from the container ladder, one rung per line
+// (ledger #386). Pure; the CartReview preview and submit's authoritative recompute both call it.
+export {
+  priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE,
+  type LadderPriceableLine, type LadderPricedLine, type LadderPricing,
+} from './ladderPricing';

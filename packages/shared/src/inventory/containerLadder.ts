@@ -105,6 +105,26 @@ export interface Rung {
   caliperMaxInches: number | null;
   /** Where the caliper figures came from. Required for the same reason `handlingBecause` is. */
   caliperBecause: string;
+  /**
+   * What it costs to install ONE tree of this size (ledger #386, R-171).
+   *
+   * 🔴 `null` IS A REAL ANSWER AND IS THE COMMON ONE. David ruled 2026-09-23: *"A RUNG WITH NO
+   * PRICE: offer install and REQUIRE A TYPED AMOUNT with a reason — never $0, never a guess,
+   * never refused."* A 0 here would put a FREE INSTALL on a screen, so an unpriced rung carries
+   * null and the line says "not set" in those words (D-9, A9 — absent is not empty).
+   *
+   * ⚠️ THE NULL PATH IS THE ORDINARY ONE, NOT THE EDGE, and the figures come from the resolver
+   * itself, not from a SQL join: of LAWNS's 632 live lots, 365 sit on a PRICED rung, 95 on a
+   * rung carrying NO price (88 of them `3/5 gal`, 7 `200 gal`) and 172 reach no rung at all
+   * (107 carry no size whatever) — 267 of 632 would ask for a typed amount today, and ONE price
+   * on `3/5 gal` removes 88 of them. ✏️ An earlier count said 268 split differently; it was made
+   * by joining on `volume_gallons`, which misses an alias match (100 gal → the 95/100 rung) and
+   * mis-reads a range rung (3/5 gal claims BOTH 3 and 5) — the exact thing R-157 forbids doing
+   * outside the resolver.
+   */
+  installPrice: number | null;
+  /** Where that price came from — the billed median, Lauren's sheet, or nobody has set it. */
+  installPriceBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -411,12 +431,18 @@ export function largestRung(ladder: Ladder): Rung | null {
  * 🔴 `install_t_posts_*` are asked for BEFORE `20260916_container_ladder_install_t_posts.sql` is
  * applied on a database that lacks it, every ladder read FAILS — which is why the branch carrying
  * this list must not merge before that migration runs.
+ * 🔴 `install_price` / `install_price_because` (ledger #386) are the SAME GATE one migration later:
+ * `20260923_container_ladder_install_price.sql` must be applied before a build selecting them
+ * merges. This list is a SELECT list, so an unapplied column is not a missing feature — it is
+ * every ladder read on the platform returning 42703. The load list, the uppot plan, the count
+ * screen and the import preview all read through it.
  */
 export const LADDER_FIELDS = [
   'id', 'label', 'aliases', 'sort_order', 'volume_gallons',
   'handling_minutes', 'handling_because',
   'install_t_posts_per_tree', 'install_t_posts_because',
   'caliper_min_inches', 'caliper_max_inches', 'caliper_because',
+  'install_price', 'install_price_because',
   'active',
 ] as const;
 
@@ -431,6 +457,7 @@ export interface LadderRow {
   install_t_posts_per_tree: number | string | null; install_t_posts_because: string | null;
   caliper_min_inches: number | string | null; caliper_max_inches: number | string | null;
   caliper_because: string | null;
+  install_price: number | string | null; install_price_because: string | null;
   active: boolean;
 }
 
@@ -453,6 +480,12 @@ export function rungFromRow(r: LadderRow): Rung {
     caliperMinInches: numOrNull(r.caliper_min_inches),
     caliperMaxInches: numOrNull(r.caliper_max_inches),
     caliperBecause: r.caliper_because ?? 'not set',
+    // 🔴 NO `?? 0` HERE, UNLIKE `installTPostsPerTree` ABOVE, AND THE DIFFERENCE IS THE DESIGN.
+    // T-posts default to 0 in the database because zero posts is a real quantity. A price of 0 is
+    // not a real price — it is a free install — so an absent one stays absent all the way to the
+    // screen, which then asks for a number instead of charging nothing (R-171 (c)).
+    installPrice: numOrNull(r.install_price),
+    installPriceBecause: r.install_price_because ?? 'not set',
     active: r.active,
   };
 }
