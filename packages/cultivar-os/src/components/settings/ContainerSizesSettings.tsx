@@ -48,6 +48,47 @@ const btn = (primary: boolean): React.CSSProperties => ({
 });
 const input: React.CSSProperties = { minHeight: 44, fontSize: 16, padding: '4px 8px', border: '1px solid #bbb', borderRadius: 6 };
 
+/**
+ * 🔴 LAUREN'S OWN PRICE SHEET, SHOWN BESIDE THE RUNG — David's ruling (b), 2026-09-23:
+ * *"SEED FROM WHAT THEY ACTUALLY BILL … with Lauren's sheet shown BESIDE each rung and the gap
+ * named, for her to confirm or change."*
+ *
+ * ⚠️ THIS IS A TENANT LITERAL IN SHARED-LOOKING CODE AND IT IS DELIBERATE, SCOPED AND FILED.
+ * It is a REFERENCE figure for one person to compare against — not a price, not a default, and
+ * nothing reads it to charge anybody. It is keyed by RUNG LABEL, so it shows for a tenant whose
+ * ladder happens to use the same labels and is simply absent otherwise. `ContainerSizesSettings`
+ * already lives in `packages/cultivar-os`, not in `shared`, so no AC-1 boundary is crossed — but
+ * it IS a hardcoded tenant value and it belongs on the hardcoded register (tech-debt #363) with
+ * its removal condition stated: it comes out the moment Lauren has confirmed or changed each rung,
+ * because by then the comparison has done its job and a stale sheet is worse than none.
+ */
+const SHEET_PRICE: Record<string, number> = {
+  '15 gal': 150, '30 gal': 300, '45 gal': 450, '65 gal': 600, '95/100': 900,
+};
+
+/** Names the gap between what is typed and what Lauren's sheet says — in words, with a direction. */
+function SheetComparison({ label, typed }: { label: string; typed: string }) {
+  const sheet = SHEET_PRICE[label];
+  if (sheet === undefined) return null;
+  const n = Number(typed);
+  const has = typed.trim() !== '' && Number.isFinite(n);
+  if (!has) {
+    return <span style={{ display: 'block', marginTop: 2 }}>Lauren&apos;s 2026-09-23 sheet says <strong>${sheet}</strong> for this size.</span>;
+  }
+  const gap = Math.round((n - sheet) * 100) / 100;
+  if (gap === 0) {
+    return <span style={{ display: 'block', marginTop: 2, color: GREEN }}>Matches Lauren&apos;s sheet (${sheet}).</span>;
+  }
+  return (
+    <span style={{ display: 'block', marginTop: 2, color: AMBER }}>
+      Lauren&apos;s sheet says <strong>${sheet}</strong> — this is <strong>${Math.abs(gap).toFixed(2)} {gap > 0 ? 'more' : 'less'}</strong>.
+      {gap > 0
+        ? ' Their invoices have been billing the higher figure; the sheet under-charges.'
+        : ' The sheet charges more than their invoices have.'}
+    </span>
+  );
+}
+
 function Field({ label, children, note }: { label: string; children: React.ReactNode; note?: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, flex: '1 1 220px' }}>
@@ -110,6 +151,25 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
         </Field>
         <Field label="Where the caliper came from">
           <input style={input} value={draft.caliperBecause} onChange={(e) => put('caliperBecause', e.target.value)} />
+        </Field>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Install price for one tree of this size"
+          note={<>
+            What the customer is charged to have ONE tree of this size planted in. Used at checkout
+            when a service is priced by size. <strong>Blank means no price is set</strong> — the
+            counter is then asked for an amount, with a reason. Never enter 0: that charges nothing.
+            {SHEET_PRICE[draft.label] !== undefined && (
+              <SheetComparison label={draft.label} typed={draft.installPrice} />
+            )}
+          </>}
+        >
+          <input style={input} type="number" step="any" min={0} placeholder="not set"
+            value={draft.installPrice} onChange={(e) => put('installPrice', e.target.value)} />
+        </Field>
+        <Field label="Where the install price came from">
+          <input style={input} value={draft.installPriceBecause} onChange={(e) => put('installPriceBecause', e.target.value)} />
         </Field>
       </div>
       {problems.length > 0 && (

@@ -1317,11 +1317,25 @@ async function handleCreate(req: any, res: any) {
     // Planting is its OWN selection row (per-plant, netted ×N) — one order, two service lines
     // (delivery ×1 + planting ×N) for the "Delivery + planting" branch.
     if (plantingActive && plantingOffering?.id) {
+      // 🔴 A LADDER-PRICED LINE IS WRITTEN AS ONE UNIT AT ITS OWN TOTAL, AND THAT IS NOT TIDINESS —
+      // IT IS THE 6070 SCAR (D-48). QuickBooks is the first thing in the chain that multiplies
+      // rate × qty and REJECTS the whole invoice when the product does not equal the amount
+      // ("6070 Amount is not equal to UnitPrice * Qty"), which is exactly what happened on
+      // 2026-07-16. A per-size install has NO single unit price by construction — five trees at
+      // five sizes — so writing `unit_price_at_time = offering.price` (an unused column on such a
+      // row, most likely 0) with `quantity = 5` would push 0 × 5 ≠ $2,479 and kill the invoice.
+      // qty 1 at the line's own total is internally consistent, and the per-size breakdown lives
+      // where it belongs: on the order, in the [TRACE:PRICE] trail, and on the Review screen.
+      // ⚠️ IT COSTS THE PER-LINE DETAIL ON THE QUICKBOOKS INVOICE. Stated rather than discovered:
+      // the customer's invoice shows one install line, not one per tree. That matches how LAWNS
+      // bills today (install is fused into the plant SKU entirely), so it is not a step backwards
+      // — but it is a decision, and ruling (f) is the one that made it.
+      const plantingIsLadderPriced = !!ladderPricing;
       selectionRows.push({
         order_id:              orderId,
         service_offering_id:   plantingOffering.id,
-        quantity:              plantingQty,
-        unit_price_at_time:    plantingOffering.price,
+        quantity:              plantingIsLadderPriced ? 1 : plantingQty,
+        unit_price_at_time:    plantingIsLadderPriced ? plantingComputed : plantingOffering.price,
         subtotal:              plantingAmount,
         ...overrideCols(plantingRes),
       });

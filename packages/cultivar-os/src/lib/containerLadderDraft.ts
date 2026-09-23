@@ -41,7 +41,18 @@ export interface RungDraft {
   caliperMinInches: string;
   caliperMaxInches: string;
   caliperBecause: string;
+  /**
+   * What ONE tree of this size costs to install, as typed (ledger #386). '' = NOT SET, which is a
+   * real and common answer: the counter then types an amount per order, with a reason (R-171 (c)).
+   * 🔴 It must never be saved as 0 to mean "unknown" — 0 is a free install, and the validation
+   * below says so in those words rather than silently accepting it.
+   */
+  installPrice: string;
+  installPriceBecause: string;
 }
+
+/** The reason a rung carries when nobody has set its install price — the migration's own wording. */
+export const INSTALL_PRICE_NOT_SET = 'not set — the counter types an amount for this size';
 
 /** The reason a rung carries when nobody has recorded its caliper — the database's own default. */
 export const CALIPER_NOT_SET = 'not set — no caliper recorded for this size';
@@ -61,6 +72,8 @@ export function draftFromRung(r: Rung): RungDraft {
     caliperMinInches: numText(r.caliperMinInches),
     caliperMaxInches: numText(r.caliperMaxInches),
     caliperBecause: r.caliperBecause,
+    installPrice: numText(r.installPrice),
+    installPriceBecause: r.installPriceBecause,
   };
 }
 
@@ -75,6 +88,10 @@ export function draftForNewRung(ladder: Ladder): RungDraft {
     postsCopiedFrom: top ? top.label : null,
     // Caliper is NOT copied from the top rung: a new size's trees are not the biggest size's trees.
     caliperMinInches: '', caliperMaxInches: '', caliperBecause: CALIPER_NOT_SET,
+    // 🔴 NOT COPIED FROM ANOTHER RUNG, UNLIKE THE T-POSTS. A post count is a physical fact that
+    // travels between neighbouring sizes; a PRICE is not, and copying one would put a number on a
+    // new size that nobody chose and that reads as though somebody did.
+    installPrice: '', installPriceBecause: INSTALL_PRICE_NOT_SET,
   };
 }
 
@@ -132,6 +149,15 @@ export function rungDraftProblems(d: RungDraft, ladder: Ladder, editingLabel: st
   if (cMax !== 'bad' && cMax != null && cMin == null) out.push('Enter the smallest caliper too — a largest with no smallest is not a size.');
   if (typeof cMin === 'number' && typeof cMax === 'number' && cMax < cMin) out.push('The largest caliper is below the smallest.');
   if (!d.caliperBecause.trim()) out.push('Say where the caliper figures came from — even "not set".');
+  // Install price (ledger #386). Optional — blank is the honest "not set". But a typed 0 is not:
+  // it is a free install, and nobody means that. `optionalPositive` refuses 0 and negatives alike.
+  const ip = optionalPositive(d.installPrice);
+  if (ip === 'bad') {
+    out.push(d.installPrice.trim() === '0'
+      ? 'An install price of $0 would charge nothing. Leave it blank if there is no price for this size — the counter is then asked for an amount.'
+      : 'The install price must be an amount above $0, or left blank if there is no price for this size.');
+  }
+  if (!d.installPriceBecause.trim()) out.push('Say where the install price came from — even "not set".');
   return out;
 }
 
@@ -157,5 +183,7 @@ export function draftToRow(d: RungDraft) {
     caliper_min_inches: typeof optionalPositive(d.caliperMinInches) === 'number' ? Number(d.caliperMinInches) : null,
     caliper_max_inches: typeof optionalPositive(d.caliperMaxInches) === 'number' ? Number(d.caliperMaxInches) : null,
     caliper_because: d.caliperBecause.trim(),
+    install_price: typeof optionalPositive(d.installPrice) === 'number' ? Number(d.installPrice) : null,
+    install_price_because: d.installPriceBecause.trim(),
   };
 }
