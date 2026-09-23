@@ -432,7 +432,7 @@ export function largestRung(ladder: Ladder): Rung | null {
  * applied on a database that lacks it, every ladder read FAILS — which is why the branch carrying
  * this list must not merge before that migration runs.
  * 🔴 `install_price` / `install_price_because` (ledger #386) are the SAME GATE one migration later:
- * `20260923_container_ladder_install_price.sql` must be applied before a build selecting them
+ * `20260923e_container_ladder_install_price.sql` must be applied before a build selecting them
  * merges. This list is a SELECT list, so an unapplied column is not a missing feature — it is
  * every ladder read on the platform returning 42703. The load list, the uppot plan, the count
  * screen and the import preview all read through it.

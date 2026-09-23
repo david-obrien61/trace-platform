@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 20260923c_manager_holds_order_discount_apply.sql  ·  ledger #386  ·  R-171 (a)
+-- 20260923g_manager_holds_order_discount_apply.sql  ·  ledger #386  ·  R-171 (a)
 --
 -- PURPOSE: give the MANAGER floor `order_discount:apply`, and give it to every
 --   existing MANAGER member who lacks it. Nothing else changes.
@@ -32,16 +32,34 @@
 --   unless David's separate `20260922e` lands. The two are independent grants and
 --   this migration takes no position on the other.
 --
--- ⚠️⚠️ IT IS A NEAR-TWIN OF DAVID'S OWN UNCOMMITTED, UNAPPLIED
---   `20260922e_manager_holds_costs_read.sql` (ledger #382). They touch THE SAME TWO
---   ROWS — the MANAGER floor in `role_definitions` and the MANAGER rows in
---   `business_members`. They do not conflict: each adds a different string and each
---   is guarded by its own `NOT (permissions ? …)`, so either order works and both
---   are idempotent. 🔴 BUT THE STRING COUNTS IN THE V-BLOCKS DEPEND ON THE ORDER,
---   and every V-block below therefore asserts the STRING'S PRESENCE and never a
---   total count. `20260922e` V1 asserts `25 AS strings_before_expected` — if this
---   migration runs FIRST, that figure becomes 26 and David's V1 will read oddly
---   while still passing on its real assertion. Stated here so it is not discovered.
+-- ⚠️⚠️ IT IS A NEAR-TWIN OF DAVID'S OWN `20260922e_manager_holds_costs_read.sql` (ledger #382),
+--   AND THE TWO OVERLAP ON THE SAME TWO ROWS: the MANAGER floor in `role_definitions` and the
+--   MANAGER rows in `business_members`. Each adds a DIFFERENT string and each is guarded by its own
+--   `NOT (permissions ? …)`, so they do not conflict and both are idempotent.
+--
+-- 🔴 EITHER ORDER IS CORRECT. WHAT CHANGES IS THE NUMBERS THE V-BLOCKS PRINT, SO HERE THEY ARE BOTH
+--   WAYS. Measured live 2026-09-23, read-only, immediately before this rename: **`20260922e` has
+--   NOT been applied** — the MANAGER floor holds **25** strings and `costs:read` is **false**.
+--
+--     IF THIS FILE (20260923g) RUNS FIRST — the state as measured today:
+--       · 20260923g V1 `strings_now` = 26 · V5 `costs_read_true_only_if_20260922e_ran` = false
+--       · then 20260922e V1 `strings_now` = 27, beside its own hardcoded
+--         `25 AS strings_before_expected`, which will READ ODD AND STILL PASS: that column is a
+--         literal reminder of the before-state, not an assertion, and 20260922e's real check is
+--         `permissions ? 'costs:read'`.
+--       · 20260922e V5 asserts the STAFF floor is 10 and the OWNER floor is 59 — both untouched by
+--         this file (V6 here asserts the same OWNER 59), so it passes either way.
+--
+--     IF 20260922e RUNS FIRST:
+--       · 20260922e V1 `strings_now` = 26, matching its own `25 AS strings_before_expected` exactly
+--       · then 20260923g V1 `strings_now` = 27 · V5 `costs_read_true_only_if_20260922e_ran` = true
+--
+--   🔴 IN BOTH ORDERS EVERY `verdict` CELL READS `PASS`, because every V-block in THIS file asserts
+--   the STRING'S PRESENCE and never a total count. That is why they were written that way.
+--
+--   ⚠️ RECOMMENDED ORDER: **`20260922e` FIRST, THEN THIS FILE.** Not for correctness — for reading.
+--   It is the older file, it is David's own, and running it first is the only order in which
+--   20260922e's `25 AS strings_before_expected` column tells the truth on screen.
 --
 -- MEASURED LIVE IMMEDIATELY BEFORE WRITING (2026-09-23, read-only):
 --   role_definitions, system floor (business_id IS NULL, is_system = true):
@@ -93,7 +111,7 @@ COMMIT;
 SELECT 'V1 MANAGER floor holds order_discount:apply' AS check,
        CASE WHEN (permissions ? 'order_discount:apply') THEN 'PASS' ELSE 'FAIL' END AS verdict,
        jsonb_array_length(permissions) AS strings_now,
-       '25 before this migration; 26 after; 27 if 20260922e also ran' AS note
+       '25 before this migration; 26 after; 27 if 20260922e also ran (MEASURED 2026-09-23: 20260922e has NOT run, so expect 26 here unless you applied it first)' AS note
   FROM role_definitions
  WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true;
 

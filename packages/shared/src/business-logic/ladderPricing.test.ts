@@ -8,7 +8,7 @@
  *
  * 🔴 THE FIXTURE IS LAWNS'S LIVE LADDER AND LAWNS'S LIVE SIZES, MEASURED 2026-09-23, NOT INVENTED.
  * The nine rungs are the nine rows in `container_ladder`; the seeded prices are the billed medians
- * `20260923_container_ladder_install_price.sql` writes; the sizes fed in are the actual spellings
+ * `20260923e_container_ladder_install_price.sql` writes; the sizes fed in are the actual spellings
  * in `business_inventory.size` ("15 gallon" 140 rows · "15 Gallon" 75 · "1G" 15 · "5 gal" 10 …).
  * A fixture of tidy invented strings would prove the function works on tidy invented strings.
  *

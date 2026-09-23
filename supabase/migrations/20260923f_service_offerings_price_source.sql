@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 20260923b_service_offerings_price_source.sql     ·  ledger #386  ·  R-171 (b)
+-- 20260923f_service_offerings_price_source.sql     ·  ledger #386  ·  R-171 (b)
 --
 -- PURPOSE: let a service say WHERE its price comes from, so an install can be
 --   priced from the tree's container size instead of from one scalar.

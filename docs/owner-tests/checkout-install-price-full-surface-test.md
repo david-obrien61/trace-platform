@@ -14,9 +14,9 @@
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 
 🔴 **THREE MIGRATIONS ARE WRITTEN AND HELD. NOTHING BELOW CARD 1 CAN RUN UNTIL YOU APPLY THEM, IN THIS ORDER:**
-1. `supabase/migrations/20260923_container_ladder_install_price.sql` — the per-rung price + LAWNS's seed
-2. `supabase/migrations/20260923b_service_offerings_price_source.sql` — how a service says where its price comes from
-3. `supabase/migrations/20260923c_manager_holds_order_discount_apply.sql` — the MANAGER's counter permission
+1. `supabase/migrations/20260923e_container_ladder_install_price.sql` — the per-rung price + LAWNS's seed
+2. `supabase/migrations/20260923f_service_offerings_price_source.sql` — how a service says where its price comes from
+3. `supabase/migrations/20260923g_manager_holds_order_discount_apply.sql` — the MANAGER's counter permission
 Each carries its own verdict-style V-blocks. **Run them in the SQL editor, never the table editor** (§6 r17).
 
 ⚠️ **AND ONE PIECE OF DATA: `docs/decisions/2026-09-23-step0-lawns-transport-rows.sql`** — LAWNS's three
