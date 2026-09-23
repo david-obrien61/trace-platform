@@ -53,7 +53,7 @@
     "verify:id-citations": "node scripts/verify-id-citations.mjs && node scripts/verify-id-citations.mjs --self-test",
     "verify:customer-address-columns": "node scripts/verify-customer-address-columns.mjs && node scripts/verify-customer-address-columns.mjs --self-test",
     "verify:id-sweep": "node scripts/verify-id-sweep.mjs",
-    "migration:slot": "node scripts/list-migration-slot.mjs",
+    "migration:slot": "node scripts/migration-slot.mjs",
     "id-citations:baseline": "node scripts/verify-id-citations.mjs --update",
     "verify:migration-apply-state": "node scripts/verify-migration-apply-state.mjs --self-test",
     "verify:main-ancestry": "node scripts/verify-main-ancestry.mjs && node scripts/verify-main-ancestry.mjs --self-test",

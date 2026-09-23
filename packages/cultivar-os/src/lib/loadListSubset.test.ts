@@ -76,7 +76,8 @@ function ok(cond: boolean, msg: string): void {
     label, aliases, sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'test',
     installTPostsPerTree: posts, installTPostsBecause: 'test', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
     installPrice: null, installPriceBecause: 'not set',
-    growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set', active: true,
+    growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
+    sellability: 'sold' as const, sellabilityBecause: 'not set', active: true,
   });
   const LADDER: Ladder = [rung('15 gal', 40, 15, 2), rung('45 gal', 60, 45, 2), rung('95/100', 80, 95, 4, ['95 gallon'])];
   const SETTINGS: LoadListSettings = { ladder: LADDER, ops: OPERATIONS_DEFAULTS };
@@ -170,7 +171,8 @@ function ok(cond: boolean, msg: string): void {
     label, aliases: [], sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'test',
     installTPostsPerTree: posts, installTPostsBecause: 'test', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
     installPrice: null, installPriceBecause: 'not set',
-    growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set', active: true,
+    growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
+    sellability: 'sold' as const, sellabilityBecause: 'not set', active: true,
   });
   const LADDER: Ladder = [rung('15 gal', 40, 15, 2), rung('45 gal', 60, 45, 2)];
   const SETTINGS: LoadListSettings = { ladder: LADDER, ops: OPERATIONS_DEFAULTS };

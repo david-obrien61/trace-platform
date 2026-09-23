@@ -33,7 +33,8 @@ import { CALIPER_STANDARD, caliperText, standardCaliperHeightInches, validateLad
 import { loadContainerLadder, type LadderRead } from '../../lib/containerLadderRead';
 import { addRung, updateRung, setRungActive, moveRung } from '../../lib/containerLadderWrite';
 import {
-  COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, rungDraftProblems, type RungDraft,
+  COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, rungDraftProblems, SELLABILITY_OPTIONS,
+  type RungDraft,
 } from '../../lib/containerLadderDraft';
 
 const GREEN = '#27500A';
@@ -211,6 +212,27 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
         </Field>
         <Field label="Where the hold figure came from">
           <input style={input} value={draft.holdBecause} onChange={(e) => put('holdBecause', e.target.value)} />
+        </Field>
+      </div>
+      {/* ── IS THIS SIZE SOLD AT ALL? (ledger #391, David 2026-09-23) ─────────────────────────
+          A production-only rung — slip, 4 in, plug — has no sellable date because nothing is ever
+          sold there. The plan then reads "not sold at this size" instead of UNKNOWN, which is the
+          difference between a settled fact and a missing measurement. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Is this size sold?"
+          note={<>
+            Stock passes through a <strong>production size</strong> (a slip, a 4-inch, a plug) on its
+            way up and is never offered for sale at it. Saying so stops the uppot plan asking for a
+            grow figure it will never need.
+          </>}
+        >
+          <select style={input} value={draft.sellability} onChange={(e) => put('sellability', e.target.value)}>
+            {SELLABILITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Why">
+          <input style={input} value={draft.sellabilityBecause} onChange={(e) => put('sellabilityBecause', e.target.value)} />
         </Field>
       </div>
       {problems.length > 0 && (

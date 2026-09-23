@@ -36,6 +36,7 @@ const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Ru
   handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice: null, installPriceBecause: 'not set',
   growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
+  sellability: 'sold' as const, sellabilityBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [
