@@ -116,8 +116,13 @@ export interface Rung {
    * ⚠️ THE NULL PATH IS THE ORDINARY ONE, NOT THE EDGE, and the figures come from the resolver
    * itself, not from a SQL join: of LAWNS's 632 live lots, 365 sit on a PRICED rung, 95 on a
    * rung carrying NO price (88 of them `3/5 gal`, 7 `200 gal`) and 172 reach no rung at all
-   * (107 carry no size whatever) — 267 of 632 would ask for a typed amount today, and ONE price
-   * on `3/5 gal` removes 88 of them. ✏️ An earlier count said 268 split differently; it was made
+   * (107 carry no size whatever) — 267 of 632 would ask for a typed amount today.
+   * 🔴 **AND 88 OF THOSE ARE `3/5 gal`, WHICH IS CORRECT AND STAYS THAT WAY — [[R-173]].** David
+   * asked Lauren on 2026-09-23: they sell 3/5 rarely and *do not install at that size*. An earlier
+   * draft of this comment called it *"the highest-value number left"* and told the owner to price
+   * it. **The count was right and the framing was wrong:** a null here has two meanings — *nobody
+   * has set this yet* and *we do not do this at this size* — and only the owner can say which,
+   * which is what `installPriceBecause` is for and why it is NOT NULL. ✏️ An earlier count said 268 split differently; it was made
    * by joining on `volume_gallons`, which misses an alias match (100 gal → the 95/100 rung) and
    * mis-reads a range rung (3/5 gal claims BOTH 3 and 5) — the exact thing R-157 forbids doing
    * outside the resolver.
