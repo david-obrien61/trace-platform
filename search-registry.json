@@ -1,0 +1,41 @@
+{
+  "_about": [
+    "THE ITEM-SEARCH REGISTRY (ledger #388). David's ruling, 2026-09-23: 'inventory already has the filter type function, why not reuse that like we should.' ONE search module, many consumers.",
+    "WHY IT EXISTS: checkout's own searchStockLines read `sku`, populated on 1 of 632 live LAWNS rows, while the code the grid displays lives in `qb_item_name` on 632 of 632. That is ledger #384's fix never reaching a second surface. Two searches means two behaviours from one promise.",
+    "`module` is the ONE implementation of the matching rule. `consumers` declare which surfaces call it and which field list they pass. A file that filters inventory-shaped rows with its own `.includes()` and is not declared FAILS the build.",
+    "`npm run verify:search-registry` (scripts/verify-search-registry.mjs) refuses: a second matcher, an undeclared consumer, or a stale declaration naming a file that is gone.",
+    "An exception declares the SYMBOL it is about, not just the file: staleness is 'has the thing I excused gone?', which is a question about that function — not about whether a grep heuristic still recognises the file's spelling."
+  ],
+  "module": {
+    "matcher": "packages/shared/src/components/datasheet/searchSpec.ts",
+    "exports": [
+      "matchesSearch",
+      "matchesHaystack",
+      "foldForSearch",
+      "searchHaystack",
+      "searchPlaceholderFor",
+      "searchedColumns"
+    ]
+  },
+  "consumers": [
+    {
+      "surface": "/inventory — the roster grid",
+      "fields": "packages/cultivar-os/src/pages/inventorySearchSpec.ts",
+      "appliedBy": "packages/shared/src/components/datasheet/DataSheet.tsx",
+      "note": "DataSheet takes a searchText prop rather than the field list, so it calls matchesHaystack. Every grid in the platform is routed through the one rule this way."
+    },
+    {
+      "surface": "/checkout/scan — counter item entry",
+      "fields": "packages/cultivar-os/src/lib/checkoutSearchSpec.ts",
+      "appliedBy": "packages/cultivar-os/src/lib/itemLineEntry.ts",
+      "note": "A SUBSET of the roster's fields — name, SKU or code, size. Not location/group/serial/notes: at a till those produce hits on somebody's note. Adds ranking and sellability, which a grid does not need."
+    }
+  ],
+  "declaredExceptions": [
+    {
+      "file": "packages/shared/src/inventory/stockLineResolver.ts",
+      "reason": "searchStockLines is the SCAN-RESOLUTION path, not a text search: it resolves a scanned tag/slug to one lot and is on the D-45/D-46 equality route. It is being retired as checkout's typed search (ledger #388) and still serves the scanner. It must NEVER gain the spelling fold — that would change which row a scan resolves to.",
+      "symbol": "searchStockLines"
+    }
+  ]
+}
