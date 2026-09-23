@@ -78,6 +78,10 @@ interface InventoryRow {
   sku: string | null;
   /** Intuit's item CODE (`DLO30`). Shown when the row has no SKU — see `itemIdentifier`. */
   qb_item_name?: string | null;
+  /** Intuit's item ID — the key a recipe survives a catalogue wipe on (ledger #370). */
+  qb_item_id?: string | null;
+  /** purchased · grown · manufactured. The flag that says this row needs a build list (R-118). */
+  item_type?: string | null;
   qty: number;
   unit_cost: number | null;
   sell_price: number | null;
@@ -109,7 +113,14 @@ interface InventoryRow {
 // base table still grants SELECT on every column, so a member with devtools reads unit_cost with
 // one query. This removes it from the rendered surface and is prerequisite work for the real fix
 // (#81 option (b) — move cost to a costs:read-gated side table, the labor_resource_wages shape).
-const BASE_COLS = 'id,name,sku,qb_item_name,qty,sell_price,location,status,serial_number,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
+// `item_type` and `qb_item_id` are read for the MADE-ITEM flag and its recipe (ledger #370). Both
+// are on every row; neither is a cost, so neither is gated. `qb_item_id` is what a recipe keys on —
+// the row id is not durable across a catalogue reload, and the database refuses a recipe keyed on it.
+// ⚠️ `item_type` is created by 20260921_recipes_made_items.sql, APPLIED on live 2026-09-21 (SHA
+// 0e6f3d6d…). It is in BOTH column sets, so the FULL→CORE fallback below does NOT rescue a database
+// without it — the grid would report the error rather than degrade. That is deliberate: a silent
+// degrade would hide a missing flag column on the one screen that owns the flag.
+const BASE_COLS = 'id,name,sku,qb_item_name,qb_item_id,item_type,qty,sell_price,location,status,serial_number,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
 const COST_COLS = 'unit_cost,cost_confidence';
 const coreCols = (canCosts: boolean) => (canCosts ? `${BASE_COLS},${COST_COLS}` : BASE_COLS);
 const fullCols = (canCosts: boolean) => `${coreCols(canCosts)},reorder_point`;
@@ -133,6 +144,7 @@ function toEditorItem(r: InventoryRow): EditorInventoryItem {
     id: r.id, name: r.name, sku: r.sku, qty: r.qty, size: r.size, variant_group: r.variant_group,
     sell_price: r.sell_price, unit_cost: r.unit_cost, cost_confidence: r.cost_confidence,
     reorder_point: r.reorder_point, location: r.location, status: r.status, notes: r.notes,
+    item_type: r.item_type ?? 'purchased', qb_item_id: r.qb_item_id ?? null,
   };
 }
 

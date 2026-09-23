@@ -64,10 +64,37 @@
 //   The load list's ratios lived in a code constant (`BOM_RULES`) that no screen could change. David,
 //   2026-09-16: *"ONE LOCATION, MANY READS, EXTREMELY FLEXIBLE."* The per-SIZE figure (T-posts) is on
 //   the RUNG (`container_ladder.install_t_posts_per_tree`); the four per-TREE figures are here.
-//   ⚠️ THEY ARE A DIFFERENT RECIPE FROM THE UPPOT KEYS AND MUST STAY SEPARATE. `tradeGallonFactor`
-//   and `mixShrinkPct` describe POTTING UP; `installMixContainerVolumesPerTree` describes PLANTING
-//   OUT. Both numbers were once 0.7 by coincidence and that coincidence has already cost one
-//   reconciliation (R-155). Nothing reads one in place of the other.
+//   ⚠️ THEY ARE A DIFFERENT RECIPE FROM THE UPPOT KEYS AND MUST STAY SEPARATE — `tradeGallonFactor`
+//   describes POTTING UP, `installMixContainerVolumesPerTree` describes PLANTING OUT. Both numbers
+//   were once 0.7 by coincidence and that coincidence has already cost one reconciliation (R-155).
+//   Nothing reads one in place of the other.
+//   ✏️ **AMENDED 2026-09-22: `mixShrinkPct` IS NO LONGER IN THAT SEPARATION.** It was listed above
+//   as an uppot key; David ruled it describes ONE physical fact that both recipes share. The
+//   separation now covers `tradeGallonFactor` vs `installMixContainerVolumesPerTree` only.
+//
+// 🔴 SHRINK IS ONE KEY, BOTH DIRECTIONS (David, 2026-09-22). In his words:
+//   *"Shrink should be the same, because 1 yard or 1/2 yard is not exact — it is per bucket on the
+//   tractor, and if 2 people drive the tractor you will get 2 different measures for a yard. This is
+//   approx, not exact science or math. If a customer gets 45 gal of SPM and it is full when they
+//   load at LAWNS, and it seems not to be the same when they get home because it settled, it is
+//   still the same amount, just compacted. It would be different if we went by weight."*
+//
+//   The fact: LOOSE MIX SETTLES. `loose × (1 − mixShrinkPct) = settled`. It is applied in both
+//   directions and they are the same equation read from either end:
+//     · POTTING UP grosses loose mix UP so a settled pot ends full — `productionMath.ts` multiplies
+//       by `(1 + mixShrinkPct)`, which is the inverse use, not a second fact.
+//     · A RECIPE YIELD converts a loose batch DOWN to settled volume — `costing/recipeCost.ts`
+//       multiplies by `(1 − mixShrinkPct)`.
+//   ⚠️ A CONSEQUENCE, STATED SO NOBODY "FIXES" IT: `(1 + s)` and `1/(1 − s)` are not equal, so the
+//   two directions do not round-trip exactly. At the default 0 they agree; at any measured value
+//   they will differ slightly. That is acceptable because THE INPUT IS A TRACTOR BUCKET — see below.
+//
+// 🔴 VOLUMES ARE APPROXIMATE AND MUST BE SHOWN THAT WAY (David, 2026-09-22). Every volume here is
+//   bucket-measured by a person on a tractor, and two drivers give two answers for a yard. So a
+//   screen ROUNDS a volume and LABELS it approximate; it never prints four decimals of a quantity
+//   nobody measured to four decimals. False precision on a bucket figure is a lie about how the
+//   number was obtained. ⚠️ Weight-based measurement would remove the approximation and is a
+//   FUTURE OPTION, not now — recorded so the eventual build knows the door was left open.
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import { type BasisKind } from './basis';
@@ -82,7 +109,12 @@ export interface OperationsConfig {
   tradeGallonFactor: number;
   /** True gallons in a cubic yard. Standard conversion, not a preference. */
   trueGallonsPerCubicYard: number;
-  /** Mix lost to shrink and spill, as a share. Zero until somebody measures it. */
+  /**
+   * Mix lost to shrink and spill, as a share. Zero until somebody measures it.
+   * 🔴 ONE KEY, BOTH RECIPES (David, 2026-09-22 — his words are in the header). Loose mix settles:
+   * `loose × (1 − mixShrinkPct) = settled`. Potting up grosses loose mix UP to fill a settled pot;
+   * a recipe's yield converts a loose batch DOWN to settled volume. Same fact, read from both ends.
+   */
   mixShrinkPct: number;
 
   // ── LABOUR IS SETUP PLUS HANDLING, NOT A FLAT PER-POT RATE (R-86) ────────────
@@ -222,7 +254,7 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
 export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind; because: string }> = {
   tradeGallonFactor:       { basis: 'fact',       because: "the owner's own figure, 1 September" },
   trueGallonsPerCubicYard: { basis: 'fact',       because: 'standard conversion' },
-  mixShrinkPct:            { basis: 'guess',      because: 'shrink and spill' },
+  mixShrinkPct:            { basis: 'guess',      because: 'shrink and spill — a bucket figure, not a measurement (David, 2026-09-22)' },
   setupMinutesPerRun:      { basis: 'suggestion', because: "decomposed from the owner's 2 hours for 20 pots" },
   handlingMinutesPerPot:   { basis: 'suggestion', because: "the owner's 3 minutes a pot" },
   productiveHoursPerDay:   { basis: 'guess',      because: 'productive hours in a working day' },

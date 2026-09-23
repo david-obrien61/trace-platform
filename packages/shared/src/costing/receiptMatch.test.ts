@@ -124,5 +124,69 @@ const JUL_B: CapturedReceipt = { ...JUL_A, id: 'r-jul-b', createdAt: '2026-09-01
     '🔴 E2: …and carries the refusal, so the screen says why rather than showing a blank price');
 }
 
+
+// ══ §F THE SCORE PICKS THE PRODUCT; THE DATE PICKS THE LINE (David, 2026-09-22) ═══════════════
+{
+  // Two purchases of the SAME product, three months apart, at different prices. The older line is
+  // worded slightly closer to the component's own name — which is exactly the trap: under the old
+  // score-first sort it outranked the newer purchase, and "what did we last pay" meant "what did
+  // we once pay".
+  // 🔴 THE FIXTURE HAS TO CREATE THE TRAP, NOT JUST DESCRIBE IT. A first draft gave both lines the
+  // SAME description, so they scored identically and score-first and date-first agreed — the mutant
+  // that restored the old sort SURVIVED, because the probe could not tell the two apart. The lines
+  // now share an ITEM CODE and differ in wording, which is the real case: a vendor re-words a
+  // description between invoices and keeps the code. The OLDER line is worded exactly like the
+  // component (`exact_name`, 0.9); the NEWER one is not (`shared_words`, ≤0.6). Under score-first
+  // the May line wins and "what did we last pay" is three months stale.
+  const older: CapturedReceipt = { id: 'r-may', vendor: 'bwi', date: '2026-05-04', amount: 100, createdAt: '2026-05-05T00:00:00Z',
+    lineItems: [{ description: 'Osmocote 21-4-8', sku: 'OSMO50', quantity: 1, amount: 100, unit_price: 100, pack_size: 50, pack_unit: 'lb' }] };
+  const newer: CapturedReceipt = { id: 'r-aug', vendor: 'bwi', date: '2026-08-04', amount: 120, createdAt: '2026-08-05T00:00:00Z',
+    lineItems: [{ description: 'Osmocote Blend 21-4-8 (12-14M) - 50 lb', sku: 'OSMO50', quantity: 1, amount: 120, unit_price: 120, pack_size: 50, pack_unit: 'lb' }] };
+
+  const { proposals } = proposeMatches({ name: 'Osmocote 21-4-8' }, [older, newer]);
+  ok(proposals[0].purchasedOn === '2026-08-04',
+    `🔴 F1: among one product's lines the NEWEST leads — even though the OLDER line is worded closer to the component's own name (got ${proposals[0].purchasedOn})`);
+  ok(proposals[1].tier === 'exact_name' && proposals[0].score < proposals[1].tier.length,
+    `F1b: …and the older line really does score higher, so the fixture creates the trap rather than describing it (older tier ${proposals[1].tier}, newer ${proposals[0].tier})`);
+  ok(proposals[0].isNewestForProduct === true && proposals[1].isNewestForProduct === false,
+    'F2: …and it is flagged, so a screen knows which one to offer by default');
+  ok(proposals[0].otherPurchasesOfThisProduct === 1,
+    `🔴 F3: the older purchase is COUNTED, not hidden — one tap away (got ${proposals[0].otherPurchasesOfThisProduct})`);
+
+  ok(proposals[0].priceChange?.direction === 'up' && proposals[0].priceChange.was === 100 && proposals[0].priceChange.now === 120,
+    `🔴 F4: the price CHANGE is called out — $100 → $120 (got ${JSON.stringify(proposals[0].priceChange)})`);
+  ok(/Up from \$100\.00 on 2026-05-04/.test(proposals[0].priceChange?.note ?? ''),
+    `F5: …in a sentence naming the date it changed from (got "${proposals[0].priceChange?.note}")`);
+  ok(proposals[1].priceChange == null,
+    'F6: only the newest line carries the comparison — every line carrying one would be noise');
+
+  // 🔴 A SUB-CENT WOBBLE IS NOT A PRICE CHANGE. Landed cost is a division, so two purchases at the
+  // same price can differ in the fourth decimal; reporting that as "the price went up" teaches
+  // people to ignore the line that matters. Added after the mutant removing the threshold SURVIVED.
+  const same: CapturedReceipt = { ...newer, id: 'r-same', date: '2026-08-04', amount: 100,
+    lineItems: [{ description: 'Osmocote Blend 21-4-8 (12-14M) - 50 lb', sku: 'OSMO50', quantity: 1, amount: 100, unit_price: 100, pack_size: 50, pack_unit: 'lb' }] };
+  const { proposals: flat } = proposeMatches({ name: 'Osmocote 21-4-8' }, [{ ...older, date: '2026-05-04' }, same]);
+  ok(flat[0].priceChange == null,
+    `🔴 F6b: two purchases at the SAME price report NO change — not a $0.00 one (got ${JSON.stringify(flat[0].priceChange)})`);
+
+  const { proposals: down } = proposeMatches({ name: 'Osmocote 21-4-8' },
+    [{ ...older, date: '2026-09-04' }, { ...newer, date: '2026-05-04' }]);
+  // ✏️ THIS ASSERTION HAD A DEAD CONJUNCT ON ITS FIRST DRAFT — `down.proposals === undefined`,
+  // which is trivially true of an array and asserted nothing. Caught by reading it back, not by a
+  // mutant, and left recorded because it is the same family as A5.
+  ok(down[0].priceChange?.direction === 'down' && down[0].priceChange.was === 120 && down[0].priceChange.now === 100,
+    `🔴 F7: a FALL is called out too, not only a rise — $120 → $100 (got ${JSON.stringify(down[0].priceChange)})`);
+
+  // 🔴 THE SCORE STILL DECIDES WHICH PRODUCT. A code match on a different product must outrank a
+  // newer purchase of a worse-matching one, or the ruling's first clause is lost.
+  const wrongProductNewer: CapturedReceipt = { id: 'r-new-wrong', vendor: 'bwi', date: '2026-09-20', amount: 50, createdAt: '2026-09-21T00:00:00Z',
+    lineItems: [{ description: 'Something with osmocote in the words', quantity: 1, amount: 50, unit_price: 50, pack_size: 50, pack_unit: 'lb' }] };
+  const withCode: CapturedReceipt = { id: 'r-code2', vendor: 'bwi', date: '2026-01-02', amount: 70, createdAt: '2026-01-03T00:00:00Z',
+    lineItems: [{ description: 'anything', sku: 'OS98615', quantity: 1, amount: 70, unit_price: 70, pack_size: 50, pack_unit: 'lb' }] };
+  const { proposals: mixed } = proposeMatches({ name: 'Osmocote 21-4-8', qbItemName: 'OS98615' }, [wrongProductNewer, withCode]);
+  ok(mixed[0].tier === 'code',
+    `🔴 F8: the SCORE picks the product — a code match from January still beats a word match from September (got ${mixed[0].tier})`);
+}
+
 console.log(`\nreceiptMatch: ${passed} passed, ${failed} failed`);
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }
