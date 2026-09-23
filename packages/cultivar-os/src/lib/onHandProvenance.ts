@@ -25,13 +25,18 @@
 //           different facts, and the screen says which.
 //
 // DEPENDENCIES: none. Pure — no React, no database, no clock except the date passed in.
-// OUTPUTS:  QtyBasis · OnHandDescription · describeOnHand.
+// OUTPUTS:  describeOnHand. (`QtyBasis` and `OnHandDescription` are its shapes and are
+//           deliberately NOT exported — nothing imports them.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Where a quantity came from. Mirrors `business_inventory.qty_basis` (20260923m). */
-export type QtyBasis = 'counted' | 'derived' | 'placeholder' | 'unknown';
+/** Where a quantity came from. Mirrors `business_inventory.qty_basis` (20260923m).
+ *  ⚠️ NOT EXPORTED: nothing imports it by name and knip is right to say so. It reaches every
+ *  caller through `describeOnHand`'s inferred return type. Export it the day something imports
+ *  it — the same call made for `DiscardStake` on #387. */
+type QtyBasis = 'counted' | 'derived' | 'placeholder' | 'unknown';
 
-export interface OnHandDescription {
+/** ⚠️ Also deliberately local, for the same reason. */
+interface OnHandDescription {
   /** The figure itself, unchanged. */
   qty: number;
   basis: QtyBasis;
