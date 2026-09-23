@@ -180,19 +180,18 @@ export interface OperationsConfig {
    */
   mixLeadTimeDays: number;
   /**
-   * 🔴 MIX A POT CONSUMES, AS A MULTIPLE OF THE POT'S OWN VOLUME (David, 2026-09-23): *"mix volume
-   * per pot = the pot's size in gallons, allowing for settle."* So 1.0 — a 30 gallon pot takes 30
-   * gallons of settled mix — and the settle allowance is `mixShrinkPct`, NOT a second key.
+   * 🔴 MIX AN UPPOT CONSUMES, AS A MULTIPLE OF THE POT'S OWN VOLUME (David, 2026-09-23):
+   * *"for UPPOTTING, mix per pot = the pot's gallons, and it will settle."* So 1.0, grossed up by
+   * `mixShrinkPct` because the mix settles after the pot is filled.
    *
-   * ⚠️⚠️ THIS IS A SEPARATE KEY FROM `installMixContainerVolumesPerTree` ON PURPOSE, AND THE REASON
-   * IS [[R-155]]. That ruling is IMPLEMENTED and live: *"install mix is TWICE the container volume
-   * (30 gal → 60 gal). The earlier 1.0 was Lightning's figure, not LAWNS's."* Today's input reads as
-   * 1.0 for what a pot consumes. **Those cannot both be the same number**, and R-155's own text says
-   * a change of this kind *"ships printing OLD AND NEW SIDE BY SIDE — this is a pricing event, not a
-   * refactor."* So nothing overwrites the 2.0 the load list prints; the planner reports both and
-   * David rules which governs an INSTALL. See `mixPlanning.ts`.
+   * 🔴 UPPOTS ONLY, AND THE NAME SAYS SO. **This is filling a pot. It is NOT backfilling an install
+   * hole**, which is [[R-155]] and stays 2.0 × container volume with no shrink on top — *"INSTALL mix
+   * is TWICE the container volume (30 gal tree → 60 gal of mix)… Err large."*
+   * ⚠️ There is NO conflict and NO pricing event: the two figures answer different questions and
+   * neither is a revision of the other. An earlier version of this comment claimed otherwise, on a
+   * prompt that said the 1.0 applied to "an install or uppot"; that was wrong and is corrected here.
    */
-  mixGallonsPerPotVolume: number;
+  uppotMixPerPotVolume: number;
   /** Feet of staking rope per T-post. */
   ropeFeetPerTPost: number;
   /** Bubblers per tree the ORDER SPECIFIES — the billed Tree Bubbler line is the count, and this
@@ -227,7 +226,7 @@ export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
 
 /** The Settings → Operations "Planting materials" group, in display order. */
 export const PLANTING_MATERIAL_KEYS = [
-  'installMixContainerVolumesPerTree', 'mixLeadTimeDays', 'mixGallonsPerPotVolume',
+  'installMixContainerVolumesPerTree', 'mixLeadTimeDays', 'uppotMixPerPotVolume',
   'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree',
 ] as const;
 
@@ -252,7 +251,7 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   seasonalStaffLastDay: null,
   installMixContainerVolumesPerTree: 2,
   mixLeadTimeDays: 2,
-  mixGallonsPerPotVolume: 1,
+  uppotMixPerPotVolume: 1,
   ropeFeetPerTPost: 4,
   bubblersPerTree: 1,
   deerFenceTPostsPerTree: 4,
@@ -298,7 +297,7 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   // ⚠️ `guess`, NOT a new `estimate` kind. David asked for it "labelled estimate"; `BasisKind` is
   // fact | suggestion | guess, and `guess` is what this platform renders as an estimate. Minting a
   // fourth kind would change a vocabulary three screens read — its own decision, not a side effect.
-  mixGallonsPerPotVolume:  { basis: 'guess',      because: "LAWNS, David 2026-09-23 — the pot's own gallons, allowing for settle (an ESTIMATE); ⚠️ reads as 1.0 against R-155's 2.0 for an INSTALL — unresolved, see mixPlanning.ts" },
+  uppotMixPerPotVolume:    { basis: 'guess',      because: "LAWNS, David 2026-09-23 — an UPPOT takes the pot's own gallons and settles (an ESTIMATE). Installs are R-155's 2.0 and are a different question." },
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
@@ -312,7 +311,7 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
 export const PLANTING_MATERIAL_LABELS: Record<typeof PLANTING_MATERIAL_KEYS[number], string> = {
   installMixContainerVolumesPerTree: 'Special mix per gallon of container, when planting (gallons)',
   mixLeadTimeDays: 'Mix ready this many days before an install day',
-  mixGallonsPerPotVolume: 'Mix a pot consumes, per gallon of pot (estimate)',
+  uppotMixPerPotVolume: 'Mix an UPPOT consumes, per gallon of pot (estimate)',
   ropeFeetPerTPost: 'Rope per T-post (feet)',
   bubblersPerTree: 'Bubblers per tree the order specifies',
   deerFenceTPostsPerTree: 'T-posts on a deer-fenced tree, in total',

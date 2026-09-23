@@ -1,152 +1,150 @@
 // ============================================================
 // mixPlanning — IS THERE ENOUGH MIX FOR SATURDAY? (ledger #370)
 //
-// PURPOSE:      The answer Lauren currently walks out to the yard to get. David, 2026-09-23: the
-//               yard crew and the production manager are not keeping up with the mix, so she looks.
-//               The platform already knows the demand; this puts it against what is on hand and
-//               names the shortfall in words.
+// PURPOSE:      The answer Lauren currently walks out to the yard to get. David, 2026-09-23: the yard
+//               crew and the production manager are not keeping up with the mix, so she looks. The
+//               platform already knows the demand; this puts it against what is on hand and names
+//               the shortfall in words.
 //
-// 🔴 THIS IS MRP — MATERIAL REQUIREMENTS PLANNING — AND IT IS IMPLEMENTED AS THE STANDARD RATHER
-//   THAN INVENTED. Of the three replenishment methods, the one that fits a known schedule exploded
-//   through a bill of materials is MRP; reorder-point is statistical and suits independent demand,
-//   and kanban needs a consumption signal at the point of use, which a pile in a yard does not give.
+// 🔴 THIS IS MRP — MATERIAL REQUIREMENTS PLANNING — IMPLEMENTED AS THE STANDARD, NOT INVENTED. Of
+//   the three replenishment methods, the one that fits a known schedule exploded through a bill of
+//   materials is MRP; reorder-point is statistical and suits independent demand; kanban needs a
+//   consumption signal at the point of use, which a pile in a yard does not give.
 //     NET REQUIREMENT = GROSS REQUIREMENT − ON HAND − SCHEDULED RECEIPTS
-//   · gross requirement  = the day's trees × their pot gallons × the mix rule
-//   · on hand            = the mix row's quantity
-//   · scheduled receipts = ZERO here, and that is a modelling choice worth stating: a build run
-//                          lands in stock immediately, so nothing is ever "on order". The term is
-//                          kept in the shape so that when batches gain a made-by date it has a home.
-//   · planned order release = "mix N yards by <date>" — the LEAD TIME turns a quantity into a day.
+//   Scheduled receipts is ZERO here and that is a modelling choice worth stating: a build run lands
+//   in stock immediately, so nothing is ever "on order". The term is kept in the shape so it has a
+//   home when batches gain a made-by date.
 //
-// 🔴 SURFACE, DON'T DECIDE. Nothing here schedules, orders or writes. It returns what it knows,
-//   names what it does not, and proposes a batch. Lauren and Joel decide.
+// 🔴 TWO JOBS, TWO RULES, AND THEY ARE NOT RIVALS.
+//   · INSTALL — backfilling a hole. [[R-155]], live and unchanged: *"INSTALL mix is TWICE the
+//     container volume (30 gal tree → 60 gal of mix)… Err large."* **No shrink on top**: the 2.0
+//     already errs large, and grossing it up again would double-count the same caution.
+//   · UPPOT — filling a pot. David, 2026-09-23: *"for UPPOTTING, mix per pot = the pot's gallons,
+//     and it will settle."* So 1.0 × pot volume, grossed up by `mixShrinkPct`.
+//   ⚠️ **NEITHER IS A REVISION OF THE OTHER AND THERE IS NO PRICING EVENT.** An earlier version of
+//   this module printed both figures side by side for an install, on a prompt that said the 1.0
+//   applied to "an install or uppot". That was wrong. Install plans now report ONE figure — R-155's.
 //
-// ⚠️⚠️ ONE NUMBER IS UNRESOLVED AND THIS MODULE REFUSES TO HIDE IT. See `MixRule` below: David's
-//   2026-09-23 input reads as 1.0 × pot volume, and [[R-155]] — IMPLEMENTED and live — says 2.0 for
-//   an install. Both are returned, side by side, exactly as R-155 itself requires of a change of
-//   this kind. A caller that wants one number must say which rule it is using.
+// 🔴 SURFACE, DON'T DECIDE. Nothing here schedules, orders or writes.
 //
-// DEPENDENCIES: ../production/productionConfig (GALLONS_PER_CUBIC_YARD, OperationsConfig) — pure.
-// OUTPUTS:      mixRequirement · MixPlan · MixRule · shortfallSentence.
-// AC-1:         generic. A schedule, a bill of materials and a stock figure.
+// DEPENDENCIES: ../production/productionConfig — pure.
+// OUTPUTS:      mixRequirement · MixPlan · MixJob · PlannedLine · OnHand.
+// AC-1:         generic. A schedule, a bill of materials, a stock figure.
 // ============================================================
 import { GALLONS_PER_CUBIC_YARD, type OperationsConfig } from '../production/productionConfig';
 
-/** One tree on the day, as the schedule gives it. */
-export interface PlannedTree {
-  /** What the stop calls it, for naming what could not be sized. */
-  label: string;
-  /** The rung's volume in gallons. `null` when the rung has none, or the line had no size. */
-  potGallons: number | null;
-  quantity: number;
-}
+/** Which job the mix is for. They use different rules and answer different questions. */
+export type MixJob = 'install' | 'uppot';
 
 /**
- * 🔴 WHICH RULE DECIDES HOW MUCH MIX A POT CONSUMES — AND THE TWO DISAGREE.
- * `perPot`  — David, 2026-09-23: *"mix volume per pot = the pot's size in gallons, allowing for
- *             settle"* → `mixGallonsPerPotVolume` (1.0) ÷ (1 − mixShrinkPct).
- * `install` — [[R-155]], IMPLEMENTED: *"install mix is TWICE the container volume (30 gal → 60
- *             gal). The earlier 1.0 was Lightning's figure, not LAWNS's."*
- *             → `installMixContainerVolumesPerTree` (2.0).
- * A 30 gallon tree is 30 gallons under one and 60 under the other. **That is the difference between
- * needing a batch and not**, so it is David's ruling, not a default this module picks.
+ * One line on the day's schedule.
+ * 🔴 `consumesMix` IS THE LOAD-BEARING FIELD. A Tree Bubbler and a Trunk Protection line are not
+ * trees that failed to be sized — they are lines that take no mix at all. Counting them as
+ * "could not be sized" cries wolf on every install day and teaches a person to ignore the warning.
+ * The warning is for a TREE whose container size could not be read, and nothing else.
  */
-export type MixRule = 'perPot' | 'install';
+export interface PlannedLine {
+  label: string;
+  quantity: number;
+  /** True for a tree. False for a bubbler, trunk protection, a fee, a delivery charge. */
+  consumesMix: boolean;
+  /** The container's volume in gallons. Null on a tree whose size could not be read. */
+  potGallons: number | null;
+}
 
-export interface MixLine {
+/** Where an on-hand figure came from. A number with no provenance is not an answer. */
+export interface OnHand {
+  yards: number | null;
+  /** The catalogue item it was read from — its QuickBooks id and name. */
+  itemId: string;
+  itemName: string;
+  /** When it was last counted. Null = never, and the sentence must say so. */
+  countedAt: string | null;
+}
+
+export interface CostedLine {
   label: string;
   quantity: number;
   potGallons: number | null;
-  /** Gallons of mix this line consumes under the chosen rule. Null when it could not be sized. */
   gallons: number | null;
-  /** Why it could not be sized, in the reader's words. */
+  /** Why a TREE line has no figure. Null on a tree that was sized, and null on a non-tree. */
   refusal: string | null;
+  consumesMix: boolean;
 }
 
 export interface MixPlan {
-  rule: MixRule;
-  lines: MixLine[];
-  /** Lines that could not be sized — named, never counted as zero. */
-  unsized: string[];
-  /** GROSS REQUIREMENT, in cubic yards. Null when nothing on the day could be sized. */
+  job: MixJob;
+  /** The multiple applied, and whether shrink was grossed up — so a reader can check the working. */
+  multiple: number;
+  shrinkApplied: boolean;
+  lines: CostedLine[];
+  /** TREE lines whose container size could not be read. Non-consuming lines are NEVER in here. */
+  unsizedTrees: string[];
+  /** Lines that take no mix, counted so a reader can see they were considered and set aside. */
+  nonConsumingCount: number;
   neededYards: number | null;
-  /** The same figure under the OTHER rule, always in hand (R-155: old and new side by side). */
-  neededYardsOtherRule: number | null;
-  /** ON HAND, in cubic yards, as given. Null when nobody has said. */
-  onHandYards: number | null;
-  /** When that figure was last counted. Null = never, and the screen must say so. */
-  onHandCountedAt: string | null;
-  /** NET REQUIREMENT. Positive = short by this many yards. Null when either side is unknown. */
+  onHand: OnHand | null;
   shortfallYards: number | null;
-  /** PLANNED ORDER RELEASE — the day the mix must exist, from the lead time. */
   makeByDate: string | null;
   leadTimeDays: number;
-  /** True when a par level, not the schedule, is what fired the prompt. */
   firedByPar: boolean;
-  /** The sentence a person reads. Never empty. */
   sentence: string;
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
-/**
- * What a day needs, against what is on hand.
- * ⚠️ `onHandYards` of `null` is NOT zero. Zero means "we counted and there is none"; null means
- * nobody has said, and the sentence must not imply a shortfall it cannot know about.
- */
 export function mixRequirement(input: {
-  /** The install day. ISO 'YYYY-MM-DD'. */
   day: string;
-  trees: PlannedTree[];
-  ops: Pick<OperationsConfig, 'mixGallonsPerPotVolume' | 'installMixContainerVolumesPerTree'
+  job: MixJob;
+  lines: PlannedLine[];
+  ops: Pick<OperationsConfig, 'uppotMixPerPotVolume' | 'installMixContainerVolumesPerTree'
     | 'mixShrinkPct' | 'mixLeadTimeDays' | 'trueGallonsPerCubicYard'>;
-  rule?: MixRule;
-  onHandYards?: number | null;
-  onHandCountedAt?: string | null;
-  /** A per-business minimum — the second trigger, for a quiet week. */
+  onHand?: OnHand | null;
   parYards?: number | null;
 }): MixPlan {
-  const rule = input.rule ?? 'perPot';
+  const { job } = input;
   const gpcy = input.ops.trueGallonsPerCubicYard || GALLONS_PER_CUBIC_YARD;
   const shrink = input.ops.mixShrinkPct ?? 0;
 
-  // 🔴 SETTLE IS `mixShrinkPct`, NOT A SECOND KEY. David ruled on 2026-09-22 that shrink is ONE key
-  // for one physical fact — loose mix settles. Filling a pot reads it in the GROSSING-UP direction:
-  // to end with one settled pot-volume you must start with `volume ÷ (1 − shrink)` loose.
-  const settleFactor = shrink > 0 && shrink < 1 ? 1 / (1 - shrink) : 1;
-  const multiple = (r: MixRule): number =>
-    r === 'perPot' ? (input.ops.mixGallonsPerPotVolume ?? 1) * settleFactor
-                   : (input.ops.installMixContainerVolumesPerTree ?? 2);
+  // 🔴 SHRINK IS GROSSED UP FOR AN UPPOT AND NOT FOR AN INSTALL. Filling a pot must end with a full
+  // settled pot, so you start with `volume ÷ (1 − shrink)`. R-155's 2.0 already errs large for a
+  // hole; adding shrink would double-count the same caution.
+  const settleFactor = job === 'uppot' && shrink > 0 && shrink < 1 ? 1 / (1 - shrink) : 1;
+  const multiple = job === 'uppot'
+    ? (input.ops.uppotMixPerPotVolume ?? 1) * settleFactor
+    : (input.ops.installMixContainerVolumesPerTree ?? 2);
 
-  const build = (r: MixRule) => {
-    let gal = 0; let any = false;
-    const lines: MixLine[] = input.trees.map(t => {
-      if (t.potGallons == null || !(t.potGallons > 0)) {
-        return { label: t.label, quantity: t.quantity, potGallons: t.potGallons, gallons: null,
-          refusal: `${t.label} has no pot size, so the mix it takes cannot be worked out.` };
-      }
-      const g = t.potGallons * t.quantity * multiple(r);
-      gal += g; any = true;
-      return { label: t.label, quantity: t.quantity, potGallons: t.potGallons, gallons: g, refusal: null };
-    });
-    return { lines, yards: any ? round1(gal / gpcy) : null };
-  };
+  let gal = 0; let anySized = false; let nonConsuming = 0;
+  const lines: CostedLine[] = input.lines.map(l => {
+    if (!l.consumesMix) {
+      nonConsuming++;
+      return { label: l.label, quantity: l.quantity, potGallons: null, gallons: null,
+        refusal: null, consumesMix: false };
+    }
+    if (l.potGallons == null || !(l.potGallons > 0)) {
+      return { label: l.label, quantity: l.quantity, potGallons: l.potGallons, gallons: null,
+        refusal: `${l.label} is a tree with no container size, so the mix it takes cannot be worked out.`,
+        consumesMix: true };
+    }
+    const g = l.potGallons * l.quantity * multiple;
+    gal += g; anySized = true;
+    return { label: l.label, quantity: l.quantity, potGallons: l.potGallons, gallons: g,
+      refusal: null, consumesMix: true };
+  });
 
-  const chosen = build(rule);
-  const other = build(rule === 'perPot' ? 'install' : 'perPot');
-  const unsized = chosen.lines.filter(l => l.gallons == null).map(l => l.label);
-
-  const onHand = input.onHandYards ?? null;
+  const unsizedTrees = lines.filter(l => l.consumesMix && l.gallons == null).map(l => l.label);
+  const need = anySized ? round1(gal / gpcy) : null;
+  const oh = input.onHand ?? null;
+  const onHandYards = oh?.yards ?? null;
   const par = input.parYards ?? null;
-  const need = chosen.yards;
 
-  // The schedule's shortfall, then the par level as a second trigger.
   let shortfall: number | null = null;
   let firedByPar = false;
-  if (need != null && onHand != null) shortfall = round1(Math.max(0, need - onHand));
-  if (par != null && onHand != null) {
-    const parShort = round1(Math.max(0, par - onHand));
-    if (shortfall == null || parShort > shortfall) { shortfall = parShort; firedByPar = shortfall > 0 && (need == null || parShort > round1(Math.max(0, need - onHand))); }
+  if (need != null && onHandYards != null) shortfall = round1(Math.max(0, need - onHandYards));
+  if (par != null && onHandYards != null) {
+    const parShort = round1(Math.max(0, par - onHandYards));
+    const schedShort = need != null ? round1(Math.max(0, need - onHandYards)) : 0;
+    if (parShort > schedShort) { shortfall = parShort; firedByPar = parShort > 0; }
   }
 
   const lead = input.ops.mixLeadTimeDays ?? 2;
@@ -157,29 +155,29 @@ export function mixRequirement(input: {
     return d.toISOString().slice(0, 10);
   })();
 
-  const counted = input.onHandCountedAt
-    ? `counted ${input.onHandCountedAt}`
-    : 'never counted';
+  const from = oh ? `${oh.itemName} (item ${oh.itemId})` : 'no item';
+  const counted = oh ? (oh.countedAt ? `counted ${oh.countedAt}` : 'never counted') : '';
+  const jobWord = job === 'uppot' ? 'uppotting' : 'the installs';
 
   let sentence: string;
   if (need == null && par == null) {
-    sentence = unsized.length
-      ? `Nothing on ${input.day} could be sized — ${unsized.length} line${unsized.length === 1 ? '' : 's'} have no pot size, so no mix figure can be worked out.`
-      : `No trees scheduled for ${input.day}, so no mix is needed for it.`;
-  } else if (onHand == null) {
-    sentence = `${input.day} needs about ${need ?? par} yards. Nobody has said how much mix is on hand — count it and this will tell you whether you are short.`;
+    sentence = unsizedTrees.length
+      ? `No mix figure for ${input.day}: ${unsizedTrees.length} tree line${unsizedTrees.length === 1 ? '' : 's'} could not be sized.`
+      : `No trees scheduled for ${input.day}, so ${jobWord} needs no mix.`;
+  } else if (onHandYards == null) {
+    sentence = `${input.day} needs about ${need ?? par} yards for ${jobWord}. Nobody has said how much mix is on hand — count it and this will tell you whether you are short.`;
   } else if ((shortfall ?? 0) <= 0) {
-    sentence = `${input.day} needs about ${need ?? 0} yards. You have ${onHand} (${counted}) — enough.`;
+    sentence = `${input.day} needs about ${need ?? 0} yards for ${jobWord}. You have ${onHandYards} from ${from}, ${counted} — enough.`;
+  } else if (firedByPar) {
+    sentence = `You have ${onHandYards} yards from ${from}, ${counted} — below your ${par}-yard minimum. Mix about ${shortfall} yards${makeBy ? ` by ${makeBy}` : ''}.`;
   } else {
-    sentence = firedByPar
-      ? `You have ${onHand} yards (${counted}), below your ${par}-yard minimum. Mix about ${shortfall} yards${makeBy ? ` by ${makeBy}` : ''}.`
-      : `${input.day} needs about ${need} yards. You have ${onHand} (${counted}). Short ${shortfall} — mix it${makeBy ? ` by ${makeBy}` : ''}.`;
+    sentence = `${input.day} needs about ${need} yards for ${jobWord}. You have ${onHandYards} from ${from}, ${counted}. Short ${shortfall} — mix it${makeBy ? ` by ${makeBy}` : ''}.`;
   }
-  if (unsized.length && need != null) {
-    sentence += ` ⚠️ ${unsized.length} line${unsized.length === 1 ? '' : 's'} could not be sized and ${unsized.length === 1 ? 'is' : 'are'} NOT in that figure: ${unsized.join(', ')}.`;
+  if (unsizedTrees.length && need != null) {
+    sentence += ` ⚠️ ${unsizedTrees.length} tree line${unsizedTrees.length === 1 ? '' : 's'} could not be sized and ${unsizedTrees.length === 1 ? 'is' : 'are'} NOT in that figure: ${unsizedTrees.join(', ')}.`;
   }
 
-  return { rule, lines: chosen.lines, unsized, neededYards: need, neededYardsOtherRule: other.yards,
-    onHandYards: onHand, onHandCountedAt: input.onHandCountedAt ?? null, shortfallYards: shortfall,
+  return { job, multiple, shrinkApplied: settleFactor !== 1, lines, unsizedTrees,
+    nonConsumingCount: nonConsuming, neededYards: need, onHand: oh, shortfallYards: shortfall,
     makeByDate: makeBy, leadTimeDays: lead, firedByPar, sentence };
 }
