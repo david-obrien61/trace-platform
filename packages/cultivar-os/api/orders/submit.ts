@@ -268,7 +268,7 @@ export async function recordOrderEvent(
 // Derive the legacy transport_method value (backward compat: delivery routing query + history).
 // Three-branch model: self → 'self'; a staff branch with planting attached (or a fused
 // per-plant staff row) → 'install'; a plain staff delivery → 'delivery'.
-function deriveTransportMethod(t: any, plantingSelected: boolean): string {
+export function deriveTransportMethod(t: any, plantingSelected: boolean): string {
   if (t.transport_mode === 'self') return 'self';
   if (plantingSelected) return 'install';
   if (t.transport_mode === 'staff' && t.price_type === 'per_unit') return 'install'; // fused row
