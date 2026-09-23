@@ -56,6 +56,11 @@ type NumKey = {
 
 const GROUPS: Array<{ title: string; note?: string; keys: NumKey[] }> = [
   { title: 'Volume', keys: ['tradeGallonFactor', 'trueGallonsPerCubicYard', 'mixShrinkPct'] },
+  // Mix planning (David, 2026-09-23). Its own group because these two answer a scheduling question,
+  // not a per-tree one — and deliberately NOT in PLANTING_MATERIAL_KEYS, which is what the staff
+  // RPC returns.
+  { title: 'Mix planning', note: 'How far ahead mix must be made, and what an uppot consumes.',
+    keys: ['mixLeadTimeDays', 'uppotMixPerPotVolume'] },
   {
     title: 'Time',
     note: 'Setup is paid once per run; handling is paid per pot. That is why batch size changes the cost of a plan and crew size does not.',
@@ -87,6 +92,8 @@ const LABELS: Partial<Record<NumKey, string>> = {
   tradeGallonFactor: 'Trade gallon → true gallons',
   trueGallonsPerCubicYard: 'True gallons in a cubic yard',
   mixShrinkPct: 'Mix shrink and spill (share)',
+  mixLeadTimeDays: 'Mix ready this many days before an install day',
+  uppotMixPerPotVolume: 'Mix an uppot consumes, per gallon of pot (estimate)',
   setupMinutesPerRun: 'Minutes to set up a run',
   handlingMinutesPerPot: 'Minutes to handle one pot',
   productiveHoursPerDay: 'Productive hours a day',

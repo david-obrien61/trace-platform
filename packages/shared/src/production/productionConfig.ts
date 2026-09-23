@@ -226,8 +226,13 @@ export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
 
 /** The Settings → Operations "Planting materials" group, in display order. */
 export const PLANTING_MATERIAL_KEYS = [
-  'installMixContainerVolumesPerTree', 'mixLeadTimeDays', 'uppotMixPerPotVolume',
-  'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree',
+  // ⚠️ MIX-PLANNING KEYS DO NOT BELONG HERE. `mixLeadTimeDays` and `uppotMixPerPotVolume` were
+  // briefly added to this list and `containerSizesSettings.test.ts` C1 refused it, correctly: this
+  // is the PER-TREE INSTALL set that `get_planting_materials` returns to STAFF, who hold no
+  // `settings:*` string (tech-debt #188). Widening it would have changed what a staff read returns
+  // — a permission-shaped change smuggled in as a config addition. They live in OperationsConfig
+  // and are grouped on the Settings screen instead.
+  'installMixContainerVolumesPerTree', 'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree',
 ] as const;
 
 export const OPERATIONS_DEFAULTS: OperationsConfig = {
@@ -310,8 +315,6 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
 /** Plain-language names for the planting-material keys. The screen shows these, never a key. */
 export const PLANTING_MATERIAL_LABELS: Record<typeof PLANTING_MATERIAL_KEYS[number], string> = {
   installMixContainerVolumesPerTree: 'Special mix per gallon of container, when planting (gallons)',
-  mixLeadTimeDays: 'Mix ready this many days before an install day',
-  uppotMixPerPotVolume: 'Mix an UPPOT consumes, per gallon of pot (estimate)',
   ropeFeetPerTPost: 'Rope per T-post (feet)',
   bubblersPerTree: 'Bubblers per tree the order specifies',
   deerFenceTPostsPerTree: 'T-posts on a deer-fenced tree, in total',
