@@ -60,6 +60,43 @@ export interface OnHand {
   itemName: string;
   /** When it was last counted. Null = never, and the sentence must say so. */
   countedAt: string | null;
+  /**
+   * The words this figure wears when it is NOT a count.
+   *
+   * 🔴 THE WORDS ARE NOT SPELLED HERE, AND THAT IS THE POINT. They come from the ONE place they
+   * already live — `inventoryStates.SEEDED_NOTE`, which the checkout picker has rendered beside
+   * an uncounted lot since 2026-07-22 — passed in by the caller, because `shared` must not import
+   * a vertical (tech-debt #156). A second copy of one wording is the copy that drifts (STD-011).
+   *
+   * 🔴 REQUIRED, NEVER OPTIONAL. Optional would let a caller omit it and render a placeholder as
+   * though it were a count — the exact lie this field exists to prevent — and no probe reads a
+   * caller nobody wrote yet. tsc refuses instead. Null means, and may ONLY mean, that
+   * `countedAt` holds a real count.
+   */
+  provenanceNote: string | null;
+}
+
+/** One live row that COULD be the made mix. Nothing here ranks them. */
+export interface MixItemCandidate {
+  itemId: string;
+  itemName: string;
+  /** When this row was last counted. Null = never. */
+  countedAt: string | null;
+  /** Same provenance words as everywhere else, from the same one place. */
+  provenanceNote: string | null;
+}
+
+/**
+ * Which catalogue item IS the planting mix.
+ *
+ * 🔴 `chosenItemId` IS TENANT CONFIG AND IT IS NULL UNTIL LAUREN NAMES ONE. It is not defaulted,
+ * not inferred from the busiest candidate, and not inferred from item 174 — David has said in
+ * terms that he does not know 174. A default here would be a choice made by whoever wrote this
+ * line, wearing the appearance of a fact she confirmed.
+ */
+export interface MixItemChoice {
+  chosenItemId: string | null;
+  candidates: MixItemCandidate[];
 }
 
 export interface CostedLine {
@@ -89,9 +126,86 @@ export interface MixPlan {
   leadTimeDays: number;
   firedByPar: boolean;
   sentence: string;
+  /** The on-hand figure AND what it is — never a bare number. Empty when nobody has said one. */
+  onHandLine: string;
+  /** The which-item question, unanswered until Lauren answers it. */
+  mixItemLine: string;
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * `2026-10-01` -> `1 October`. Parsed as UTC and formatted by hand: `toLocaleDateString` would
+ * hand the answer to whatever locale the machine happens to carry, so the same plan would read
+ * differently on two laptops.
+ */
+export function humanDay(iso: string | null): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  const mon = MONTHS[Number(m[2]) - 1];
+  if (!mon) return null;
+  return `${Number(m[3])} ${mon}`;
+}
+
+/**
+ * Is this figure a COUNT? One predicate, read by the figure, the candidate list AND the verdict.
+ *
+ * 🔴 THE DEFAULT IS "NOT COUNTED", AND IT IS THE WHOLE POINT. An earlier draft of this file keyed
+ * on the note alone, so a caller that passed no note — which is EVERY real caller, because
+ * `fetchSeededLots` only marks a row that has an `opening_stock_seed` event and LAWNS's mix rows
+ * have no ledger row of ANY kind — rendered "(all counted)" beside twelve rows nobody has ever
+ * counted, and a flat "enough" over item 174's 10. Measured against the live database, not
+ * reviewed: every fixture had supplied a note, so no probe was ever in the real caller's
+ * population (tech-debt #182). A count is proven by a DATE, never by the absence of a note.
+ */
+export function isCounted(p: { countedAt: string | null; provenanceNote: string | null }): boolean {
+  return !p.provenanceNote && !!p.countedAt;
+}
+
+/** The words a figure wears. Never 'counted' unless a date says so. */
+export function provenanceWords(p: { countedAt: string | null; provenanceNote: string | null }): string {
+  if (p.provenanceNote) return p.provenanceNote;
+  return p.countedAt ? `counted ${p.countedAt}` : 'never counted';
+}
+
+/**
+ * The on-hand figure and what it IS, in one place — `10 · never counted`.
+ *
+ * 🔴 IT IS A SUFFIX ON THE NUMBER, NOT A REPLACEMENT FOR IT, for the same reason the checkout
+ * picker's label is: hiding the figure leaves Lauren walking out to look, which is the whole
+ * problem; showing it bare asserts a count nobody performed. Shown AND qualified.
+ */
+export function onHandFigure(oh: OnHand): string {
+  if (oh.yards == null) return 'not said';
+  return `${oh.yards} · ${provenanceWords(oh)}`;
+}
+
+/**
+ * The which-item question. It ASKS until it has been answered, and it never implies an answer.
+ *
+ * 🔴 THE CANDIDATE LIST IS NOT A RANKING AND CARRIES NO FIRST CHOICE. Each id wears its own
+ * provenance, so a reader cannot mistake a placeholder for a count while choosing.
+ */
+export function mixItemQuestion(choice: MixItemChoice | null | undefined): string {
+  const ask = 'Which item is your planting mix?';
+  if (!choice) return `${ask} Not yet confirmed — and no candidates have been read.`;
+  if (choice.chosenItemId) {
+    const c = choice.candidates.find(x => x.itemId === choice.chosenItemId);
+    return c
+      ? `Your planting mix is ${c.itemName} (item ${c.itemId}), set in Settings.`
+      : `Settings names item ${choice.chosenItemId} as your planting mix and no live row matches it — check it.`;
+  }
+  if (!choice.candidates.length) return `${ask} Not yet confirmed — and no candidates have been read.`;
+  const notes = new Set(choice.candidates.map(provenanceWords));
+  const list = notes.size === 1
+    ? `${choice.candidates.map(c => c.itemId).join(', ')} (all ${[...notes][0]})`
+    : choice.candidates.map(c => `${c.itemId} (${provenanceWords(c)})`).join(', ');
+  return `${ask} Not yet confirmed — candidates: ${list}. Nothing here picks one.`;
+}
 
 export function mixRequirement(input: {
   day: string;
@@ -101,6 +215,7 @@ export function mixRequirement(input: {
     | 'mixShrinkPct' | 'mixLeadTimeDays' | 'trueGallonsPerCubicYard'>;
   onHand?: OnHand | null;
   parYards?: number | null;
+  mixItem?: MixItemChoice | null;
 }): MixPlan {
   const { job } = input;
   const gpcy = input.ops.trueGallonsPerCubicYard || GALLONS_PER_CUBIC_YARD;
@@ -156,8 +271,15 @@ export function mixRequirement(input: {
   })();
 
   const from = oh ? `${oh.itemName} (item ${oh.itemId})` : 'no item';
-  const counted = oh ? (oh.countedAt ? `counted ${oh.countedAt}` : 'never counted') : '';
+  const figure = oh ? onHandFigure(oh) : '';
+  const byDay = humanDay(makeBy);
   const jobWord = job === 'uppot' ? 'uppotting' : 'the installs';
+
+  // 🔴 A VERDICT RESTING ON AN UNCOUNTED FIGURE SAYS SO IN THE VERDICT, not in a footnote.
+  // "enough" above a number nobody counted is §18's defect exactly: the line reads as settled
+  // while the state underneath it is unknown, and Lauren acts on the line.
+  const uncounted = !!oh && !isCounted(oh);
+  const countIt = ` Count it${byDay ? ` before ${byDay}` : ''}.`;
 
   let sentence: string;
   if (need == null && par == null) {
@@ -167,11 +289,15 @@ export function mixRequirement(input: {
   } else if (onHandYards == null) {
     sentence = `${input.day} needs about ${need ?? par} yards for ${jobWord}. Nobody has said how much mix is on hand — count it and this will tell you whether you are short.`;
   } else if ((shortfall ?? 0) <= 0) {
-    sentence = `${input.day} needs about ${need ?? 0} yards for ${jobWord}. You have ${onHandYards} from ${from}, ${counted} — enough.`;
+    sentence = uncounted
+      ? `${input.day} needs ${need ?? 0} yd for ${jobWord}. On hand: ${figure} from ${from} — enough only if that's right.${countIt}`
+      : `${input.day} needs ${need ?? 0} yd for ${jobWord}. On hand: ${figure} from ${from} — enough.`;
   } else if (firedByPar) {
-    sentence = `You have ${onHandYards} yards from ${from}, ${counted} — below your ${par}-yard minimum. Mix about ${shortfall} yards${makeBy ? ` by ${makeBy}` : ''}.`;
+    sentence = `On hand: ${figure} from ${from} — below your ${par}-yard minimum. Mix about ${shortfall} yards${byDay ? ` by ${byDay}` : ''}.`;
+    if (uncounted) sentence += ` That shortfall rests on a figure nobody has counted.${countIt}`;
   } else {
-    sentence = `${input.day} needs about ${need} yards for ${jobWord}. You have ${onHandYards} from ${from}, ${counted}. Short ${shortfall} — mix it${makeBy ? ` by ${makeBy}` : ''}.`;
+    sentence = `${input.day} needs ${need} yd for ${jobWord}. On hand: ${figure} from ${from}. Short ${shortfall} — mix it${byDay ? ` by ${byDay}` : ''}.`;
+    if (uncounted) sentence += ` That shortfall rests on a figure nobody has counted.${countIt}`;
   }
   if (unsizedTrees.length && need != null) {
     sentence += ` ⚠️ ${unsizedTrees.length} tree line${unsizedTrees.length === 1 ? '' : 's'} could not be sized and ${unsizedTrees.length === 1 ? 'is' : 'are'} NOT in that figure: ${unsizedTrees.join(', ')}.`;
@@ -179,5 +305,7 @@ export function mixRequirement(input: {
 
   return { job, multiple, shrinkApplied: settleFactor !== 1, lines, unsizedTrees,
     nonConsumingCount: nonConsuming, neededYards: need, onHand: oh, shortfallYards: shortfall,
-    makeByDate: makeBy, leadTimeDays: lead, firedByPar, sentence };
+    makeByDate: makeBy, leadTimeDays: lead, firedByPar, sentence,
+    onHandLine: oh ? `${figure} from ${from}` : '',
+    mixItemLine: mixItemQuestion(input.mixItem) };
 }
