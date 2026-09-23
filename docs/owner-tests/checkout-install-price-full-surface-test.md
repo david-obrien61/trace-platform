@@ -9,7 +9,7 @@
 > **`env?`** or **`local`** is **not production**, and a matching SHA does not rescue it. *(tech-debt #280 ②.)*
 
 **Capability:** 2.1 Cart / QR checkout · container sizes · **Ledger:** #386 · **Rulings:** R-171 (a)–(f), R-172
-**Board: 0 of 14 covered** (14 `owed`). Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
+**Board: 0 of 14 covered** — 13 `owed`, **1 `needs-test` with its reason (CARD 13: a prerequisite I could not establish — read it before planning that run).** Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
 
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 
@@ -174,16 +174,63 @@ the tier reaches the install. **FAIL:** $450.00 is charged. That is a contractor
 going UP because the install moved out of the plant SKU, which is precisely what ruling (d) forbids.
 
 ### CARD 13 — 🔴 AND THE QUICKBOOKS INVOICE SURVIVES IT
-`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+`STATUS: needs-test` · `DEVICE: desktop` · `LAST-PROVEN: —`
 **WHO:** David (OWNER) · **TENANT:** a tenant with QuickBooks connected · **COVERS:** R-171 (d)(f)
 
-Push CARD 12's order to QuickBooks.
+🔴 **`needs-test`, NOT `owed`, AND THE REASON IS A PREREQUISITE I COULD NOT ESTABLISH.** This is the
+card that matters most and the one nothing in the repo can prove — and before it can be run at all,
+someone has to confirm that a TRACE→QuickBooks push currently succeeds for any order. **I could not
+confirm that, and I am recording the measurements rather than assuming either way.**
+
+**WHAT WAS MEASURED, 2026-09-23, read-only:**
+- `qboItemMappingOf` (`invoiceLineShapes.ts`) reads **`qbo_item_id`**. A revenue line whose backing
+  row lacks it is REFUSED with `QBO_ITEM_UNMAPPED` (422) — deliberately: *"TRACE will not pick one
+  — that is how every tree came to book as generic income."*
+- `qbo_item_id` exists on **exactly one table: `order_items`** (3,679 of 3,958 populated).
+- The goods line passes `backingRow: item.business_inventory`, and `business_inventory` carries
+  **`qb_item_id`** (no `o`) — LAWNS **632 of 632** populated with real Intuit ids.
+- The service line passes `backingRow: offering`, and **`service_offerings` carries neither column.**
+  The install IS a service line, so this is directly in CARD 13's path.
+- 19 LAWNS and 14 Test Dave's orders carry a `qb_invoice_id`, **but that does not settle it**: LAWNS's
+  came in through the OCR/QuickBooks history door, where the invoice id is READ FROM QuickBooks
+  rather than written by a push. Test Dave's most recent is 2026-08-25, three days before the
+  item-ref change of 2026-08-30.
+
+**THE ONE CHEAP CHECK THAT SETTLES IT — do this first, on Test Dave's, and it needs no setup:**
+ring up ANY ordinary order and press push.
+- If it **pushes**, the mapping path works and CARD 13 is merely `owed` — set it up as below.
+- If it returns **`QBO_ITEM_UNMAPPED` (422)** naming the lines, then the QuickBooks push is blocked
+  for every order on every tenant, CARD 13 cannot run, **and that is a finding worth its own build**
+  — it is not caused by #386 and #386 does not fix it.
+
+**IF IT PUSHES — what to set up on Test Dave's, since LAWNS has one CD10% customer in 2,007:**
+1. **The tier already exists.** `Contractor tier 1` (10% off retail) with **three** customers on it —
+   e.g. **Hillside Landscapes (contractor)**. Nothing to create.
+2. **Give Test Dave's a container ladder.** It has **none** (LAWNS is the only tenant with one).
+   Settings → Container sizes → add at least `15 gal`, `30 gal` and `45 gal`, and **set an install
+   price on each** (any figure; $204 / $425 / $450 mirrors LAWNS). Their sellable stock is sized
+   `15`, `30`, `45` — bare numbers, which the resolver reads by number without an alias.
+3. **Make an install service that prices from the ladder.** Either flip `Placement Service` to
+   `price_source = 'container_ladder'`, **or** — better, because it keeps CARD 2's negative control
+   intact — add a NEW transport row: category `transport`, mode `staff`, `per_unit` / `plant`,
+   `price_source = 'container_ladder'`.
+   ⚠️ **There is no UI for `price_source` yet.** It is one UPDATE in the SQL editor:
+   ```sql
+   update service_offerings set price_source = 'container_ladder'
+    where business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b' and name = '<the row you chose>';
+   ```
+   🔴 **If you flip `Placement Service`, CARD 2 stops being a valid negative control** — say so on
+   that card rather than letting it read as passing.
+4. **Ring it up:** attach Hillside Landscapes, add ONE 45 gal tree, choose the branch with planting.
+   Review should show install at **$450 baseline, $405 charged**.
+5. **Push it.**
 
 **PASS:** the invoice is **accepted**, and shows the install at its **retail** figure with a separate
-**discount** line. **FAIL:** QuickBooks rejects it with **6070 — "Amount is not equal to UnitPrice *
-Qty"**. 🔴 **This is the card that matters most and the one nothing in the repo could prove:** it is
-the 2026-07-16 scar, and ruling (d) reopened the same door from a different side. It needs a
-discount-tier customer AND an install — a combination nobody rings up by accident.
+**discount** line.
+**FAIL:** QuickBooks rejects it with **6070 — "Amount is not equal to UnitPrice * Qty"**. That is the
+2026-07-16 scar; ruling (d) reopened the same door from a different side, and the fix is in this
+build. The unit test (`qboInvoiceLines` §J, mutant = the pre-#386 condition) proves the payload
+shape; **only this card proves QuickBooks accepts it.**
 
 ### CARD 14 — 🔴 IT CHANGES WHAT THE CUSTOMER SEES (R-171 (f))
 `STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
