@@ -4,7 +4,7 @@
 // DEPENDENCIES: addressStep (pure).
 // OUTPUTS: assertions only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { planAddressStep, applyGeocodeToStep, orderChoices, addressLine, mayPrice } from './addressStep';
+import { planAddressStep, applyGeocodeToStep, orderChoices, addressLine, mayPrice, resolveAddressCheck } from './addressStep';
 
 let passed = 0; const failures: string[] = [];
 const ok = (c: boolean, m: string) => { if (c) passed++; else failures.push(m); };
@@ -39,9 +39,20 @@ ok(planAddressStep(saved({ geocode_status: null, latitude: null, longitude: null
 
 // ── §B · never two questions for one address ─────────────────────────────────────────────────
 {
-  const p = planAddressStep(saved({ geocode_status: 'not_found', latitude: null, longitude: null, geocoded_at: null }), NOW);
+  // ✏️ THIS FIXTURE GAINED A DATE (2026-09-24, ruling 1). It used to carry `geocoded_at: null`,
+  // because nothing wrote the answer back and an undated row was the only kind there was. Now
+  // every verdict is dated when it is recorded, and the date is what stops the re-ask.
+  const p = planAddressStep(saved({ geocode_status: 'not_found', latitude: null, longitude: null, geocoded_at: daysAgo(3) }), NOW);
   ok(p.geocode === false && p.question.ask === 'cannot-place',
      '🔴 B1 AN ADDRESS ALREADY KNOWN TO BE UNPLACEABLE IS NOT RE-ASKED OF GOOGLE — the same text gets the same answer, and re-asking the PERSON is exactly the second question this step exists to prevent');
+}
+{
+  const legacy = planAddressStep(saved({ geocode_status: 'not_found', latitude: null, longitude: null, geocoded_at: null }), NOW);
+  ok(legacy.geocode === true,
+     "🔴 B1b AN UNDATED VERDICT IS RE-CHECKED, AND THIS IS A DELIBERATE CHANGE. If we cannot say WHEN we learned an address was unplaceable, we cannot claim to be inside the 30-day window — the same rule that makes an undated COORDINATE expired. It also rescues the rows the first version wrote without a date");
+  const old = planAddressStep(saved({ geocode_status: 'not_found', latitude: null, longitude: null, geocoded_at: daysAgo(400) }), NOW);
+  ok(old.geocode === true,
+     '🔴 B1c AND UNPLACEABLE IS NOT A LIFE SENTENCE — after 30 days we look again. 35% of Liberty Hill is new enough that the maps have not caught up, and those streets DO get built. An address refused forever on a January answer is wrong by construction in Lauren\'s own town');
 }
 {
   // Every path returns at most one question — the shape makes two impossible.
@@ -111,6 +122,51 @@ ok(mayPrice(null, NOW) === false, 'E4 no address, no price');
 }
 ok(addressLine({ line1: '400 Honey Comb Mesa', city: 'Leander', state: 'TX', zip: '78641' }) === '400 Honey Comb Mesa, Leander, TX, 78641',
    'F2 the address reads as one line, the way a person says it');
+
+// ── §G · RULING 1 — THE RESULT IS WRITTEN BACK, SO NOBODY IS ASKED TWICE ────────────────────
+// David, 2026-09-24. Before this, the check ran and its answer was thrown away: a customer with a
+// nonsense address was asked about it on EVERY visit, because nothing recorded that they had
+// already been asked.
+{
+  const before = applyGeocodeToStep(goog('ROOFTOP', true, '400 Honey Comb Mesa, Leander, TX 78641, USA'), '400 Hunnycom Mesa');
+  ok(before.store === null,
+     '🔴 G1 STILL NOTHING IS STORED WHILE THE QUESTION IS PENDING — §C3 is unchanged. The write happens AFTER the answer, which is what makes ruling 1 and ruling 2 agree rather than collide');
+  const kept = resolveAddressCheck(before.outcome, 'mine', NOW);
+  ok(kept.geocode_status === 'confirm',
+     'G2 she kept HER version → the row records that the question was asked and answered');
+  ok(kept.latitude === null && kept.longitude === null,
+     "🔴 G3 …AND TAKES NO COORDINATE. Google's pin belongs to GOOGLE'S text; attaching it to the street she kept is exactly how a truck arrives at the house next door");
+  const took = resolveAddressCheck(before.outcome, 'google', NOW);
+  ok(took.geocode_status === 'found' && typeof took.latitude === 'number',
+     "G4 she took Google's version → it is verified, and the coordinate comes with it");
+  ok(took.latitude !== kept.latitude,
+     '🔴 G5 NEGATIVE CONTROL: the two answers to the SAME question produce different rows. An implementation that ignored the choice would pass G2 and G4 by accident');
+}
+{
+  // The whole point, end to end: asked once, never asked again.
+  const answered = resolveAddressCheck(
+    applyGeocodeToStep(goog('RANGE_INTERPOLATED', false, '1 Odd St'), '1 Odd St').outcome, 'mine', NOW);
+  const next = planAddressStep(saved({ geocode_status: answered.geocode_status, geocoded_at: answered.geocoded_at,
+                                       latitude: null, longitude: null }), NOW);
+  ok(next.geocode === false && next.question.ask === 'none',
+     '🔴 G6 THE NEXT VISIT ASKS NOTHING — the answer is on the record, so the customer standing at the counter is not re-litigating an address they settled last month');
+  ok(mayPrice(saved({ geocode_status: 'confirm', latitude: null, longitude: null, geocoded_at: daysAgo(1) }), NOW) === false,
+     '🔴 G7 …BUT IT IS STILL NOT PRICED. "Asked and answered" is not "verified": nothing confirmed where this is, so a delivery to it is never priced from a guess');
+}
+{
+  const nf = resolveAddressCheck(applyGeocodeToStep({ status: 'ZERO_RESULTS' }, 'qqqq').outcome, 'mine', NOW);
+  ok(nf.geocode_status === 'not_found' && nf.latitude === null,
+     'G8 an unplaceable address records that, with no coordinate');
+  ok(typeof nf.geocoded_at === 'string' && nf.geocoded_at.length > 0,
+     '🔴 G9 …AND IS DATED. Without the date the 30-day clock cannot start, so it would be re-checked on every single visit — the cost this ruling exists to stop');
+  ok(planAddressStep(saved({ geocode_status: 'not_found', latitude: null, longitude: null, geocoded_at: nf.geocoded_at }), NOW).geocode === false,
+     'G10 and the next visit does not call Google about it again');
+}
+{
+  const stale = planAddressStep(saved({ geocode_status: 'confirm', geocoded_at: daysAgo(31), latitude: null, longitude: null }), NOW);
+  ok(stale.geocode === true,
+     '🔴 G11 AN ANSWER EXPIRES LIKE ANY OTHER — past thirty days it is re-checked (Google ToS §6.3.1). A permanent "asked once" would outlive the street being built');
+}
 
 console.log(`\naddressStep — ${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) { console.error('FAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }

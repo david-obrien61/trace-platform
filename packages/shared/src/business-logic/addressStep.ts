@@ -33,7 +33,7 @@
 // 720 both, 15 shipping) came from how the IMPORT typed rows; no behaviour keys on them beyond
 // ordering the list.
 // ─────────────────────────────────────────────────────────────────────────────
-import { isUsable, type StoredCoordinate } from './geocodeFreshness';
+import { isUsable, answerIsFresh, type StoredCoordinate } from './geocodeFreshness';
 import { classifyGeocodeResponse, verdictMessage, type GeocodeOutcome } from './geocodeResult';
 
 /** An address the person can choose, as the step needs to see it. */
@@ -98,7 +98,10 @@ export function planAddressStep(chosen: ChoosableAddress | null | undefined, now
   // A previously UNPLACEABLE address stays unplaceable until its text changes — re-asking Google
   // the same question gets the same answer and re-asking the PERSON is the second question this
   // exists to prevent.
-  if (chosen.geocode_status === 'not_found') {
+  // ⚠️ DATED, NOT PERMANENT. An unplaceable address is left alone only while the answer is inside
+  // the 30-day window; after that we look again, because new streets genuinely appear — Liberty
+  // Hill's are 35% of the town. An UNDATED `not_found` is re-checked for the same reason.
+  if (chosen.geocode_status === 'not_found' && answerIsFresh(chosen, now)) {
     return {
       geocode: false,
       question: { ask: 'cannot-place', message: verdictMessage({ verdict: 'not_found', latitude: null, longitude: null, suggestion: null, reason: 'previously not found' }, addressLine(chosen)) ?? '' },
@@ -107,6 +110,16 @@ export function planAddressStep(chosen: ChoosableAddress | null | undefined, now
   }
   if (chosen.geocode_status === 'found' && isUsable(chosen, now)) {
     return { geocode: false, question: { ask: 'none' }, reason: 'found and within the 30-day window' };
+  }
+  // 🔴 A PERSON ALREADY ANSWERED THIS ONE. `confirm` on a stored row does not mean "a question is
+  // pending" — a pending confirm is never written (see `applyGeocodeToStep`, which returns
+  // `store: null` for exactly that reason). It means the question was PUT and ANSWERED, and the
+  // answer was "keep mine". Asking again on the next visit is the second question this whole step
+  // exists to prevent, and it would be the most annoying kind: one the customer already settled.
+  // ⚠️ It is deliberately NOT promoted to `found`. The address is still unverified, so `mayPrice`
+  // stays false and a delivery to it is never priced from a guess.
+  if (chosen.geocode_status === 'confirm' && answerIsFresh(chosen, now)) {
+    return { geocode: false, question: { ask: 'none' }, reason: 'a person already answered this one' };
   }
   return { geocode: true, question: { ask: 'none' }, reason: chosen.geocode_status === 'found' ? 'coordinate has expired' : 'never geocoded' };
 }
@@ -144,6 +157,43 @@ export function applyGeocodeToStep(raw: unknown, typed: string): {
     return { question: { ask: 'confirm', mine: typed, google: outcome.suggestion ?? typed, message }, outcome, store: null };
   }
   return { question: { ask: 'cannot-place', message }, outcome, store: { geocode_status: 'not_found' } };
+}
+
+/** What a person chose when the step asked them to confirm. */
+export type ConfirmChoice = 'mine' | 'google';
+
+/**
+ * 🔴 WHAT IS WRITTEN ONTO THE ADDRESS RECORD **AFTER** A PERSON ANSWERS — ruling 1, 2026-09-24.
+ *
+ * This is the other half of `applyGeocodeToStep`, and the split is the whole point. That function
+ * runs BEFORE the person answers and returns `store: null` for a `confirm`, because storing
+ * Google's answer while someone is mid-question silently accepts a correction they were being
+ * asked about. THIS function runs AFTER, and records what they actually decided.
+ *
+ * · they picked GOOGLE's version → it is verified: the coordinate is kept and the status is
+ *   `found`. This is the ONE case where the address TEXT may be rewritten (ruling 2, 2026-09-23:
+ *   Google suggests, the person confirms, and what is stored is THEIR choice — here their choice
+ *   IS Google's). The caller does the text change; this returns the geocode half.
+ * · they kept THEIRS → `confirm`, and 🔴 NO COORDINATE. Google's pin belongs to Google's text, and
+ *   attaching it to a different street is precisely how a truck ends up at the house next door.
+ *   The row records that the question was asked and answered, so it is never asked again, and the
+ *   address stays unpriceable because nothing verified it.
+ */
+export function resolveAddressCheck(outcome: GeocodeOutcome, choice: ConfirmChoice, now: Date): {
+  latitude: number | null; longitude: number | null;
+  geocoded_at: string; geocode_status: 'found' | 'confirm' | 'not_found';
+} {
+  const at = now.toISOString();
+  if (outcome.verdict === 'found') {
+    return { latitude: outcome.latitude, longitude: outcome.longitude, geocoded_at: at, geocode_status: 'found' };
+  }
+  if (outcome.verdict === 'not_found') {
+    return { latitude: null, longitude: null, geocoded_at: at, geocode_status: 'not_found' };
+  }
+  if (choice === 'google') {
+    return { latitude: outcome.latitude, longitude: outcome.longitude, geocoded_at: at, geocode_status: 'found' };
+  }
+  return { latitude: null, longitude: null, geocoded_at: at, geocode_status: 'confirm' };
 }
 
 /** May a delivery to this address be priced? The one question the charge path asks. */
