@@ -173,6 +173,25 @@ export interface OperationsConfig {
    * read out of the size text.
    */
   installMixContainerVolumesPerTree: number;
+  /**
+   * 🔴 MIX PLANNING (David, 2026-09-23, from LAWNS). Days before an install day that the mix must
+   * already exist. MRP's LEAD TIME: it turns "you are short 3 yards" into "mix 3 yards before
+   * Thursday". Tenant config, never a constant — LAWNS says 2, another grower will say otherwise.
+   */
+  mixLeadTimeDays: number;
+  /**
+   * 🔴 MIX AN UPPOT CONSUMES, AS A MULTIPLE OF THE POT'S OWN VOLUME (David, 2026-09-23):
+   * *"for UPPOTTING, mix per pot = the pot's gallons, and it will settle."* So 1.0, grossed up by
+   * `mixShrinkPct` because the mix settles after the pot is filled.
+   *
+   * 🔴 UPPOTS ONLY, AND THE NAME SAYS SO. **This is filling a pot. It is NOT backfilling an install
+   * hole**, which is [[R-155]] and stays 2.0 × container volume with no shrink on top — *"INSTALL mix
+   * is TWICE the container volume (30 gal tree → 60 gal of mix)… Err large."*
+   * ⚠️ There is NO conflict and NO pricing event: the two figures answer different questions and
+   * neither is a revision of the other. An earlier version of this comment claimed otherwise, on a
+   * prompt that said the 1.0 applied to "an install or uppot"; that was wrong and is corrected here.
+   */
+  uppotMixPerPotVolume: number;
   /** Feet of staking rope per T-post. */
   ropeFeetPerTPost: number;
   /** Bubblers per tree the ORDER SPECIFIES — the billed Tree Bubbler line is the count, and this
@@ -207,6 +226,12 @@ export const GALLONS_PER_CUBIC_YARD = 46656 / 231; // 201.974025974…
 
 /** The Settings → Operations "Planting materials" group, in display order. */
 export const PLANTING_MATERIAL_KEYS = [
+  // ⚠️ MIX-PLANNING KEYS DO NOT BELONG HERE. `mixLeadTimeDays` and `uppotMixPerPotVolume` were
+  // briefly added to this list and `containerSizesSettings.test.ts` C1 refused it, correctly: this
+  // is the PER-TREE INSTALL set that `get_planting_materials` returns to STAFF, who hold no
+  // `settings:*` string (tech-debt #188). Widening it would have changed what a staff read returns
+  // — a permission-shaped change smuggled in as a config addition. They live in OperationsConfig
+  // and are grouped on the Settings screen instead.
   'installMixContainerVolumesPerTree', 'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree',
 ] as const;
 
@@ -230,6 +255,8 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   windowEnd: null,
   seasonalStaffLastDay: null,
   installMixContainerVolumesPerTree: 2,
+  mixLeadTimeDays: 2,
+  uppotMixPerPotVolume: 1,
   ropeFeetPerTPost: 4,
   bubblersPerTree: 1,
   deerFenceTPostsPerTree: 4,
@@ -271,6 +298,11 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   windowEnd:               { basis: 'fact',       because: 'the window the owner set' },
   seasonalStaffLastDay:    { basis: 'fact',       because: 'when the seasonal staff leave' },
   installMixContainerVolumesPerTree: { basis: 'fact', because: "LAWNS, David 2026-09-15; corrects an earlier 1.0 that was Lightning's" },
+  mixLeadTimeDays:         { basis: 'fact',       because: 'LAWNS, David 2026-09-23 — two days before an install day' },
+  // ⚠️ `guess`, NOT a new `estimate` kind. David asked for it "labelled estimate"; `BasisKind` is
+  // fact | suggestion | guess, and `guess` is what this platform renders as an estimate. Minting a
+  // fourth kind would change a vocabulary three screens read — its own decision, not a side effect.
+  uppotMixPerPotVolume:    { basis: 'guess',      because: "LAWNS, David 2026-09-23 — an UPPOT takes the pot's own gallons and settles (an ESTIMATE). Installs are R-155's 2.0 and are a different question." },
   ropeFeetPerTPost:        { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },

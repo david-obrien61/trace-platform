@@ -181,11 +181,51 @@ export interface HistoryOrderLine {
   businessInventoryId: null;
 }
 
+/**
+ * DOES THE DOCUMENT FOOT? Σ(line amounts) vs the document's own subtotal.
+ *
+ * 🔴 THIS IS THE SAME ARITHMETIC `buildHistoryOrder` ALREADY DID AND NOBODY COULD SEE.
+ * `arithmeticBalances` has been computed since this file was written, and the OCR door
+ * reacted to it with `console.warn('recorded AS PRINTED, not corrected')` — a server log,
+ * on a screen Lauren does not have. The check was correct, wired to nothing, and two orders
+ * went out short: LaPrime 8 trees, Duy Le one. Exported here so the DOOR can reach the
+ * verdict BEFORE it schedules a stop, rather than discovering it after.
+ *
+ * Tolerance is half a cent, matching `arithmeticBalances` — these are numeric(10,2) columns
+ * and a float comparison at full precision would call an exact match a mismatch.
+ *
+ * `missing` is POSITIVE when the lines fall short of the subtotal (money the document says
+ * is there and the lines do not account for — the LaPrime shape) and NEGATIVE when the lines
+ * exceed it (the LEANDER shape, a vendor invoice captured as a sale). Both are held; only
+ * the sign tells the reader which mistake they are looking at.
+ */
+/**
+ * THE SENTENCE LAUREN READS. One definition, used by the capture response and the order page,
+ * so the two can never say different things about the same document.
+ *
+ * Reads the SIGN rather than hiding it: money the lines fall short of, versus lines that
+ * exceed the document — the second is usually a vendor invoice captured as a sale.
+ */
+export function footingMessage(missing: number): string {
+  const amt = Math.abs(missing).toFixed(2);
+  return missing > 0
+    ? `Lines don't add up — $${amt} missing. Check the invoice.`
+    : `Lines don't add up — $${amt} more than the invoice total. Check the invoice.`;
+}
+
+export function documentFooting(documentLines: any, subtotal: number): {
+  balances: boolean; lineSum: number; missing: number;
+} {
+  const lineSum = round2(historyOrderLines(documentLines).reduce((t, l) => t + l.subtotal, 0));
+  const sub = round2(Number(subtotal) || 0);
+  return { balances: Math.abs(lineSum - sub) < 0.005, lineSum, missing: round2(sub - lineSum) };
+}
+
 /** One transcribed line → one order_items row. Quantity floors at 1: order_items.quantity is
  *  NOT NULL and a zero-quantity sold line is not a thing a document can mean. */
-export function historyOrderLines(lineItemsOriginal: any): HistoryOrderLine[] {
-  if (!Array.isArray(lineItemsOriginal)) return [];
-  return lineItemsOriginal.map((l: any) => ({
+export function historyOrderLines(documentLines: any): HistoryOrderLine[] {
+  if (!Array.isArray(documentLines)) return [];
+  return documentLines.map((l: any) => ({
     quantity:   Math.max(1, parseInt(l?.quantity ?? 1, 10) || 1),
     unitPrice:  Number(l?.unit_price ?? 0),
     subtotal:   Number(l?.amount ?? 0),
@@ -219,14 +259,29 @@ export interface HistoryOrderInput {
   documentDate: string | null;
   /** receipts.amount — the total actually invoiced. */
   documentTotal: number;
-  lineItemsOriginal: any;
+  /**
+   * THE LINES THE DOCUMENT IS AGREED TO CARRY — for the OCR door, `receipts.line_items`.
+   *
+   * 🔴 RENAMED FROM `lineItemsOriginal` ON 2026-09-23 (ledger #395) BECAUSE THE NAME CAUSED
+   * A LIVE DEFECT. `api/customers/create.ts` read it as "pass `line_items_original`" and did
+   * exactly that — and `line_items_original` is the WRITE-ONCE OCR SNAPSHOT (`20260902`'s
+   * trigger: *"it is the record of what the OCR read"*). Lauren's corrections live in
+   * `line_items`. So every line she fixed at capture was discarded when the order was built:
+   * Lindsey LaPrime lost 8 trees ($2,000) from a load list for the next morning, and Duy Le
+   * lost one ($450). **53 of 145 LAWNS receipts have a corrected set longer than the snapshot.**
+   *
+   * The evidence column is still written once and never read here. The CORRECTED document is
+   * what gets posted; the original is kept untouched as evidence. That is the industry shape
+   * and it is now what the parameter name says.
+   */
+  documentLines: any;
   decoded: CapturedDocument | null;
   deliveryDate?: string | null;
   serviceType?: string | null;
   /** The delivery row's own status. Drives the order status — see historyOrderStatus. */
   deliveryStatus?: string | null;
   /**
-   * Lines ALREADY BUILT by the caller, used INSTEAD of decoding `lineItemsOriginal`.
+   * Lines ALREADY BUILT by the caller, used INSTEAD of decoding `documentLines`.
    *
    * The OCR door hands over a blob it wants transcribed; the QuickBooks door hands over lines
    * it has already classified against Intuit's own vocabulary (`invoiceOrderLines.ts` — which
@@ -298,7 +353,7 @@ export interface HistoryOrderDraft {
 export function buildHistoryOrder(input: HistoryOrderInput): HistoryOrderDraft {
   // Pre-built lines win when the caller supplied them; the OCR door supplies none and
   // falls through to the transcription path exactly as before.
-  const items = input.lines ?? historyOrderLines(input.lineItemsOriginal);
+  const items = input.lines ?? historyOrderLines(input.documentLines);
   const lineSum = round2(items.reduce((a, l) => a + l.subtotal, 0));
   const total = Number(input.documentTotal ?? 0);
 
