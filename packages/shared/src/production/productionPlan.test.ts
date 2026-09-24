@@ -23,7 +23,7 @@ import {
 import {
   rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot, startingGallons,
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck, addMonths, addWorkingDays,
-  workingDaysBetween, ARITHMETIC_TOLERANCE, type LotInput,
+  workingDaysBetween, ARITHMETIC_TOLERANCE, growMonthsFor, growUnknownSentence, type LotInput,
 } from './productionMath';
 import { type Ladder, type Rung } from '../inventory/containerLadder';
 import { holdsStock, availableFrom3, availabilityLabel3, PLAN_STATUSES } from './productionHold';
@@ -495,6 +495,111 @@ ok(planLots([], planCfg, { managerNumbers: {}, targets: {}, batchSize: 40, start
   '§K an empty plan is zero pots, not a crash');
 ok(planLots(lots, planCfg, { managerNumbers: {}, targets: { L1: 15 }, batchSize: 40, startDate: '2026-11-16' }).batches.length === 0,
   '🔴 §K a target SMALLER than the current size is not a plan line — a rung must go up');
+
+// ════════════════════════════════════════════════════════════════════════════════
+// §M — GROW MONTHS COME FROM THE TARGET RUNG, AND AN UNMEASURED RUNG SAYS SO
+// Ledger #390 · David, 2026-09-23: *"The other eight rungs are UNKNOWN and render as UNKNOWN.
+// Never 7 by default."*
+//
+// 🔴 RED-FIRST, AND THE RED WAS REAL. Before `growMonthsFor` existed, `planLots` read
+//     addMonths(completesOn, lot.growMonths ?? ops.growMonthsDefault)
+// with `lot.growMonths` hardcoded null at every call site. M3 and M4 below BOTH FAILED against
+// that line — it returned a date built on the business-wide 7 for a rung carrying no figure, which
+// is the defect David's ruling names. M1/M2/M5 passed before and after and are here as the
+// negative controls that stop the fix over-reaching.
+// ════════════════════════════════════════════════════════════════════════════════
+const mRung = (label: string, sortOrder: number, volumeGallons: number | null, grow: number | null): Rung => ({
+  label, aliases: [], sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'not timed',
+  installTPostsPerTree: 0, installTPostsBecause: 'test',
+  caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
+  installPrice: null, installPriceBecause: 'not set',
+  growMonths: grow, growBecause: grow == null ? 'not set' : 'David 2026-09-18',
+  holdMonths: null, holdBecause: 'not set',
+  active: true,
+});
+// LAWNS as it stands the day this ships: 15 gal carries David's 6; every other rung is unmeasured.
+const mLadder: Ladder = [
+  mRung('3/5 gal', 30, 4, null), mRung('15 gal', 40, 15, 6),
+  mRung('30 gal', 50, 30, null), mRung('45 gal', 60, 45, null),
+];
+
+{
+  const g = growMonthsFor(mLadder, 15, OPS);
+  ok(g.known && g.months === 6 && g.source === 'rung',
+    '🔴 §M1 the 15 gal rung supplies 6 months, not the business-wide 7 (David 2026-09-18)');
+  ok(growUnknownSentence(g) === null, '§M1 a known figure has no unknown sentence');
+}
+{
+  const g = growMonthsFor(mLadder, 30, OPS);
+  ok(!g.known && g.reason === 'rung-has-no-grow',
+    '🔴 §M2 a rung with no figure is UNKNOWN — it does NOT borrow growMonthsDefault');
+  ok(growUnknownSentence(g) === 'UNKNOWN — nobody has set GROW on the 30 gal rung',
+    '§M2 …and the sentence NAMES the rung, so the reader knows which one to go and set');
+}
+{
+  const g = growMonthsFor(mLadder, 47, OPS);
+  ok(!g.known && g.reason === 'target-not-on-ladder',
+    '§M3 a target that is not a rung is UNKNOWN for a DIFFERENT reason, and says which');
+}
+{
+  // ⚠️ SELF-CATCH / NEGATIVE CONTROL. A tenant with NO ladder must behave exactly as before this
+  // build — Test Dave's Tree Nest has zero ladder rows and every other probe in this file runs
+  // there. A fix that made the no-ladder case UNKNOWN would break the whole existing suite, and
+  // this assertion is what would have caught it.
+  ok(((x) => x.known && x.months === OPS.growMonthsDefault && x.source === 'business-default')(growMonthsFor(null, 30, OPS)),
+    '🔴 §M4 a tenant with NO ladder still uses the business default — unchanged behaviour');
+  ok(((x) => x.known && x.source === 'business-default')(growMonthsFor([], 30, OPS)),
+    '§M4 an EMPTY ladder is the same case as no ladder, not "not on the ladder"');
+}
+{
+  // The whole point, end to end: two lots, one going to a measured rung and one to an unmeasured
+  // one, in a single plan. One gets a date; the other gets null AND a reason.
+  const mLots: LotInput[] = [
+    lot({ id: 'A', name: 'Mexican Sycamore', size: '3/5 gal', unitValue: 4, qty: 140, salesPerMonth: 2 }),
+    lot({ id: 'B', name: 'Chinkapin Oak', size: '15 gal', unitValue: 15, qty: 200, salesPerMonth: 5 }),
+  ];
+  const r = planLots(mLots, planCfg, {
+    managerNumbers: {}, targets: { A: 15, B: 30 }, batchSize: 40, startDate: '2027-06-01', ladder: mLadder,
+  });
+  const a = r.batches.find((b) => b.lotId === 'A')!;
+  const b = r.batches.find((b) => b.lotId === 'B')!;
+  ok(a.firstSellable != null && a.growMonths.known && a.growMonths.months === 6,
+    '🔴 §M5 the 3/5 → 15 batch IS dated, from the 15 gal rung it is arriving on');
+  ok(a.firstSellable === addMonths(a.completesOn!, 6),
+    '🔴 §M5 …and the date is the FINISHING date plus six months (R-88), not the start plus seven');
+  ok(b.firstSellable === null && !b.growMonths.known,
+    '🔴 §M6 the 15 → 30 batch has NO date, because nobody has measured the 30 gal rung');
+  ok(growUnknownSentence(b.growMonths)!.includes('30 gal'),
+    '§M6 …and the screen is told exactly which rung to go and set');
+  // ⚠️ SELF-CATCH. `arriveSellable` must NOT be suppressed along with the date: how many trees
+  // arrive is known (it is the survival rate on the number being potted); WHEN is what is unknown.
+  ok(b.arriveSellable > 0,
+    '🔴 §M6 …but the QUANTITY arriving is still known — only the date is unknown, and they are different questions');
+}
+{
+  // R-85 one layer down: cover ties to GROW, and the grow it ties to is now the TARGET rung's.
+  //
+  // 🔴 THIS PROBE HAS ITS OWN CONFIG AND THE REASON IS A SELF-CATCH THAT DREW BLOOD. The first
+  // draft used `planCfg`, which carries `coverMonthsOverride: 6` — so `coverMonthsFor` returned 6
+  // from the OVERRIDE and never looked at the grow argument at all. The assertion passed, and it
+  // passed for a reason that had nothing to do with what it claimed: the override happened to
+  // equal the rung's figure. MUTANT 4 (drop the target-rung wiring from `splitLot`) SURVIVED
+  // against that draft, which is how it was found. That is tech-debt #182's shape — a probe that
+  // could not reach the thing it was about — and R-33's rule that a check which cannot disagree is
+  // not a check. With the override null, the grow argument is the only thing that can supply 6.
+  const noOverride = resolveConfig({ ...OPS_WINDOW, coverMonthsOverride: null }, { blendedMixCostPerCubicYard: 151 }, true);
+  const r = planLots([lot({ id: 'C', size: '3/5 gal', unitValue: 4, qty: 300, salesPerMonth: 10 })], noOverride, {
+    managerNumbers: {}, targets: { C: 15 }, batchSize: 40, startDate: '2027-06-01', ladder: mLadder,
+  });
+  ok(r.batches[0].split.coverMonthsUsed === 6 && r.batches[0].split.mustKeepSellable === 60,
+    '🔴 §M7 cover ties to the TARGET rung\'s grow (6), so must-keep is 60 — not 70 off the business default');
+  // ⚠️ SELF-CATCH ON THE SELF-CATCH: assert the override is genuinely out of the way, so this
+  // block can never silently drift back into testing the override again.
+  ok(noOverride.ops.coverMonthsOverride === null,
+    '§M7 …and this probe runs with NO cover override, or it would be testing the override instead');
+  ok(r.batches[0].split.salesPerMonthUsed === 10,
+    '§M7 the split carries the sales figure it used, so a committed line can be re-read (production_plan_lines.sales_per_month)');
+}
 
 console.log(`\n── production planning: ${passed} passed, ${failed} failed ──`);
 if (failed > 0) { console.error(failures.map((f) => '  ✗ ' + f).join('\n')); process.exit(1); }

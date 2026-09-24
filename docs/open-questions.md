@@ -87,6 +87,83 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#390 + #391 — the grow ladder (build, BUILDER-COMPLETE, 4 migrations WRITTEN not applied)**
+- ⛔ **OPEN — APPLY IN THIS ORDER, THEN MERGE, NEVER THE OTHER WAY ROUND: `20260923h` → `20260924a` → `20260924b` → `20260924c`.** Every ladder read on the platform selects the new columns, so merging first makes the load list, uppot plan, count screen and import preview all fail with 42703. Owner: the migration files.
+- 🔴 **OPEN — THE UPPOT WINDOW DATES IN `docs/decisions/2026-09-23-lawns-grow-ladder-step0.sql` ARE A DECISION, NOT A MEASUREMENT.** It carries 2026-11-04 → 2026-11-12 from David's own workbook; he is confirming with Joel. Without a window, every batch is undated and the plan says so. Owner: David.
+- 🔴 **OPEN — GROW AND HOLD FOR THE EIGHT UNMEASURED RUNGS, AND WHICH RUNGS ARE NEVER SOLD BEYOND SLIP AND 4-INCH.** Only the 15 gal rung has a stated GROW (6 months). David is asking Terry. Until then those rungs read UNKNOWN by design; do NOT fill them to make the screen look finished. Owner: Terry, via David.
+- 🟡 **OPEN — `hold_months` HAS NO READER YET.** Captured so Terry is asked once for both numbers; nothing schedules on it until the due/overdue board is built. Recorded rather than discovered: this is tech-debt #299's shape, deliberate and time-boxed. Owner: ledger #391.
+- 🟡 **OPEN — THE CONFIG HISTORY HAS NO SCREEN.** `business_operations_config_history` is written by a trigger and read today only in the SQL editor (owner-test CARD 36 step 4 says so). A Settings panel showing "who changed the window, and when" is a small follow-up. Owner: ledger #391.
+- 🟡 **OPEN — `rung-dates` IS NOT IN THE WRITER REGISTRY AND CANNOT BE UNTIL THE MIGRATION IS APPLIED.** A registered path test must run on `live-schema-public.sql`, which is a snapshot of the live database; `production_rung_dates` is not in it. Registering now would declare a test that cannot run. Register in the pass that follows the apply + re-snapshot. Owner: `writer-registry.json` → `proposed`.
+- ✏️ **DISCLOSED — I COMMITTED ONCE IN THE SHARED CHECKOUT (§6 r20) during build (a)** and reset it; David's 20 untracked files were untouched. Recorded so it is not discovered later as a mystery.
+- ✏️ **DISCLOSED — I YIELDED SLOT `20260923i` TO ANOTHER SESSION.** `migration:slot` caught `20260923i_warranty_claims.sql` in `wt-warranty`, uncommitted and in no ref, while this build was writing. Mine renumbered to j/k/l. Nobody adjudicated; my work was unmerged and cheaper to move.
+
+**1 · `20260905_production_planning` — ✅ ANSWERED 2026-09-15. NOT A QUESTION ANY MORE, AND IT WAS
+NEVER THE BLOCKER IT CLAIMED TO BE.**
+🔴 **THE CLAIM IS STRUCK: David ran it live on `c99a4c5` — he changed values in Settings → Operations
+and they PERSISTED ACROSS A RELOAD.** A value that survives a reload was written to and read back from
+`business_operations_config` under real RLS. **The table exists and the save path works.** 🔴 **And the refutation was ALREADY ON `main`:** `docs/recon/2026-09-12-one-fact-many-homes.md`
+(committed 2026-09-12) carries the catalog read for all three tables — `rls=true`, 4 policies each —
+and says *"All three exist … it is describing yesterday."* **This file and that one have contradicted
+each other on `main` for three days.**
+⚠️ **STILL GENUINELY UNPROVEN, and it is a CARD not a blocker: nobody has driven an Uppot plan COMMIT
+end to end.** Unproven is not broken — and the difference is the whole point of this correction.
+🔴 **This was the #1 item on this list for four days and it was false**, gating tech-debt **#299**,
+which is now unblocked. → tech-debt **#253** ✅ RESOLVED
+
+**2 · WHO MAY SEE THE EQUIPMENT LIST WITHOUT SEEING WHAT IT COST?**
+*"Equipment lives in `cost_objects` (confidential, gated on `costs:read`); maintaining it is `pmi:*`.
+So someone who holds `pmi:*` and not `costs:read` gets a locked screen with nothing to maintain."*
+**Joel is in exactly that state today** — `/pmi` shows him nothing. → `RULINGS.md` OWED · tech-debt **#262**
+
+**3 · HOW DOES FOLLOW-UP GET TURNED ON?** Catalog 30-day clock, by hand in SQL, or core.
+`followup_engine` is a `planned` tile and `/subscription` offers **no Turn on**, so the review ask
+**cannot fire on any tenant** whatever link you enter. → CLAUDE.md §3 #300 · tech-debt **#270**
+
+**4 · LAWNS'S THREE SERVICE ROWS — you write them, Thunder cannot.**
+Trip charge (533 lines, $40,760) · Tailgate Delivery (127 lines, $18,990) · self-collect (no line).
+All four rows read `category='addon'` today. 🔴 **Blocked on tech-debt #251** — checkout offers one
+staff/flat row, so trip charge and tailgate would hide one of the two. → CLAUDE.md §4
+
+**5 · THE 8-HOUR RULE — WHAT EXACTLY WAS RULED?**
+*"The backlog lists 'Crew capacity / the 8-hour rule — ruled, not built' and gives no wording. A
+ruling cannot be numbered without its words."* → `RULINGS.md` OWED
+
+**6 · THE YARD-WORKER PERMISSION SET — confirm or amend.** Proposed `inventory:read`,
+`deliveries:read`, `deliveries:update`, `pmi:read`, `pmi:update`; excluded `inventory:reconcile`,
+every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collides with question 2.
+→ `RULINGS.md` OWED
+
+**7 · THE COARSE SPLIT — A or B?** `businesses_owner_update` guards the profile fields **and**
+`owner_id` / `qbo_writes_enabled` on one policy, and RLS has no column-level restriction.
+→ `RULINGS.md` OWED
+
+---
+
+## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
+
+> ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
+
+**#397 / #398 — tax rate fails closed; the refusal reaches Lauren**
+- 🔴 **OPEN — SECTION 4: THE SELF-SERVICE CYCLE HAS THREE SETTLED DEFECTS, ALL STILL OPEN.** (a) Preview/Import disable on `busy` only — **the import panel makes no run-state query at all**, so there is nothing to gate on; (b) the Undo panel's ONLY query reads `business_inventory`, so a customers-only run leaves Undo unrendered and the tenant stranded; (h) **65 `business_id` tables, 6 carry `import_run_id`, 59 unclassified** — the wipe's correctness rests on memory. (a) and (b) are ONE build: a run-state query both the gate and the Undo read. **(h) is the irreversible one** and needs David to confirm the classification, not me to guess it. Owner: ledger #398 · section 4.
+- 🟡 **OPEN — THE `1363/1378/1380` INVOICE SERIES IS NOT IN QUICKBOOKS.** Absent from a complete 1,530-invoice export (QB export 2026-09-24). They are not lookup misses; they are documents from another source captured as LAWNS invoices. What are they? Owner: David.
+- ⚠️ **OPEN — `fetchTaxRate`'s narrow form still exists.** Kept deliberately and defined in terms of `readTaxRate`, but any NEW money path that reaches for it silently loses the error case. A verify check refusing `fetchTaxRate` in a money path would close it. Owner: ledger #397.
+
+**#395 — capture discarded Lauren's corrections; the footing guard**
+- 🔴 **OPEN — THE SWEEP IS THE REAL REMAINING RISK, AND FOOTING DOES NOT COVER IT.** The guard catches missing MONEY. An order whose lines foot can still carry the wrong VARIETY, SIZE or QUANTITY against what Lauren corrected, and nothing compares them. 53 receipts where `line_items` differs from `line_items_original` need a line-by-line comparison, upcoming deliveries first. Owner: ledger #395 part 3.
+- ⚠️ **OPEN — `held` is a new `deliveries.status` value with no CHECK constraint behind it.** Nothing refuses a typo'd status on that column (measured: no CHECK on `deliveries.status` or `orders.status`). A constraint would make the vocabulary real rather than conventional. Owner: ledger #395.
+- ⚠️ **OPEN — `deliveryIngestWriter` still filters `cancelled` only.** Deliberate: excluding `held` from a dedupe READ could re-create a stop that is merely waiting on Lauren. Worth a decision rather than a default. Owner: ledger #395.
+- ⚠️ **OPEN — §6 numbering gap.** Rule 24 exists only on `origin/feat/warranty-claims`; rule 25 is assigned and written nowhere; 26 is filed on this branch. Owner: David.
+
+**#370 — mix planning: the MRP engine, every figure labelled (MERGED and LIVE, engine only)**
+- 🔴 **NOTHING TO CLICK, BY DAVID'S OWN RULING (2026-09-23): mix planning is below the go-live bar, so it ships as an ENGINE ONLY and `mixRequirement` has ZERO callers.** Do not read its output as a screen, and do not board a card for a surface that does not exist. Owner: `packages/shared/src/costing/mixPlanning.ts`.
+- ⚠️ **THE PROVENANCE WORDING IS DAVID'S AND IS UNMADE:** the live constant says *"starting number, not counted"*, his sentence said *"placeholder, never counted"*. I used the live words so one wording serves both surfaces and did NOT touch the constant — it renders in the checkout picker Lauren uses. Changed once, in `SEEDED_NOTE`, and both follow. Owner: `packages/cultivar-os/src/lib/inventoryStates.ts`.
+- 🔴 **`20260923m` IS NOT APPLIED — measured live, `qty_basis` columns = 0.** On apply, this path reads the stored basis via CHECKOUT-BASIC's `describeOnHand` and the `opening_stock_seed` inference is retired for it. ⚠️ `describeOnHand` has a FOURTH state, `unknown`, which is NOT `placeholder` — it means the SELECT did not ask for the basis columns, so the switch must name `qty_basis, qty_basis_at` or every row reads "basis unknown". Owner: CHECKOUT-BASIC's `feat/qty-provenance`.
+- 🟡 **WHICH ITEM IS THE MADE MIX — LAUREN'S ANSWER, NOT A DEFAULT.** Twelve live candidates, all never counted; `chosenItemId` stays null until she names one. ⚠️ **The set is TWELVE, not the seven in the prompt:** 48/49/50/53/54 are *"Regular Compost Mix, w/o Fertilizer"*. Owner: tenant config.
+- 🟡 **FERTILISER PER YARD OF MIX is a recipe line nobody has given a figure for** — and the *"w/o Fertilizer"* rows above are the same question wearing an item name. Owner: the recipe builder.
+- 🟡 **NOBODY HAS EVER COUNTED A YARD OF MIX.** Item 174 reads 10 with no ledger row of any kind. Every verdict rests on that until someone counts it — which is why the verdict says so out loud. Owner: a count.
+- ✅ **`20260922d_build_runs_freeze_cost.sql` — **APPLIED — PROVEN LIVE 2026-09-24 01:35 UTC, AND MY EARLIER "written and held" WAS WRONG.** `build_runs` 16 cols · `build_run_components` 11 cols · `recipe_components.typed_*` 4 · `item_recipes.actual_yield_*` 2 — every object the file creates, with a negative control absent from the same read. **RLS enabled on both tables, 4 policies live** (`*_member_select` [r] and `*_member_insert` [a] — SELECT and INSERT only, no UPDATE or DELETE, append-only as designed), names matching the file's four exactly. Owner `postgres` with no TRUNCATE or REFERENCES for `anon`, so it came through the migration path and not the table editor (§6 r17's fingerprint). **All four row counts are 0** — applied, nothing written yet. **TWO SHAs, AND THE DIFFERENCE MATTERS:** the content David applied hashes `a532ad9d1bd85c17f8c8f08634a5e48974a84cdb0fe7d1909289b3a2d4b39203` — the SHA I had been quoting, so the applied schema corresponds to this file — and **the file on disk now hashes `b51a3688730a2f72055b64f2c43b20f0e2486c2d7720d0446d1f2a2d5f112876`** because this session added the applied-stamp comment above. **No SQL was touched** (§6 r1, append-only); only the header. Quoting the old SHA for the file as it stands today would be the same kind of stale-label error this correction is about. ✏️ **THE 2026-09-23 HANDOFF WAS RIGHT AND I WAS WRONG FOR TWO DAYS** — tech-debt #22's class (applied-but-recorded-as-pending) and [[R-111]]'s lesson in its own words, *"a migration label is not evidence"*: I carried the word "held" forward from the session that wrote the file instead of asking the database. **So the build-run cost freeze is NOT inert — it is live and ready to receive its first run.** Owner: nobody; this one is closed.
+- 🔴 **WHAT IS "RULE 24"?** The 2026-09-23 prompt puts Rules 23, 24 and 25 in force. CLAUDE.md stops at r23, and the string appears nowhere in the corpus, `RULINGS.md` or the roster. I have not complied with it because I cannot read it. Owner: David.
+
 **#388 — one item-search module, two consumers (MERGED)**
 - 🔴 **CARDS 6–7 ARE THE PROOF IT WAS AN EXTRACTION, NOT A SECOND COPY** — run "creek shoal" and "Center Court" on `/inventory`, not only at the counter. If the counter can do something the roster cannot, the ruling was not carried out. Owner: `docs/owner-tests/checkout-item-entry-full-surface-test.md` CARDS 6–7.
 - 🔴 **CARD 8 — a scanned tag must resolve to exactly the row it always did.** The spelling fold is search-only; `canonicalNameKey` is a money path and is untouched (proven three ways). If a scan resolves differently, STOP and report it. Owner: the board, CARD 8.

@@ -154,7 +154,7 @@ export function planHistoryLoad(input: {
       receiptId: null,                       // there is no photograph — this came from their books
       documentDate: str(inv.TxnDate),
       documentTotal: num(inv.TotalAmt) ?? 0,
-      lineItemsOriginal: null,               // the lines are already classified; do not re-derive
+      documentLines: null,               // the lines are already classified; do not re-derive
       decoded: null,
       lines: content.lines,
       notes: content.notes.length ? content.notes.join('\n') : null,

@@ -205,14 +205,50 @@ export async function readPricingConfig(
  * Returns null when genuinely unset (the redline) OR when the caller is not an active member.
  * Semantics match resolveTaxRate (tierPricing.ts): absent/empty/garbage/negative → null.
  */
+/**
+ * THE THREE OUTCOMES OF ASKING FOR A TAX RATE. `rate` is a number; `none` means the business
+ * genuinely has not set one; `error` means WE COULD NOT READ IT.
+ *
+ * 🔴 WHY THIS IS A TYPE AND NOT A `number | null` — IT IS A MONEY DEFECT, NOT A TIDINESS ONE.
+ * `fetchTaxRate` returned `null` for BOTH "none set" and "the RPC failed" (`if (error || data
+ * == null) return null`). Checkout uses it. So a failed lookup at the counter was indistinguish-
+ * able from a business with no tax, and the sale would go through AT ZERO TAX, silently, with
+ * the screen showing the same "not identified" line it shows for a legitimately untaxed sale.
+ * Rule 24: an empty result and a failed request must never look the same. Money fails CLOSED.
+ */
+export type TaxRateResult =
+  | { kind: 'rate';  rate: number }
+  | { kind: 'none' }
+  | { kind: 'error'; message: string };
+
+/**
+ * Read a business's sales-tax rate, distinguishing all three outcomes.
+ *
+ * ⚠️ `fetchTaxRate` (below) is KEPT as the narrow `number | null` form for the callers that
+ * genuinely cannot act on the difference, and it is now DEFINED IN TERMS OF THIS ONE so the two
+ * can never drift. Every money path must use `readTaxRate` and handle `error`.
+ */
+export async function readTaxRate(
+  supabase: SupabaseClient,
+  businessId: string,
+): Promise<TaxRateResult> {
+  const { data, error } = await supabase.rpc('get_business_tax_rate', { p_business_id: businessId });
+  if (error) return { kind: 'error', message: error.message || 'tax rate could not be read' };
+  if (data == null) return { kind: 'none' };
+  const n = Number(data);
+  // A stored value we cannot parse is NOT "no tax" — it is a rate we failed to read.
+  if (!Number.isFinite(n) || n < 0) return { kind: 'error', message: `tax rate is not a usable number: ${String(data)}` };
+  return { kind: 'rate', rate: n };
+}
+
 export async function fetchTaxRate(
   supabase: SupabaseClient,
   businessId: string,
 ): Promise<number | null> {
-  const { data, error } = await supabase.rpc('get_business_tax_rate', { p_business_id: businessId });
-  if (error || data == null) return null;
-  const n = Number(data);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  // DEFINED IN TERMS OF readTaxRate so the two cannot drift. A caller reaching this form has
+  // declared it cannot act on the difference between 'none' and 'error' — no MONEY path may.
+  const r = await readTaxRate(supabase, businessId);
+  return r.kind === 'rate' ? r.rate : null;
 }
 
 /**

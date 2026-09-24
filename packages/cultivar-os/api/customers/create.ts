@@ -21,7 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { callerCan, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import type { ContactValueResult } from '../../../shared/src/business-logic/contactWriter';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
-import { buildHistoryOrder, decodeCapturedDocument } from '../../../shared/src/business-logic/historyOrder';
+import { buildHistoryOrder, decodeCapturedDocument, documentFooting, footingMessage } from '../../../shared/src/business-logic/historyOrder';
 
 const TRACE_ROUTER   = true; // [TRACE:ROUTER]   STD-003 — ON until David owner-proves
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
@@ -111,11 +111,49 @@ export default async function handler(req: any, res: any) {
   // (the no-double-create contract, now structural: one endpoint, one customer, one delivery).
   let deliveryId: string | undefined;
   let deliveryError: string | undefined;
+  // Declared at FUNCTION scope, beside deliveryId, because the order insert ~100 lines below
+  // reads it too. Declaring it inside `if (delivery)` compiled in the editor and failed
+  // `verify:api-types` with TS2304 — the same shape as #381's ReferenceError, caught this
+  // time before it shipped, by the ratchet #381 built.
+  let footingHold: { missing: number } | null = null;
   if (delivery) {
     const addr = delivery.address ?? {};
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] create — customerId:', customerId,
       'date:', delivery.deliveryDate ?? '(none)', 'serviceType:', delivery.serviceType ?? '(none)',
       'addr:', [addr.line1, addr.city, addr.state, addr.zip].filter(Boolean).join(', ') || '(none)');
+
+    // ── FOOTING GUARD (ledger #395) ───────────────────────────────────────────
+    // 🔴 COMPUTED HERE, BEFORE THE STOP IS WRITTEN, AND THAT POSITION IS THE WHOLE FIX.
+    // The same verdict was already available further down as `draft.arithmeticBalances` —
+    // but the delivery is inserted at this point and the order is not built until ~70 lines
+    // later, so by the time the imbalance was known the stop was already 'scheduled' and on
+    // the load list. Knowing late is what made a console.warn the only possible response.
+    //
+    // A document whose lines do not foot to its own subtotal is HELD, not scheduled: the
+    // crew never loads from it, and Lauren is told what is missing. She can correct the
+    // lines or confirm. The capture itself is untouched — evidence is never edited by a guard.
+    if (receiptId) {
+      try {
+        const { data: rcpt } = await db
+          .from('receipts')
+          .select('line_items, line_items_original, amount, ocr_raw')
+          .eq('id', receiptId)
+          .eq('business_id', businessId)
+          .maybeSingle();
+        if (rcpt) {
+          const dec = decodeCapturedDocument(rcpt.ocr_raw);
+          // the document's OWN subtotal when it decoded one, else total − tax, else the total
+          const sub = dec?.subtotal ?? (dec?.tax != null ? Number(rcpt.amount ?? 0) - Number(dec.tax) : Number(rcpt.amount ?? 0));
+          const f = documentFooting(rcpt.line_items ?? rcpt.line_items_original, sub);
+          if (!f.balances) footingHold = { missing: f.missing };
+        }
+      } catch (e: any) {
+        // §6 r6 — a guard that cannot read must not block the capture. It also must not
+        // claim the document balanced: nothing is held, and the failure is surfaced.
+        console.error('[TRACE:FOOTING] could not evaluate footing:', e?.message);
+      }
+    }
+    if (footingHold) console.warn('[TRACE:FOOTING] HELD — lines do not foot:', footingHold);
 
     const baseRow: Record<string, any> = {
       business_id:   businessId,
@@ -125,7 +163,8 @@ export default async function handler(req: any, res: any) {
       city:          addr.city  || null,
       state:         addr.state || null,
       zip:           addr.zip   || null,
-      status:        'scheduled',
+      // HELD keeps it off the schedule, route, load list and crew link until Lauren settles it.
+      status:        footingHold ? 'held' : 'scheduled',
       source:        delivery.source || source || 'ocr-invoice',
       notes:         delivery.notes || null,
     };
@@ -195,7 +234,7 @@ export default async function handler(req: any, res: any) {
     try {
       const { data: receipt, error: rErr } = await db
         .from('receipts')
-        .select('id, business_id, date, amount, ocr_raw, line_items_original')
+        .select('id, business_id, date, amount, ocr_raw, line_items, line_items_original')
         .eq('id', receiptId)
         .eq('business_id', businessId)   // AC-3: a receipt from another tenant is not found, never used
         .maybeSingle();
@@ -209,7 +248,12 @@ export default async function handler(req: any, res: any) {
         receiptId: receipt.id,
         documentDate:  receipt.date ?? null,
         documentTotal: Number(receipt.amount ?? 0),
-        lineItemsOriginal: receipt.line_items_original,
+        // 🔴 `line_items`, NOT `line_items_original`. The _original column is the WRITE-ONCE
+        // OCR snapshot (20260902's trigger says so in its own error message); Lauren's
+        // corrections at capture land in `line_items`. Reading the snapshot here discarded
+        // every correction she made — 8 trees off LaPrime's load list for the next morning.
+        // Falls back to the snapshot only when a receipt genuinely has no corrected set.
+        documentLines: receipt.line_items ?? receipt.line_items_original,
         decoded: decodeCapturedDocument(receipt.ocr_raw),
         deliveryDate: delivery?.deliveryDate || null,
         serviceType:  delivery?.serviceType  || null,
@@ -218,7 +262,7 @@ export default async function handler(req: any, res: any) {
         // been delivered yet — NOT 'fulfilled'. Before this was threaded through, every capture
         // wrote 'fulfilled' at the moment of scanning, asserting that trees scheduled for a future
         // Saturday had already left the property.
-        deliveryStatus: deliveryId ? 'scheduled' : null,
+        deliveryStatus: deliveryId ? (footingHold ? 'held' : 'scheduled') : null,
       });
 
       if (TRACE_HISTORY) console.log('[TRACE:HISTORY] building history order — receipt:', receipt.id,
@@ -275,5 +319,10 @@ export default async function handler(req: any, res: any) {
     console.log('[TRACE:HISTORY] no receiptId supplied — no history order (a document with no customer never reaches here)');
   }
 
-  return res.json({ ok: true, customerId, created, contactResults, deliveryId, deliveryError, orderId, orderError });
+  // The capture screen renders `footingHeld` — the stop exists but is HELD, and saying so is
+  // the point: a silent hold reads as a lost capture, which is the defect one door over.
+  return res.json({ ok: true, customerId, created, contactResults, deliveryId, deliveryError, orderId, orderError,
+    footingHeld: footingHold
+      ? { missing: footingHold.missing, message: footingMessage(footingHold.missing) }
+      : null });
 }

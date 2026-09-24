@@ -241,7 +241,8 @@ export function Dashboard() {
         .from('orders')
         .select('id, total_amount')
         .eq('business_id', businessId!)
-        .neq('status', 'cancelled')
+        // held AND cancelled are both off the day's counts — a held stop is not a scheduled delivery (#395)
+      .neq('status', 'cancelled').neq('status', 'held')
         .or(REAL_BUSINESS_PGRST)
         .or(`and(sale_date.gte.${todayD},sale_date.lt.${tomorrowD}),and(sale_date.is.null,created_at.gte.${today},created_at.lt.${tomorrowT})`),
 
@@ -278,7 +279,8 @@ export function Dashboard() {
         .from('orders')
         .select('id, leakage_flag, order_kind')
         .eq('business_id', businessId!)
-        .neq('status', 'cancelled')
+        // held AND cancelled are both off the day's counts — a held stop is not a scheduled delivery (#395)
+      .neq('status', 'cancelled').neq('status', 'held')
         .or(REAL_BUSINESS_PGRST)
         .or(`and(sale_date.gte.${weekD},sale_date.lt.${weekEndD}),and(sale_date.is.null,created_at.gte.${week},created_at.lt.${weekEndT})`),
     ]);
