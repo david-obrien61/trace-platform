@@ -131,6 +131,24 @@ export interface Rung {
   /** Where that price came from — the billed median, Lauren's sheet, or nobody has set it. */
   installPriceBecause: string;
   /**
+   * What it costs to PLANT ONE tree of this size THAT THE CUSTOMER ALREADY OWNS — David, 2026-09-24:
+   * *"PLANT YOUR TREE IS PRICED BY CONTAINER SIZE FROM A LADDER, like install."*
+   *
+   * 🔴 IT IS A DIFFERENT SERVICE FROM INSTALL AND THE HISTORY SAYS SO, WHICH IS WHY IT IS A SECOND
+   * COLUMN RATHER THAN A MULTIPLIER ON `installPrice`. All five Plant-Your-Tree lines LAWNS has ever
+   * invoiced (measured live 2026-09-24) are an Olive, a Japanese Maple, yaupons moved within a
+   * garden — trees LAWNS did not sell. On each of those invoices the container size belongs to a
+   * DIFFERENT line, which is exactly why David's spec has the customer SAY the size and the
+   * installer confirm it on the day.
+   *
+   * 🔴 `null` IS THE ORDINARY ANSWER AND IT IS TODAY THE ONLY ONE: `20260924d` seeds NO rung,
+   * because the history supports none. Unlike install, an unpriced PYT line DOES NOT BLOCK the
+   * order — David ruled it is amended later. A 0 would read as a free planting, so it stays null.
+   */
+  pytPrice: number | null;
+  /** Where that figure came from, or why there is none. NOT NULL for the same reason as above. */
+  pytPriceBecause: string;
+  /**
    * Months from UPPOTTING INTO this rung until a tree on it is SELLABLE (David, 2026-09-01;
    * re-ruled 2026-09-23). Read from the rung a lot is going TO, never the one it is leaving —
    * *"a 15 gal is SELLABLE AT THE UPPOT-TO-15 DATE + 6 MONTHS."*
@@ -156,6 +174,22 @@ export interface Rung {
   holdMonths: number | null;
   /** Where that hold figure came from. Required for the same reason `handlingBecause` is. */
   holdBecause: string;
+  /**
+   * Is stock ever SOLD at this rung? David, 2026-09-23, from LAWNS: *"RUNGS NEVER SOLD: slips,
+   * 4-inch, plugs. 3/5 gallon sells rarely and stays sellable."*
+   *
+   * 🔴 `never_sold` IS NOT "UNKNOWN GROW". A production-only rung has no sellable date because
+   * nothing is ever sold there — that is a settled fact, not a missing measurement — so the plan
+   * says *"not sold at this size"* and NEVER "UNKNOWN". David ruled this on the customer's
+   * contrarian seat: UNKNOWN invites somebody to go and fill in a number that should not exist.
+   *
+   * ⚠️ `rarely_sold` BEHAVES EXACTLY LIKE `sold` everywhere in the code today. It records an
+   * owner's statement rather than driving a branch, and it is named here so nobody later "tidies"
+   * the three values into a boolean and loses it.
+   */
+  sellability: 'sold' | 'rarely_sold' | 'never_sold';
+  /** Where that came from. '' = nobody has said, and `sold` is then the platform's assumption. */
+  sellabilityBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -467,6 +501,8 @@ export function largestRung(ladder: Ladder): Rung | null {
  * merges. This list is a SELECT list, so an unapplied column is not a missing feature — it is
  * every ladder read on the platform returning 42703. The load list, the uppot plan, the count
  * screen and the import preview all read through it.
+ * 🔴 `pyt_price` / `pyt_price_because` (ledger #399) are the SAME GATE again:
+ * `20260924d_container_ladder_pyt_price.sql` must be applied before a build selecting them merges.
  */
 export const LADDER_FIELDS = [
   'id', 'label', 'aliases', 'sort_order', 'volume_gallons',
@@ -474,7 +510,9 @@ export const LADDER_FIELDS = [
   'install_t_posts_per_tree', 'install_t_posts_because',
   'caliper_min_inches', 'caliper_max_inches', 'caliper_because',
   'install_price', 'install_price_because',
+  'pyt_price', 'pyt_price_because',
   'grow_months', 'grow_because', 'hold_months', 'hold_because',
+  'sellability', 'sellability_because',
   'active',
 ] as const;
 
@@ -490,8 +528,10 @@ export interface LadderRow {
   caliper_min_inches: number | string | null; caliper_max_inches: number | string | null;
   caliper_because: string | null;
   install_price: number | string | null; install_price_because: string | null;
+  pyt_price: number | string | null; pyt_price_because: string | null;
   grow_months: number | string | null; grow_because: string | null;
   hold_months: number | string | null; hold_because: string | null;
+  sellability: string | null; sellability_because: string | null;
   active: boolean;
 }
 
@@ -520,6 +560,9 @@ export function rungFromRow(r: LadderRow): Rung {
     // screen, which then asks for a number instead of charging nothing (R-171 (c)).
     installPrice: numOrNull(r.install_price),
     installPriceBecause: r.install_price_because ?? 'not set',
+    // Same rule as installPrice, for the same reason: no `?? 0`. A free planting is not a price.
+    pytPrice: numOrNull(r.pyt_price),
+    pytPriceBecause: r.pyt_price_because || 'not set',
     // 🔴 NO `?? 0` ON EITHER, for `installPrice`'s reason one step further: a grow of 0 months is
     // not a short grow, it is a tree sellable the instant it is potted. An absent figure stays
     // absent all the way to the screen, which then says UNKNOWN instead of a date.
@@ -527,6 +570,12 @@ export function rungFromRow(r: LadderRow): Rung {
     growBecause: r.grow_because || 'not set',
     holdMonths: numOrNull(r.hold_months),
     holdBecause: r.hold_because || 'not set',
+    // The database column is NOT NULL DEFAULT 'sold'. A null here means the row came back without
+    // it — an unapplied migration — and `sold` is the reading that leaves every screen behaving as
+    // it did before this column existed. An unrecognised value is treated the same way, deliberately:
+    // a fourth value must not silently stop a rung being sellable.
+    sellability: r.sellability === 'never_sold' || r.sellability === 'rarely_sold' ? r.sellability : 'sold',
+    sellabilityBecause: r.sellability_because || 'not set',
     active: r.active,
   };
 }

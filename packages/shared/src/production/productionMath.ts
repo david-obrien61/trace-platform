@@ -482,6 +482,12 @@ export function workingDaysBetween(a: string, b: string): number {
 export type GrowMonths =
   | { known: true; months: number; source: 'rung'; rungLabel: string }
   | { known: true; months: number; source: 'business-default' }
+  // 🔴 NOT-SOLD IS A FOURTH STATE, NOT A FLAVOUR OF UNKNOWN (David, 2026-09-23, ruling 4 — decided
+  // from the customer's contrarian seat). A slip has no sellable date because nothing is ever sold
+  // at that size; that is SETTLED, not missing. Rendering it as UNKNOWN would send somebody to
+  // Settings to fill in a number that should not exist — the opposite of what the honest state is
+  // for. It is checked FIRST, before grow months are even looked at.
+  | { known: false; reason: 'rung-not-sold'; rungLabel: string }
   | { known: false; reason: 'rung-has-no-grow'; rungLabel: string }
   | { known: false; reason: 'target-not-on-ladder' };
 
@@ -504,6 +510,10 @@ export function growMonthsFor(
   }
   const rung = ladder.find((r) => r.volumeGallons != null && Number(r.volumeGallons) === Number(targetUnitValue));
   if (rung == null) return { known: false, reason: 'target-not-on-ladder' };
+  // 🔴 ORDER MATTERS AND IS THE RULING. A never-sold rung answers BEFORE grow months are consulted,
+  // so a production-only size reads "not sold at this size" even if somebody has also set a grow
+  // figure on it. The settled fact wins over the measurement.
+  if (rung.sellability === 'never_sold') return { known: false, reason: 'rung-not-sold', rungLabel: rung.label };
   if (rung.growMonths == null) return { known: false, reason: 'rung-has-no-grow', rungLabel: rung.label };
   return { known: true, months: Number(rung.growMonths), source: 'rung', rungLabel: rung.label };
 }
@@ -511,9 +521,24 @@ export function growMonthsFor(
 /** The sentence the screen shows when there is no date. Never a number, never a blank. */
 export function growUnknownSentence(g: GrowMonths): string | null {
   if (g.known) return null;
+  // 🔴 THREE DIFFERENT SENTENCES, AND ONLY TWO OF THEM SAY "UNKNOWN". A not-sold rung is not an
+  // unknown; saying so would be the six-state ruling's defect — a surface saying one thing while
+  // the state says another.
+  if (g.reason === 'rung-not-sold') return `not sold at this size (${g.rungLabel})`;
   return g.reason === 'rung-has-no-grow'
     ? `UNKNOWN — nobody has set GROW on the ${g.rungLabel} rung`
     : 'UNKNOWN — this target size is not a rung on the ladder';
+}
+
+/**
+ * Is this one of the states a person should ACT on by going and setting something?
+ *
+ * `not sold at this size` is settled and needs no action; the two UNKNOWNs do. The screen uses this
+ * to decide whether to print a "go here and set it" pointer — a pointer under a settled fact is an
+ * instruction to break it.
+ */
+export function growUnknownIsActionable(g: GrowMonths): boolean {
+  return !g.known && g.reason !== 'rung-not-sold';
 }
 
 export interface PlannedBatch {

@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 33 covered** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
+**Board: 0 of 36 covered** ✏️ **+3 on 2026-09-23 (ledger #391) — CARD 34 a production size reads "not sold at this size", CARD 35 the potting date and its history, CARD 36 the uppot window and its dated history. ⛔ They wait on `20260924a` · `20260924b` · `20260924c` respectively.** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -740,3 +740,53 @@ COVERS: ledger #390 — the graduation date `planLots` has computed on every bat
 5. Go to **Settings → Container sizes**, set **30 gal** GROW to **8** with a reason, save, and return to **/inventory/uppot**. **PASS:** that same row now shows a date and **8 mo on 30 gal**. Set it back to blank afterwards — 🔴 **8 is not Terry's number and must not be left in the database.**
 
 **FAIL:** the column is missing · an unmeasured rung shows a date · a date appears with no trees count · **Sellable from** reads **—** for every row with the window set (that is the old, silent behaviour).
+
+---
+
+## CARD 34 — 🔴 A PRODUCTION SIZE READS "NOT SOLD AT THIS SIZE", NEVER "UNKNOWN"
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #391 — David, 2026-09-23, ruling 4, decided from the customer's contrarian seat: a never-sold rung is a SETTLED fact, not a missing measurement, and calling it UNKNOWN sends somebody to fill in a number that should not exist.
+
+⛔ Needs `20260924b_rung_sellability.sql` applied. CARDS 32–33 (ledger #390) should be proven first — this builds on their column.
+
+1. **Settings → Container sizes → Edit** on any size. **PASS:** a new **Is this size sold?** picker with exactly three choices — *Sold at this size* · *Sold at this size, but rarely* · *Never sold — a production size only* — and a **Why** box beside it. Every existing size reads **Sold**.
+2. Choose **Never sold**, leave **Why** empty, press **Save size**. **PASS:** red text **"Say why this size is never sold — it stops the plan ever giving it a sellable date."** and the save is refused.
+3. Type a reason (*"production only — stock passes through"*) and save. **PASS:** it saves.
+4. **/inventory/uppot.** Put a lot on a plan whose **Going to** is that size. **PASS:** **Sellable from** reads, in **grey**, **not sold at this size (<the size>)** with **a production size — stock passes through it** beneath. 🔴 **It must NOT say UNKNOWN, and there must be NO link to go and set anything** — there is nothing to set.
+5. Set that same size's **Months to GROW** to **6** and return. **PASS:** it STILL reads **not sold at this size** — 🔴 the settled fact wins over the measurement. Put the size back to **Sold** afterwards.
+
+**FAIL:** a never-sold size shows UNKNOWN · it shows a date · it offers a "set GROW" link · the picker has two options or free text.
+
+---
+
+## CARD 35 — 🔴 LAWNS SETS ITS OWN POTTING DATE, AND EVERY ENTRY IS KEPT
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest · **ACTOR:** OWNER, then a MANAGER and a STAFF member for step 6 · **LAST-PROVEN:** —
+COVERS: ledger #391 — David, 2026-09-23, rulings 1 and 2: the date is ENTERED, never derived; each entry or edit ADDS A ROW; nothing is overwritten; current is the latest.
+
+⛔ Needs `20260924a_rung_entry_dates.sql` applied.
+
+1. **/inventory/uppot.** **PASS:** a new **Potted on** column. Every row reads **not set**, in red, and is clickable.
+2. Click **not set** on any lot. **PASS:** a centred sheet opens with the lot's name and size, **Potted on — not recorded**, and the line **No potting date recorded, so there is no sellable date**. Below: **Nobody has recorded a potting date for this block yet.**
+3. Enter **2026-06-25**, note *"140 Cedar Creek liners landed"*, press **Add this entry**. **PASS:** *"Recorded. The earlier entries are kept — this is the current one."*, the history shows one row marked **current**, and the readiness line changes.
+4. Add a second entry, **2026-07-02**, note *"Joel: it was the week after"*. 🔴 **PASS: the history now shows TWO rows, newest first, 2026-07-02 marked current and 2026-06-25 STILL THERE.** Nothing was overwritten. The **Potted on** column reads **2026-07-02**.
+5. Try a date in the future. **PASS:** red **"That date is in the future — a block cannot have been potted tomorrow."** and **Add this entry** stays disabled.
+6. 🔴 **Sign in as a STAFF member** (holds `inventory:read`, not `inventory:update`) and open the same sheet. **PASS:** the history and the current date are visible, and instead of the form: **"You can see this date; changing it needs permission to update inventory."** Then as a **MANAGER**: the form is present and an entry saves.
+
+**FAIL:** a correction replaces the earlier entry instead of being added · the column shows a date the sheet disagrees with · a staff member can add an entry · the sheet says "saved" but the history does not grow (that is the RLS-refusal defect the writer exists to catch).
+
+---
+
+## CARD 36 — THE UPPOT WINDOW IS SET IN THE APP, AND EVERY CHANGE IS DATED
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest · **ACTOR:** MANAGER (not the owner — the point is that a manager can do it) · **LAST-PROVEN:** —
+COVERS: ledger #391 — David, 2026-09-23, ruling 1: LAWNS sets and adjusts its own dates, and neither the window nor the potting date may be settable only by SQL.
+
+⛔ Needs `20260924c_operations_config_history.sql` applied.
+✏️ **THE EDITOR ITSELF IS NOT NEW AND THIS CARD SAYS SO:** Settings → Operations has had **Window opens** / **Window closes** as date inputs since ledger #276. What is new is the dated history and the link from the plan. If step 1 surprises you, that is the finding.
+
+1. **Signed in as a MANAGER**, go to **Settings → Operations**. **PASS:** **Window opens**, **Window closes** and **Last day the seasonal staff are here** are editable date boxes. Set the window to **2026-11-04 → 2026-11-12** and **Save**.
+2. **/inventory/uppot**, with a lot on a plan. **PASS:** **Sellable from** now shows dates rather than **no uppot window set**.
+3. Go back to Settings → Operations, change **Window closes** to **2026-11-20**, save, and return to the plan. **PASS:** the dates move.
+4. 🔴 **The history.** In the SQL editor (this has no screen yet — see the flag): `SELECT config_key, old_value, new_value, changed_at FROM business_operations_config_history WHERE business_id = '<Test Dave''s>' ORDER BY changed_at DESC LIMIT 5;` **PASS:** a row for **windowEnd** showing `"2026-11-12"` → `"2026-11-20"`, and rows for the two keys set in step 1. 🔴 **There must be NO rows for the twenty-odd keys you did not touch.**
+5. Press **Save** again without changing anything. **PASS:** re-run the query — **no new rows.**
+
+**FAIL:** the window is not editable by a manager · a save writes a row per key rather than per change · a no-op save writes rows · step 4 returns nothing (the trigger did not fire).

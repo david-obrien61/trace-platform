@@ -33,7 +33,8 @@ import { CALIPER_STANDARD, caliperText, standardCaliperHeightInches, validateLad
 import { loadContainerLadder, type LadderRead } from '../../lib/containerLadderRead';
 import { addRung, updateRung, setRungActive, moveRung } from '../../lib/containerLadderWrite';
 import {
-  COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, rungDraftProblems, type RungDraft,
+  COPIED_POSTS_NOTE, draftForNewRung, draftFromRung, rungDraftProblems, SELLABILITY_OPTIONS,
+  type RungDraft,
 } from '../../lib/containerLadderDraft';
 
 const GREEN = '#27500A';
@@ -172,6 +173,31 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
           <input style={input} value={draft.installPriceBecause} onChange={(e) => put('installPriceBecause', e.target.value)} />
         </Field>
       </div>
+      {/* ── PLANT YOUR TREE (ledger #399) ────────────────────────────────────────────────────
+          🔴 A SEPARATE PRICE FROM INSTALL, BECAUSE IT IS A SEPARATE JOB, AND LAWNS'S OWN HISTORY
+          IS WHAT SAYS SO. Every Plant-Your-Tree line they have ever invoiced — an Olive, a
+          Japanese Maple, yaupons moved within a garden — is a tree they did not sell. There is no
+          tree to deliver and no warranty; the size is the CUSTOMER'S pot, which is why David's
+          rule has them say it and the installer confirm it on the day.
+          ⚠️ EVERY RUNG SHIPS BLANK AND THAT IS NOT AN OVERSIGHT: `20260924d` deliberately seeds
+          none, because those five invoices carry no size of their own to take a median from. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Plant Your Tree price for one tree of this size"
+          note={<>
+            What the customer is charged to have ONE tree <strong>they already own</strong> planted
+            at this size. <strong>Blank means no price is set</strong> — the line then says the size
+            is to be confirmed on the install day and the charge is added by amendment, and the order
+            can still be taken. Never enter 0: that charges nothing.
+          </>}
+        >
+          <input style={input} type="number" step="any" min={0} placeholder="not set"
+            value={draft.pytPrice} onChange={(e) => put('pytPrice', e.target.value)} />
+        </Field>
+        <Field label="Where the Plant Your Tree price came from">
+          <input style={input} value={draft.pytPriceBecause} onChange={(e) => put('pytPriceBecause', e.target.value)} />
+        </Field>
+      </div>
       {/* ── THE GROWING SCHEDULE (ledger #390) ───────────────────────────────────────────────
           Two numbers, and they are the whole grow ladder: GROW is how long after potting a tree on
           this size can be SOLD; HOLD is how long it then stays before it must move up. David,
@@ -211,6 +237,27 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
         </Field>
         <Field label="Where the hold figure came from">
           <input style={input} value={draft.holdBecause} onChange={(e) => put('holdBecause', e.target.value)} />
+        </Field>
+      </div>
+      {/* ── IS THIS SIZE SOLD AT ALL? (ledger #391, David 2026-09-23) ─────────────────────────
+          A production-only rung — slip, 4 in, plug — has no sellable date because nothing is ever
+          sold there. The plan then reads "not sold at this size" instead of UNKNOWN, which is the
+          difference between a settled fact and a missing measurement. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <Field
+          label="Is this size sold?"
+          note={<>
+            Stock passes through a <strong>production size</strong> (a slip, a 4-inch, a plug) on its
+            way up and is never offered for sale at it. Saying so stops the uppot plan asking for a
+            grow figure it will never need.
+          </>}
+        >
+          <select style={input} value={draft.sellability} onChange={(e) => put('sellability', e.target.value)}>
+            {SELLABILITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Why">
+          <input style={input} value={draft.sellabilityBecause} onChange={(e) => put('sellabilityBecause', e.target.value)} />
         </Field>
       </div>
       {problems.length > 0 && (
@@ -319,6 +366,28 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
                   {standardCaliperHeightInches(r) != null
                     ? <> · <span style={{ color: '#666' }}>{CALIPER_STANDARD.name} would measure it at {standardCaliperHeightInches(r)} in</span></>
                     : null}
+                  {/* ── THE TWO PRICES, SIDE BY SIDE (ledger #399) ────────────────────────
+                      🔴 NEITHER WAS ON THIS LINE BEFORE, AND THE INSTALL PRICE'S ABSENCE WAS THE
+                      REAL GAP: it has been editable since #386 and readable only by opening the
+                      rung one at a time, so "which sizes do we not price?" — the exact question
+                      the null path exists to make answerable — took nine clicks. Adding PYT alone
+                      would have left that standing, so both are here.
+                      ⚠️ "not set" IS PRINTED, NOT HIDDEN, AND IT IS THE COMMON ANSWER (A9 —
+                      absent is not empty). A blank where a price belongs reads as a price of
+                      nothing; these words read as a decision nobody has made yet. */}
+                  <div style={{ marginTop: 2 }}>
+                    <strong>install</strong>{' '}
+                    {r.installPrice == null
+                      ? <span style={{ color: AMBER }}>not set</span>
+                      : <>${Number(r.installPrice).toFixed(2)}</>}{' '}
+                    <span style={{ color: '#777' }}>({r.installPriceBecause})</span>
+                    {' · '}
+                    <strong>plant your tree</strong>{' '}
+                    {r.pytPrice == null
+                      ? <span style={{ color: AMBER }}>not set</span>
+                      : <>${Number(r.pytPrice).toFixed(2)}</>}{' '}
+                    <span style={{ color: '#777' }}>({r.pytPriceBecause})</span>
+                  </div>
                 </div>
               </div>
               {canWrite && !isEditing && (

@@ -20,7 +20,7 @@ export {
   rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot, startingGallons,
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck,
   addMonths, addWorkingDays, workingDaysBetween, ARITHMETIC_TOLERANCE,
-  growMonthsFor, growUnknownSentence,
+  growMonthsFor, growUnknownSentence, growUnknownIsActionable,
 } from './productionMath';
 export type {
   LotInput, LotRefusal, LotSplit, PlannedBatch, PlanTotals, CascadeRung, CascadeResult,
@@ -38,3 +38,9 @@ export {
 export type {
   ProductionFlag, ProductionFlagKind, CompletionInput, CompletionVerdict,
 } from './productionFlags';
+
+export {
+  RUNG_DATE_FIELDS, RUNG_DATE_SELECT, currentRungDate, rungDateHistory, readinessOf,
+  addMonthsISO, recordRungDate, rungDateProblems,
+} from './rungDates';
+export type { RungDateRow, Readiness, RecordOutcome } from './rungDates';

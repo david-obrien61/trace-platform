@@ -46,15 +46,19 @@
 // STORY:        user_stories.md → *The growing ladder — potted, waiting, ready, and up a size*.
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useBusinessContext } from '@trace/shared/context';
 import { resolveRung, rungsAbove, type Ladder } from '@trace/shared/inventory';
 import { loadContainerLadder, type LadderRead } from '../lib/containerLadderRead';
 import {
   planLots, arithmeticCheck, basisSentence, splitPenalty, minutesPerPot, startingGallons,
-  growUnknownSentence, WITHHELD_REASON,
+  growUnknownSentence, growUnknownIsActionable, WITHHELD_REASON,
   type LotInput, type ResolvedConfig, type Estimate,
 } from '@trace/shared/production';
 import { loadPlanLots, type PlanLotsRead } from '../lib/uppotPlanRead';
+import { loadRungDates, type RungDatesRead } from '../lib/rungDatesRead';
+import RungDateSheet from '../components/RungDateSheet';
+import { currentRungDate } from '@trace/shared/production';
 import { loadOperationsConfig, commitPlan, type CommitOutcome } from '../lib/uppotPlanWrite';
 
 const GREEN = '#27500A';
@@ -82,11 +86,20 @@ function Figure({ label, value, estimate }: { label: string; value: string; esti
 
 export default function UppotPlan() {
   const { businessId, can } = useBusinessContext();
+  // `inventory:update` is what the production_rung_dates INSERT policy requires. Measured at LAWNS:
+  // MANAGER holds it, STAFF holds inventory:read alone — so staff see the dates and cannot set them,
+  // and the sheet says so rather than showing a form the write would silently refuse.
+  const canWrite = can('inventory:update');
   const [read, setRead] = useState<PlanLotsRead>({ phase: 'loading' });
   const [cfg, setCfg] = useState<ResolvedConfig | null>(null);
   const [typed, setTyped] = useState<Record<string, number | null>>({});
   const [targets, setTargets] = useState<Record<string, number>>({});
   const [batchSize, setBatchSize] = useState(40);
+  // The potted-on record. Loaded beside the lots; `reloadKey` re-reads after an entry is added, so
+  // the column and the sheet never show a value the database does not have.
+  const [rungDates, setRungDates] = useState<RungDatesRead>({ phase: 'loading' });
+  const [dateLotId, setDateLotId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [ladderRead, setLadderRead] = useState<LadderRead | null>(null);
   const [reason, setReason] = useState('');
   const [committing, setCommitting] = useState(false);
@@ -139,6 +152,17 @@ export default function UppotPlan() {
       ladder,
     });
   }, [lots, cfg, typed, targets, batchSize, ladder]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    void loadRungDates(businessId).then(setRungDates);
+  }, [businessId, reloadKey]);
+
+  /** The current potting entry for a lot, or null. One place, so the column and the sheet agree. */
+  const dateFor = useCallback((lotId: string) => {
+    if (rungDates.phase !== 'loaded') return null;
+    return currentRungDate(rungDates.byLot.get(lotId) ?? []);
+  }, [rungDates]);
 
   // The rung a lot sits on, or null when it is not on the ladder at all. Used by the picker to
   // decide what to OFFER; the refusal list below explains the nulls.
@@ -273,7 +297,7 @@ export default function UppotPlan() {
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13, background: '#fff' }}>
             <thead>
               <tr style={{ background: SAGE, textAlign: 'left' }}>
-                {['Variety', 'In now', 'Going to', 'On hand', 'Keep', 'Cushion', 'Could pot', 'UPPOT NOW', 'Still sellable', 'Mix yd³', 'Hours', 'Sellable from'].map((h) => (
+                {['Variety', 'In now', 'Going to', 'On hand', 'Keep', 'Cushion', 'Could pot', 'UPPOT NOW', 'Still sellable', 'Mix yd³', 'Hours', 'Potted on', 'Sellable from'].map((h) => (
                   <th key={h} style={{ padding: '8px 6px', borderBottom: '2px solid #cfe0bd', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -337,6 +361,26 @@ export default function UppotPlan() {
                     <td style={{ padding: '6px' }}>{batch ? n0(batch.split.stillSellable) : '—'}</td>
                     <td style={{ padding: '6px' }}>{batch ? batch.mixTotal.toFixed(2) : '—'}</td>
                     <td style={{ padding: '6px' }}>{batch ? batch.crewHoursAtBatch.toFixed(1) : '—'}</td>
+                    {/* ── POTTED ON (ledger #391) ──────────────────────────────────────────────
+                        The date LAWNS enters and adjusts itself. Three states, and "not set" is the
+                        common one today: nothing has ever recorded it. The cell is the way IN to the
+                        history — a date with no way to see how it got there is a number you cannot
+                        argue with. */}
+                    <td style={{ padding: '6px' }}>
+                      {rungDates.phase === 'failed' ? (
+                        <span style={{ color: '#A32D2D', fontSize: 11 }} title={rungDates.message}>unavailable</span>
+                      ) : (
+                        <button
+                          onClick={() => setDateLotId(lot.id)}
+                          style={{
+                            background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left',
+                            color: dateFor(lot.id) ? '#111' : '#A32D2D', fontSize: 12, textDecoration: 'underline dotted',
+                          }}
+                        >
+                          {dateFor(lot.id)?.entered_on ?? 'not set'}
+                        </button>
+                      )}
+                    </td>
                     {/* ── 🔴 THE GRADUATION DATE (ledger #390) ─────────────────────────────────
                         `planLots` has computed this on every batch since ledger #276 and NOTHING
                         HAS EVER RENDERED IT. That is the whole of this build's screen work: the
@@ -357,15 +401,36 @@ export default function UppotPlan() {
                               : batch.growMonths.known ? ` · ${batch.growMonths.months} mo (business default)` : ''}
                           </div>
                         </>
+                      ) : !growUnknownIsActionable(batch.growMonths) ? (
+                        /* 🔴 STATE 2 OF FOUR — SETTLED, NOT MISSING, AND IT IS CHECKED BEFORE THE
+                           WINDOW. A slip is never sold whether or not a window is set, so asking
+                           about the window first would hide the real answer behind an unrelated
+                           one. Grey, not red: nothing here is wrong and there is nothing to go and
+                           fix (David, 2026-09-23, ruling 4). */
+                        <span style={{ color: '#666', fontSize: 12 }}>
+                          {growUnknownSentence(batch.growMonths)}
+                          <div style={{ fontSize: 11, color: '#888' }}>a production size — stock passes through it</div>
+                        </span>
                       ) : cfg && !cfg.ops.windowStart ? (
                         <span style={{ color: '#A32D2D', fontSize: 12 }}>
                           no uppot window set
-                          <div style={{ fontSize: 11, color: '#888' }}>Settings → Operations</div>
+                          {/* The link David asked for: the state names the screen that fixes it AND
+                              goes there. A message naming a screen the reader then has to hunt for
+                              is a pointer, and pointers are what row 19B says do not act. */}
+                          <div style={{ fontSize: 11 }}>
+                            <Link to="/settings?section=operations" style={{ color: GREEN }}>
+                              Settings → Operations — set the uppot window
+                            </Link>
+                          </div>
                         </span>
                       ) : (
                         <span style={{ color: '#A32D2D', fontSize: 12 }}>
                           {growUnknownSentence(batch.growMonths)}
-                          <div style={{ fontSize: 11, color: '#888' }}>Settings → Container sizes</div>
+                          <div style={{ fontSize: 11 }}>
+                            <Link to="/settings?section=container-sizes" style={{ color: GREEN }}>
+                              Settings → Container sizes — set GROW
+                            </Link>
+                          </div>
                         </span>
                       )}
                     </td>
@@ -503,6 +568,28 @@ export default function UppotPlan() {
           )}
         </div>
       </div>
+
+      {/* The potting-date sheet: current entry, the five-state readiness line, the full history and
+          the add form. Mounted here rather than per row so only one can be open. */}
+      {dateLotId && (() => {
+        const lot = lots.find((l) => l.id === dateLotId);
+        if (!lot) return null;
+        const r = ladder ? resolveRung(ladder, lot.size) : null;
+        const rung = r && r.ok
+          ? { label: r.rung.label, growMonths: r.rung.growMonths, sellability: r.rung.sellability }
+          : null;
+        return (
+          <RungDateSheet
+            businessId={businessId!}
+            lot={{ id: lot.id, name: lot.name, size: lot.size, unitValue: lot.unitValue }}
+            rows={rungDates.phase === 'loaded' ? (rungDates.byLot.get(lot.id) ?? []) : []}
+            rung={rung}
+            canWrite={canWrite}
+            onClose={() => setDateLotId(null)}
+            onRecorded={() => setReloadKey((k) => k + 1)}
+          />
+        );
+      })()}
     </div>
   );
 }

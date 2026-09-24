@@ -20,7 +20,7 @@ import {
   resolveConfig,
 } from '@trace/shared/production';
 import {
-  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, GROW_NOT_SET, HOLD_NOT_SET, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
+  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, GROW_NOT_SET, HOLD_NOT_SET, SELLABILITY_NOT_SET, SELLABILITY_OPTIONS, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems, PYT_PRICE_NOT_SET
 } from './containerLadderDraft';
 
 let passed = 0, failed = 0;
@@ -35,7 +35,9 @@ const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Ru
   label, aliases: [], sortOrder, volumeGallons: null, handlingMinutes: null,
   handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice: null, installPriceBecause: 'not set',
+  pytPrice: null, pytPriceBecause: 'not set',
   growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
+  sellability: 'sold' as const, sellabilityBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [
@@ -241,6 +243,17 @@ const LAWNS: Ladder = [
     'F2 🔴 and it stores NULL, not 0 — the difference the whole ruling rests on');
   ok(draftToRow(good).install_price_because === INSTALL_PRICE_NOT_SET,
     'F3 …with a reason that says nobody has set it, so the screen can say WHY it is asking');
+  // ── the same three, for Plant Your Tree (ledger #399) ────────────────────────────────────
+  // 🔴 THIS EXISTS BECAUSE knip TOLD ME `PYT_PRICE_NOT_SET` HAD NO IMPORTER, AND THE HONEST
+  // reading of that was not "stop exporting it" — it was that the default reason for the ONE
+  // column shipping entirely unpriced had no assertion at all, while the install one beside it
+  // did. The gap was in the test, not in the export.
+  ok(draftToRow(good).pyt_price === null,
+    'F3-pyt 🔴 a new size stores a NULL Plant Your Tree price, never 0 — a free planting is the value this column exists to keep off a screen');
+  ok(draftToRow(good).pyt_price_because === PYT_PRICE_NOT_SET,
+    'F3-pyt2 …with the reason that says nobody has set it AND that it can be added by amendment on the install day');
+  ok(/amendment/.test(PYT_PRICE_NOT_SET),
+    'F3-pyt3 🔴 the default reason names the WAY OUT, not just the absence — David 2026-09-24: the installer identifies the size on the day and LAWNS amends');
 
   const zero = rungDraftProblems({ ...good, installPrice: '0' }, LAWNS, null);
   ok(zero.some(p => /charge nothing/.test(p)),
@@ -264,6 +277,28 @@ const LAWNS: Ladder = [
   const roundTrip = draftFromRung({ ...LAWNS[3], installPrice: 204, installPriceBecause: 'billed median' });
   ok(roundTrip.installPrice === '204' && draftToRow({ ...roundTrip, label: LAWNS[3].label }).install_price === 204,
     'F10 rung → draft → row keeps the price, so opening the editor and saving changes nothing');
+  // ── Plant Your Tree (ledger #399) — the same refusals, because it is the same kind of fact ──
+  // 🔴 THESE ARE NOT COPIES OF THE INSTALL PROBES ABOVE FOR THEIR OWN SAKE: the validation was
+  // added by hand in a second place, and a rule typed twice is a rule that can be typed wrong once.
+  ok(rungDraftProblems({ ...good, pytPrice: '0' }, LAWNS, null).some(p => /charge nothing/.test(p)),
+    '🔴 B-pyt1: a $0 Plant Your Tree price is refused, and the sentence says it would charge nothing');
+  ok(rungDraftProblems({ ...good, pytPrice: '-50' }, LAWNS, null).some(p => /above \$0/.test(p)),
+    'B-pyt2: a negative Plant Your Tree price is refused');
+  ok(rungDraftProblems({ ...good, pytPrice: '' }, LAWNS, null).length === 0,
+    '🔴 B-pyt3: a BLANK price is a real answer and the ONLY one LAWNS has today — it must not be a validation error');
+  ok(rungDraftProblems({ ...good, pytPrice: '90', pytPriceBecause: '  ' }, LAWNS, null)
+      .some(p => /Say where the Plant Your Tree price came from/.test(p)),
+    '🔴 B-pyt4: a price with no reason is refused — an unlabelled price cannot be checked');
+  const pytPriced = draftToRow({ ...good, pytPrice: '90', pytPriceBecause: 'Lauren, 2026-09-24' });
+  ok(pytPriced.pyt_price === 90 && pytPriced.pyt_price_because === 'Lauren, 2026-09-24',
+    'B-pyt5: a typed price and its reason reach the write payload');
+  const pytBlank = draftToRow({ ...good, pytPrice: '', pytPriceBecause: 'not set' });
+  ok(pytBlank.pyt_price === null,
+    '🔴 B-pyt6: a blank writes NULL, never 0 — the whole point of the column');
+  const pytTrip = draftFromRung({ ...LAWNS[1], pytPrice: 90, pytPriceBecause: 'set by hand' });
+  ok(pytTrip.pytPrice === '90' && draftToRow({ ...pytTrip, label: LAWNS[1].label }).pyt_price === 90,
+    'B-pyt7: rung → draft → row round-trips without losing the figure');
+
   const blankTrip = draftFromRung({ ...LAWNS[3], installPrice: null, installPriceBecause: 'not priced' });
   ok(blankTrip.installPrice === '' && draftToRow({ ...blankTrip, label: LAWNS[3].label }).install_price === null,
     'F11 🔴 …and an UNPRICED rung round-trips as blank, never as 0 — the direction that would charge nothing');
@@ -316,6 +351,26 @@ const LAWNS: Ladder = [
   const trip = draftFromRung({ ...LAWNS[1], growMonths: 6, growBecause: 'David 2026-09-18', holdMonths: null, holdBecause: 'not set' });
   ok(trip.growMonths === '6' && trip.holdMonths === '',
     '🔴 G6 rung → draft keeps a set grow as text and an unset hold as blank — opening the editor changes nothing');
+
+  // ── SELLABILITY (ledger #391, R-184/R-185) ───────────────────────────────────────────────────
+  ok(fresh.sellability === 'sold' && fresh.sellabilityBecause === SELLABILITY_NOT_SET,
+    '🔴 G7 a new size is assumed SOLD, with a reason saying that is the platform\'s assumption and not the owner\'s word');
+  ok(SELLABILITY_OPTIONS.length === 3 && SELLABILITY_OPTIONS.map((o) => o.value).join(',') === 'sold,rarely_sold,never_sold',
+    'G7 exactly three values, in the order the picker offers them');
+
+  // 🔴 SAYING "NEVER SOLD" TAKES THE SIZE OFF THE SELLABLE-FROM COLUMN ENTIRELY, so unlike the
+  // default it may not be silent. This is the one sellability rule with teeth.
+  ok(rungDraftProblems({ ...base, sellability: 'never_sold', sellabilityBecause: '  ' }, LAWNS, null)
+      .some((p) => /never sold/.test(p)),
+    '🔴 G8 marking a size NEVER SOLD with no reason is refused — it stops the plan ever dating that size');
+  ok(rungDraftProblems({ ...base, sellability: 'never_sold', sellabilityBecause: 'production only' }, LAWNS, null).length === 0,
+    'G8 …and with a reason it is accepted');
+  ok(rungDraftProblems({ ...base, sellability: 'sold', sellabilityBecause: '  ' }, LAWNS, null).length === 0,
+    '⚠️ G8 SELF-CATCH: a blank reason on the DEFAULT is fine — the rule bites only on the value that changes behaviour');
+  ok(rungDraftProblems({ ...base, sellability: 'sometimes' }, LAWNS, null).some((p) => /sold, rarely sold, or never sold/.test(p)),
+    'G9 a value outside the three is refused in the client too, not only by the database CHECK');
+  ok(draftToRow({ ...base, sellability: 'never_sold', sellabilityBecause: ' production only ' }).sellability_because === 'production only',
+    'G9 the reason is trimmed on the way to the row');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);

@@ -107,3 +107,66 @@ The window's date-source order becomes: **stop Done timestamp → `ship_date` �
 runs, `ship_date` is NULL on every row, so the window falls through to `sale_date` — which David
 judged tolerable on 2026-09-01 (a few days' error on a six-month window). **The screen must still
 name `sale_date` as the source**, so nobody reads a fallback as a measurement.
+
+
+---
+
+# ✅ F1 ANSWERED FROM THE EXPORT — 2026-09-24
+
+The live pull was impossible (no token; see above, still NULL as of 2026-09-24 15:47 UTC). David
+supplied today's QuickBooks export instead. **Every figure below is labelled `QB export 2026-09-24`
+and is a SNAPSHOT, not live** (Rule 25) — the final reload still runs through the live connection.
+
+Source: `~/Downloads/24SepLawns/qbo-invoices-…json`, `queried_at 2026-09-24T16:17:51Z`,
+`complete: true`, **1,530 of 1,530** invoices retrieved. Parsed count equals `retrieved_total`, so
+the read is complete and the figures below are not computed off a short page.
+⚠️ Read in place. No customer data was copied into chat or into this repository.
+
+## Coverage  [QB export 2026-09-24]
+
+| | count |
+|---|---|
+| invoices in the export | **1,530** |
+| **carrying `ShipDate`** | **630** (41.2%) |
+| `ShipDate` format | **`YYYY-MM-DD` on all 630** — no other shape occurs |
+
+## Matching against what we imported  [QB export 2026-09-24]
+
+| | count |
+|---|---|
+| our history orders | 1,546 |
+| carrying a `qb_invoice_id` | **1,503** |
+| 🔴 **matched to an export invoice** | **1,503 — every one. ZERO unmatched.** |
+| 🔴 **ship date therefore recoverable on** | **603 of 1,546** |
+| matched, but QuickBooks holds no ShipDate | 900 |
+| no `qb_invoice_id` at all — unmatchable by any key | **43** |
+
+**The key is sound**: `qb_invoice_id` → `Invoice.Id` matched 1,503 of 1,503 with no misses, so the
+backfill is not guessing at its join. The ceiling is QuickBooks' own coverage, not ours: **900
+invoices simply never had a ShipDate entered**, and 43 of our rows carry no invoice id to match on.
+
+⚠️ **603, not 630.** The export's 630 includes invoices we did not import (the export is 1,530 and
+our history is 1,546 — the two sets are not the same population, and neither is a subset of the
+other). Quoting 630 as "recoverable" would overstate it by 27.
+
+⚠️ **The pairs run to 2026-10-28** — future-dated ShipDates exist in the books. `ship_date` is
+therefore not "when it shipped" for every row; for future dates it is when it is *due to* ship.
+Anything reading it as a planting date must say so, which is why the warranty window labels its
+source.
+
+## The backfill
+
+Generated from the export as **603 explicit `(qb_invoice_id, ShipDate)` pairs** — self-contained, so
+it needs no QuickBooks call to run. One `BEGIN … COMMIT`, a temp table, and:
+
+* it **REFUSES** if `orders.ship_date` is absent, or if **0 pairs match** — a backfill that matches
+  nothing and reports success is §6 r24's failure mode wearing a migration's clothes;
+* it reports **matched and updated separately**, because "matched 603, updated 0" means *already
+  applied* and must never share a number with *read nothing*;
+* the post-run verify asserts **shape and run-time reads only** — no pinned live count, after
+  `20260923j`'s V3 pinned 43 and read 59 on the day David ran it (§6 r26).
+
+🔴 **THE GENERATED FILE IS DELIVERED TO DAVID'S FOLDER ONLY AND IS NOT COMMITTED.** It carries 603
+invoice ids and dates drawn from a customer's books; David's instruction was to keep export data out
+of the repo. What is committed is this method plus the generator, so the file is reproducible from
+the export without the data living in git.

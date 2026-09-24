@@ -4,6 +4,7 @@
 //   count sentence), orderItemName (the line's own name). OUTPUTS: the /orders screen.
 // ============================================================
 import React, { useEffect, useMemo, useState } from 'react';
+import { primaryOrderLine } from '@trace/shared/business-logic';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Truck, Package, Wrench, ScanLine, ChevronRight, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -23,7 +24,11 @@ interface OrderRow {
   leakage_flag: boolean;
   notes: string | null;
   status: string;
-  customers: { first_name: string; last_name: string; email: string } | null;
+  customers: { first_name: string | null; last_name: string | null;
+    // required by customerDisplayName(): an organisation has no person name, and 519 of
+    // 2,021 LAWNS customers are that shape (ledger #403).
+    display_name: string | null; organization_name: string | null; customer_type: string | null;
+    email: string | null } | null;
   order_items: (OrderItemAnchorFields & { quantity: number })[];
 }
 
@@ -66,7 +71,7 @@ export function Orders() {
       .select(`
         id, created_at, total_amount, transport_method,
         leakage_flag, notes, status,
-        customers!orders_customer_id_fkey ( first_name, last_name, email ),
+        customers!orders_customer_id_fkey ( first_name, last_name, display_name, organization_name, customer_type, email ),
         order_items (
           quantity, business_inventory_id, description, sku,
           business_inventory ( name, size, sku )
@@ -77,7 +82,10 @@ export function Orders() {
       .limit(ROSTER_PAGE_LIMIT);
 
     if (err) { setError(err.message); setLoading(false); return; }
-    const rows = (data ?? []) as OrderRow[];
+    // `as unknown as` because PostgREST types an embed as an ARRAY while a to-one embed
+    // returns an object; the direct cast stopped compiling once `customers` gained the
+    // display_name fields. The shape assertion is unchanged — only the route to it.
+    const rows = (data ?? []) as unknown as OrderRow[];
     // [TRACE:ROSTER] which anchor named each order's first line (specimen vs stock line) — the
     // fix for the "Unknown plant" gap on stock-line/scan orders (as-built recon §7).
     // The status distribution is logged alongside the anchors so the DEPLOYED-bar check for the
@@ -259,7 +267,11 @@ export function Orders() {
       {/* ── Order list ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {view.map(order => {
-          const item      = order.order_items?.[0];
+          // 🔴 THE LINE THAT SUMMARISES, NOT THE ROW THAT HAPPENS TO BE FIRST. On a LAWNS
+          // invoice the discount and the trip charge are ordinary lines and often sort first,
+          // so this read "8× Customer Discount" for Lindsey LaPrime and "1× Customer Discount
+          // 15%" for Duy Le — describing the right order by the wrong row (ledger #403).
+          const item      = primaryOrderLine(order.order_items);
           const qty       = item?.quantity ?? 1;
           const tagId     = item ? orderItemTag(item) : '—';
           // An order with NO order_items row at all is a different thing from a line we could not

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useBusinessContext } from '@trace/shared/context';
@@ -236,7 +237,7 @@ export function CustomerCapture() {
     // The order's invoked tier (if ScanOrder set one) is kept, not cleared.
     attachCustomer({
       customerId: h.id,
-      name: `${f.first_name} ${f.last_name}`.trim(),
+      name: customerDisplayName({ ...(saved ?? {}), ...f }, String(f.email ?? '').trim()),
       customer: { ...(saved ?? {}), first_name: f.first_name, last_name: f.last_name, email: f.email },
       invokedTier: invokedTier ?? null,
       tierLabel: orderTierLabel ?? null,
