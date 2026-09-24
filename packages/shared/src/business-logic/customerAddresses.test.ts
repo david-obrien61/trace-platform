@@ -427,6 +427,54 @@ async function main(): Promise<void> {
   ok(!sameAddress(site(), { line1: null, city: null, state: null, zip: null }),
     'K3 an EMPTY address does not match a real one — otherwise every blank would read as already-saved');
 
+  // ══ RULING 1 — A SITE SAVED AFTER THE CHECK KEEPS WHAT THE CHECK FOUND ═══════════════════════
+  // Before this, the address was geocoded at the counter and then saved with NO coordinate, so
+  // the next visit geocoded the identical text again: the 30-day cache could never hit, and a
+  // not_found was re-asked of the person every single time.
+  {
+    const found = { latitude: 30.5719542, longitude: -97.9188683, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' as const };
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [], geocode: found });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.latitude === 30.5719542 && row.longitude === -97.9188683,
+      '🔴 R1 A LOCATED SITE IS SAVED WITH ITS COORDINATE — without this the check runs, costs a request, and the answer is thrown away at the moment it would have been useful');
+    ok(row.geocode_status === 'found' && row.geocoded_at === found.geocoded_at,
+      'R2 …with the verdict and the date that starts the 30-day clock');
+  }
+  {
+    const kept = { latitude: null, longitude: null, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'confirm' as const };
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [], geocode: kept });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.geocode_status === 'confirm' && row.latitude === null,
+      "🔴 R3 A KEPT-MINE CONFIRM IS SAVED WITH NO COORDINATE. The row records that the question was asked and answered — so it is never asked again — while refusing to attach Google's pin to the street the person kept. That pairing IS the ruling");
+    ok(row.geocoded_at === kept.geocoded_at,
+      'R4 …and it is dated, or the answer could not expire and an unfindable street would stay unfindable after it was built');
+  }
+  {
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [] });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.latitude === null && row.geocode_status === null,
+      'R5 a site saved with NO check has no verdict — null, not 0 and not a guessed status. Every existing caller is unchanged');
+  }
+  {
+    // NEGATIVE CONTROL — the row must depend on what the CHECK found, not on the address text.
+    const a = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: 30.5, longitude: -97.9, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' } });
+    const b = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: null, longitude: null, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'not_found' } });
+    const ra = a.kind === 'insert' ? (a.row as Record<string, unknown>) : {};
+    const rb = b.kind === 'insert' ? (b.row as Record<string, unknown>) : {};
+    ok(ra.latitude === 30.5 && rb.latitude === null && ra.geocode_status !== rb.geocode_status,
+      '🔴 R6 NEGATIVE CONTROL: the SAME address with two different verdicts produces two different rows. An implementation that derived the coordinate from the text, or ignored the argument, would pass R1 by accident');
+  }
+  {
+    // 🔴 DAVID'S SECOND PROOF: editing an address must not move a stop.
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: 30.5, longitude: -97.9, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' } });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(!('delivery_id' in row) && !('stop_id' in row) && !('order_id' in row),
+      "🔴 R7 THE ADDRESS ROW POINTS AT NO STOP. A stop SNAPSHOTS its own address and coordinate (ledger #335, 20260923d), so correcting a customer's address tomorrow cannot move a truck that was already routed — the two records are deliberately not joined, and this asserts the absence");
+  }
+
   console.log(`\ncustomerAddresses: ${passed} passed, ${failed} failed`);
   if (failed) { for (const f of failures) console.log(`   ✗ ${f}`); process.exit(1); }
 }

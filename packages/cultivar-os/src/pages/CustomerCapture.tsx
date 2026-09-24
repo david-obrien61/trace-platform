@@ -7,7 +7,9 @@ import { supabase } from '../lib/supabase';
 import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
 import { ShipToPicker } from '@trace/shared/components/customers/ShipToPicker';
 import { AddressInput } from '@trace/shared/components/AddressInput';
-import { planAddressStep, applyGeocodeToStep, addressLine, type StepQuestion } from '@trace/shared/business-logic/addressStep';
+import { planAddressStep, applyGeocodeToStep, resolveAddressCheck, addressLine, type StepQuestion } from '@trace/shared/business-logic/addressStep';
+import type { GeocodeOutcome } from '@trace/shared/business-logic/geocodeResult';
+import { setAddressGeocode } from '@trace/shared/business-logic/contactWriter';
 import { customerOrderFill } from '../components/customers/customerFieldRegistry';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
 import type { CustomerInput } from '../types/customer';
@@ -257,13 +259,45 @@ export function CustomerCapture() {
   // Until the tenant's address is itself geocoded this is null and Places simply ranks nationally,
   // which is worse but honest — it is never silently replaced with somebody else's coordinates.
   const tenantBias = null as { latitude: number; longitude: number; radius?: number } | null;
-  const [pickedSite, setPickedSite] = useState<{ latitude?: number | null; longitude?: number | null; geocoded_at?: string | null; geocode_status?: string | null } | null>(null);
+  // `id` is carried so the ANSWER can be written back onto the row it is about (ruling 1). A
+  // typed address has no row yet and therefore no id — it gets its coordinate when it is SAVED
+  // as a site, not here.
+  const [pickedSite, setPickedSite] = useState<{ id?: string | null; latitude?: number | null; longitude?: number | null; geocoded_at?: string | null; geocode_status?: string | null } | null>(null);
+  // The verdict behind the question on screen, kept so answering it can record what was decided.
+  const [addrOutcome, setAddrOutcome] = useState<GeocodeOutcome | null>(null);
   const [addrQuestion, setAddrQuestion] = useState<StepQuestion | null>(null);
   const [addrChecking, setAddrChecking] = useState(false);
   // Set the moment a question is answered, so re-entering handleSubmit cannot ask it twice.
   const [addrAnswered, setAddrAnswered] = useState(false);
   // Remembered so the Review preview suppresses the charge the same way submit will.
   const [addrUnplaceable, setAddrUnplaceable] = useState(false);
+
+  /**
+   * Write the geocode answer back onto the saved address it is about (ruling 1, 2026-09-24).
+   *
+   * 🔴 ONLY WHEN THERE IS A ROW TO WRITE TO. A typed address has no `customer_addresses` row yet,
+   * so there is nothing to update — it takes its coordinate when it is SAVED as a site. Inventing
+   * a row here would create an address nobody asked to keep.
+   * ⚠️ NEVER BLOCKS CHECKOUT. A failed write costs the cache, not the sale (§6 r6).
+   */
+  async function rememberAnswer(outcome: GeocodeOutcome, choice: 'mine' | 'google', addressId: string | null) {
+    // 🔴 THE ID IS PASSED, NEVER READ FROM STATE HERE. The 'Use Google's' handler clears
+    // `pickedSite` as part of answering, and a write-back that read the id afterwards would
+    // depend on React's update timing to find the row it is about.
+    if (!addressId || !businessId) return;
+    try {
+      const patch = resolveAddressCheck(outcome, choice, new Date());
+      const { count, error } = await setAddressGeocode(supabase, { businessId, addressId, patch });
+      // R-12: an update matching ZERO rows returns success with no error, so the count is the
+      // only honest signal that anything landed.
+      console.log('[TRACE:DELIVERY] address answer recorded', {
+        addressId, status: patch.geocode_status, located: patch.latitude !== null,
+        rows: count, error: error?.message ?? null,
+      });
+    } catch (e) {
+      console.log('[TRACE:DELIVERY] address answer NOT recorded — checkout continues', { message: (e as Error).message });
+    }
+  }
 
   /** Run the check behind whatever was picked or typed. Returns true when checkout may continue. */
   async function addressStepPasses(): Promise<boolean> {
@@ -296,7 +330,15 @@ export function CustomerCapture() {
       });
       const body = await res.json().catch(() => ({}));
       const r = applyGeocodeToStep(body?.google ?? body, addressLine(chosen));
-      if (r.question.ask === 'none') { setAddrQuestion(null); return true; }
+      setAddrOutcome(r.outcome);
+      if (r.question.ask === 'none') {
+        setAddrQuestion(null);
+        // 🔴 RULING 1: the answer is kept. Without this the check ran, cost a request, and threw
+        // its result away — so the 30-day cache never had anything to hit and the next visit paid
+        // for the same answer again.
+        await rememberAnswer(r.outcome, 'mine', pickedSite?.id ?? null);
+        return true;
+      }
       setAddrQuestion(r.question);
       return false;
     } catch (e) {
@@ -665,7 +707,13 @@ export function CustomerCapture() {
               and what we store is THEIR choice (David 2026-09-23). Pre-selecting Google's would
               be the silent correction the ruling forbids. */}
           <button className="btn" style={{ width: '100%', minHeight: 48, marginBottom: 8, textAlign: 'left' }}
-            onClick={() => { setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
+            onClick={() => {
+              // Ruling 1: her answer is recorded, so this is never asked again. It records
+              // `confirm` with NO coordinate — Google's pin belongs to Google's text.
+              const id = pickedSite?.id ?? null;
+              if (addrOutcome) void rememberAnswer(addrOutcome, 'mine', id);
+              setAddrAnswered(true); setAddrQuestion(null); void handleSubmit();
+            }}>
             Keep what I typed — <strong>{addrQuestion.mine}</strong>
           </button>
           <button className="btn" style={{ width: '100%', minHeight: 48, textAlign: 'left' }}
@@ -673,6 +721,10 @@ export function CustomerCapture() {
               // Google's text is stored ONLY because she picked it. Parsed back into the fields
               // so what is saved is a normal address, not an opaque string.
               const parts = addrQuestion.google.split(',').map(x => x.trim());
+              // Ruling 1: taking Google's version VERIFIES the address, so the row records
+              // `found` WITH the coordinate. Captured before pickedSite is cleared.
+              const id = pickedSite?.id ?? null;
+              if (addrOutcome) void rememberAnswer(addrOutcome, 'google', id);
               if (parts[0]) setAddress(parts[0]);
               if (parts[1]) setCity(parts[1]);
               setPickedSite(null);
@@ -690,7 +742,13 @@ export function CustomerCapture() {
               wrong — only that it cannot be found (David's ruling 1). */}
           <div style={{ color: '#991b1b', lineHeight: 1.5 }}>{addrQuestion.message}</div>
           <button className="btn" style={{ width: '100%', minHeight: 48, marginTop: 10 }}
-            onClick={() => { setAddrUnplaceable(true); setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
+            onClick={() => {
+              // Ruling 1: recorded as not_found AND DATED, so the next visit does not ask again —
+              // and so it is looked at again after thirty days, because new streets get built.
+              const id = pickedSite?.id ?? null;
+              if (addrOutcome) void rememberAnswer(addrOutcome, 'mine', id);
+              setAddrUnplaceable(true); setAddrAnswered(true); setAddrQuestion(null); void handleSubmit();
+            }}>
             Yes, it's correct — save it anyway
           </button>
         </div>
