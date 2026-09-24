@@ -3365,6 +3365,8 @@ row · sales-a-month from history (stage ④) · a UI cancel for a committed pla
 
 ⚠️ **AN EARLIER DRAFT GOT THIS BACKWARDS AND THE LIVE DATABASE SAID SO, NOT A REVIEW.** It keyed "counted?" on the note alone, so every real caller — `fetchSeededLots` marks only a row with an `opening_stock_seed` event, and LAWNS's twelve candidate mix rows have NO ledger row of any kind — rendered *"(all counted)"* beside twelve never-counted rows. All 56 probes passed because every fixture had supplied a note (tech-debt #182). 64 assertions now, 11 mutants, 11 caught.
 
+✅ **`20260922d` IS APPLIED (proven live 2026-09-24 01:35 UTC: 2 tables at 16 and 11 columns, 6 added columns, RLS enabled, 4 policies SELECT+INSERT only, owner `postgres`, all row counts 0).** The build-run cost freeze is live and awaiting its first run. ✏️ It was recorded here and in four other places as *written and held* for two days — tech-debt #22's class, corrected by reading the catalog rather than the note.
+
 🔴 **PENDING: ONE PROVENANCE SOURCE.** CHECKOUT-BASIC's `20260923m` stores `qty_basis`/`qty_basis_at`/`qty_basis_because` per lot. **Measured live 2026-09-23: NOT APPLIED, `qty_basis` columns = 0.** On apply this path reads the stored basis via `describeOnHand` and the `opening_stock_seed` inference is retired for it. `describeOnHand` has a fourth state, `unknown`, which is NOT `placeholder` — it means the SELECT omitted the basis columns.
 
 ### THE CONTAINER LADDER — a container size is a RUNG, not a number (2026-09-14, ledger #326, R-157)

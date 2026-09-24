@@ -6,6 +6,19 @@
 --    [[R-148]] clause 4 the LATER claim renumbers, and this is the later one. David named it
 --    `20260922d` before I found the collision. ⚠️ A file whose name collides is not a cosmetic
 --    problem: two migrations sorting to the same prefix apply in an order nobody chose.
+-- ✅ APPLIED — VERIFIED AGAINST THE LIVE CATALOG 2026-09-24 01:35 UTC (LADDER, ledger #370).
+--    `build_runs` 16 columns · `build_run_components` 11 columns · `recipe_components.typed_*` 4 ·
+--    `item_recipes.actual_yield_*` 2. RLS ENABLED on both new tables; 4 policies live —
+--    `build_runs_member_select` [r], `build_runs_member_insert` [a], and the same pair on
+--    `build_run_components`. NO UPDATE and NO DELETE policy, which is the append-only design, not
+--    an omission. Owner `postgres`, and `anon` holds no TRUNCATE and no REFERENCES, so this came
+--    through the migration path rather than the dashboard table editor (CLAUDE.md §6 r17's
+--    fingerprint). All four row counts 0 — applied, nothing written yet.
+-- 🔴 IT WAS RECORDED AS "WRITTEN AND HELD" IN FIVE PLACES FOR TWO DAYS AND IT WAS ALREADY APPLIED.
+--    tech-debt #22's class (applied-but-recorded-as-pending) and [[R-111]]'s own sentence — *"a
+--    migration label is not evidence"*. The word "held" was carried forward from the session that
+--    wrote this file instead of being re-derived from the database. Stamped here so the next reader
+--    asks the catalog, not the note. Comment only; no SQL below this line was touched (§6 r1).
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- BUILD RUNS FREEZE THEIR COST, AND A COMPONENT MAY CARRY A TYPED PRICE (ledger #370)
 --
