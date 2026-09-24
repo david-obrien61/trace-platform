@@ -81,8 +81,6 @@ const DECLARED = {
   // (#73), and then it is not protecting the NEW forms either — which is the half that matters,
   // because the seven below are known and a new one would not be. Each line comes off as its
   // surface is wired.
-  'packages/cultivar-os/src/components/customers/ContactListsPanel.tsx':
-    'OWED — the customer page address book (add / edit a site).',
   'packages/cultivar-os/src/pages/ReceiptKeeper.tsx':
     'OWED — invoice capture creating a new customer.',
   'packages/cultivar-os/src/pages/OrderDetail.tsx':

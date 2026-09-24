@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { AddressInput } from '@trace/shared/components/AddressInput';
 import {
   addContactRow, editContactRow, makeContactMain, readContactLists, retireContact,
   type ContactAddressPatch, type ContactList, type ContactValueResult,
@@ -123,7 +124,19 @@ export function ContactListsPanel({ businessId, customerId, onChanged }: {
             <option value="shipping">Delivery site</option>
             <option value="both">Both</option>
           </select>
-          <input style={input} value={d.address.line1 ?? ''} placeholder="Street" onChange={e => setDraft({ ...d, address: { ...d.address, line1: e.target.value } })} />
+          {/* 🔴 THE CUSTOMER'S ADDRESS BOOK TYPES THROUGH THE SHARED FIELD TOO. This is where
+              Lauren adds and corrects a delivery site away from the till, so it is exactly the
+              place a bad address gets fixed — and the place autocomplete stops one being created.
+              Picking a suggestion fills the city and state beside it. */}
+          <AddressInput
+            businessId={businessId ?? null}
+            bias={null}
+            label=""
+            value={{ line1: d.address.line1 ?? '', city: d.address.city ?? '',
+                     state: d.address.state ?? '', zip: d.address.zip ?? '' }}
+            onChange={(v) => setDraft({ ...d, address: { ...d.address, line1: v.line1,
+                       city: v.city || d.address.city, state: v.state || d.address.state } })}
+          />
           <input style={input} value={d.address.line2 ?? ''} placeholder="Unit, suite (optional)" onChange={e => setDraft({ ...d, address: { ...d.address, line2: e.target.value } })} />
           <div style={{ display: 'flex', gap: 8 }}>
             <input style={{ ...input, flex: 2 }} value={d.address.city ?? ''} placeholder="City" onChange={e => setDraft({ ...d, address: { ...d.address, city: e.target.value } })} />
