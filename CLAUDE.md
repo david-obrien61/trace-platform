@@ -563,6 +563,43 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
 
     ⚠️ **Numbered 26 by APPENDING, and the gap is real rather than a mistake:** §6 on `main` runs to **23**. **24** (data-access helpers throw on non-2xx) exists only on `origin/feat/warranty-claims` and lands when that branch merges; **25** is assigned but not yet written anywhere. Renumbering to close the gap would break the documents that cite these by number — the note on r18 records that cost being paid once already.
 
+
+27. **BEFORE RESERVING A LEDGER ID OR MIGRATION SLOT, READ `~/Desktop/trace-heavy.lock/owner` AS WELL AS SWEEPING THE REPO, BRANCHES AND WORKTREES — A CLAIM HELD IN THE LOCK OWNER FILE IS INVISIBLE TO EVERY REPO SWEEP. NEVER INCREMENT AN ID FROM MEMORY (binding — filed 2026-09-24; ledger #394).**
+
+    **THE GAP, AND IT IS STRUCTURAL RATHER THAN ANYONE'S CARELESSNESS.** Between the moment a
+    session TAKES a number and the moment it PUSHES the reservation, the only record of that claim
+    is the owner file inside the heavy lock. **Nothing in `verify:id-sweep` reads it, and nothing
+    can:** the lock is per-machine state the repo deliberately does not track — `.claude/` is
+    gitignored for exactly that reason (ledger #311). So a sweep across every remote branch and
+    every worktree can return FREE for a number another session is building on right now.
+
+    🔴 **BOTH HALVES OF THIS RULE WERE PAID FOR ON 2026-09-24, HOURS APART.**
+    · **The sweep half:** `#398` read **FREE across all 32 worktrees** while HISTORY held it. The
+      only record was the lock owner file. A session that swept the repo correctly would have taken
+      a number already in use.
+    · **The memory half:** `#399` was reserved on `main` at `8b12d9f2` with a full `⏳ RESERVED`
+      row, and was claimed by a second session anyway — **not a race: `merge-base --is-ancestor`
+      proved the reservation row was already in that session's working tree when it branched.** Its
+      own account: *"I did not sweep. My previous id was #398, so I used #399 — incremented from
+      memory of my own last number."* It was caught by reading the lock, not the repo, and renamed
+      to `#403` before merge. Two rows claiming one id fails `verify:id-citations` on the TRUNK, for
+      every session — the same outage `#397` caused that morning.
+
+    ⚠️ **THIS IS TECH-DEBT #289's OWN LESSON AND THE SECOND CLAUSE IS ITS WORDS:** David, on
+    deleting the cached next-free numbers from `TRACE-SESSION-BOOTSTRAP.md` — *"A number that is
+    usually right is worse than no number, because it gets trusted."* An incremented id is a cached
+    number with no file to go stale in, which is worse, not better.
+
+    ⚠️ **NOTHING ENFORCES THIS AND THE RULE SAYS SO, like r17 and r20.** A cap would have to read
+    per-machine state the repo does not track. It is a rule kept by sessions, and the evidence that
+    it can be is that it was kept: the collision was found and corrected before it reached `main`.
+
+    ⚠️ **Numbered 27 by APPENDING** (r18's note: other documents cite these rules by number).
+    🔴 **AND THE GAP AT 25 IS REAL BUT TEMPORARY, RECORDED SO NOBODY "FIXES" IT BY RENUMBERING:**
+    §6 on `main` runs 1–24 then jumps to 26. **Rule 25 is written in full on
+    `origin/fix/rung-dates-verify` and is unmerged** — it closes when that branch lands. Do not
+    renumber to close it; renumbering to satisfy a reading order breaks live citations.
+
 ---
 
 ## 7. OFF LIMITS THIS SESSION
