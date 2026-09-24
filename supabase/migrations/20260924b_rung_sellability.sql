@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════
--- 20260923k_rung_sellability.sql — WHICH RUNGS ARE SOLD AT ALL
+-- 20260924b_rung_sellability.sql — WHICH RUNGS ARE SOLD AT ALL
 -- Ledger #391 · David applies · TENANT-AGNOSTIC
 -- ══════════════════════════════════════════════════════
 -- APPLY AS: postgres, IN THE SQL EDITOR (CLAUDE.md §6 r17). Creates no table; ADDITIVE ONLY, two
@@ -73,7 +73,17 @@ COMMIT;
 --   ROLLBACK;
 --
 -- (V4) 🔴 NOTHING CHANGED ON APPLY — every rung reads `sold` with an empty reason, so the plan
---      behaves exactly as it did yesterday until somebody says otherwise. Expect 9 rows at LAWNS,
---      all sold / ''.
+--      behaves exactly as it did yesterday until somebody says otherwise.
+--      ⚠️ THE COUNT IS READ AT RUN TIME, NOT PINNED. An earlier draft said "expect 9 rows", which
+--      is a number that drifts the moment a tenant adds a container size — and a V-block that
+--      fails because the business changed teaches the reader to ignore it.
+--      PASS = `all_default` is TRUE and `not_default` is 0, whatever the ladder's size.
+--   SELECT count(*)                                                        AS rungs,
+--          count(*) FILTER (WHERE sellability <> 'sold'
+--                              OR sellability_because <> '')               AS not_default,
+--          bool_and(sellability = 'sold' AND sellability_because = '')     AS all_default
+--   FROM public.container_ladder;
+--
+--   -- and the eyeball version, for the same data:
 --   SELECT label, sort_order, sellability, sellability_because
 --   FROM public.container_ladder ORDER BY business_id, sort_order;

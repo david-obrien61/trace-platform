@@ -319,7 +319,7 @@ const LAWNS: Ladder = [
   ok(trip.growMonths === '6' && trip.holdMonths === '',
     '🔴 G6 rung → draft keeps a set grow as text and an unset hold as blank — opening the editor changes nothing');
 
-  // ── SELLABILITY (ledger #391, R-178/R-179) ───────────────────────────────────────────────────
+  // ── SELLABILITY (ledger #391, R-184/R-185) ───────────────────────────────────────────────────
   ok(fresh.sellability === 'sold' && fresh.sellabilityBecause === SELLABILITY_NOT_SET,
     '🔴 G7 a new size is assumed SOLD, with a reason saying that is the platform\'s assumption and not the owner\'s word');
   ok(SELLABILITY_OPTIONS.length === 3 && SELLABILITY_OPTIONS.map((o) => o.value).join(',') === 'sold,rarely_sold,never_sold',

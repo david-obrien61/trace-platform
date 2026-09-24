@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════
--- 20260923l_operations_config_history.sql — EVERY CHANGE TO AN OPERATIONS SETTING, DATED
+-- 20260924c_operations_config_history.sql — EVERY CHANGE TO AN OPERATIONS SETTING, DATED
 -- Ledger #391 · David applies · TENANT-AGNOSTIC
 -- ══════════════════════════════════════════════════════
 -- APPLY AS: postgres, IN THE SQL EDITOR — never the dashboard TABLE EDITOR (CLAUDE.md §6 r17).
@@ -64,6 +64,14 @@ ALTER TABLE public.business_operations_config_history ENABLE ROW LEVEL SECURITY;
 
 -- Reading the history needs the same string as reading the config it describes. NO NEW PERMISSION
 -- STRING IS MINTED.
+-- 🔴 EVERY POLICY IS DROPPED-IF-EXISTS BEFORE IT IS CREATED, SO THIS FILE IS RE-RUNNABLE.
+-- Postgres has no `CREATE POLICY IF NOT EXISTS`, so a plain CREATE makes a migration fail on its
+-- second run with `policy ... already exists` — and the failure ABORTS THE TRANSACTION, so every
+-- statement after it is silently skipped too. ⚠️ FOUND BY RUNNING THIS FILE TWICE UNDER §6 r26,
+-- not by reading it: the first pass executed cleanly and the second died on the first policy.
+DROP POLICY IF EXISTS business_operations_config_history_owner_select ON public.business_operations_config_history;
+DROP POLICY IF EXISTS business_operations_config_history_member_select ON public.business_operations_config_history;
+
 CREATE POLICY business_operations_config_history_owner_select ON public.business_operations_config_history
   FOR SELECT TO authenticated
   USING (EXISTS (SELECT 1 FROM public.businesses b WHERE b.id = business_operations_config_history.business_id AND b.owner_id = auth.uid()));

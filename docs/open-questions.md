@@ -42,7 +42,7 @@ added 11 more that nothing but §3 was holding.**
 These are the ones where a build is stopped, not merely slower. Each is quoted from its owner.
 
 **#390 + #391 — the grow ladder (build, BUILDER-COMPLETE, 4 migrations WRITTEN not applied)**
-- ⛔ **OPEN — APPLY IN THIS ORDER, THEN MERGE, NEVER THE OTHER WAY ROUND: `20260923h` → `20260923j` → `20260923k` → `20260923l`.** Every ladder read on the platform selects the new columns, so merging first makes the load list, uppot plan, count screen and import preview all fail with 42703. Owner: the migration files.
+- ⛔ **OPEN — APPLY IN THIS ORDER, THEN MERGE, NEVER THE OTHER WAY ROUND: `20260923h` → `20260924a` → `20260924b` → `20260924c`.** Every ladder read on the platform selects the new columns, so merging first makes the load list, uppot plan, count screen and import preview all fail with 42703. Owner: the migration files.
 - 🔴 **OPEN — THE UPPOT WINDOW DATES IN `docs/decisions/2026-09-23-lawns-grow-ladder-step0.sql` ARE A DECISION, NOT A MEASUREMENT.** It carries 2026-11-04 → 2026-11-12 from David's own workbook; he is confirming with Joel. Without a window, every batch is undated and the plan says so. Owner: David.
 - 🔴 **OPEN — GROW AND HOLD FOR THE EIGHT UNMEASURED RUNGS, AND WHICH RUNGS ARE NEVER SOLD BEYOND SLIP AND 4-INCH.** Only the 15 gal rung has a stated GROW (6 months). David is asking Terry. Until then those rungs read UNKNOWN by design; do NOT fill them to make the screen look finished. Owner: Terry, via David.
 - 🟡 **OPEN — `hold_months` HAS NO READER YET.** Captured so Terry is asked once for both numbers; nothing schedules on it until the due/overdue board is built. Recorded rather than discovered: this is tech-debt #299's shape, deliberate and time-boxed. Owner: ledger #391.

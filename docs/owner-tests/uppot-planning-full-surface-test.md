@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 36 covered** ✏️ **+3 on 2026-09-23 (ledger #391) — CARD 34 a production size reads "not sold at this size", CARD 35 the potting date and its history, CARD 36 the uppot window and its dated history. ⛔ They wait on `20260923j` · `20260923k` · `20260923l` respectively.** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
+**Board: 0 of 36 covered** ✏️ **+3 on 2026-09-23 (ledger #391) — CARD 34 a production size reads "not sold at this size", CARD 35 the potting date and its history, CARD 36 the uppot window and its dated history. ⛔ They wait on `20260924a` · `20260924b` · `20260924c` respectively.** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -747,7 +747,7 @@ COVERS: ledger #390 — the graduation date `planLots` has computed on every bat
 **STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) · **ACTOR:** OWNER · **LAST-PROVEN:** —
 COVERS: ledger #391 — David, 2026-09-23, ruling 4, decided from the customer's contrarian seat: a never-sold rung is a SETTLED fact, not a missing measurement, and calling it UNKNOWN sends somebody to fill in a number that should not exist.
 
-⛔ Needs `20260923k_rung_sellability.sql` applied. CARDS 32–33 (ledger #390) should be proven first — this builds on their column.
+⛔ Needs `20260924b_rung_sellability.sql` applied. CARDS 32–33 (ledger #390) should be proven first — this builds on their column.
 
 1. **Settings → Container sizes → Edit** on any size. **PASS:** a new **Is this size sold?** picker with exactly three choices — *Sold at this size* · *Sold at this size, but rarely* · *Never sold — a production size only* — and a **Why** box beside it. Every existing size reads **Sold**.
 2. Choose **Never sold**, leave **Why** empty, press **Save size**. **PASS:** red text **"Say why this size is never sold — it stops the plan ever giving it a sellable date."** and the save is refused.
@@ -763,7 +763,7 @@ COVERS: ledger #391 — David, 2026-09-23, ruling 4, decided from the customer's
 **STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest · **ACTOR:** OWNER, then a MANAGER and a STAFF member for step 6 · **LAST-PROVEN:** —
 COVERS: ledger #391 — David, 2026-09-23, rulings 1 and 2: the date is ENTERED, never derived; each entry or edit ADDS A ROW; nothing is overwritten; current is the latest.
 
-⛔ Needs `20260923j_rung_entry_dates.sql` applied.
+⛔ Needs `20260924a_rung_entry_dates.sql` applied.
 
 1. **/inventory/uppot.** **PASS:** a new **Potted on** column. Every row reads **not set**, in red, and is clickable.
 2. Click **not set** on any lot. **PASS:** a centred sheet opens with the lot's name and size, **Potted on — not recorded**, and the line **No potting date recorded, so there is no sellable date**. Below: **Nobody has recorded a potting date for this block yet.**
@@ -780,7 +780,7 @@ COVERS: ledger #391 — David, 2026-09-23, rulings 1 and 2: the date is ENTERED,
 **STATUS:** owed · **DEVICE:** desktop · **TENANT:** Test Dave's Tree Nest · **ACTOR:** MANAGER (not the owner — the point is that a manager can do it) · **LAST-PROVEN:** —
 COVERS: ledger #391 — David, 2026-09-23, ruling 1: LAWNS sets and adjusts its own dates, and neither the window nor the potting date may be settable only by SQL.
 
-⛔ Needs `20260923l_operations_config_history.sql` applied.
+⛔ Needs `20260924c_operations_config_history.sql` applied.
 ✏️ **THE EDITOR ITSELF IS NOT NEW AND THIS CARD SAYS SO:** Settings → Operations has had **Window opens** / **Window closes** as date inputs since ledger #276. What is new is the dated history and the link from the plan. If step 1 surprises you, that is the finding.
 
 1. **Signed in as a MANAGER**, go to **Settings → Operations**. **PASS:** **Window opens**, **Window closes** and **Last day the seasonal staff are here** are editable date boxes. Set the window to **2026-11-04 → 2026-11-12** and **Save**.

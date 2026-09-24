@@ -1,5 +1,5 @@
 /**
- * -- rung-dates-391.pglite -- 20260923j/k/l EXECUTED -------------------------------------------
+ * -- rung-dates-391.pglite -- 20260924a/b/c EXECUTED -------------------------------------------
  * (built from ladder-grow-hold-390.pglite.mjs — same minimal surrounding schema.)
  *
  * PURPOSE:      the three migrations David will paste are RUN by a Postgres engine before he sees
@@ -33,9 +33,9 @@ const POSTS = read('20260916_container_ladder_install_t_posts.sql');
 const CAL = read('20260918c_container_ladder_caliper.sql');
 const PRICE = read('20260923e_container_ladder_install_price.sql');
 const GROW = read('20260923h_container_ladder_grow_and_hold.sql');
-const DATES = read('20260923j_rung_entry_dates.sql');
-const SELL = read('20260923k_rung_sellability.sql');
-const HIST = read('20260923l_operations_config_history.sql');
+const DATES = read('20260924a_rung_entry_dates.sql');
+const SELL = read('20260924b_rung_sellability.sql');
+const HIST = read('20260924c_operations_config_history.sql');
 
 const L = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74', T = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
 const MEMBER = '11111111-1111-1111-1111-111111111111';

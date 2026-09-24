@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════
--- 20260923j_rung_entry_dates.sql — WHEN A LOT WENT INTO THE SIZE IT IS IN
+-- 20260924a_rung_entry_dates.sql — WHEN A LOT WENT INTO THE SIZE IT IS IN
 -- Ledger #391 · David applies · TENANT-AGNOSTIC (no tenant id appears anywhere below)
 -- ══════════════════════════════════════════════════════
 -- APPLY AS: postgres, IN THE SQL EDITOR — never the dashboard TABLE EDITOR (CLAUDE.md §6 r17).
@@ -113,6 +113,16 @@ ALTER TABLE public.production_rung_dates ENABLE ROW LEVEL SECURITY;
 -- append-only rule enforced rather than documented. The owner policy is deliberately FOR SELECT,
 -- INSERT only, which DIVERGES from `production_plans`' `FOR ALL` owner policy: that table's rows
 -- are plans, which are cancelled; these are statements of fact somebody made on a date.
+-- 🔴 EVERY POLICY IS DROPPED-IF-EXISTS BEFORE IT IS CREATED, SO THIS FILE IS RE-RUNNABLE.
+-- Postgres has no `CREATE POLICY IF NOT EXISTS`, so a plain CREATE makes a migration fail on its
+-- second run with `policy ... already exists` — and the failure ABORTS THE TRANSACTION, so every
+-- statement after it is silently skipped too. ⚠️ FOUND BY RUNNING THIS FILE TWICE UNDER §6 r26,
+-- not by reading it: the first pass executed cleanly and the second died on the first policy.
+DROP POLICY IF EXISTS production_rung_dates_owner_select ON public.production_rung_dates;
+DROP POLICY IF EXISTS production_rung_dates_owner_insert ON public.production_rung_dates;
+DROP POLICY IF EXISTS production_rung_dates_member_select ON public.production_rung_dates;
+DROP POLICY IF EXISTS production_rung_dates_member_insert ON public.production_rung_dates;
+
 CREATE POLICY production_rung_dates_owner_select ON public.production_rung_dates
   FOR SELECT TO authenticated
   USING (EXISTS (SELECT 1 FROM public.businesses b WHERE b.id = production_rung_dates.business_id AND b.owner_id = auth.uid()));
