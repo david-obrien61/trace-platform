@@ -13,6 +13,10 @@
 import { readFileSync } from 'node:fs';
 import { openLiveDb } from '../path-tests/lib/liveDb.mjs';
 
+// The PRE-FIX definition of undo_import_run, carried here rather than taken from the
+// snapshot — see the file's own header. R1/R2 install it so they prove the DEFECT no matter
+// how fresh live-schema-public.sql is; every other block uses the snapshot's current function.
+const PREFIX_UNDO = readFileSync(`${process.cwd()}/scripts/sql-harness/fixtures/undo_import_run.prefix-348.sql`, 'utf8');
 const MIG = readFileSync(`${process.cwd()}/supabase/migrations/20260917b_undo_takes_test_mode_edits.sql`, 'utf8');
 const B = 'b0000000-0000-4000-8000-00000000000b';
 const OWNER = '0a000000-0000-4000-8000-0000000000aa';
@@ -86,6 +90,12 @@ const undo = async (db) => (await one(db, `select public.undo_import_run($1::uui
 // ── R · RED-FIRST against the LIVE function (no migration) ────────────────────────────────────
 {
   const db = await fresh({ typed: true, applyMigration: false });
+  // 🔴 PIN THE SUBJECT. `applyMigration: false` alone only means "do not apply the FIX" — it
+  // leaves whatever `undo_import_run` the snapshot happens to carry, and once #391 refreshed
+  // that snapshot from live the fixture arrived ALREADY FIXED, so R1/R2 failed on that branch
+  // and passed on main. The probe was reporting the fixture's age. Installing the pre-fix text
+  // makes these two probes about the CODE again.
+  await db.exec(PREFIX_UNDO);
   const before = await counts(db);
   const r = await undo(db);
   ok(r.refused === true && r.live_contact_rows === 1, `R1 🔴 RED: today's undo REFUSES in test mode because a person typed a number (${JSON.stringify(r).slice(0, 110)})`);
