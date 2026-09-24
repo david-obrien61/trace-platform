@@ -130,6 +130,32 @@ export interface Rung {
   installPrice: number | null;
   /** Where that price came from — the billed median, Lauren's sheet, or nobody has set it. */
   installPriceBecause: string;
+  /**
+   * Months from UPPOTTING INTO this rung until a tree on it is SELLABLE (David, 2026-09-01;
+   * re-ruled 2026-09-23). Read from the rung a lot is going TO, never the one it is leaving —
+   * *"a 15 gal is SELLABLE AT THE UPPOT-TO-15 DATE + 6 MONTHS."*
+   *
+   * 🔴 `null` IS THE ORDINARY ANSWER AND IT MEANS UNKNOWN. Eight of LAWNS's nine rungs are null
+   * today and David has gone to Terry for them. It must NOT fall back to
+   * `OperationsConfig.growMonthsDefault`: printing 7 against a rung nobody has measured is a
+   * written declaration nobody checked, steering a decision ([[R-26]]). `growMonthsFor` is the
+   * ONE resolver and it returns the UNKNOWN case explicitly rather than a number.
+   */
+  growMonths: number | null;
+  /** Where that grow figure came from. Required for the same reason `handlingBecause` is. */
+  growBecause: string;
+  /**
+   * Months a tree STAYS on this rung, once sellable, before it must move up. Lauren: *"they can
+   * live in their pots for say a year."* `null` = unknown.
+   *
+   * ⚠️ NOTHING SCHEDULES ON THIS YET — the due/overdue board is the next build, and this is
+   * captured now only so Terry is asked for GROW and HOLD in ONE conversation. Recorded here
+   * rather than discovered later: a column with no reader is tech-debt #299's shape, and this one
+   * is deliberate and time-boxed, not an oversight.
+   */
+  holdMonths: number | null;
+  /** Where that hold figure came from. Required for the same reason `handlingBecause` is. */
+  holdBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -448,6 +474,7 @@ export const LADDER_FIELDS = [
   'install_t_posts_per_tree', 'install_t_posts_because',
   'caliper_min_inches', 'caliper_max_inches', 'caliper_because',
   'install_price', 'install_price_because',
+  'grow_months', 'grow_because', 'hold_months', 'hold_because',
   'active',
 ] as const;
 
@@ -463,6 +490,8 @@ export interface LadderRow {
   caliper_min_inches: number | string | null; caliper_max_inches: number | string | null;
   caliper_because: string | null;
   install_price: number | string | null; install_price_because: string | null;
+  grow_months: number | string | null; grow_because: string | null;
+  hold_months: number | string | null; hold_because: string | null;
   active: boolean;
 }
 
@@ -491,6 +520,13 @@ export function rungFromRow(r: LadderRow): Rung {
     // screen, which then asks for a number instead of charging nothing (R-171 (c)).
     installPrice: numOrNull(r.install_price),
     installPriceBecause: r.install_price_because ?? 'not set',
+    // 🔴 NO `?? 0` ON EITHER, for `installPrice`'s reason one step further: a grow of 0 months is
+    // not a short grow, it is a tree sellable the instant it is potted. An absent figure stays
+    // absent all the way to the screen, which then says UNKNOWN instead of a date.
+    growMonths: numOrNull(r.grow_months),
+    growBecause: r.grow_because || 'not set',
+    holdMonths: numOrNull(r.hold_months),
+    holdBecause: r.hold_because || 'not set',
     active: r.active,
   };
 }

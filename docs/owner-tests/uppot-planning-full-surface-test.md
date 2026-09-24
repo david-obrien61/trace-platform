@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 31 covered** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
+**Board: 0 of 33 covered** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -706,3 +706,37 @@ COVERS: ledger #356 — David, 2026-09-18: *"the trade measure LAWNS buys and se
 4. **Settings → Operations → Trees.** **PASS:** **Caliper measured at (inches above the soil) — 12**, and beside it **SUGGESTION — ANSI Z60.1 measures at 6 in (12 in once caliper passes 4 in) — set your own; LAWNS measures at 12**.
 
 **FAIL:** any size shows a caliper of 0 · a blank where "not recorded" should be · the height reads 6 for LAWNS · Settings → Container sizes says **Could not read the sizes** (the migration is not applied).
+
+---
+
+## CARD 32 — 🔴 GROW AND HOLD ON THE LADDER: EACH SIZE CARRIES HOW LONG IT TAKES, AND AN UNMEASURED SIZE SAYS SO
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #390 — David, 2026-09-01: GROW = months from uppotting until SELLABLE on that rung; HOLD = months it then stays before the next uppot. Lauren: *"It takes six to eight months to grow into their pots, and then they can live in their pots for say a year."*
+
+⛔ **MIGRATION GATE — `supabase/migrations/20260923h_container_ladder_grow_and_hold.sql` must be applied first**, then `docs/decisions/2026-09-23-lawns-grow-ladder-step0.sql`. Both in the SQL editor, as `postgres`, whole file. **Until the first is applied every ladder read fails** — the reader asks for the new columns — so do not merge this branch before applying it.
+
+🔴 **WHEN A V-BLOCK EXPECTS A REFUSAL, THE ERROR IS THE PASS** (CARD 31's lesson, David 2026-09-20). V3 in the migration's foot is a deliberate refusal: a red **`violates check constraint "container_ladder_grow_months_check"`** and a rolled-back transaction is a PASS. It has FAILED if the UPDATE succeeds.
+
+1. **Settings → Container sizes.** **PASS:** every size still shows its label, volume, T-posts, caliper and install price exactly as before — nothing moved.
+2. Click **Edit** on **15 gal**. **PASS:** two new boxes below the install price — **Months to GROW — potted until sellable** holding **6**, and **Where the grow figure came from** holding *David, 2026-09-18 — a 15 gal is sellable at the uppot-to-15 date plus six months. Terry to confirm or correct.* **Months to HOLD** is **blank**, with placeholder **unknown**.
+3. Click **Edit** on **30 gal**. **PASS:** **Months to GROW is BLANK**, placeholder **unknown**, and the note beside it reads *"Blank means nobody has measured it — the plan then says UNKNOWN instead of showing a date built on a guess."* 🔴 **It must NOT read 7.**
+4. Still on **30 gal**, type **0** into *Months to GROW*. **PASS:** red text **"A grow of 0 months would make a tree sellable the day it is potted. Leave it blank if nobody has measured it — the schedule then says UNKNOWN."** and **Save size** is greyed. Clear the box and press **Cancel**.
+5. Type **9** into *Months to HOLD* on **30 gal**, clear *Where the hold figure came from*, and try to save. **PASS:** red text **"Say where the hold figure came from — even 'not set'."**. Press **Cancel** — do not save.
+
+**FAIL:** any size shows GROW **7** · a blank where **6** should be on the 15 gal · a **0** accepted · Settings → Container sizes says **Could not read the sizes** (the migration is not applied).
+
+---
+
+## CARD 33 — 🔴 THE PLAN SAYS WHEN THE TREES BECOME SELLABLE — AND NAMES THE RUNG WHEN IT CANNOT
+**STATUS:** owed · **DEVICE:** desktop · **TENANT:** LAWNS · **ACTOR:** OWNER · **LAST-PROVEN:** —
+COVERS: ledger #390 — the graduation date `planLots` has computed on every batch since ledger #276 and which NOTHING has ever rendered. David, 2026-09-23: *"The other eight rungs are UNKNOWN and render as UNKNOWN. Never 7 by default."*
+
+⛔ Needs CARD 32's migration **and** the step-0 SQL applied (the step-0 file sets the uppot window; without it every row reads **no uppot window set**, which is a different and also correct answer).
+
+1. **/inventory/uppot.** **PASS:** the table has a new last column headed **Sellable from**.
+2. Find a lot sitting at **3/5 gal** and set **Going to** = **15 gal**, then type a number into **UPPOT NOW**. **PASS:** **Sellable from** shows **a date**, and under it **N trees · 6 mo on 15 gal**. 🔴 The date must be the batch's FINISHING day plus six months, not its start (R-88).
+3. Find a lot at **15 gal** and set **Going to** = **30 gal**. **PASS:** **Sellable from** shows, in red, **UNKNOWN — nobody has set GROW on the 30 gal rung**, with **Settings → Container sizes** beneath it. 🔴 **It must NOT show a date.**
+4. **PASS:** the **UPPOT NOW**, **Still sellable**, **Mix yd³**, **Hours**, the totals strip and the pot-cascade line are all unchanged from before this build.
+5. Go to **Settings → Container sizes**, set **30 gal** GROW to **8** with a reason, save, and return to **/inventory/uppot**. **PASS:** that same row now shows a date and **8 mo on 30 gal**. Set it back to blank afterwards — 🔴 **8 is not Terry's number and must not be left in the database.**
+
+**FAIL:** the column is missing · an unmeasured rung shows a date · a date appears with no trees count · **Sellable from** reads **—** for every row with the window set (that is the old, silent behaviour).
