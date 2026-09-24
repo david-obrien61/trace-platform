@@ -30,6 +30,9 @@ export interface ItemRow extends CheckoutSearchRow {
   id: string;
   qty?: number | null;
   sell_price?: number | null;
+  /** Where `qty` came from (20260923m). The till NEVER shows the figure without it — R-176. */
+  qty_basis?: string | null;
+  qty_basis_at?: string | null;
 }
 
 /** Why a row cannot be sold, in the words the list shows. `null` = it can. */

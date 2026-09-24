@@ -27,7 +27,8 @@ function ok(cond: boolean, msg: string): void {
 }
 
 const row = (p: Partial<ItemRow> & { id: string }): ItemRow => ({
-  name: null, sku: null, qb_item_name: null, size: null, qty: 10, sell_price: 100, ...p,
+  name: null, sku: null, qb_item_name: null, size: null, qty: 10, sell_price: 100,
+  qty_basis: 'placeholder', qty_basis_at: null, ...p,
 });
 
 // LAWNS, live 2026-09-23. NOTE `sku: null` everywhere — that is the real data, not a simplification.
