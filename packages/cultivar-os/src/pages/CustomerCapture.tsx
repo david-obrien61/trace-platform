@@ -252,10 +252,16 @@ export function CustomerCapture() {
   const [pickedSite, setPickedSite] = useState<{ latitude?: number | null; longitude?: number | null; geocoded_at?: string | null; geocode_status?: string | null } | null>(null);
   const [addrQuestion, setAddrQuestion] = useState<StepQuestion | null>(null);
   const [addrChecking, setAddrChecking] = useState(false);
+  // Set the moment a question is answered, so re-entering handleSubmit cannot ask it twice.
+  const [addrAnswered, setAddrAnswered] = useState(false);
 
   /** Run the check behind whatever was picked or typed. Returns true when checkout may continue. */
   async function addressStepPasses(): Promise<boolean> {
     if (!deliveryRequired || !address.trim()) return true;          // nothing to place
+    // 🔴 ANSWERED MEANS ANSWERED. Once the person has chosen, the step does not ask again — that
+    // is the "never two questions" rule at the one place it could be broken, because handleSubmit
+    // re-enters through here after every answer.
+    if (addrAnswered) return true;
     const chosen = {
       line1: address.trim(), city: city.trim(), state: state.trim(), zip: zip.trim(),
       // A picked saved site carries its own coordinate and status; a typed one carries neither.
@@ -623,14 +629,56 @@ export function CustomerCapture() {
         </label>
       </div>
 
+      {/* ── THE ONE QUESTION ─────────────────────────────────────────────────────────────────
+          Rendered only when the step has something to ask, which for a good saved address is
+          never. Sits directly above the button so the answer is the next thing the hand does. */}
+      {addrQuestion && addrQuestion.ask === 'confirm' && (
+        <div className="section" style={{ border: '1.5px solid #A32D2D', borderRadius: 10, background: '#fffbeb', padding: '0.9rem' }}>
+          <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 8 }}>Is this the same address?</div>
+          {/* 🔴 BOTH ARE SHOWN AND NEITHER IS PRE-CHOSEN. Google suggests, the person confirms,
+              and what we store is THEIR choice (David 2026-09-23). Pre-selecting Google's would
+              be the silent correction the ruling forbids. */}
+          <button className="btn" style={{ width: '100%', minHeight: 48, marginBottom: 8, textAlign: 'left' }}
+            onClick={() => { setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
+            Keep what I typed — <strong>{addrQuestion.mine}</strong>
+          </button>
+          <button className="btn" style={{ width: '100%', minHeight: 48, textAlign: 'left' }}
+            onClick={() => {
+              // Google's text is stored ONLY because she picked it. Parsed back into the fields
+              // so what is saved is a normal address, not an opaque string.
+              const parts = addrQuestion.google.split(',').map(x => x.trim());
+              if (parts[0]) setAddress(parts[0]);
+              if (parts[1]) setCity(parts[1]);
+              setPickedSite(null);
+              setAddrAnswered(true);
+              setAddrQuestion(null);
+              void handleSubmit();
+            }}>
+            Use Google's — <strong>{addrQuestion.google}</strong>
+          </button>
+        </div>
+      )}
+      {addrQuestion && addrQuestion.ask === 'cannot-place' && (
+        <div className="section" style={{ border: '1.5px solid #A32D2D', borderRadius: 10, background: '#fef2f2', padding: '0.9rem' }}>
+          {/* Says what it cannot do, and what follows from that. It never says the address is
+              wrong — only that it cannot be found (David's ruling 1). */}
+          <div style={{ color: '#991b1b', lineHeight: 1.5 }}>{addrQuestion.message}</div>
+          <button className="btn" style={{ width: '100%', minHeight: 48, marginTop: 10 }}
+            onClick={() => { setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
+            Yes, it's correct — save it anyway
+          </button>
+        </div>
+      )}
+
       {/* Submit */}
       <div className="section">
         <button
           className="btn btn-primary"
           style={{ minHeight: 56 }}
+          disabled={addrChecking}
           onClick={() => { void handleSubmit(); }}
         >
-          Review my order
+          {addrChecking ? 'Checking the address…' : 'Review my order'}
         </button>
       </div>
     </div>
