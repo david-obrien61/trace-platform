@@ -1,8 +1,8 @@
--- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-24T17:14:33.987Z
+-- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-24T17:39:11.736Z
 -- @@
 -- by scripts/sql-harness/snapshot-live-schema.mjs. Do not edit by hand; re-run the script.
 -- @@
--- 80 tables · 69 functions · 50 triggers · 204 policies · 1 views
+-- 81 tables · 70 functions · 51 triggers · 206 policies · 1 views
 -- @@
 SET check_function_bodies = off;
 -- @@
@@ -246,6 +246,16 @@ CREATE TABLE public."business_operations_config" (
   "updated_at" timestamp with time zone NOT NULL
 );
 -- @@
+CREATE TABLE public."business_operations_config_history" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "config_key" text NOT NULL,
+  "old_value" jsonb,
+  "new_value" jsonb,
+  "changed_by" uuid,
+  "changed_at" timestamp with time zone NOT NULL
+);
+-- @@
 CREATE TABLE public."business_pmi_schedule" (
   "id" uuid NOT NULL,
   "business_id" uuid NOT NULL,
@@ -411,7 +421,11 @@ CREATE TABLE public."container_ladder" (
   "grow_months" numeric,
   "grow_because" text NOT NULL,
   "hold_months" numeric,
-  "hold_because" text NOT NULL
+  "hold_because" text NOT NULL,
+  "sellability" text NOT NULL,
+  "sellability_because" text NOT NULL,
+  "pyt_price" numeric(10,2),
+  "pyt_price_because" text NOT NULL
 );
 -- @@
 CREATE TABLE public."cost_object_assignments" (
@@ -2766,6 +2780,38 @@ BEGIN
 END;
 $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.record_operations_config_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  k    text;
+  oldv jsonb;
+  newv jsonb;
+BEGIN
+  -- Union of the keys on BOTH sides, so a key ADDED or REMOVED is recorded, not only one edited.
+  FOR k IN
+    SELECT jsonb_object_keys(NEW.config)
+    UNION
+    SELECT jsonb_object_keys(COALESCE(OLD.config, '{}'::jsonb))
+  LOOP
+    oldv := CASE WHEN OLD IS NULL THEN NULL ELSE OLD.config -> k END;
+    newv := NEW.config -> k;
+    -- `IS DISTINCT FROM`, never `<>`: a key that appears or disappears has a NULL on one side, and
+    -- `<>` returns NULL there — so the IF would not fire and the change would go unrecorded. That
+    -- is a guard that cannot fire, on the exact rows most worth recording (R-33).
+    IF oldv IS DISTINCT FROM newv THEN
+      INSERT INTO public.business_operations_config_history
+        (business_id, config_key, old_value, new_value, changed_by)
+      VALUES (NEW.business_id, k, oldv, newv, auth.uid());
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.record_order_event(p_business_id uuid, p_order_id uuid, p_event_type text, p_actor_user_id uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text, p_occurred_at timestamp with time zone DEFAULT now())
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4404,6 +4450,140 @@ BEGIN
 END;
 $function$;
 -- @@
+REVOKE ALL ON FUNCTION adjust_inventory_manual(uuid,uuid,integer,uuid,text,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION adjust_inventory_manual(uuid,uuid,integer,uuid,text,text,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION adjust_inventory_qty(uuid,uuid,integer,uuid,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assert_movement_actor(uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assert_movement_actor(uuid,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assign_member_role(uuid,uuid,uuid,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assign_member_role(uuid,uuid,uuid,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assign_stops_team(uuid,uuid[],uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assign_stops_team(uuid,uuid[],uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_group_variant_sizes(uuid,uuid,text,uuid[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_group_variant_sizes(uuid,uuid,text,uuid[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_promote_create_inventory(uuid,uuid,text,integer,text,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_promote_create_inventory(uuid,uuid,text,integer,text,text,text,text,uuid,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_reconcile_inventory(uuid,uuid,integer,uuid,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_reconcile_inventory(uuid,uuid,integer,uuid,text,text,uuid,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION create_crew_day_link(uuid,date,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION create_crew_day_link(uuid,date,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION create_invitation(uuid,uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION create_invitation(uuid,uuid,text,text,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_day_read(text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_day_stops(uuid,date) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_link_hit(text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_link_resolve(text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_stop_act(text,text,uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION discovery_create_inventory(uuid,text,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION discovery_rescan_clear(uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION edit_receipt_line_items(uuid,jsonb,boolean) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION edit_receipt_line_items(uuid,jsonb,boolean) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION emit_inventory_movement(uuid,uuid,integer,text,text,text,uuid,uuid,timestamp with time zone,text,uuid,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION get_business_tax_rate(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION get_business_tax_rate(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION get_planting_materials(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION get_planting_materials(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION import_write_price(uuid,uuid,uuid,numeric,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION import_write_price(uuid,uuid,uuid,numeric,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION record_build_run(uuid,uuid,numeric,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION record_build_run(uuid,uuid,numeric,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION record_order_event(uuid,uuid,text,uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION reset_invitation_expiry(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION reset_invitation_expiry(uuid,uuid,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION revoke_crew_day_link(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION revoke_crew_day_link(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_role_permissions(uuid,uuid,text,text,text,text,jsonb,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_role_permissions(uuid,uuid,text,text,text,text,jsonb,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_route_order(uuid,date,uuid[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_route_order(uuid,date,uuid[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_route_order(uuid,date,uuid[],uuid,numeric,integer) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_route_order(uuid,date,uuid[],uuid,numeric,integer) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_team(uuid,uuid,text,boolean,uuid,text[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_team(uuid,uuid,text,boolean,uuid,text[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION seed_business_modules(uuid,uuid,jsonb) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION seed_business_modules(uuid,uuid,jsonb) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_module_state(uuid,text,boolean,boolean,jsonb,uuid,integer) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_module_state(uuid,text,boolean,boolean,jsonb,uuid,integer) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_profile(uuid,uuid,text,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_profile(uuid,uuid,text,text,text,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_tax_rate(uuid,numeric,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_tax_rate(uuid,numeric,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION soft_delete_inventory(uuid,uuid,uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION soft_delete_inventory(uuid,uuid,uuid,text,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION start_module_trial(uuid,text,integer,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION start_module_trial(uuid,text,integer,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION stop_act(uuid,uuid,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION stop_act(uuid,uuid,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION stop_progress_apply(uuid,uuid,text,text,text,uuid,text,uuid,text,date) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION sync_customer_flat_contact(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION undo_import_run(uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
 CREATE SEQUENCE IF NOT EXISTS public.production_rung_dates_seq_seq;
 -- @@
 ALTER TABLE public."addons" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
@@ -4544,6 +4724,10 @@ ALTER TABLE public."business_operations_config" ALTER COLUMN "created_at" SET DE
 -- @@
 ALTER TABLE public."business_operations_config" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."business_operations_config_history" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."business_operations_config_history" ALTER COLUMN "changed_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."business_pmi_schedule" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."business_pmi_schedule" ALTER COLUMN "tasks" SET DEFAULT '[]'::jsonb;
@@ -4645,6 +4829,12 @@ ALTER TABLE public."container_ladder" ALTER COLUMN "install_price_because" SET D
 ALTER TABLE public."container_ladder" ALTER COLUMN "grow_because" SET DEFAULT ''::text;
 -- @@
 ALTER TABLE public."container_ladder" ALTER COLUMN "hold_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "sellability" SET DEFAULT 'sold'::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "sellability_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "pyt_price_because" SET DEFAULT ''::text;
 -- @@
 ALTER TABLE public."cost_object_assignments" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -5104,6 +5294,8 @@ ALTER TABLE public."business_operating_days" ADD CONSTRAINT "business_operating_
 -- @@
 ALTER TABLE public."business_operations_config" ADD CONSTRAINT "business_operations_config_pkey" PRIMARY KEY (business_id);
 -- @@
+ALTER TABLE public."business_operations_config_history" ADD CONSTRAINT "business_operations_config_history_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."business_pmi_schedule" ADD CONSTRAINT "business_pmi_schedule_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."business_position_responsibilities" ADD CONSTRAINT "business_position_responsibilities_pkey" PRIMARY KEY (id);
@@ -5306,6 +5498,10 @@ ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_hold_mont
 -- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_install_t_posts_per_tree_check" CHECK ((install_t_posts_per_tree >= 0));
 -- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_pyt_price_positive_check" CHECK (((pyt_price IS NULL) OR (pyt_price > (0)::numeric)));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_sellability_check" CHECK ((sellability = ANY (ARRAY['sold'::text, 'rarely_sold'::text, 'never_sold'::text])));
+-- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_volume_gallons_check" CHECK (((volume_gallons IS NULL) OR (volume_gallons > (0)::numeric)));
 -- @@
 ALTER TABLE public."cost_object_assignments" ADD CONSTRAINT "cost_object_assignments_basis_confidence_check" CHECK (((basis_confidence IS NULL) OR (basis_confidence = ANY (ARRAY['CONFIRMED'::text, 'DERIVED'::text, 'ESTIMATED'::text, 'UNKNOWN'::text]))));
@@ -5491,6 +5687,8 @@ ALTER TABLE public."business_not_stock_items" ADD CONSTRAINT "business_not_stock
 ALTER TABLE public."business_operating_days" ADD CONSTRAINT "business_operating_days_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."business_operations_config" ADD CONSTRAINT "business_operations_config_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."business_operations_config_history" ADD CONSTRAINT "business_operations_config_history_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."business_pmi_schedule" ADD CONSTRAINT "business_pmi_schedule_asset_id_fkey" FOREIGN KEY (asset_id) REFERENCES cost_objects(id) ON DELETE CASCADE;
 -- @@
@@ -5786,6 +5984,8 @@ CREATE UNIQUE INDEX business_operating_days_exception_uniq ON public.business_op
 -- @@
 CREATE UNIQUE INDEX business_operating_days_pattern_uniq ON public.business_operating_days USING btree (business_id, weekday) WHERE (weekday IS NOT NULL);
 -- @@
+CREATE INDEX business_operations_config_history_key_idx ON public.business_operations_config_history USING btree (business_id, config_key, changed_at DESC);
+-- @@
 CREATE INDEX bpr_position_idx ON public.business_position_responsibilities USING btree (position_id);
 -- @@
 CREATE UNIQUE INDEX business_positions_title_key ON public.business_positions USING btree (business_id, lower(title));
@@ -6020,6 +6220,8 @@ CREATE TRIGGER business_operating_days_updated_at BEFORE UPDATE ON public.busine
 -- @@
 CREATE TRIGGER business_operations_config_updated_at BEFORE UPDATE ON public.business_operations_config FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
+CREATE TRIGGER trg_operations_config_history AFTER INSERT OR UPDATE ON public.business_operations_config FOR EACH ROW EXECUTE FUNCTION record_operations_config_change();
+-- @@
 CREATE TRIGGER business_pmi_schedule_updated_at BEFORE UPDATE ON public.business_pmi_schedule FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
 CREATE TRIGGER business_positions_updated_at BEFORE UPDATE ON public.business_positions FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
@@ -6123,6 +6325,8 @@ ALTER TABLE public."business_not_stock_items" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."business_operating_days" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_operations_config" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."business_operations_config_history" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_pmi_schedule" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -6361,6 +6565,12 @@ CREATE POLICY "business_operations_config_owner_all" ON public."business_operati
   WHERE ((b.id = business_operations_config.business_id) AND (b.owner_id = auth.uid()))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM businesses b
   WHERE ((b.id = business_operations_config.business_id) AND (b.owner_id = auth.uid())))));
+-- @@
+CREATE POLICY "business_operations_config_history_member_select" ON public."business_operations_config_history" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:read'::text)));
+-- @@
+CREATE POLICY "business_operations_config_history_owner_select" ON public."business_operations_config_history" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = business_operations_config_history.business_id) AND (b.owner_id = auth.uid())))));
 -- @@
 CREATE POLICY "business_pmi_schedule_member_all" ON public."business_pmi_schedule" AS PERMISSIVE FOR ALL TO public USING (is_active_member(business_id)) WITH CHECK (is_active_member(business_id));
 -- @@

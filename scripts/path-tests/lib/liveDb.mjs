@@ -52,7 +52,18 @@ const STUBS = `
 
 const GRANTS = `
   GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
+  -- Sequences too, or a serial column refuses every insert with permission denied for sequence.
+  -- MEASURED live 2026-09-24: anon and authenticated both hold USAGE on the one sequence in
+  -- public, so this blanket grant matches the database rather than assuming.
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+  -- NO BLANKET GRANT EXECUTE ON ALL FUNCTIONS ANY MORE (2026-09-24, ledger #391).
+  -- It ran AFTER the dump, so it silently undid every REVOKE the dump carries and made EVERY
+  -- function callable by anon -- including crew_day_read, which live revokes from both anon and
+  -- authenticated (MEASURED). The fixture was LESS RESTRICTIVE THAN LIVE, and the guard whose whole
+  -- job is "only the endpoint may call this" could not pass against it.
+  -- Postgres already gives a new function EXECUTE to PUBLIC, so the default case needs no grant;
+  -- the dump now emits REVOKE/GRANT only where live DIFFERS from that default (40 functions).
+  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
   GRANT SELECT ON auth.users TO authenticated, service_role;
 `;
 

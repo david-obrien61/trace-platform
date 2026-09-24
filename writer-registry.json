@@ -764,14 +764,71 @@
         }
       ],
       "declared": []
+    },
+    {
+      "id": "rung-dates",
+      "title": "When a lot went into the container size it is in",
+      "writer": {
+        "name": "recordRungDate",
+        "at": "packages/shared/src/production/rungDates.ts#export async function recordRungDate"
+      },
+      "writerFiles": [
+        "packages/shared/src/production/rungDates.ts"
+      ],
+      "tables": [
+        "production_rung_dates"
+      ],
+      "databaseGuardForTables": "APPEND-ONLY, AND ENFORCED TWICE. `trg_rung_dates_immutable` (20260924a) raises on any UPDATE or DELETE, and the table carries NO update and NO delete policy for anyone, owner included. So unlike `contacts`, the database itself refuses a correction-by-edit \u2014 a correction is a NEW ROW. What the database cannot tell is the writer's INSERT from any other; RLS (`inventory:update`) is that guard.",
+      "entryFunctions": [
+        "recordRungDate"
+      ],
+      "inputSignal": {
+        "fileMentions": "recordRungDate|production_rung_dates|loadRungDates",
+        "props": "enteredOn|entered_on|pottedOn"
+      },
+      "tests": "scripts/path-tests/rung-dates.paths.mts",
+      "paths": [
+        {
+          "id": "potting.record",
+          "what": "/inventory/uppot \u2192 Potted on \u2192 Add this entry",
+          "at": "packages/cultivar-os/src/components/RungDateSheet.tsx#const save = useCallback",
+          "files": [
+            "packages/cultivar-os/src/components/RungDateSheet.tsx",
+            "packages/cultivar-os/src/pages/UppotPlan.tsx",
+            "packages/cultivar-os/src/lib/rungDatesRead.ts"
+          ],
+          "chain": "RungDateSheet.save \u2192 recordRungDate \u2192 INSERT production_rung_dates (inventory:update checked by RLS)",
+          "shown": "/inventory/uppot \u2192 the Potted on column, and the sheet's current entry + history",
+          "test": "potting.record"
+        }
+      ],
+      "guards": [
+        {
+          "id": "potting.correction-adds-a-row",
+          "what": "a correction ADDS a row and becomes current; the original stays"
+        },
+        {
+          "id": "potting.append-only",
+          "what": "nobody may UPDATE or DELETE an entry"
+        },
+        {
+          "id": "potting.staff-may-not-set",
+          "what": "a STAFF member sees a date and cannot set one"
+        },
+        {
+          "id": "potting.other-business",
+          "what": "a member of one business never sees another's dates"
+        },
+        {
+          "id": "potting.no-future-date",
+          "what": "a date in the future is refused before it is written"
+        }
+      ],
+      "declared": [],
+      "registeredBecause": "REGISTERED 2026-09-24 (ledger #391), and only now: a path test must run on the live-schema fixture, and `production_rung_dates` was not in it until David applied 20260924a and the snapshot was refreshed. Declaring it earlier would have declared a test that cannot run."
     }
   ],
   "proposed": [
-    {
-      "domain": "rung-dates",
-      "order": 0,
-      "why": "BUILT AND NOT YET REGISTERABLE, ledger #391. `recordRungDate` (packages/shared/src/production/rungDates.ts) is already the SINGLE writer of `production_rung_dates` and its only capture path today is the potting sheet on /inventory/uppot. \ud83d\udd34 IT CANNOT BE REGISTERED YET AND THE REASON IS MECHANICAL, NOT A CHOICE: a registered path test must run against the live schema (scripts/sql-harness/fixtures/live-schema-public.sql, PGlite, RLS on), that fixture is a snapshot of the LIVE database, and 20260924a is WRITTEN AND HELD \u2014 so the table is not in it. Registering now would mean declaring a test that cannot run. Register in the same pass that follows the migration being applied and the fixture re-snapshotted. Meanwhile the writer IS covered end to end by rungDates.test.ts (35 assertions, 6 mutants) and by rung-dates-391.pglite.mjs against the real migration."
-    },
     {
       "domain": "orders",
       "order": 1,
