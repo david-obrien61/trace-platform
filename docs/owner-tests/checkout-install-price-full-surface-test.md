@@ -253,13 +253,15 @@ anybody this way** — it is far cheaper to change now than after a customer has
 
 ## LEDGER #399 — PLANT YOUR TREE, PRICED BY CONTAINER SIZE (David, 2026-09-24)
 
-🔴 **BEFORE CARD 15, TWO THINGS, IN THIS ORDER:**
-1. **`supabase/migrations/20260924d_container_ladder_pyt_price.sql`** — the per-rung Plant Your Tree
-   price. SQL editor, never the table editor (§6 r17). It carries V1–V7; **V3 is commented out and
-   marked: run it alone, and an ERROR `23514` IS the pass.**
-2. **`docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql`** — DATA, not a migration. It tells
-   LAWNS's `Plant Your Tree` row to read the ladder. 🔴 **Run it only after this branch is merged
-   and deployed**, or checkout will read a price it no longer shows.
+✅ **`supabase/migrations/20260924d_container_ladder_pyt_price.sql` — APPLIED 2026-09-24.** Verified
+live the same day: both columns, the named CHECK, **0 rungs priced on any tenant** and **0 rungs
+silent**. *(V3 is live SQL that must ERROR `23514` — that error is the pass.)*
+
+🔴 **ONE THING STILL TO RUN, AND ONLY IN THIS ORDER: `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql`**
+— DATA, not a migration. It tells LAWNS's `Plant Your Tree` row to read the ladder.
+**Run it only AFTER this branch is merged and deployed**, or checkout reads a price it no longer shows.
+⚠️ **Until it runs, CARDS 15–17 will show the old flat price and that is not a failure** — the row is
+still `fixed` and nothing has told it otherwise.
 
 ⚠️ **AND EXPECT EVERY RUNG TO SAY "not set" — THAT IS THE DESIGNED STATE, NOT A BROKEN APPLY.**
 The migration seeds **no price at all**, on purpose. LAWNS has invoiced five Plant-Your-Tree lines
