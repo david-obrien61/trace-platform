@@ -1,7 +1,7 @@
 {
   "_doc": [
-    "capA assertion 4 — WHO PASSES each authority site, resolved against the three default bundles.",
-    "Keyed on file::binding, NEVER file:line — a binding name survives an edit above it (tech-debt #78).",
+    "capA assertion 4 \u2014 WHO PASSES each authority site, resolved against the three default bundles.",
+    "Keyed on file::binding, NEVER file:line \u2014 a binding name survives an edit above it (tech-debt #78).",
     "A change to any `roles` array FAILS the build. To accept one: re-run with --baseline AND write",
     "a `why`. An empty `roles` (the site admits NOBODY) requires a `why` even on first sight."
   ],
@@ -87,7 +87,7 @@
         "MANAGER",
         "STAFF"
       ],
-      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). Was deliveries:create — a string the MANAGER does not hold, and wrong on the merits: this field writes orders.delivery_date, a COLUMN ON `orders`; it never touches the `deliveries` table. Now orders:create, per the ruling A PERMISSION GATES A CAPABILITY, NOT A FIELD. STAFF is admitted DELIBERATELY: they hold orders:create and take orders, so they set the date on the order they are taking. orders:update would have handed the field to the manager and withheld it from the person standing in the lot."
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). Was deliveries:create \u2014 a string the MANAGER does not hold, and wrong on the merits: this field writes orders.delivery_date, a COLUMN ON `orders`; it never touches the `deliveries` table. Now orders:create, per the ruling A PERMISSION GATES A CAPABILITY, NOT A FIELD. STAFF is admitted DELIBERATELY: they hold orders:create and take orders, so they set the date on the order they are taking. orders:update would have handed the field to the manager and withheld it from the person standing in the lot."
     },
     "packages/cultivar-os/src/pages/Customers.tsx::canEditCustomer": {
       "strings": [
@@ -119,7 +119,7 @@
       "roles": [
         "OWNER"
       ],
-      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `view_costs` → `costs:read`. Was a LEGACY string admitting NOBODY INCLUDING THE OWNER — the inventory-value metric was dark for everyone and :160 did not request `unit_cost`. The metric is qty × unit_cost, the cost basis and nothing else, so of `view_costs`' eight successors only `costs:read` describes what is read. OWNER-only is correct: cost is confidential (§4), and the same string already gates /costs, /inventory and PMI."
+      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `view_costs` \u2192 `costs:read`. Was a LEGACY string admitting NOBODY INCLUDING THE OWNER \u2014 the inventory-value metric was dark for everyone and :160 did not request `unit_cost`. The metric is qty \u00d7 unit_cost, the cost basis and nothing else, so of `view_costs`' eight successors only `costs:read` describes what is read. OWNER-only is correct: cost is confidential (\u00a74), and the same string already gates /costs, /inventory and PMI."
     },
     "packages/cultivar-os/src/pages/DeliveryRoute.tsx::render:costs:create": {
       "strings": [
@@ -172,7 +172,7 @@
         "OWNER",
         "MANAGER"
       ],
-      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to MANAGER by the Phase 2 conversion (isOwner && ... -> can('customers:update')). CORRECT: the manager holds customers:update by bundle and this affordance edits a customer from the delivery row — the door now matches the vault. It is declared rather than assumed because nobody reports a widening; the person who gained the button does not file a ticket."
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to MANAGER by the Phase 2 conversion (isOwner && ... -> can('customers:update')). CORRECT: the manager holds customers:update by bundle and this affordance edits a customer from the delivery row \u2014 the door now matches the vault. It is declared rather than assumed because nobody reports a widening; the person who gained the button does not file a ticket."
     },
     "packages/cultivar-os/src/pages/DeliverySchedule.tsx::render:deliveries:update": {
       "strings": [
@@ -216,7 +216,7 @@
       "roles": [
         "OWNER"
       ],
-      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `import_pricing` → `inventory:import_price`, a pure 1:1 rename with no judgement in it. Was a LEGACY string admitting NOBODY, so the owner was told his own prices would not save. OWNER-only matches the bundle: `inventory:import_price` is a BLAST-RADIUS authority (bulk CSV price write) held by the owner alone, and the server's import_write_price RPC is the real gate — this flag is the courtesy marker in front of it."
+      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `import_pricing` \u2192 `inventory:import_price`, a pure 1:1 rename with no judgement in it. Was a LEGACY string admitting NOBODY, so the owner was told his own prices would not save. OWNER-only matches the bundle: `inventory:import_price` is a BLAST-RADIUS authority (bulk CSV price write) held by the owner alone, and the server's import_write_price RPC is the real gate \u2014 this flag is the courtesy marker in front of it."
     },
     "packages/cultivar-os/src/pages/OrderDetail.tsx::canManage": {
       "strings": [
@@ -227,7 +227,7 @@
         "OWNER",
         "MANAGER"
       ],
-      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, TWO verbs: `manage_orders` became orders:update HERE and orders:create at ScanOrder::canInvoke. Both are defensible per site — editing an existing order is not the same act as taking a new one — and the split was invisible as a SET until this baseline listed them side by side. That visibility is the deliverable."
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, TWO verbs: `manage_orders` became orders:update HERE and orders:create at ScanOrder::canInvoke. Both are defensible per site \u2014 editing an existing order is not the same act as taking a new one \u2014 and the split was invisible as a SET until this baseline listed them side by side. That visibility is the deliverable."
     },
     "packages/cultivar-os/src/pages/OrderDetail.tsx::route:orders:update": {
       "strings": [
@@ -260,7 +260,7 @@
         "MANAGER",
         "STAFF"
       ],
-      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to STAFF by the Phase 2 conversion (isOwner || can('manage_orders') -> can('orders:create')), and CORRECT per David's 2026-07-27 fulfilment ruling: a staff member reads what the work requires and takes the order. Recorded here because it was right BY ACCIDENT of the string chosen, not by a decision anybody wrote down — 'probably right and undeclared' is the state this assertion exists to end."
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to STAFF by the Phase 2 conversion (isOwner || can('manage_orders') -> can('orders:create')), and CORRECT per David's 2026-07-27 fulfilment ruling: a staff member reads what the work requires and takes the order. Recorded here because it was right BY ACCIDENT of the string chosen, not by a decision anybody wrote down \u2014 'probably right and undeclared' is the state this assertion exists to end."
     },
     "packages/cultivar-os/src/pages/ScanOrder.tsx::canLookup": {
       "strings": [
@@ -316,7 +316,28 @@
         "OWNER",
         "MANAGER"
       ],
-      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, THREE verbs: `manage_settings` became settings:read HERE, settings:update at Dashboard::canManageSettings and Settings::canManageSettings, and team:read at MemberConsole. Note the binding NAME is identical at three sites while the string is not — read the strings, never the name. Defensible per site; recorded as a set."
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, THREE verbs: `manage_settings` became settings:read HERE, settings:update at Dashboard::canManageSettings and Settings::canManageSettings, and team:read at MemberConsole. Note the binding NAME is identical at three sites while the string is not \u2014 read the strings, never the name. Defensible per site; recorded as a set."
+    },
+    "packages/cultivar-os/src/pages/UppotPlan.tsx::canCommit": {
+      "strings": [
+        "inventory:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": "Committing a plan INSERTs production_plans, whose member INSERT policy is gated on inventory:create (20260905 \u00a72) \u2014 the client gate names the same string the database enforces, so a staff member sees the button refuse rather than a write that silently lands nothing."
+    },
+    "packages/cultivar-os/src/pages/UppotPlan.tsx::canReadMoney": {
+      "strings": [
+        "pricing_recipe:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": "Gates the money half of the plan (blended mix cost). MEASURED LIVE 2026-09-24: business_pricing_config carries bpc_member_select USING has_permission(..., 'pricing_recipe:read') \u2014 so this client gate names exactly the string the RLS enforces. \ud83d\udd34 NOT costs:read: the manifest declares view_pricing_config -> pricing_recipe:read ('the moat (D-009), stays confidential'), while costs:read belongs to the view_costs split over business_inventory/cost_objects/receipts. Swapping it would let a session holding costs:read but not pricing_recipe:read render money UI the database then refuses \u2014 tech-debt #236's shape."
     },
     "packages/cultivar-os/src/router.tsx::route:campaigns:read": {
       "strings": [
@@ -463,6 +484,6 @@
     }
   },
   "a7Declared": {
-    "view_dashboard": "AWAITING RULING #87 — navPermission()'s fallback (tileRegistry.ts:432-433). R3 retired the string into the `member` sentinel. UNREACHABLE TODAY: 0 of 26 nav nodes hit it, because every node declares a tileKey or its own permission. A landmine, not a live defect — the next node added without either goes invisible to EVERYONE including the owner. Fallback to `member`, or delete the fallback and make the field required? David rules."
+    "view_dashboard": "AWAITING RULING #87 \u2014 navPermission()'s fallback (tileRegistry.ts:432-433). R3 retired the string into the `member` sentinel. UNREACHABLE TODAY: 0 of 26 nav nodes hit it, because every node declares a tileKey or its own permission. A landmine, not a live defect \u2014 the next node added without either goes invisible to EVERYONE including the owner. Fallback to `member`, or delete the fallback and make the field required? David rules."
   }
 }

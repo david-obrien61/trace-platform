@@ -103,7 +103,11 @@
   "20260923g_manager_holds_order_discount_apply.sql": {
    "kind": "evidence",
    "means": "every MANAGER member row, and the system MANAGER floor, carries order_discount:apply — the two things this file UPDATEs. ledger #386, R-171 (a). ⚠️ It is `evidence` and not `invariant` because the floor could only have gained that string from this migration: before it, the floor held 25 strings without it (measured live 2026-09-23) and nothing else writes role_definitions",
-   "sql": "((SELECT bool_and(permissions ? 'order_discount:apply') FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true) AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'order_discount:apply')))"
+   "sql": "((SELECT bool_and(permissions ? 'order_discount:apply') FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true) AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'order_discount:apply')))"  },
+  "20260922e_manager_holds_costs_read.sql": {
+   "kind": "evidence",
+   "means": "the MANAGER system floor holds costs:read, and NO MANAGER member is missing it — the two things this file UPDATEs. ledger #382, David's ruling 2026-09-22 (*the asset cost is TRACE's ESTIMATE, not the purchase price*). ⚠️ `evidence` not `invariant` for the same reason as 20260923g's entry: the floor could only have gained the string here — it held 25 without it, measured live 2026-09-22, and nothing else writes role_definitions. ⚠️ The floor clause is `count(*) = 1` rather than `bool_and`, DELIBERATELY: bool_and over zero rows is NULL, which would read as neither true nor false if the floor row ever went missing — the count asserts the row EXISTS as well as what it holds. Proven able to refuse before it was committed (§6 r19): live it reads true, and two mutants read false — the permission string changed, and MANAGER swapped for STAFF.",
+   "sql": "(SELECT (SELECT count(*) = 1 FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true AND permissions ? 'costs:read') AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'costs:read')))"
   }
  }
 }

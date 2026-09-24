@@ -622,7 +622,24 @@ async function handleCreate(req: any, res: any) {
     // the resolveTaxRate seam (NOT businesses.tax_rate; NOT a hardcoded 8.25%). Absent → null =
     // "not identified" (the redline; never a fabricated default). Read server-side (service key,
     // RLS-bypassed) so the rate resolves regardless of the caller's view_pricing_config grant.
-    const { data: pricingCfg } = await readPricingConfig(db, businessId);
+    // 🔴 THE ERROR IS READ, NOT DISCARDED — THIS IS THE SERVER-AUTHORITATIVE TAX PATH.
+    // This line was `const { data: pricingCfg } = await readPricingConfig(...)`: the error was
+    // destructured away, so a FAILED READ gave `pricingCfg = undefined`, `resolveTaxRate` then
+    // returned null, and the order was written AT ZERO TAX with the same "not identified" line a
+    // legitimately untaxed sale shows. A database hiccup at the counter silently undercharged a
+    // customer, and nothing on any screen said so (ledger #397; Rule 24).
+    //
+    // Money FAILS CLOSED: a rate we could not read refuses the sale. A business that genuinely
+    // has no rate configured is unchanged — that is `data` present with no `taxRate`, which
+    // still resolves to null and still means "not identified".
+    const { data: pricingCfg, error: pricingErr } = await readPricingConfig(db, businessId);
+    if (pricingErr) {
+      console.error('[TRACE:TAX] pricing config unreadable — REFUSING the order rather than billing $0 tax:', pricingErr.message);
+      return res.status(503).json({
+        error: 'tax_rate_unreadable',
+        message: "Couldn't read your tax rate — try again.",
+      });
+    }
     const taxRate = resolveTaxRate(pricingCfg?.config);
 
     // PRICE TIER at checkout (D-35 + the generalized TYPES×TIERS model, 2026-07-10) — READ + APPLIED

@@ -19,6 +19,7 @@ import { backTarget, backLabel } from '../lib/backTarget';
 import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { readTaxRate } from '@trace/shared/business-logic';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { ORDER_STATUSES, ORDER_STATUS_META, orderStatusMeta } from '../lib/orderStatus';
@@ -72,7 +73,23 @@ interface OrderDetailRow {
   leakage_flag: boolean;
   notes: string | null;
   delivery_date?: string | null;
-  customers: { first_name: string; last_name: string; email: string; phone: string | null; billing_line1: string | null; billing_city: string | null; billing_state: string | null; billing_zip: string | null } | null;
+  // selected so the exempt-check note can NAME the document it is asking about — a prompt that
+  // cannot cite the invoice number and date is not actionable in QuickBooks.
+  order_kind?: string | null;
+  qb_invoice_id?: string | null;
+  sale_date?: string | null;
+  customers: { first_name: string | null; last_name: string | null;
+    // display_name/organization_name/customer_type feed the ONE customerDisplayName()
+    // helper — without them an organisation renders as its fallback (519 of 2,021 LAWNS
+    // customers have no person name, and every one of them has a business name).
+    display_name: string | null; organization_name: string | null; customer_type: string | null;
+    // the customer's CURRENT exemption, for the history-order check below. It is NEVER
+    // used to recompute this order's tax — the order's own stored figures are the record.
+    tax_exempt: boolean | null; tax_exempt_reason: string | null;
+    email: string | null; phone: string | null;
+    billing_line1: string | null; billing_city: string | null;
+    billing_state: string | null; billing_zip: string | null;
+  } | null;
   order_items: DetailItem[];
   order_service_selections: DetailSelection[];
 }
@@ -90,8 +107,8 @@ const SELECT_COLS = `
   id, created_at, status, transport_method, transport_note, netting_declined,
   subtotal, tax_amount, total_amount, addons_amount,
   tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref,
-  leakage_flag, notes,
-  customers!orders_customer_id_fkey ( first_name, last_name, email, phone, billing_line1, billing_city, billing_state, billing_zip ),
+  leakage_flag, notes, order_kind, qb_invoice_id, sale_date,
+  customers!orders_customer_id_fkey ( first_name, last_name, display_name, organization_name, customer_type, tax_exempt, tax_exempt_reason, email, phone, billing_line1, billing_city, billing_state, billing_zip ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
     is_manual_override, original_price, override_reason,
@@ -117,6 +134,14 @@ export function OrderDetail() {
   // which is exactly the behaviour this replaces.
   const back             = backTarget(location.state, { label: 'Orders', href: '/orders' });
   const { businessId, can } = useBusinessContext();
+  // 🔴 THE RATE IS READ, NOT ASSUMED. This page passed `taxRate={null}` as a HARDCODED LITERAL
+  // (ledger #397) — not a failed lookup — so it printed "no tax rate set" on every order while
+  // `business_pricing_config.config.taxRate` held 0.0825 the whole time. The rate's one home is
+  // that config, read through the narrow `get_business_tax_rate` RPC via this shared seam, which
+  // is what checkout already uses. Display only: nothing here recomputes a charge.
+  const [bizTaxRate, setBizTaxRate] = useState<number | null>(null);
+  // Distinguished from a rate of null: "we could not read it" is not "there isn't one".
+  const [taxReadFailed, setTaxReadFailed] = useState(false);
   // `orders:update` — the fine string that replaced manage_orders. submit.ts enforces it on the
   // line-edit and status paths this flag gates. `isOwner ||` removed (ruling 2026-07-30): an
   // OWNER-role session holds orders:update in its computed set and passes on the same branch.
@@ -204,6 +229,21 @@ export function OrderDetail() {
   }, [businessId, id, canManage]);
 
   useEffect(() => { void load(); }, [load]);
+  // Load the business rate. 🔴 PLACED HERE, ABOVE THE `if (loading) return` EARLY RETURN —
+  // a hook after a conditional return is called in a different ORDER on different renders, and
+  // React's rules-of-hooks caught it. `void` on the promise because the effect is fire-and-
+  // forget and an unawaited promise is the floating-promise class the gate also refuses.
+  useEffect(() => {
+    if (!businessId) return;
+    let live = true;
+    void readTaxRate(supabase, businessId).then(r => {
+      if (!live) return;
+      if (r.kind === 'error') { setTaxReadFailed(true); setBizTaxRate(null); }
+      else { setTaxReadFailed(false); setBizTaxRate(r.kind === 'rate' ? r.rate : null); }
+    });
+    return () => { live = false; };
+  }, [businessId]);
+
 
   async function authHeader(): Promise<Record<string, string>> {
     const { data } = await supabase.auth.getSession();
@@ -320,6 +360,23 @@ export function OrderDetail() {
     ? 'exempt'
     : (Number(order.tax_amount) > 0 ? 'taxed' : 'not_identified');
 
+  // 🔴 EXEMPT TODAY, TAXED ON THE DOCUMENT — A PROMPT TO CHECK, NEVER AN ASSERTION OF ERROR.
+  // 10 LAWNS orders across 4 customers carry $1,212.99 of tax while the customer is exempt NOW
+  // (measured 2026-09-24). Every one is `order_kind = 'history'` with a QuickBooks invoice
+  // number: the tax was charged IN QUICKBOOKS and TRACE recorded it faithfully. No-recompute-
+  // history — nothing here rewrites an amount or backfills `tax_exempt_applied`.
+  //
+  // ⚠️ AND THE EXEMPTION HAS NO START DATE. `tax_exempt` is the customer's CURRENT status; only
+  // 9 of 27 exempt LAWNS customers carry a certificate ref and NONE carries a start date, so an
+  // invoice from before the certificate may have been correctly taxed on the day. Asserting an
+  // error here would be a confident wrong answer; the copy asks the question instead.
+  const exemptButTaxed = order.customers?.tax_exempt === true && Number(order.tax_amount) > 0;
+  const exemptCheckNote = exemptButTaxed
+    ? `This customer is tax exempt now. This invoice (${order.qb_invoice_id ? `QB #${order.qb_invoice_id}` : 'no QuickBooks number'}`
+      + `${order.sale_date ? `, ${order.sale_date}` : ''}) charged $${Number(order.tax_amount).toFixed(2)} tax — `
+      + `check whether the exemption applied on that date; a credit memo, if owed, is made in QuickBooks.`
+    : null;
+
   return (
     <Shell>
       {/* Header */}
@@ -417,6 +474,21 @@ export function OrderDetail() {
           )}
         </div>
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 10 }}>
+          {taxReadFailed && (
+            <p style={{ margin: '0 0 10px', padding: '8px 10px', borderRadius: 6,
+                        background: '#FEE2E2', border: '1px solid #DC2626',
+                        color: '#991B1B', fontSize: '0.8rem' }}>
+              Couldn&rsquo;t read the tax rate for this business &mdash; this is not the same as
+              having none set. The figures below are the order&rsquo;s own stored amounts.
+            </p>
+          )}
+          {exemptCheckNote && (
+            <p style={{ margin: '0 0 10px', padding: '8px 10px', borderRadius: 6,
+                        background: '#FEF3C7', border: '1px solid #F59E0B',
+                        color: '#92400E', fontSize: '0.8rem', lineHeight: 1.45 }}>
+              {exemptCheckNote}
+            </p>
+          )}
           <OrderTotals
             goodsRetailSubtotal={goodsRetailSubtotal}
             discountTotal={discountTotal}
@@ -427,7 +499,7 @@ export function OrderDetail() {
             taxStatus={taxStatus}
             tax={Number(order.tax_amount)}
             taxableSubtotal={Number(order.subtotal)}
-            taxRate={null}
+            taxRate={bizTaxRate}
             taxReason={order.tax_exempt_reason}
             taxCertRef={order.tax_exempt_cert_ref}
           />

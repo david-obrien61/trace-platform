@@ -8,7 +8,7 @@ import { formatPersonName } from '@trace/shared/utils/personName';
 import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
   fetchAttachedCustomerTier,
-  fetchTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
+  readTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
   priceLinesFromLadder, usesLadderPricing,
   type PricingLineInput, type DiscountType, type OrderTaxExemption, type LadderPricing,
 } from '@trace/shared/business-logic';
@@ -45,6 +45,8 @@ export function CartReview() {
   // businesses.tax_rate column, NOT a hardcoded 8.25%. null = "not identified" (redline). taxLoaded
   // gates the redline so it doesn't flash before the config resolves.
   const [taxRate, setTaxRate] = useState<number | null>(null);
+  // true ONLY when the rate could not be READ — never when the business simply has none set.
+  const [taxReadFailed, setTaxReadFailed] = useState(false);
   const [taxLoaded, setTaxLoaded] = useState(false);
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // 🔴 THE TIER IS RESOLVED FROM THE CUSTOMER **ROW**, BY ID — THE SAME KEY `submit.ts` USES.
@@ -88,7 +90,12 @@ export function CartReview() {
       // resolveTaxRate(cfg), because cfg is view_pricing_config-walled and a MANAGER reads null
       // from it → "not identified" over a rate that IS set (D-9). fetchTaxRate returns the rate to
       // any active member without exposing the pricing recipe.
-      setTaxRate(await fetchTaxRate(supabase, bid));
+      // 🔴 THREE OUTCOMES, NOT TWO. `fetchTaxRate` collapsed "could not read" into the same
+      // null as "none set", so a failed RPC at the counter looked exactly like a tax-free
+      // business and the sale went through AT ZERO TAX. Money fails closed (ledger #397).
+      const tr = await readTaxRate(supabase, bid);
+      if (tr.kind === 'error') { setTaxReadFailed(true); setTaxRate(null); }
+      else { setTaxReadFailed(false); setTaxRate(tr.kind === 'rate' ? tr.rate : null); }
       setTaxLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -823,17 +830,24 @@ export function CartReview() {
 
       {/* Actions */}
       <div className="section" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {taxReadFailed && (
+          <p style={{ margin: '0 0 10px', padding: '8px 10px', borderRadius: 6,
+                      background: '#FEE2E2', border: '1px solid #DC2626', color: '#991B1B',
+                      fontSize: '0.85rem' }}>
+            Couldn&rsquo;t read your tax rate &mdash; try again.
+          </p>
+        )}
         <button
           className="btn btn-primary"
           style={{ minHeight: 56 }}
-          disabled={submitting || noSalePrice || installBlocks}
+          disabled={submitting || noSalePrice || installBlocks || taxReadFailed}
           onClick={() => handleSubmit(true)}
         >
           {submitting && payOnline ? 'Sending…' : `Send invoice + pay online — $${total.toFixed(2)}`}
         </button>
         <button
           className="btn btn-secondary"
-          disabled={submitting || noSalePrice || installBlocks}
+          disabled={submitting || noSalePrice || installBlocks || taxReadFailed}
           onClick={() => handleSubmit(false)}
         >
           {submitting && !payOnline ? 'Creating order…' : "I'll pay at the office"}
