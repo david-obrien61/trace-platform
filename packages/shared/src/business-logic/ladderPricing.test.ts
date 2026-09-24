@@ -44,8 +44,14 @@ const rung = (
   pytPriceBecause: pytPrice == null
     ? 'Not set. LAWNS has invoiced five Plant Your Tree lines ever and every one is a tree the customer already owned.'
     : 'set by hand for this case',
+  // 🔴 SUPPLIED, NOT CAST PAST. An earlier draft of this factory ended `} as Rung` and tsc said
+  // the shapes did not sufficiently overlap — which was it telling me the fixture was missing two
+  // real fields. A cast would have silenced the one thing standing between a fixture and the type
+  // it claims to be (tech-debt #138's class: a double more forgiving than the real system).
+  growMonths: null, growBecause: 'not set',
+  holdMonths: null, holdBecause: 'not set',
   active,
-} as Rung);
+});
 
 // LAWNS's live ladder + the seed the migration writes. slip / 4 in / 3-5 / 200 carry NO price.
 const LADDER: Ladder = [
