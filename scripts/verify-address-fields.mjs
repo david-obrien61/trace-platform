@@ -83,10 +83,6 @@ const DECLARED = {
   // surface is wired.
   'packages/cultivar-os/src/components/customers/ContactListsPanel.tsx':
     'OWED — the customer page address book (add / edit a site).',
-  'packages/cultivar-os/src/components/vendors/VendorEditor.tsx':
-    'OWED — vendor create/edit. David named vendors explicitly on 2026-09-24; coordinate with any Vendors-list work in flight.',
-  'packages/cultivar-os/src/components/delivery/StopCard.tsx':
-    'OWED — the post-order stop edit, the third address surface.',
   'packages/cultivar-os/src/pages/ReceiptKeeper.tsx':
     'OWED — invoice capture creating a new customer.',
   'packages/cultivar-os/src/pages/OrderDetail.tsx':
