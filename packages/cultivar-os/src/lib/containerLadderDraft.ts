@@ -50,6 +50,15 @@ export interface RungDraft {
   installPrice: string;
   installPriceBecause: string;
   /**
+   * What ONE tree of this size costs to PLANT when the customer already owns it (ledger #399).
+   * '' = NOT SET, and today that is EVERY rung — `20260924d` seeds none, because LAWNS's five
+   * historical Plant-Your-Tree lines are all for trees LAWNS did not sell and carry no size of
+   * their own to take a median from.
+   * 🔴 Same refusal as the install price: never 0, which would be a free planting.
+   */
+  pytPrice: string;
+  pytPriceBecause: string;
+  /**
    * GROW — months from uppotting into this rung until a tree on it is SELLABLE (ledger #390).
    * '' = UNKNOWN, which is the honest and currently the COMMON answer: eight of LAWNS's nine rungs
    * have no figure and David is asking Terry for them. It must never be typed as 0 — a tree
@@ -64,6 +73,8 @@ export interface RungDraft {
 
 /** The reason a rung carries when nobody has set its install price — the migration's own wording. */
 export const INSTALL_PRICE_NOT_SET = 'not set — the counter types an amount for this size';
+/** ledger #399 — the same shape for Plant Your Tree, whose ladder ships with NO rung priced. */
+export const PYT_PRICE_NOT_SET = 'not set — the counter types an amount, or it is added by amendment on the install day';
 
 /** The reason a rung carries when nobody has recorded its caliper — the database's own default. */
 export const CALIPER_NOT_SET = 'not set — no caliper recorded for this size';
@@ -90,6 +101,8 @@ export function draftFromRung(r: Rung): RungDraft {
     caliperBecause: r.caliperBecause,
     installPrice: numText(r.installPrice),
     installPriceBecause: r.installPriceBecause,
+    pytPrice: numText(r.pytPrice),
+    pytPriceBecause: r.pytPriceBecause,
     growMonths: numText(r.growMonths),
     growBecause: r.growBecause,
     holdMonths: numText(r.holdMonths),
@@ -112,6 +125,9 @@ export function draftForNewRung(ladder: Ladder): RungDraft {
     // travels between neighbouring sizes; a PRICE is not, and copying one would put a number on a
     // new size that nobody chose and that reads as though somebody did.
     installPrice: '', installPriceBecause: INSTALL_PRICE_NOT_SET,
+    // Not copied either, for the install price's reason: a price is a decision, not a property
+    // that travels between neighbouring sizes.
+    pytPrice: '', pytPriceBecause: PYT_PRICE_NOT_SET,
     // 🔴 NOT COPIED FROM ANOTHER RUNG, for the install price's reason: how long a tree takes to
     // grow into a 30 is not evidence about a 45. A copied interval would put a schedule date on a
     // new size that nobody chose — and a date is exactly what people act on.
@@ -183,6 +199,14 @@ export function rungDraftProblems(d: RungDraft, ladder: Ladder, editingLabel: st
       : 'The install price must be an amount above $0, or left blank if there is no price for this size.');
   }
   if (!d.installPriceBecause.trim()) out.push('Say where the install price came from — even "not set".');
+  // Plant Your Tree (ledger #399) — same rule, same words, because it is the same kind of fact.
+  const pp = optionalPositive(d.pytPrice);
+  if (pp === 'bad') {
+    out.push(d.pytPrice.trim() === '0'
+      ? 'A Plant Your Tree price of $0 would charge nothing. Leave it blank if there is no price for this size — the line then says so and is added by amendment.'
+      : 'The Plant Your Tree price must be an amount above $0, or left blank if there is no price for this size.');
+  }
+  if (!d.pytPriceBecause.trim()) out.push('Say where the Plant Your Tree price came from — even "not set".');
   // GROW and HOLD (ledger #390). Both optional — blank is the honest UNKNOWN and the schedule then
   // says UNKNOWN rather than borrowing the business-wide default. A typed 0 is refused for the same
   // reason a $0 install price is: it is not a short interval, it is a nonsensical one.
@@ -227,6 +251,8 @@ export function draftToRow(d: RungDraft) {
     caliper_because: d.caliperBecause.trim(),
     install_price: typeof optionalPositive(d.installPrice) === 'number' ? Number(d.installPrice) : null,
     install_price_because: d.installPriceBecause.trim(),
+    pyt_price: typeof optionalPositive(d.pytPrice) === 'number' ? Number(d.pytPrice) : null,
+    pyt_price_because: d.pytPriceBecause.trim(),
     grow_months: typeof optionalPositive(d.growMonths) === 'number' ? Number(d.growMonths) : null,
     grow_because: d.growBecause.trim(),
     hold_months: typeof optionalPositive(d.holdMonths) === 'number' ? Number(d.holdMonths) : null,

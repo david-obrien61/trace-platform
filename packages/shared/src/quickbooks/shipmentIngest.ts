@@ -35,6 +35,7 @@
 //   for nothing.
 // ══════════════════════════════════════════════════════════════════════════════
 import { parseRows } from './qboRead';
+import { customerDisplayName } from '../utils/personName';
 import { parseInvoiceOrderLines, type QboOrderSourceLine } from './invoiceOrderLines';
 import { normalizePhone } from '../utils/normalizePhone';
 import { personNamesMatch } from '../utils/personName';
@@ -536,7 +537,7 @@ export function resolveIngestCustomer(stop: PlannedStop, existing: ExistingCusto
     }
   }
   const full = `${stop.firstName} ${stop.lastName}`.trim();
-  const byName = existing.filter(c => personNamesMatch(`${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(), full));
+  const byName = existing.filter(c => personNamesMatch(customerDisplayName(c, '').trim(), full));
   if (byName.length === 1) return { action: 'link', customerId: byName[0].id, rule: 'unique name match → LINK' };
   if (byName.length > 1) {
     return {

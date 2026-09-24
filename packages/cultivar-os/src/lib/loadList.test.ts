@@ -79,6 +79,7 @@ const rung = (label: string, sortOrder: number, volumeGallons: number | null, po
   handlingMinutes: null, handlingBecause: 'not timed — the yard-wide rate stands in',
   installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice: null, installPriceBecause: 'not set',
+  pytPrice: null, pytPriceBecause: 'not set',
   growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set', active,
 });
 const LAWNS: Ladder = [

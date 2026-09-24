@@ -91,7 +91,8 @@ interface DeliveryActivityRow {
   notes: string | null;
   address_line1: string | null;
   city: string | null;
-  customers: { first_name: string; last_name: string } | null;
+  customers: { first_name: string | null; last_name: string | null;
+    display_name: string | null; organization_name: string | null; customer_type: string | null } | null;
 }
 
 function monthDay(date: string): string {
@@ -242,7 +243,7 @@ export function OperationsCalendar() {
     // booked in September counted as this week's. The window is the model's own.
     const { data, error } = await supabase
       .from('deliveries')
-      .select('id, delivery_date, service_type, notes, address_line1, city, customers ( first_name, last_name )')
+      .select('id, delivery_date, service_type, notes, address_line1, city, customers ( first_name, last_name, display_name, organization_name, customer_type )')
       .eq('business_id', businessId!)
       // held AND cancelled are both off the calendar — same reason (#395)
       .neq('status', 'cancelled').neq('status', 'held')
