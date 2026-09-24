@@ -17,7 +17,7 @@
 **Story:** `user_stories.md` → *What the driver receives is what the manager saw* (PIECES `handoff_order_parity`, `one_derived_route_url`, `stop_count_parity`)
 **Surface:** `/deliveries` — and, for every card below, **the artefact that leaves it**.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 8 covered** (7 `owed` · 1 `needs-test`) — ✏️ **#301 (2026-09-11) flipped CARDS 1, 2 and 7 back to `owed`: the stop list that feeds the route on `/deliveries?date=` was rebuilt as the shared stop card.** Before that — **CARDS 1, 2 and 7 proven live 2026-09-09 on LAWNS, build `f5f40e3`, the first run in this feature's history.** **CARD 2 is `covered` WITH A NAMED LIMIT** (Cultivar on the phone, Google's render on desktop — the mobile half is unevidenced). CARD 8 carries a partial desktop finding and a rewritten method; it stays `needs-test`.
+**Board: 0 of 10 covered** (9 `owed` · 1 `needs-test`) — ✏️ **#405 (2026-09-24) added CARDS 9 and 10: "Route this team" routes that crew, and a crew that cannot be routed says why.** — ✏️ **#301 (2026-09-11) flipped CARDS 1, 2 and 7 back to `owed`: the stop list that feeds the route on `/deliveries?date=` was rebuilt as the shared stop card.** Before that — **CARDS 1, 2 and 7 proven live 2026-09-09 on LAWNS, build `f5f40e3`, the first run in this feature's history.** **CARD 2 is `covered` WITH A NAMED LIMIT** (Cultivar on the phone, Google's render on desktop — the mobile half is unevidenced). CARD 8 carries a partial desktop finding and a rewritten method; it stays `needs-test`.
 ⚠️ **THE ROUTE COULD NOT BE BUILT UNTIL TWO LIVE ADDRESSES WERE CORRECTED** — see CARD 2 and tech-debt #226/#227.
 **DEVICE:** CARDS 1–3 and 5–6 are `DEVICE: desktop` (Lauren builds the route at a desk). **CARD 4 is `DEVICE: phone` and is the one that matters most** — it reads what actually landed on the installer's handset, and it is provable **without a console**.
 
@@ -248,3 +248,53 @@ question this build did not answer.
 
 **When it is decided,** this card becomes: build a **12-stop** route, text it, open it on a phone,
 and count the destinations that actually arrive.
+
+---
+
+## CARD 9 — 🔴 "Route this team" ROUTES that team
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+🔴 **THIS CARD EXISTS BECAUSE THE BUTTON DID NOTHING, AND NOTHING IS WHAT DAVID REPORTED
+(2026-09-24): *"'Route this team' DOES NOTHING when pressed."*** It navigated to the route page for
+that crew and stopped there, because `buildRoute` had exactly ONE caller — the second button,
+labelled **Route N Stops**. Nothing routed until Lauren pressed a SECOND button she had no reason to
+know about. Ledger **#405**.
+
+⚠️ **Lauren's workaround was to route the WHOLE DAY and untick the other crew — two weekends
+running.** David: *"i understand that solution to untick was used last weekend we should have had
+this fixed for this weekend."* A card that passes here is what retires that workaround.
+
+1. On **Delivery schedule**, open a day whose stops are split across **two** crews.
+2. In the **first crew's** section header, press **Route this team**. Press nothing else.
+
+**PASS:** the route page opens **already showing a built route** — the summary line, the stop order,
+and a working **Open in Google Maps** — for **that crew's stops only**, with no second press.
+**FAIL:** a stop list with no route on it, a greyed button, or a route carrying the other crew's
+stops.
+
+---
+
+## CARD 10 — a crew that cannot be routed SAYS WHY
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+The second half of the same defect, and the one §6 r24 is actually about: the page returned `null`
+whenever the selection was empty, so a crew with nothing routable rendered **a greyed button and no
+words**. The screen answered *"why can't I route?"* with silence — an absence read as an answer.
+
+**Every branch names something** — the crew, the count, or the customers by name. Four sentences are
+reachable and they are probed in `teamRouteGate.test.ts` (11 probes, 3 of 3 mutants caught):
+
+| What is true | What the screen must say |
+|---|---|
+| The crew has no stops that day | `No stops are assigned to <crew> on this day.` |
+| Every one of its stops lacks an address | `<crew> has N stops, but they have no address that can be placed: <names>.` |
+| A ticked stop has no crew | `<customer> has no team — assign it to a team first.` |
+| The ticked set spans two crews | `That set also contains stops for another team. Route one team at a time.` |
+
+1. On a day where **CREW 2** has been created but has **no** stops, press **Route this team** for it
+   — or reach `/deliveries?date=<that day>&team=<CREW 2's id>` directly.
+2. Then untick every stop on a crew that DOES have stops.
+
+**PASS:** in both cases a **sentence naming the crew** is on screen, telling Lauren what to do next.
+**FAIL:** a greyed button with no words, or the word "Cannot route" with no reason — a reason nobody
+can act on is barely better than silence.

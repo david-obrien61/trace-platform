@@ -97,6 +97,13 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#405 — "Route this team" did nothing when pressed (built; MERGED and LIVE at `6b177f67`; no migration)**
+- ⚠️ **OPEN — CARDS 9 AND 10 ON THE ROUTE BOARD ARE `owed`, AND BOTH NEED A TWO-CREW DAY.** CARD 9: press **Route this team** on the first crew and press nothing else → a built route for that crew's stops only. CARD 10: a crew with no stops, and a crew whose stops are all unticked, each put **a sentence naming the crew** on screen. Thunder never marks a card `covered`.
+- 🟡 **OPEN — THERE IS NO BULK ASSIGN, AND IT IS THE NEXT THING LAUREN WILL ASK FOR.** She sets each stop's crew from that stop's own dropdown — six times for Saturday 2026-09-26. Fine at six, not at twenty. Recorded as a question because "select these four → Crew 1" is a surface David has not specified.
+- ⛔ **OPEN AND UNCHANGED — PIECE 3, CREW LINK PER CREW, IS STILL PARKED AND `20260921d_crew_link_per_team.sql` IS STILL UNAPPLIED.** Its harness failure is not the guard's content, not its position, and not app-client setup, and **`PATH_ONLY` is not a safe bisect** — a known-good guard fails alone too (`docs/recon/2026-09-21-crew-link-per-team-parked.md`). **DO NOT APPLY that migration.** This is the task in progress, not a closed one.
+- ✏️ **NOT A QUESTION, RECORDED BECAUSE IT WILL RECUR: a multi-line `// eslint-disable-next-line <rule> -- reason` suppresses the COMMENT CONTINUATION, not the code.** eslint then reports an unused directive AND the original warning — 245 → 246, worse than no fix. The directive is the single line immediately before the code; the prose goes above it.
+
+
 **#389 — the parked sale (built; no migration)**
 - 🔴 **OPEN — CARD 5'S EXPECTATION IS NOW THE OPPOSITE OF WHAT IT WAS, AND IT MUST BE RUN BOTH WAYS.** Under #387 it was PASS when the order was LOST. Lock the phone **and** refresh — they are different evictions — **and write down which you did.** Plus: leave one parked overnight, because nothing may delete it on a timer.
 - ⚠️ **OPEN — LOCAL IS A STAGE, NOT THE DESTINATION, IN DAVID'S OWN WORDS:** *"a parked order belongs to the BUSINESS, not the device."* **The server draft is ~16 h and is NOT built** — today a parked order does not follow Lauren to a second device and never reaches the office. The persisted payload is exactly the cart's own shape (no ids, no lifecycle, no status), so the server version is a second STORAGE, not a rewrite.
