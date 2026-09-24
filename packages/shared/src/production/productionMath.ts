@@ -205,16 +205,36 @@ export interface LotSplit {
   clamped: boolean;
   coverMonthsUsed: number;
   cushionPctUsed: number;
+  /** The sales figure the split was computed from. Carried for the same reason cover and cushion
+   *  are: `production_plan_lines.sales_per_month` exists so a committed plan can be re-read later
+   *  and understood, rather than silently recomputed against constants that have since moved. */
+  salesPerMonthUsed: number;
 }
 
 /**
  * Split one lot four ways. `managerNumber` of `null` means "take the whole delta", which is the
  * default the workbook uses and the behaviour a manager who types nothing should get.
  */
-export function splitLot(lot: LotInput, ops: OperationsConfig, managerNumber: number | null): LotSplit {
+export function splitLot(
+  lot: LotInput,
+  ops: OperationsConfig,
+  managerNumber: number | null,
+  /**
+   * The TARGET rung's grow months, when known. R-85 ties cover to grow — *"the cover must last as
+   * long as the replacement takes"* — and the replacement's duration is a property of the rung it
+   * is arriving on. Omitted (or null) falls back to `lot.growMonths`, which is what every existing
+   * caller and probe passes, so their behaviour is unchanged.
+   *
+   * ⚠️ COVER STILL FALLS BACK WHEN GROW IS UNKNOWN, AND THE SELLABLE DATE DOES NOT — deliberately.
+   * A missing cover would refuse the lot and print no plan at all; a missing sellable date is the
+   * one honest answer to "when can I sell this". They are different questions and they fail
+   * differently. The basis line already marks a defaulted cover as a guess.
+   */
+  effectiveGrowMonths?: number | null,
+): LotSplit {
   const onHand = Number(lot.qty ?? 0);
   const committed = Number(lot.committed ?? 0);
-  const cover = coverMonthsFor(ops, lot.coverMonths, lot.growMonths);
+  const cover = coverMonthsFor(ops, lot.coverMonths, effectiveGrowMonths ?? lot.growMonths);
   const cushionPct = lot.cushionPct ?? ops.cushionPctDefault;
   const spm = Number(lot.salesPerMonth ?? 0);
 
@@ -226,7 +246,7 @@ export function splitLot(lot: LotInput, ops: OperationsConfig, managerNumber: nu
   const uppotNow = Math.min(asked, delta);
 
   return {
-    onHand, committed, mustKeepSellable, cushion, delta, uppotNow,
+    onHand, committed, mustKeepSellable, cushion, delta, uppotNow, salesPerMonthUsed: spm,
     // 🔴 COMMITTED IS SUBTRACTED HERE. The workbook's own column omits it and agrees with the truth
     // only because every committed cell in it is zero. Floored at 0: a negative "still sellable" is
     // a data problem to surface, never a number to show a customer.
@@ -437,6 +457,65 @@ export function workingDaysBetween(a: string, b: string): number {
 // THE PLAN
 // ════════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════════
+// GROW MONTHS — THE ONE RESOLVER, AND IT IS ALLOWED TO SAY IT DOES NOT KNOW
+// ════════════════════════════════════════════════════════════════════════════════
+// 🔴 DAVID, 2026-09-23: *"The other eight rungs are UNKNOWN and render as UNKNOWN. Never 7 by
+// default."* That single sentence is why this is a discriminated union and not a number with a
+// `??` behind it. The old line read
+//     addMonths(completesOn, lot.growMonths ?? ops.growMonthsDefault)
+// and `lot.growMonths` was hardcoded `null` at every call site, so EVERY batch on EVERY tenant
+// silently took the business-wide default — a sellable date computed from a figure nobody had
+// stated for that rung, rendered identically to one Terry had measured. That is [[R-26]] exactly:
+// a written declaration nobody checked against reality, steering a decision.
+//
+// 🔴 THE FIGURE BELONGS TO THE RUNG THE LOT IS GOING **TO**, NEVER THE ONE IT IS LEAVING.
+// David's ruling is *"a 15 gal is SELLABLE AT THE UPPOT-TO-15 DATE + 6 MONTHS"* — the 6 is a
+// property of being a 15 gal, not of having been a 3/5 gal. ⚠️ THIS IS WHY THE FIX IS NOT AT
+// `uppotPlanRead.ts:110` where it was first scoped: the read does not know the target. The target
+// is the manager's choice on the screen and is only known here, inside `planLots`.
+//
+// ⚠️ A TENANT WITH NO LADDER IS UNCHANGED. `ladder == null` still resolves to the business-wide
+// default, because a business that has configured no rungs has said nothing to contradict — and
+// Test Dave's Tree Nest, where every existing probe runs, has zero ladder rows.
+
+export type GrowMonths =
+  | { known: true; months: number; source: 'rung'; rungLabel: string }
+  | { known: true; months: number; source: 'business-default' }
+  | { known: false; reason: 'rung-has-no-grow'; rungLabel: string }
+  | { known: false; reason: 'target-not-on-ladder' };
+
+/**
+ * How many months after uppotting does a tree on the TARGET rung become sellable?
+ *
+ * `targetUnitValue` is the number the picker produced, which is a rung's own `volumeGallons` —
+ * so matching back on that value is an exact round-trip for the ladder path. It is NOT a general
+ * gallons→rung resolver and must not be used as one: R-157 keeps size resolution inside
+ * `resolveRung`, because a bare number mis-reads a range rung (`3/5 gal` claims both 3 and 5) and
+ * misses an alias (`100 gal` → the `95/100` rung).
+ */
+export function growMonthsFor(
+  ladder: Ladder | null | undefined,
+  targetUnitValue: number,
+  ops: OperationsConfig,
+): GrowMonths {
+  if (ladder == null || ladder.length === 0) {
+    return { known: true, months: ops.growMonthsDefault, source: 'business-default' };
+  }
+  const rung = ladder.find((r) => r.volumeGallons != null && Number(r.volumeGallons) === Number(targetUnitValue));
+  if (rung == null) return { known: false, reason: 'target-not-on-ladder' };
+  if (rung.growMonths == null) return { known: false, reason: 'rung-has-no-grow', rungLabel: rung.label };
+  return { known: true, months: Number(rung.growMonths), source: 'rung', rungLabel: rung.label };
+}
+
+/** The sentence the screen shows when there is no date. Never a number, never a blank. */
+export function growUnknownSentence(g: GrowMonths): string | null {
+  if (g.known) return null;
+  return g.reason === 'rung-has-no-grow'
+    ? `UNKNOWN — nobody has set GROW on the ${g.rungLabel} rung`
+    : 'UNKNOWN — this target size is not a rung on the ladder';
+}
+
 export interface PlannedBatch {
   lotId: string;
   name: string;
@@ -453,7 +532,14 @@ export interface PlannedBatch {
   completesOn: string | null;
   workingDays: number;
   crewHoursAtBatch: number;
+  /**
+   * The date this batch becomes sellable, or `null` when the target rung's GROW is unknown.
+   * 🔴 `null` NO LONGER MEANS "no window set" ALONE — it also means "nobody has stated GROW for
+   * this rung", and `growMonths` below says which. A screen must read that, not guess.
+   */
   firstSellable: string | null;
+  /** WHY there is or is not a date. The screen renders `growUnknownSentence` when it is unknown. */
+  growMonths: GrowMonths;
   arriveSellable: number;
 }
 
@@ -525,7 +611,9 @@ export function planLots(
     const from = startingGallons(lot, opts.ladder ?? null);
     if (target == null || !Number.isFinite(target) || target <= from) continue;
 
-    const split = splitLot(lot, ops, opts.managerNumbers[lot.id] ?? null);
+    // Resolved BEFORE the split, because cover ties to it (R-85).
+    const grow = growMonthsFor(opts.ladder ?? null, target, ops);
+    const split = splitLot(lot, ops, opts.managerNumbers[lot.id] ?? null, grow.known ? grow.months : null);
     if (split.uppotNow <= 0) continue;
 
     const mixPerPot = mixCubicYardsPerPot(from, target, ops);
@@ -550,7 +638,12 @@ export function planLots(
       // First sellable keys off the FINISHING date, never the start. David: *"in the growing
       // schedule 1 day is nothing"* — seven months is 213 days and a two-day spread is 0.9% — and
       // erring later is the same asymmetry as erring long on the minutes.
-      firstSellable: completesOn == null ? null : addMonths(completesOn, lot.growMonths ?? ops.growMonthsDefault),
+      // 🔴 TWO REASONS THERE MAY BE NO DATE, AND THE BATCH CARRIES WHICH. No window set leaves
+      // `completesOn` null; an unmeasured rung leaves `grow` unknown. Falling back to
+      // `ops.growMonthsDefault` — which is what this line used to do — printed a date in both
+      // cases and said nothing (David, 2026-09-23: *"Never 7 by default."*).
+      firstSellable: completesOn == null || !grow.known ? null : addMonths(completesOn, grow.months),
+      growMonths: grow,
       arriveSellable: Math.round(split.uppotNow * ops.survivalRate),
     });
   }
