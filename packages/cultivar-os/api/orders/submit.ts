@@ -1,4 +1,4 @@
-import { classifyGeocodeResponse } from '@trace/shared/business-logic/geocodeResult';
+import { classifyGeocodeResponse } from '../../../shared/src/business-logic/geocodeResult';
 import { createClient } from '@supabase/supabase-js';
 import { customerDisplayName } from '../../../shared/src/utils/personName';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
