@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { customerDisplayName } from '../../../../shared/src/utils/personName';
 import { callerCan } from '../../../../shared/src/auth/callerPermission';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
@@ -105,9 +106,22 @@ function isDuplicateNameError(body: string): boolean {
   return /"code"\s*:\s*"6240"/.test(body) || /Duplicate Name Exists/i.test(body);
 }
 
-/** The DisplayName TRACE would use for this party. Empty name → fall back to email. */
+/**
+ * The DisplayName TRACE would use for this party.
+ *
+ * 🔴 THIS BUILT THE NAME FROM first+last ONLY AND FELL BACK TO EMAIL — so an ORGANISATION,
+ * whose first/last are legitimately NULL (David's 2026-09-09 ruling: first and last are
+ * nullable when a business name is filled), was pushed to QuickBooks as its EMAIL ADDRESS.
+ * AGAVE LD LLC would have gone across as `kyla@agaveld.com` while `display_name` and
+ * `organization_name` both held "AGAVE LD LLC". That is the same ruling's other half —
+ * the business name belongs on the invoice — broken at the one place that writes the invoice.
+ * 519 of 2,021 LAWNS customers have no person name (ledger #403).
+ *
+ * Now the ONE shared resolver, so the invoice, the screens and the load list cannot disagree
+ * about what a customer is called.
+ */
 function displayNameFor(customer: any): string {
-  return `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim() || String(customer.email ?? '').trim();
+  return customerDisplayName(customer, String(customer?.email ?? '').trim());
 }
 
 /**
@@ -145,7 +159,7 @@ async function assertNoLinkCollision(
   db: any, businessId: string, qbId: string, traceCustomerId: string,
 ): Promise<void> {
   const { data } = await db
-    .from('customers').select('id, first_name, last_name')
+    .from('customers').select('id, first_name, last_name, display_name, organization_name, customer_type')
     .eq('business_id', businessId).eq('qb_customer_id', qbId)
     .neq('id', traceCustomerId).limit(1);
   if (data && data.length > 0) {
@@ -155,7 +169,7 @@ async function assertNoLinkCollision(
     });
     throw new QboIdentityConflict(
       `QuickBooks customer ${qbId} is already linked to a different TRACE customer `
-      + `("${other.first_name ?? ''} ${other.last_name ?? ''}".trim()). TRACE will not bill one QuickBooks customer `
+      + `("${customerDisplayName(other, String(other.email ?? ''))}"). TRACE will not bill one QuickBooks customer `
       + `for two different people. Resolve the duplicate in TRACE or QuickBooks, then push again.`,
     );
   }
