@@ -7,7 +7,8 @@ import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
 import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
-import { priceLinesFromLadder, usesLadderPricing } from '../../../shared/src/business-logic/ladderPricing';
+import { priceLinesFromLadder, usesLadderPricing, ladderPriceKindFor, LADDER_PRICE_KINDS }
+  from '../../../shared/src/business-logic/ladderPricing';
 import { LADDER_SELECT, rungFromRow, type Ladder } from '../../../shared/src/inventory/containerLadder';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
@@ -923,7 +924,15 @@ async function handleCreate(req: any, res: any) {
     // paid on every order.
     let ladder: Ladder | null = null;
     const plantingUsesLadder = plantingActive && usesLadderPricing(plantingOffering);
-    if (plantingUsesLadder) {
+    // 🔴 LADDER-PRICED ADDONS TOO, NOT ONLY THE INSTALL (ledger #399). `Plant Your Tree` is an
+    // ADDON that prices by container size exactly as install does (David, 2026-09-24), so the
+    // question this asks is *"does any service on this order read the ladder?"* — never *"is it
+    // the install?"*. Keyed on `price_source`, which is the column that already answers it, so a
+    // tenant turning a third service onto the ladder needs no code change here.
+    const ladderAddons = (services ?? []).filter(
+      (s: any) => s.selected && s.offering?.category === 'addon' && usesLadderPricing(s.offering),
+    );
+    if (plantingUsesLadder || ladderAddons.length > 0) {
       const { data: ladderRows, error: ladderErr } = await db
         .from('container_ladder')
         .select(LADDER_SELECT)
@@ -934,11 +943,12 @@ async function handleCreate(req: any, res: any) {
       // `order_discount:apply`, silently becomes a $0 planting line. An empty array is a real
       // answer (a business with no rungs); a failed read is not, and they must not look alike.
       if (ladderErr) {
-        console.log('[TRACE:PRICE] container ladder read FAILED — refusing to price the install', {
+        console.log('[TRACE:PRICE] container ladder read FAILED — refusing to price by size', {
           businessId, error: ladderErr.message,
+          services: [plantingUsesLadder ? plantingOffering.name : null, ...ladderAddons.map((s: any) => s.offering.name)].filter(Boolean),
         });
         return res.status(503).json({
-          error: 'We could not read this business\'s container sizes, so the install price cannot be worked out. Nothing was charged. Try again in a moment.',
+          error: 'We could not read this business\'s container sizes, so the price that depends on them cannot be worked out. Nothing was charged. Try again in a moment.',
         });
       }
       ladder = (ladderRows ?? []).map((r: any) => rungFromRow(r));
@@ -1013,10 +1023,59 @@ async function handleCreate(req: any, res: any) {
     const otherAddons = (services ?? []).filter(
       (s: any) => s.selected && s.offering?.category === 'addon' && !s.offering?.trigger_transport_mode,
     );
-    const otherResults = otherAddons.map((s: any) => ({
-      offering: s.offering,
-      res: applyOverride(s.offering.id, lineSubtotal(s.offering, qtyFor(s.offering))),
-    }));
+    // ── A LADDER-PRICED ADDON IS PRICED BY SIZE HERE TOO (ledger #399) ────────────────────────
+    // 🔴 THE SERVER RECOMPUTES IT, LIKE EVERY OTHER PRICE (§1.6 gate 10). CartReview previews the
+    // same pure function over the same rule; THIS reads the SERVER's container sizes, so a
+    // tampered cart changes the preview and not the charge.
+    //
+    // 🔴 AND IT DOES NOT REFUSE, WHICH IS THE OPPOSITE OF THE INSTALL TWENTY LINES ABOVE. David,
+    // 2026-09-24: *"'I don't know' → the installer identifies it on the install day and LAWNS
+    // AMENDS the order to add the charge."* So an unpriced planting line is CHARGED NOTHING TODAY
+    // and named on the order, rather than blocking the sale. `blocksOrder` on `LADDER_PRICE_KINDS`
+    // is where that difference is declared — one place, read by both this and CartReview, because
+    // two hardcoded copies of a rule this consequential are two rules waiting to disagree.
+    const addonLadderPricing = new Map<string, ReturnType<typeof priceLinesFromLadder>>();
+    if (ladder) {
+      for (const s of otherAddons) {
+        if (!usesLadderPricing(s.offering)) continue;
+        const kind = ladderPriceKindFor(s.offering);
+        const priced = priceLinesFromLadder(ladder, resolvedLines.map(rl => ({
+          size: rl.container,
+          quantity: rl.quantity,
+          name: rl.plant?.common_name ?? rl.plant?.species ?? null,
+        })), kind);
+        addonLadderPricing.set(s.offering.id, priced);
+        console.log('[TRACE:PRICE] addon priced per container size', {
+          offering: s.offering.name, kind, blocksOrder: LADDER_PRICE_KINDS[kind].blocksOrder,
+          pricedTotal: priced.pricedTotal,
+          linesNeedingAmount: priced.linesNeedingAmount,
+          unitsNeedingAmount: priced.quantityNeedingAmount,
+          lines: priced.lines.map(l => ({ name: l.name, size: l.size, rung: l.rungLabel, unit: l.unitPrice, total: l.lineTotal, reason: l.reason })),
+        });
+        // 🔴 A LADDER-PRICED ADDON THAT *DOES* BLOCK IS REFUSED HERE, SO THE DECLARATION IS NOT
+        // DECORATIVE. Nothing sets `blocksOrder: true` on an addon today; if a tenant ever puts
+        // install-shaped pricing on an addon, this is the gate behind the UI, exactly as the
+        // install's own refusal above is (STD-013's pattern).
+        if (LADDER_PRICE_KINDS[kind].blocksOrder && !priced.allPriced && !honored[s.offering.id]) {
+          const owed = priced.lines.filter(l => l.needsAmount);
+          return res.status(422).json({
+            error: `${s.offering.name} has no price for some of these sizes, so it cannot be totalled yet. `
+                 + 'Enter an amount for it, with a reason — or set a price for '
+                 + [...new Set(owed.map(l => l.rungLabel ?? l.size ?? 'the missing size'))].join(', ')
+                 + ' in Settings → Container sizes.',
+            linesNeedingAmount: owed.map(l => ({ name: l.name, size: l.size, rung: l.rungLabel, reason: l.reason })),
+          });
+        }
+      }
+    }
+    const otherResults = otherAddons.map((s: any) => {
+      const priced = addonLadderPricing.get(s.offering.id);
+      // 🔴 THE BASELINE FOR A LADDER-PRICED ROW IS WHAT THE LADDER COULD PRICE — NEVER `price × qty`.
+      // The scalar `price` column is unused on such a row (that is what `price_source` says), so
+      // multiplying it would charge whatever happened to be sitting there.
+      const baseline = priced ? priced.pricedTotal : lineSubtotal(s.offering, qtyFor(s.offering));
+      return { offering: s.offering, priced: priced ?? null, res: applyOverride(s.offering.id, baseline) };
+    });
     const otherTotal = otherResults.reduce((sum: number, x: any) => sum + x.res.amount, 0);
 
     // Override columns for a selection row. `is_manual_override` is set on EVERY row — true on the
@@ -1068,7 +1127,20 @@ async function handleCreate(req: any, res: any) {
       overrideReason: plantingRes?.reason ?? null,
     });
     if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null, overrideReason: nettingRes?.reason ?? null });
-    for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null, overrideReason: x.res.reason ?? null });
+    for (const x of otherResults) {
+      // A ladder-priced addon has ALREADY been summed across its lines, so it enters as ONE unit at
+      // that total — `price × qty` would charge the unused scalar column. Same shape as the install
+      // twelve lines above, and `tierEligible` follows it for the same reason: a ladder-priced
+      // service is one a contractor's tier has always reached.
+      serviceInputs.push({
+        kind: 'service', name: x.offering.name,
+        unitPrice: x.priced ? x.priced.pricedTotal : Number(x.offering.price),
+        qty:       x.priced ? 1                    : qtyFor(x.offering),
+        tierEligible: !!x.priced,
+        overrideTotal: x.res.isOverride ? x.res.amount : null,
+        overrideReason: x.res.reason ?? null,
+      });
+    }
 
     // D-40: the tax rate + effective exemption flow into the SAME shared computation. taxStatus is
     // one of not_identified (rate unset → redline) / taxed / exempt (documented). The surfaces render
@@ -1373,8 +1445,10 @@ async function handleCreate(req: any, res: any) {
       selectionRows.push({
         order_id:              orderId,
         service_offering_id:   x.offering.id,
-        quantity:              qtyFor(x.offering),
-        unit_price_at_time:    x.offering.price,
+        // A ladder-priced row is ONE line at the ladder's total, as the install's own row is —
+        // storing `qty × the unused scalar` would record a price nobody charged.
+        quantity:              x.priced ? 1 : qtyFor(x.offering),
+        unit_price_at_time:    x.priced ? x.priced.pricedTotal : x.offering.price,
         subtotal:              x.res.amount,
         ...overrideCols(x.res),
       });

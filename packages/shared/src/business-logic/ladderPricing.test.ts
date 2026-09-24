@@ -14,7 +14,10 @@
  *
  * Run: node scripts/run-tests.mjs ladderPricing
  */
-import { priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE } from './ladderPricing';
+import {
+  priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE,
+  ladderPriceKindFor, LADDER_PRICE_KINDS,
+} from './ladderPricing';
 import type { Ladder, Rung } from '../inventory/containerLadder';
 
 let passed = 0, failed = 0;
@@ -27,6 +30,7 @@ function ok(cond: boolean, msg: string): void {
 const rung = (
   label: string, sortOrder: number, volumeGallons: number | null,
   installPrice: number | null, aliases: string[] = [], active = true,
+  pytPrice: number | null = null,
 ): Rung => ({
   label, aliases, sortOrder, volumeGallons,
   handlingMinutes: null, handlingBecause: 'not timed',
@@ -34,8 +38,14 @@ const rung = (
   caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice,
   installPriceBecause: installPrice == null ? 'Not priced. Lauren\'s sheet covers 15/30/45/65/95 only.' : 'LAWNS billed median, measured 2026-09-23.',
+  // ledger #399 — PYT is a LAST parameter with a null default, so every existing call above keeps
+  // its meaning and the PYT ladder is, as live, entirely unpriced unless a case says otherwise.
+  pytPrice,
+  pytPriceBecause: pytPrice == null
+    ? 'Not set. LAWNS has invoiced five Plant Your Tree lines ever and every one is a tree the customer already owned.'
+    : 'set by hand for this case',
   active,
-});
+} as Rung);
 
 // LAWNS's live ladder + the seed the migration writes. slip / 4 in / 3-5 / 200 carry NO price.
 const LADDER: Ladder = [
@@ -162,6 +172,98 @@ const LADDER: Ladder = [
     '§H money is rounded to cents at both the unit and the line, so a total cannot carry a fraction of a cent');
   ok(priceLinesFromLadder([], [{ size: '15 gallon', quantity: 1 }]).linesNeedingAmount === 1,
     '§H 🔴 an EMPTY ladder prices nothing and asks — it does not fall back to some default price');
+}
+
+// ── §J — PLANT YOUR TREE: THE SAME MODULE, A DIFFERENT RUNG FIELD (ledger #399) ──────────────
+// 🔴 WHAT THIS SECTION IS REALLY GUARDING IS THAT THERE IS NO SECOND MODULE. David ruled on
+// 2026-09-23, about search: *"inventory already has the filter type function, why not reuse that
+// like we should."* A `plantingPricing.ts` would have been the same mistake one file over, so the
+// service is a PARAMETER — and these probes prove the parameter actually reaches the price.
+{
+  // A ladder where install and planting DISAGREE at every rung. If the kind were ignored — the
+  // shape a copy-paste would produce — every assertion below would read the install number.
+  const BOTH: Ladder = [
+    rung('15 gal', 40, 15, 204, [], true, 90),
+    rung('30 gal', 50, 30, 425, [], true, null),   // priced to install, NOT to plant
+    rung('45 gal', 60, 45, 450, [], true, 150),
+  ];
+
+  const plant = priceLinesFromLadder(BOTH, [{ size: '15 gal', quantity: 2, name: 'Their olive' }], 'planting');
+  ok(plant.lines[0].unitPrice === 90 && plant.lines[0].lineTotal === 180,
+    '🔴 §J the planting kind reads pytPrice (90), NOT installPrice (204) — the parameter reaches the money');
+  const inst = priceLinesFromLadder(BOTH, [{ size: '15 gal', quantity: 2 }], 'install');
+  ok(inst.lines[0].unitPrice === 204,
+    '§J …and the install kind is unchanged by any of this');
+  ok(priceLinesFromLadder(BOTH, [{ size: '15 gal', quantity: 2 }]).lines[0].unitPrice === 204,
+    '🔴 §J the DEFAULT is still install — every caller written before #399 keeps its exact meaning');
+
+  // A rung priced for install and not for planting: the planting line must ASK, not borrow.
+  const borrow = priceLinesFromLadder(BOTH, [{ size: '30 gal', quantity: 1, name: 'Their maple' }], 'planting');
+  ok(borrow.lines[0].unitPrice === null && borrow.lines[0].needsAmount,
+    '🔴 §J a rung with an install price but NO planting price asks — it never borrows the install figure');
+  ok(/Plant Your Tree price is set for 30 gal/.test(borrow.lines[0].reason),
+    `§J …and it names the rung and the service, so the person reading can fix it — "${borrow.lines[0].reason}"`);
+
+  // 🔴 THE UNKNOWN SIZE — DAVID'S ACTUAL SENTENCE, 2026-09-24. For a tree LAWNS did not sell, the
+  // customer often does not know their own pot. That is a PLAN, not a data-entry failure, and the
+  // two must not read the same.
+  const unknown = priceLinesFromLadder(BOTH, [{ size: null, quantity: 1, name: 'Their olive' }], 'planting');
+  ok(unknown.lines[0].needsAmount && unknown.lines[0].unitPrice === null && unknown.lines[0].lineTotal === null,
+    '§J an unknown size is unpriced — never 0, which would be a free planting');
+  ok(/confirmed on install day/i.test(unknown.lines[0].reason),
+    `§J 🔴 …and it says the size is confirmed on the install day — "${unknown.lines[0].reason}"`);
+  const unknownInstall = priceLinesFromLadder(BOTH, [{ size: null, quantity: 1 }], 'install');
+  ok(!/confirmed on install day/i.test(unknownInstall.lines[0].reason),
+    '🔴 §J the INSTALL says something different for the same missing size — the two kinds do not share one sentence');
+  ok(unknownInstall.lines[0].reason.length > 0 && unknown.lines[0].reason.includes(unknownInstall.lines[0].reason),
+    '§J …and planting WRAPS the resolver\'s own words rather than replacing them, so the reason is not lost');
+
+  // A mixed cart: the priced part is charged, the rest is owed. Nothing is silently dropped.
+  const mixed = priceLinesFromLadder(BOTH, [
+    { size: '15 gal', quantity: 1, name: 'Theirs A' },
+    { size: '45 gal', quantity: 2, name: 'Theirs B' },
+    { size: null,     quantity: 1, name: 'Theirs C' },
+  ], 'planting');
+  ok(mixed.pricedTotal === 390 && mixed.linesNeedingAmount === 1 && mixed.quantityNeedingAmount === 1,
+    `§J a mixed cart charges what it can (90 + 300 = ${mixed.pricedTotal}) and counts what it cannot (${mixed.linesNeedingAmount})`);
+  ok(!mixed.allPriced, '§J …and it does not claim to be fully priced');
+}
+
+// ── §K — `blocksOrder` IS A RULING, AND IT IS DECLARED IN EXACTLY ONE PLACE ──────────────────
+// 🔴 THE TWO SERVICES DIVERGE HERE AND NOWHERE ELSE, WHICH IS WHY IT IS A TABLE AND NOT AN `if`
+// IN TWO FILES. Install: *"never $0, never a guess, never refused"* (David, 2026-09-23 (c)) — the
+// order stops until someone types an amount. Planting: *"'I don't know' → the installer identifies
+// it on the install day and LAWNS AMENDS the order"* (David, 2026-09-24) — the order goes.
+// CartReview's Send guard and submit.ts's 422 both read this; if it were written out at each site
+// they could disagree, and the disagreement would be a sale silently blocked or silently free.
+{
+  ok(LADDER_PRICE_KINDS.install.blocksOrder === true,
+    '🔴 §K an unpriced INSTALL blocks the order — David 2026-09-23 (c), "never a guess"');
+  ok(LADDER_PRICE_KINDS.planting.blocksOrder === false,
+    '🔴 §K an unpriced PLANTING does NOT block — David 2026-09-24, it is amended on the install day');
+  ok(LADDER_PRICE_KINDS.install.price === 'installPrice' && LADDER_PRICE_KINDS.planting.price === 'pytPrice',
+    '§K each kind names the rung field it reads, so adding a third service is a row here and no new module');
+  ok(LADDER_PRICE_KINDS.install.because === 'installPriceBecause' && LADDER_PRICE_KINDS.planting.because === 'pytPriceBecause',
+    '§K …and the reason field travels with it, so a price can never be shown without its provenance');
+  const kinds = Object.keys(LADDER_PRICE_KINDS);
+  ok(kinds.length === 2 && kinds.includes('install') && kinds.includes('planting'),
+    `§K the table holds exactly the two services that exist today (${kinds.join(', ')}) — a third would need its own probes`);
+}
+
+// ── §L — WHICH SERVICE IS WHICH ─────────────────────────────────────────────────────────────
+// ⚠️ THE HONEST LIMIT, SAID RATHER THAN HIDDEN: this reads the offering's NAME, because
+// `service_offerings` has no column saying which ladder price a row reads. That is a real weakness
+// — renaming the row in Settings changes the price it reads — and it is recorded in the close-out
+// rather than left for someone to find. The alternative was a migration adding a `ladder_price_kind`
+// column, which is the right answer and is a decision for David, not a default taken here.
+{
+  ok(ladderPriceKindFor({ name: 'Plant Your Tree' }) === 'planting', '§L the PYT row prices by the planting rung');
+  ok(ladderPriceKindFor({ name: 'plant your tree' }) === 'planting', '§L …case does not matter');
+  ok(ladderPriceKindFor({ name: 'Installation' }) === 'install', '§L the install row prices by the install rung');
+  ok(ladderPriceKindFor({ name: 'Tailgate Delivery' }) === 'install',
+    '🔴 §L anything else falls back to INSTALL, the blocking kind — an unknown service must not become the one that can be free');
+  ok(ladderPriceKindFor(null) === 'install' && ladderPriceKindFor({}) === 'install',
+    '§L a missing name falls back the same way');
 }
 
 console.log(`\n  ladderPricing: ${passed} passed, ${failed} failed`);

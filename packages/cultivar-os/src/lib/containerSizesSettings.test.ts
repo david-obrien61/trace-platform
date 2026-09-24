@@ -35,6 +35,7 @@ const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Ru
   label, aliases: [], sortOrder, volumeGallons: null, handlingMinutes: null,
   handlingBecause: 'not timed', installTPostsPerTree: posts, installTPostsBecause: 'LAWNS, David 2026-09-12', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
   installPrice: null, installPriceBecause: 'not set',
+  pytPrice: null, pytPriceBecause: 'not set',
   growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
   active: true, ...extra,
 });
@@ -264,6 +265,28 @@ const LAWNS: Ladder = [
   const roundTrip = draftFromRung({ ...LAWNS[3], installPrice: 204, installPriceBecause: 'billed median' });
   ok(roundTrip.installPrice === '204' && draftToRow({ ...roundTrip, label: LAWNS[3].label }).install_price === 204,
     'F10 rung → draft → row keeps the price, so opening the editor and saving changes nothing');
+  // ── Plant Your Tree (ledger #399) — the same refusals, because it is the same kind of fact ──
+  // 🔴 THESE ARE NOT COPIES OF THE INSTALL PROBES ABOVE FOR THEIR OWN SAKE: the validation was
+  // added by hand in a second place, and a rule typed twice is a rule that can be typed wrong once.
+  ok(rungDraftProblems({ ...good, pytPrice: '0' }, LAWNS, null).some(p => /charge nothing/.test(p)),
+    '🔴 B-pyt1: a $0 Plant Your Tree price is refused, and the sentence says it would charge nothing');
+  ok(rungDraftProblems({ ...good, pytPrice: '-50' }, LAWNS, null).some(p => /above \$0/.test(p)),
+    'B-pyt2: a negative Plant Your Tree price is refused');
+  ok(rungDraftProblems({ ...good, pytPrice: '' }, LAWNS, null).length === 0,
+    '🔴 B-pyt3: a BLANK price is a real answer and the ONLY one LAWNS has today — it must not be a validation error');
+  ok(rungDraftProblems({ ...good, pytPrice: '90', pytPriceBecause: '  ' }, LAWNS, null)
+      .some(p => /Say where the Plant Your Tree price came from/.test(p)),
+    '🔴 B-pyt4: a price with no reason is refused — an unlabelled price cannot be checked');
+  const pytPriced = draftToRow({ ...good, pytPrice: '90', pytPriceBecause: 'Lauren, 2026-09-24' });
+  ok(pytPriced.pyt_price === 90 && pytPriced.pyt_price_because === 'Lauren, 2026-09-24',
+    'B-pyt5: a typed price and its reason reach the write payload');
+  const pytBlank = draftToRow({ ...good, pytPrice: '', pytPriceBecause: 'not set' });
+  ok(pytBlank.pyt_price === null,
+    '🔴 B-pyt6: a blank writes NULL, never 0 — the whole point of the column');
+  const pytTrip = draftFromRung({ ...LAWNS[1], pytPrice: 90, pytPriceBecause: 'set by hand' });
+  ok(pytTrip.pytPrice === '90' && draftToRow({ ...pytTrip, label: LAWNS[1].label }).pyt_price === 90,
+    'B-pyt7: rung → draft → row round-trips without losing the figure');
+
   const blankTrip = draftFromRung({ ...LAWNS[3], installPrice: null, installPriceBecause: 'not priced' });
   ok(blankTrip.installPrice === '' && draftToRow({ ...blankTrip, label: LAWNS[3].label }).install_price === null,
     'F11 🔴 …and an UNPRICED rung round-trips as blank, never as 0 — the direction that would charge nothing');

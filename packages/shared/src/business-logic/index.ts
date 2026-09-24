@@ -292,5 +292,8 @@ export type {
 // (ledger #386). Pure; the CartReview preview and submit's authoritative recompute both call it.
 export {
   priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE,
+  // ledger #399 — `Plant Your Tree` prices by container size too, through THIS module. The
+  // service is a parameter; there is still one implementation of "price a line from its rung".
+  ladderPriceKindFor, LADDER_PRICE_KINDS, type LadderPriceKind,
   type LadderPriceableLine, type LadderPricedLine, type LadderPricing,
 } from './ladderPricing';
