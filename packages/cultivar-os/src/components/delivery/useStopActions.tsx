@@ -179,6 +179,22 @@ export function useStopActions(
     });
     if (TRACE_DELIVERY) console.log('[TRACE:STOP] ship-to save —', out.kind, out);
     if (out.kind === 'saved') {
+      // Raised BEFORE the refresh, not after: `onChanged()` unmounts the card list on two of the
+      // three screens, and state set after an await that outlives the component is the defect this
+      // moved to fix. Here it is page state, so the order is a choice rather than a hazard — and
+      // raising it first means a refresh that THROWS still leaves the owner the offer they earned.
+      // The gate is the same pair the card used, checked in one place now (§1.6 item 4).
+      if (can('customers:create') && d.customer_id) {
+        setSiteResult(null);
+        setSiteOffer({
+          stopId: d.id,
+          customerName: customerDisplayName(d.customers, 'this customer'),
+          address: [form.address_line1, form.city, form.state, form.zip].filter(Boolean).join(', '),
+          label: '',
+        });
+      }
+      await onChanged();
+
       // ══════════════════════════════════════════════════════════════════════════════════════
       // 🔴 RULING 4 — A CHANGED ADDRESS NEVER SILENTLY RE-PRICES AN ALREADY-INVOICED ORDER
       // ══════════════════════════════════════════════════════════════════════════════════════
@@ -200,21 +216,6 @@ export function useStopActions(
           stopId: d.id, orderId: d.order_id ?? null,
         });
       }
-      // Raised BEFORE the refresh, not after: `onChanged()` unmounts the card list on two of the
-      // three screens, and state set after an await that outlives the component is the defect this
-      // moved to fix. Here it is page state, so the order is a choice rather than a hazard — and
-      // raising it first means a refresh that THROWS still leaves the owner the offer they earned.
-      // The gate is the same pair the card used, checked in one place now (§1.6 item 4).
-      if (can('customers:create') && d.customer_id) {
-        setSiteResult(null);
-        setSiteOffer({
-          stopId: d.id,
-          customerName: customerDisplayName(d.customers, 'this customer'),
-          address: [form.address_line1, form.city, form.state, form.zip].filter(Boolean).join(', '),
-          label: '',
-        });
-      }
-      await onChanged();
     }
     setSavingId(null);
     return out;
