@@ -49,6 +49,17 @@ export interface RungDraft {
    */
   installPrice: string;
   installPriceBecause: string;
+  /**
+   * GROW — months from uppotting into this rung until a tree on it is SELLABLE (ledger #390).
+   * '' = UNKNOWN, which is the honest and currently the COMMON answer: eight of LAWNS's nine rungs
+   * have no figure and David is asking Terry for them. It must never be typed as 0 — a tree
+   * sellable the instant it is potted has not been grown — and the validation says so.
+   */
+  growMonths: string;
+  growBecause: string;
+  /** HOLD — months it then stays on this rung before it must move up. '' = UNKNOWN. */
+  holdMonths: string;
+  holdBecause: string;
 }
 
 /** The reason a rung carries when nobody has set its install price — the migration's own wording. */
@@ -56,6 +67,11 @@ export const INSTALL_PRICE_NOT_SET = 'not set — the counter types an amount fo
 
 /** The reason a rung carries when nobody has recorded its caliper — the database's own default. */
 export const CALIPER_NOT_SET = 'not set — no caliper recorded for this size';
+
+/** The reason a rung carries when nobody has stated how long it takes to grow on this size. */
+export const GROW_NOT_SET = 'not set — nobody has said how long this size takes to become sellable';
+/** The reason a rung carries when nobody has stated how long a tree holds on this size. */
+export const HOLD_NOT_SET = 'not set — nobody has said how long a tree holds at this size';
 
 const numText = (n: number | null): string => (n == null ? '' : String(n));
 
@@ -74,6 +90,10 @@ export function draftFromRung(r: Rung): RungDraft {
     caliperBecause: r.caliperBecause,
     installPrice: numText(r.installPrice),
     installPriceBecause: r.installPriceBecause,
+    growMonths: numText(r.growMonths),
+    growBecause: r.growBecause,
+    holdMonths: numText(r.holdMonths),
+    holdBecause: r.holdBecause,
   };
 }
 
@@ -92,6 +112,11 @@ export function draftForNewRung(ladder: Ladder): RungDraft {
     // travels between neighbouring sizes; a PRICE is not, and copying one would put a number on a
     // new size that nobody chose and that reads as though somebody did.
     installPrice: '', installPriceBecause: INSTALL_PRICE_NOT_SET,
+    // 🔴 NOT COPIED FROM ANOTHER RUNG, for the install price's reason: how long a tree takes to
+    // grow into a 30 is not evidence about a 45. A copied interval would put a schedule date on a
+    // new size that nobody chose — and a date is exactly what people act on.
+    growMonths: '', growBecause: GROW_NOT_SET,
+    holdMonths: '', holdBecause: HOLD_NOT_SET,
   };
 }
 
@@ -158,6 +183,23 @@ export function rungDraftProblems(d: RungDraft, ladder: Ladder, editingLabel: st
       : 'The install price must be an amount above $0, or left blank if there is no price for this size.');
   }
   if (!d.installPriceBecause.trim()) out.push('Say where the install price came from — even "not set".');
+  // GROW and HOLD (ledger #390). Both optional — blank is the honest UNKNOWN and the schedule then
+  // says UNKNOWN rather than borrowing the business-wide default. A typed 0 is refused for the same
+  // reason a $0 install price is: it is not a short interval, it is a nonsensical one.
+  const gm = optionalPositive(d.growMonths);
+  if (gm === 'bad') {
+    out.push(d.growMonths.trim() === '0'
+      ? 'A grow of 0 months would make a tree sellable the day it is potted. Leave it blank if nobody has measured it — the schedule then says UNKNOWN.'
+      : 'Months to grow must be a number above 0, or left blank if nobody has measured it.');
+  }
+  if (!d.growBecause.trim()) out.push('Say where the grow figure came from — even "not set".');
+  const hom = optionalPositive(d.holdMonths);
+  if (hom === 'bad') {
+    out.push(d.holdMonths.trim() === '0'
+      ? 'A hold of 0 months would mean a tree must move up the day it becomes sellable. Leave it blank if nobody has measured it.'
+      : 'Months to hold must be a number above 0, or left blank if nobody has measured it.');
+  }
+  if (!d.holdBecause.trim()) out.push('Say where the hold figure came from — even "not set".');
   return out;
 }
 
@@ -185,5 +227,9 @@ export function draftToRow(d: RungDraft) {
     caliper_because: d.caliperBecause.trim(),
     install_price: typeof optionalPositive(d.installPrice) === 'number' ? Number(d.installPrice) : null,
     install_price_because: d.installPriceBecause.trim(),
+    grow_months: typeof optionalPositive(d.growMonths) === 'number' ? Number(d.growMonths) : null,
+    grow_because: d.growBecause.trim(),
+    hold_months: typeof optionalPositive(d.holdMonths) === 'number' ? Number(d.holdMonths) : null,
+    hold_because: d.holdBecause.trim(),
   };
 }

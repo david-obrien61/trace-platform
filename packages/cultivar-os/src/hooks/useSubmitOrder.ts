@@ -145,7 +145,13 @@ export function useSubmitOrder() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Order submission failed (${res.status})`);
+        // 🔴 `message` FIRST, THEN `error`. This read `body.error` alone — and `error` is the
+        // MACHINE CODE on refusals that carry both. The tax-rate refusal returns
+        // { error: 'tax_rate_unreadable', message: "Couldn't read your tax rate — try again." },
+        // so Lauren was shown the literal string `tax_rate_unreadable` at the counter while the
+        // sentence written for her sat unread in the same payload (ledger #398).
+        // Endpoints that send only `error` carry human text there, so it stays as the fallback.
+        throw new Error(body.message || body.error || `Order submission failed (${res.status})`);
       }
 
       const { orderId, invoiceNumber, total, subtotal, taxAmount, breakdown,

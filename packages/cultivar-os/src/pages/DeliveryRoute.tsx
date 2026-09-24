@@ -466,7 +466,8 @@ export function DeliveryRoute() {
       `)
       .eq('business_id', businessId!)
       .eq('transport_method', 'delivery')
-      .neq('status', 'cancelled')
+      // held AND cancelled are both off the ROUTE — a held stop must not be routed or driven to (#395)
+      .neq('status', 'cancelled').neq('status', 'held')
       .order('created_at', { ascending: false })
       .limit(30);
 

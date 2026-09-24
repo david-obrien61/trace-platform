@@ -20,10 +20,11 @@ export {
   rungKey, classifyLot, splitLot, planLots, mixCubicYardsPerPot, runMinutes, minutesPerPot, startingGallons,
   crewHours, splitPenalty, potCascade, sequenceRuns, arithmeticCheck,
   addMonths, addWorkingDays, workingDaysBetween, ARITHMETIC_TOLERANCE,
+  growMonthsFor, growUnknownSentence,
 } from './productionMath';
 export type {
   LotInput, LotRefusal, LotSplit, PlannedBatch, PlanTotals, CascadeRung, CascadeResult,
-  ArithmeticCheck,
+  ArithmeticCheck, GrowMonths,
 } from './productionMath';
 
 export {

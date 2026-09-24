@@ -61,11 +61,32 @@ code. CLAUDE.md §2 block is now stale — it points here.
 | `SUPABASE_SERVICE_KEY` | Dev / Preview / Prod | Supabase service role key (bypasses RLS) — server-side only | All api functions that write or admin-query |
 | `ANTHROPIC_API_KEY` | Dev / Preview / Prod | Anthropic API key for Claude calls — server-side only | api/campaigns, api/discovery/ingest, api/pmi/suggest, api/receipts/ocr (fallback), api/social/generate-posts |
 | `GEMINI_API_KEY` | Dev / Preview / Prod | Google Gemini API key — server-side only | api/receipts/ocr (primary) |
+| `GOOGLE_GEOCODING_API_KEY` | Dev / Preview / Prod | 🔴 **SERVER-SIDE ONLY — NEVER A `VITE_` NAME.** Google Geocoding API: address → coordinate, for checkout validation and the one-pass failure list. Google Cloud key **"BuiltWithCAI"** (project `gen-lang-client-0103777424`), **Application restrictions = NONE**, which is what lets it answer from a Node script — and exactly why it must never reach the browser bundle. | the address check (#386): checkout validation, the lazy 30-day refresh, `scripts/` one-pass geocode |
+| `VITE_GOOGLE_MAPS_API_KEY` | Dev / Preview / Prod | **BROWSER — public by design.** The Maps JS loader on the delivery route map. **Referrer-locked**, so it is useless anywhere but our own pages. ✏️ Recorded here for the first time 2026-09-23; it has been in use since the route map shipped and this inventory did not list it, which is the drift this file exists to prevent. | `packages/cultivar-os/src/pages/DeliveryRoute.tsx:76` |
 | `QBO_CLIENT_ID` | Dev / Preview / Prod | QuickBooks OAuth app client ID | api/qbo/auth-url, api/qbo/callback |
 | `QBO_CLIENT_SECRET` | Dev / Preview / Prod | QuickBooks OAuth app client secret | api/qbo/auth-url, api/qbo/callback |
 | `QBO_REDIRECT_URI` | Dev / Preview / Prod | QuickBooks OAuth redirect URI (`https://cultivar-os.vercel.app/api/qbo/callback`) | api/qbo/auth-url, api/qbo/callback |
 | `QBO_ENVIRONMENT` | Dev / Preview / Prod | `production` (updated 2026-05-22 post Intuit production approval) | api/qbo/callback, api/qbo/invoice/cultivar |
 | `VITE_DEMO_NURSERY_ID` | Dev / Preview / Prod | Demo nursery UUID (a1b2c3d4-0000-0000-0000-000000000001) — frontend | Cultivar-os frontend pages |
+
+### 🔴 WHY THERE ARE TWO GOOGLE KEYS, AND WHY THEY STAY SEPARATE
+
+They are not interchangeable and swapping either for the other fails — in one direction loudly,
+in the other silently and expensively.
+
+* **`VITE_GOOGLE_MAPS_API_KEY` is REFERRER-LOCKED.** It only answers requests that carry one of our
+  origins as the referrer. A Node script sends no referrer, so Google replies `REQUEST_DENIED` —
+  the one-pass geocode would fail on **every one of LAWNS's 1,482 addresses**, and it would read
+  like "no addresses could be found" rather than like a credentials problem.
+* **`GOOGLE_GEOCODING_API_KEY` has NO application restriction.** That is what makes it work from a
+  script, and it is precisely why it must never be inlined into the bundle. Vite substitutes every
+  `VITE_*` value at BUILD time, so naming it with that prefix would publish an unrestricted,
+  billable key to every visitor — permanently, in a static asset, with no way to un-ship it short
+  of rotating the key.
+
+**The rule, in one line: the browser gets the locked key, the server gets the unlocked one, and the
+prefix is what decides which.** Both point at the same Google Cloud project; the restriction, not
+the value, is the security boundary.
 | `VITE_DEMO_BUSINESS_ID` | Dev / Preview / Prod | Demo business UUID (same as DEMO_NURSERY_ID) — frontend. Added 2026-05-29 | Cultivar-os frontend pages |
 | `VITE_TAX_RATE` | Dev / Preview / Prod | Texas sales tax rate (`0.0825`) | orders/submit.ts (hardcoded fallback), frontend cart |
 | `VITE_APP_URL` | Dev / Preview / Prod | App base URL — confirmed in Vercel screenshots | ⚠️ zero code references found (grep 2026-06-13); possibly orphaned |
