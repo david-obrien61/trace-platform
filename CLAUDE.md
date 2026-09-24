@@ -535,6 +535,19 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
 
     ⚠️ **Numbered 23 by APPENDING**, per the notes on r18–r21 — other documents cite these rules by number.
 
+
+24. **EVERY DATA-ACCESS HELPER THROWS ON A NON-2xx — AN EMPTY RESULT AND A FAILED REQUEST MUST NEVER LOOK THE SAME (binding — David, 2026-09-23; rule number assigned by Lightning; ledger #392).**
+
+    A helper that fetches, queries or reads **raises on any non-2xx** and never converts a failure into an empty collection. In every report, "0 rows" must mean *the question was asked and the answer was none* — never *the question failed*.
+
+    🔴 **THE INSTANCE THAT PRODUCED THIS RULE, AND IT WAS A HAIR FROM A FALSE REPORT TO DAVID.** Measuring the warranty backlog, a paginating read helper returned `[]` for any body that was not an array. An HTTP 400 — `column order_items.total_price does not exist` — therefore read as **"0 replacement lines"**, and the answer being counted was *a count of zeros*. I was one step from reporting that LAWNS had **no warranty backlog at all**. The helper now throws, and only then did a SECOND wrong column (`customers.city`) surface; it had been hidden behind the same silence.
+
+    ⚠️ **THE DANGEROUS SHAPE IS SPECIFICALLY A FALSE ZERO**, because zero is the one answer nobody questions. A wrong non-zero figure invites arithmetic; an empty list reads as *nothing to do* and closes the question. This is [[R-33]]'s family — a check that cannot disagree — reached through a helper rather than a test.
+
+    **PROVE IT RED ONCE, BOTH DIRECTIONS** (David's instruction, and the standard every cap here is held to): a deliberate 400 must THROW, and a genuinely empty result must still return cleanly. Done for `#392`'s reader on 2026-09-23 — `select=no_such_column` threw; a real `id=eq.<nonexistent>` returned `0 rows` without throwing. A helper whose failure path nobody has watched fire is a claim.
+
+    ⚠️ **Numbered 24 by APPENDING**, per the notes on r18–r20: other documents cite these rules by number, and renumbering to satisfy a reading order breaks references to fix a preference.
+
 26. **ANY SQL HANDED TO DAVID IS EXECUTED END TO END BEFORE HAND-OFF — EVERY STATEMENT, IN ONE `BEGIN … COMMIT`, AGAINST `live-schema-public.sql` WITH ITS DEFAULTS LOADED. A READ-ONLY SIMULATION IS NOT VERIFICATION (binding — David, 2026-09-23; ledger #395).**
 
     A data file, migration or V-block set that David will paste into the SQL editor is **run first**, in PGlite, against the live schema snapshot: the whole file, top to bottom, including every `INSERT` — then its V-blocks, then **the whole file a second time** to prove idempotence. Only then does it get a SHA and a hand-off.
