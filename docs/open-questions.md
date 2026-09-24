@@ -87,6 +87,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#389 — the parked sale (built; no migration)**
+- 🔴 **OPEN — CARD 5'S EXPECTATION IS NOW THE OPPOSITE OF WHAT IT WAS, AND IT MUST BE RUN BOTH WAYS.** Under #387 it was PASS when the order was LOST. Lock the phone **and** refresh — they are different evictions — **and write down which you did.** Plus: leave one parked overnight, because nothing may delete it on a timer.
+- ⚠️ **OPEN — LOCAL IS A STAGE, NOT THE DESTINATION, IN DAVID'S OWN WORDS:** *"a parked order belongs to the BUSINESS, not the device."* **The server draft is ~16 h and is NOT built** — today a parked order does not follow Lauren to a second device and never reaches the office. The persisted payload is exactly the cart's own shape (no ids, no lifecycle, no status), so the server version is a second STORAGE, not a rewrite.
+- ⚠️ **OPEN — CARD 6 IS `needs-test`, NOT `owed`, AND THE REASON IS A PREREQUISITE I CANNOT ESTABLISH.** Proving that a second tenant in the same browser does NOT resume the first one's order needs two businesses on one login, and a user is capped at one today. 🔴 **No RLS policy can see localStorage** — this is the one tenant boundary the database cannot enforce.
+- 🟡 **OPEN — A STORY IS OWED.** `user_stories.md` still has nothing for parking or abandoning a sale; recorded OPEN rather than invented.
+
 **#393 — provenance at the till (built; `20260923m` APPLIED 2026-09-24)**
 - ✅ **`20260923m_inventory_qty_provenance.sql` — APPLIED BY DAVID 2026-09-24.** V1 PASS · V2 PASS (632 lots, 632 `placeholder`, 0 `counted`, 0 `derived`, 0 silent) · V3 PASS · **V4 FAIL 511/120/1 and the FAIL is the world moving, not the migration** — lot `8ab5ab55` (SFCM2) went 10 → 1 in test mode on 2026-09-23 21:46Z, after the figure was cut; the migration moves no quantity, and V4 pinning a live count is exactly what **Rule 26** now forbids · V5 PASS 1,210 rows · V6 refused `guessed` with `business_inventory_qty_basis_check` (**the error IS the pass**) · V7 PASS 0.
 - 🔴 **THIS DESCRIBES THE NUMBER; IT DOES NOT FIX IT.** The purchases-minus-sales derivation has **no inputs**: zero purchase-kind ledger rows, and 3,924 of 3,925 order lines unlinked to a lot. **A marked placeholder is not a solved count.** The real work is a purchase side and a lot linkage. Owner: **David** (scope).
