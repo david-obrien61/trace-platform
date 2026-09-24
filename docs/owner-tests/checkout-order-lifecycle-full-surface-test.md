@@ -9,7 +9,7 @@
 > **`env?`** or **`local`** is **not production**, and a matching SHA does not rescue it. *(tech-debt #280 ②.)*
 
 **Capability:** 2.1 Cart / QR checkout · **Ledger:** #387 (this board's cards 1–5) · #389 (parked orders, cards to follow)
-**Board: 0 of 5 covered** (5 `owed`). Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
+**Board: 0 of 7 covered** — 6 `owed`, **1 `needs-test` with its reason (CARD 6: a prerequisite I could not establish — read it before planning that run).** Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
 
 **TENANT:** any. **ACTOR:** whoever rings up an order — no permission is involved; nothing here is gated.
 
@@ -73,16 +73,52 @@ something to discard.
 stake is the dialog people learn to dismiss unread, and it is what makes them dismiss the one that
 mattered.** This card guards the confirm's credibility, not its presence.
 
-### CARD 5 — 🔴 THE HONEST LIMIT, SO YOU SEE IT BEFORE LAUREN DOES
+### CARD 5 — 🔴 THE ORDER SURVIVES BOTH EVICTIONS. RUN IT BOTH WAYS.
 `STATUS: owed` · `DEVICE: phone` · `LAST-PROVEN: —`
-**WHO:** David · **COVERS:** #387 · names what **#389** must fix
+**WHO:** David · **COVERS:** #389 — [[R-174]] ③–⑥
 
-On a **phone**, start an order with two lines. Lock the phone, wait a couple of minutes, unlock, and
-return to the browser. Then separately: pull to **refresh** the page.
+✏️ **THIS CARD IS REWRITTEN AND ITS EXPECTATION IS NOW THE OPPOSITE OF WHAT IT WAS.** Under #387 it
+was PASS when the order was **lost** — that build persisted nothing and the card existed to show you
+exactly how much #389 was worth. #389 is that build, so the same steps now expect the order to
+**come back**. A green check left on the old wording would have asserted a proof of the opposite fact.
 
-**PASS *for #387*:** the order may well be **gone** — and that is the honest, expected result of
-this build, which persists nothing. **This card is PASS when the loss is what you observe**, because
-it tells you exactly how much #389 is worth.
-**FAIL:** the app shows a stale order it cannot actually submit, or an error rather than an empty
+On a **phone**, start an order with two lines. Then do **both**, separately, and **write down which
+you did** — locking and refreshing are different evictions and this must survive each:
+1. **Lock the phone**, wait a couple of minutes, unlock, return to the browser.
+2. **Pull to refresh** the page.
+
+**PASS:** the order is still there **both times** — the same two lines, the same quantities — and you
+can carry on and submit it. *(Provable without a console.)*
+**FAIL:** it is gone, **or** it comes back and will not submit. A stale order that cannot be sent is
+worse than none, because Lauren would find out in front of the customer.
+🔴 **AND ONE MORE, WHICH IS THE POINT OF THE WHOLE THING: nothing may delete it on a timer.** Leave
+an order parked overnight and open it in the morning. David: *"never expire, surface by age… nothing
+deletes a customer's order on a timer."* It is cleared by exactly two things — a successful submit,
+and the discard confirm.
+
+### CARD 6 — 🔴 A SECOND BUSINESS IN THE SAME BROWSER DOES NOT SEE THE FIRST ONE'S ORDER
+`STATUS: needs-test` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #389 — AC-3 through localStorage
+
+**REASON IT IS `needs-test` AND NOT `owed`: I cannot establish the prerequisite.** This needs a login
+that belongs to a **second business** in the same browser profile, and today a user is capped at one
+business (`BusinessProvider`, max businesses/user = 1). Recording the hole rather than writing steps
+nobody can run.
+
+**WHAT IT WOULD PROVE:** park an order on Test Dave's, sign into another tenant in the same browser,
+and the parked order must be **dropped, not resumed**. 🔴 **No RLS policy can see localStorage** —
+this is the one tenant boundary the database cannot enforce, which is why `dropIfOtherBusiness` exists
+and why it deserves a live proof rather than a unit test.
+
+### CARD 7 — THE ORDER SAYS HOW OLD IT IS, AND THE AGE DOES NOT RESET
+`STATUS: owed` · `DEVICE: phone` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #389
+
+Start an order, add one line, wait a few minutes, then **add a second line**.
+
+**PASS:** the order's age still counts from the **first** line, not the second.
+🔴 **WHY THIS IS A CARD AND NOT A DETAIL:** re-stamping on every scan would make a two-hour-old order
+look new — and the age is the only thing that will ever tell Lauren a parked sale has been forgotten.
+
 start. 🔴 **Write down which of the two happened** — locking and refreshing are different evictions
 and #389 must survive both. *(Provable without a console.)*
