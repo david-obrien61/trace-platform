@@ -1,5 +1,5 @@
 /**
- * ── teamRouteGate — "Route this team" never does nothing (ledger #400) ──────────────
+ * ── teamRouteGate — "Route this team" never does nothing (ledger #405) ──────────────
  *
  * David, 2026-09-24: it routes that crew's stops, or says plainly why it can't. Lauren lost two
  * weekends to a button that did neither.

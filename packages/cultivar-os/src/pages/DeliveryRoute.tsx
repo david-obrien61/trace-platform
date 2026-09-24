@@ -585,7 +585,7 @@ export function DeliveryRoute() {
   // BUTTON AND NO WORDS — the screen answered "why can't I route?" with nothing at all. That is the
   // same class as a helper turning a failure into an empty list: an absence read as an answer.
   // 🔴 THE "WHY NOT" LIVES IN `teamRouteGate.ts` SO IT CAN BE PROBED. It was inline here, which is
-  // how it came to return null on the empty case without anything noticing (ledger #400).
+  // how it came to return null on the empty case without anything noticing (ledger #405).
   const selectionTeamProblem = React.useMemo(() => {
     if (!dateParam) return null;
     const gate: GateInput = {

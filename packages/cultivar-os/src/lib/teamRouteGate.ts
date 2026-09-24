@@ -1,5 +1,5 @@
 // ============================================================
-// teamRouteGate — why a crew's day can or cannot be routed, as a sentence (ledger #400)
+// teamRouteGate — why a crew's day can or cannot be routed, as a sentence (ledger #405)
 //
 // PURPOSE:      David, 2026-09-24: pressing "Route this team" must either route that crew's stops
 //               or SAY PLAINLY why it can't — never nothing. This is the "why not", extracted from
