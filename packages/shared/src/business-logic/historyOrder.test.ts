@@ -273,5 +273,27 @@ const build = (over: any = {}) => buildHistoryOrder({
     'and it does not hand-write a status of its own — the rule lives in ONE place');
 }
 
+// ══ SHIP DATE REACHES THE ROW (ledger #392) ═══════════════════════════════════════
+// 🔴 THE DEFECT THIS EXISTS FOR WAS A FIELD PARSED AND THEN SILENTLY DROPPED. `shipmentIngest`
+// carried `shipDate` on every invoice from the day it was written; the history writer mapped
+// `txnDate` and never read it. Nothing failed — 603 of LAWNS's 1,546 history orders simply lost a
+// date their own books held, and it had to be recovered from an export by hand. A field that is
+// read and not written is invisible to tsc, to eslint and to every probe aimed at what IS written.
+{
+  const withShip = build({ shipDate: '2026-03-14' });
+  ok((withShip.order as any).ship_date === '2026-03-14',
+    `🔴 S1: shipDate must reach the order row — got ${JSON.stringify((withShip.order as any).ship_date)}`);
+
+  // 🔴 AND IT MUST NOT LAND IN delivery_date. That column is a PLANNING field the schedule and the
+  // route page read; a historical ShipDate written there would put finished invoices on Lauren's
+  // schedule as scheduled days.
+  ok((withShip.order as any).delivery_date !== '2026-03-14',
+    '🔴 S2: shipDate must NOT be written into delivery_date — the schedule would gain phantom days');
+
+  const noShip = build({});
+  ok((noShip.order as any).ship_date === null,
+    'S3: an invoice with no ShipDate yields NULL, never today and never the sale date');
+}
+
 console.log(`\n  historyOrder: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }
