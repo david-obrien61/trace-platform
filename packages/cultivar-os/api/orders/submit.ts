@@ -1,3 +1,4 @@
+import { classifyGeocodeResponse } from '@trace/shared/business-logic/geocodeResult';
 import { createClient } from '@supabase/supabase-js';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
 import { sendNotification } from '../../../shared/src/notifications/send';
@@ -496,6 +497,7 @@ export async function scheduleCheckoutDelivery(
 // One endpoint, multiple actions (12-fn ceiling — CLAUDE.md §6 rule 11). action absent/'create'
 // = the ORIGINAL checkout write (unchanged, anon-createable). 'update'/'delete'/'status' = the
 // roster CRUD (owner/manager only, token-gated, server-recompute). No new api/ file (12/12 held).
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -902,8 +904,56 @@ async function handleCreate(req: any, res: any) {
       return baseline;
     };
 
-    const transportComputed = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
-    const transportRes      = selectedTransport ? applyOverride(selectedTransport.id, transportComputed) : null;
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 AN ADDRESS THAT CANNOT BE PLACED IS NEVER PRICED (David, 2026-09-18 and 2026-09-23)
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // *"Surfaced, never priced, never guessed, no silent fallback."* A delivery charge is a claim
+    // about getting a truck to a place; if nobody can say where the place is, there is no honest
+    // number to charge. So the transport line is suppressed — NOT defaulted, NOT estimated, and
+    // NOT refused: the ORDER still saves, because the customer is standing at the counter and
+    // their trees are real even when their street name is not.
+    //
+    // ⚠️ THIS IS SERVER-AUTHORITATIVE AND THAT IS THE POINT. `CartReview` and `AddOns` show the
+    // same suppression, but a display mirror can be stale, bypassed or simply wrong; §1.6 item 10
+    // requires the money to be decided here. The two mirrors agree with this line — they do not
+    // replace it.
+    //
+    // It differs deliberately from the ladder-install refusal a few lines below (the 422): THERE,
+    // a line is owed an amount nobody has stated and charging the priced subset would be a silent
+    // $0. HERE, no amount is owed at all — the service cannot be delivered to an unknown place, so
+    // charging nothing IS the correct number, and the reason travels back so the screen can say it.
+    // 🔴 THE SERVER DECIDES WHETHER THE PLACE EXISTS. IT DOES NOT TAKE THE CLIENT'S WORD.
+    // My first version read `shipTo.geocode_status` — a field the ship-to does not carry, so the
+    // suppression would never have fired; and had I made the client send it, the money would have
+    // depended on a flag a caller can set (§1.6 item 10 requires this recomputed server-side,
+    // tamper-defended). So the address is placed HERE, once, before it is priced.
+    // One Geocoding call per delivery order — inside the 10,000/month free cap at LAWNS's volume.
+    const shipToUnplaceable = await (async () => {
+      if (!selectedTransport || !shipTo?.address_line1) return false;
+      const key = process.env.GOOGLE_GEOCODING_API_KEY;
+      // Rule 24: no key configured is NOT an unplaceable address. Degrade to charging as before
+      // rather than silently stripping every delivery charge on a misconfigured deployment.
+      if (!key) return false;
+      const text = [shipTo.address_line1, shipTo.city, shipTo.state, shipTo.zip].filter(Boolean).join(', ');
+      try {
+        const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(text)}&key=${encodeURIComponent(key)}`);
+        const verdict = classifyGeocodeResponse(await r.json());
+        // `confirm` is NOT unplaceable — it is placed, and the person was asked at the counter.
+        return verdict.verdict === 'not_found';
+      } catch {
+        // Unreachable Google must not strip a legitimate charge either.
+        return false;
+      }
+    })();
+    if (shipToUnplaceable && selectedTransport) {
+      console.log('[TRACE:PRICE] transport SUPPRESSED — ship-to cannot be placed', {
+        businessId, offeringId: selectedTransport.id, wouldHaveCharged: round2(lineSubtotal(selectedTransport, qtyFor(selectedTransport))),
+      });
+    }
+    const transportComputed = (selectedTransport && !shipToUnplaceable) ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
+    // No override may reinstate a suppressed charge: an override states an AMOUNT, and the
+    // question here is not "how much" but "to where" — which is still unanswered.
+    const transportRes      = (selectedTransport && !shipToUnplaceable) ? applyOverride(selectedTransport.id, transportComputed) : null;
     const transportAmount   = transportRes?.amount ?? 0;
 
     // Planting — the SEPARATE per-plant service the "Delivery + planting" branch attaches
