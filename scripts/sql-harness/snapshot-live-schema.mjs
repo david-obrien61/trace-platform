@@ -46,8 +46,19 @@ const idx = await sql(`
                       join pg_namespace n on n.oid = ic.relnamespace
                      where n.nspname = 'public' and ic.relname = i.indexname)
    order by i.tablename, i.indexname`);
+// 🔴 THE SIGNATURE AND THE EXECUTE GRANTS COME WITH THE BODY, and the grants are the half this
+// dump silently dropped. Postgres gives a new function EXECUTE to PUBLIC, so a fixture built from
+// bodies alone has EVERY function callable by `anon` — regardless of what live actually allows.
+// MEASURED 2026-09-24: live REVOKEs EXECUTE on `crew_day_read` from both `anon` and
+// `authenticated`; the fixture did not, and `crew.other-business` — the guard whose whole job is
+// "only the endpoint may call this" — failed against it. **The fixture was LESS RESTRICTIVE THAN
+// LIVE**, which is the dangerous direction: here it made a test go red, but a security assertion
+// pointing the other way would have gone GREEN on a permission the database does not grant.
 const fns = await sql(`
-  select p.proname as name, pg_get_functiondef(p.oid) as def
+  select p.proname as name, pg_get_functiondef(p.oid) as def,
+         p.oid::regprocedure::text as sig,
+         has_function_privilege('anon', p.oid, 'EXECUTE') as anon_exec,
+         has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_exec
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prokind in ('f','p') order by p.proname, p.oid`);
 const trg = await sql(`
@@ -79,6 +90,24 @@ for (const { t } of tables) {
 }
 // 2. functions (bodies unchecked, so order among them does not matter)
 for (const f of fns) out.push(`${f.def.trim()};`);
+// 2b. FUNCTION EXECUTE GRANTS — emitted only where they DIFFER from Postgres's default (EXECUTE to
+// PUBLIC). Derived per function from the live catalog, so this cannot drift from what is granted.
+for (const f of fns) {
+  if (f.anon_exec && f.auth_exec) continue;               // default; nothing to say
+  const keep = [f.anon_exec ? 'anon' : null, f.auth_exec ? 'authenticated' : null].filter(Boolean);
+  out.push(`REVOKE ALL ON FUNCTION ${f.sig} FROM PUBLIC, anon, authenticated;`);
+  if (keep.length) out.push(`GRANT EXECUTE ON FUNCTION ${f.sig} TO ${keep.join(', ')};`);
+}
+// 3a. 🔴 SEQUENCES ANY DEFAULT DEPENDS ON — WITHOUT THESE THE SNAPSHOT DOES NOT LOAD AT ALL.
+// A `serial`/`bigserial` column's default is `nextval('<table>_<col>_seq'::regclass)`, and the
+// sequence is a separate object this dump never emitted. The first such column in the corpus
+// (`production_rung_dates.seq`, 2026-09-24) made the refreshed fixture fail on load with
+// `relation "production_rung_dates_seq_seq" does not exist` — which broke EVERY writer-registry
+// path test at once, not just the new table's. Derived from the defaults themselves, so it cannot
+// go stale: whatever a default calls `nextval` on gets created first.
+const seqs = [...new Set(cols.flatMap(c => [...String(c.def ?? '').matchAll(/nextval\('([^']+)'/g)].map(m => m[1])))];
+for (const sname of seqs) out.push(`CREATE SEQUENCE IF NOT EXISTS ${sname.includes('.') ? sname : `public.${sname}`};`);
+
 // 3. defaults and generated columns
 for (const c of cols) {
   if (c.gen) out.push(`ALTER TABLE public.${q(c.t)} ADD COLUMN ${q(c.col)} ${c.type} GENERATED ALWAYS AS ${c.def.startsWith('(') ? c.def : `(${c.def})`} STORED;`);

@@ -1,8 +1,8 @@
--- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-17T17:11:13.095Z
+-- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-24T17:39:11.736Z
 -- @@
 -- by scripts/sql-harness/snapshot-live-schema.mjs. Do not edit by hand; re-run the script.
 -- @@
--- 62 tables · 49 functions · 44 triggers · 165 policies · 1 views
+-- 81 tables · 70 functions · 51 triggers · 206 policies · 1 views
 -- @@
 SET check_function_bodies = off;
 -- @@
@@ -28,6 +28,61 @@ CREATE TABLE public."audit_log" (
   "target_id" text,
   "detail" jsonb NOT NULL,
   "outcome" text NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."books_report_results" (
+  "id" uuid NOT NULL,
+  "run_id" uuid NOT NULL,
+  "rule_id" text NOT NULL,
+  "rule_version" integer NOT NULL,
+  "matched" integer NOT NULL,
+  "of" integer NOT NULL,
+  "noun" text NOT NULL,
+  "value" numeric,
+  "measured" boolean NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."books_report_runs" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "ran_at" timestamp with time zone NOT NULL,
+  "walks" jsonb NOT NULL,
+  "complete" boolean NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."build_run_components" (
+  "id" uuid NOT NULL,
+  "build_run_id" uuid NOT NULL,
+  "name" text NOT NULL,
+  "quantity" numeric NOT NULL,
+  "unit" text NOT NULL,
+  "inventory_id" uuid,
+  "consumed" boolean NOT NULL,
+  "unit_cost" numeric,
+  "line_cost" numeric,
+  "price_source" text,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."build_runs" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "recipe_id" uuid NOT NULL,
+  "batches" numeric NOT NULL,
+  "yield_cubic_yards" numeric,
+  "yield_measured" boolean NOT NULL,
+  "materials_cost" numeric,
+  "labour_cost" numeric,
+  "total_cost" numeric,
+  "cost_per_cubic_yard" numeric,
+  "cost_incomplete" boolean NOT NULL,
+  "cost_note" text,
+  "freight_spread" text NOT NULL,
+  "built_by" uuid,
+  "built_at" timestamp with time zone NOT NULL,
   "created_at" timestamp with time zone NOT NULL
 );
 -- @@
@@ -107,7 +162,15 @@ CREATE TABLE public."business_inventory" (
   "retired_reason" text,
   "import_run_id" uuid,
   "retired_by_run_id" uuid,
-  "qb_item_id" text
+  "qb_item_id" text,
+  "qb_item_name" text,
+  "qb_item_fqn" text,
+  "qb_item_type" text,
+  "qb_income_account" text,
+  "item_type" text NOT NULL,
+  "qty_basis" text NOT NULL,
+  "qty_basis_at" timestamp with time zone,
+  "qty_basis_because" text NOT NULL
 );
 -- @@
 CREATE TABLE public."business_inventory_ledger" (
@@ -154,6 +217,17 @@ CREATE TABLE public."business_modules" (
   "updated_at" timestamp with time zone NOT NULL
 );
 -- @@
+CREATE TABLE public."business_not_stock_items" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "qb_item_id" text NOT NULL,
+  "item_name" text NOT NULL,
+  "reason" text NOT NULL,
+  "fix_at_source" boolean NOT NULL,
+  "active" boolean NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
 CREATE TABLE public."business_operating_days" (
   "id" uuid NOT NULL,
   "business_id" uuid NOT NULL,
@@ -170,6 +244,16 @@ CREATE TABLE public."business_operations_config" (
   "config" jsonb NOT NULL,
   "created_at" timestamp with time zone NOT NULL,
   "updated_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."business_operations_config_history" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "config_key" text NOT NULL,
+  "old_value" jsonb,
+  "new_value" jsonb,
+  "changed_by" uuid,
+  "changed_at" timestamp with time zone NOT NULL
 );
 -- @@
 CREATE TABLE public."business_pmi_schedule" (
@@ -293,6 +377,25 @@ CREATE TABLE public."channels" (
   "created_at" timestamp with time zone NOT NULL
 );
 -- @@
+CREATE TABLE public."component_purchase_links" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "component_id" uuid NOT NULL,
+  "receipt_id" uuid,
+  "document_key" text,
+  "receipt_line_index" integer,
+  "matched_description" text,
+  "vendor_id" uuid,
+  "pack_size" numeric,
+  "pack_unit" text,
+  "line_unit_price" numeric,
+  "purchased_on" date,
+  "freight_spread" text NOT NULL,
+  "confirmed_by" uuid,
+  "confirmed_at" timestamp with time zone NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
 CREATE TABLE public."container_ladder" (
   "id" uuid NOT NULL,
   "business_id" uuid NOT NULL,
@@ -305,7 +408,24 @@ CREATE TABLE public."container_ladder" (
   "active" boolean NOT NULL,
   "retired_at" timestamp with time zone,
   "created_at" timestamp with time zone NOT NULL,
-  "updated_at" timestamp with time zone NOT NULL
+  "updated_at" timestamp with time zone NOT NULL,
+  "install_t_posts_per_tree" integer NOT NULL,
+  "install_t_posts_because" text NOT NULL,
+  "is_large" boolean NOT NULL,
+  "is_large_because" text NOT NULL,
+  "caliper_min_inches" numeric,
+  "caliper_max_inches" numeric,
+  "caliper_because" text NOT NULL,
+  "install_price" numeric(10,2),
+  "install_price_because" text NOT NULL,
+  "grow_months" numeric,
+  "grow_because" text NOT NULL,
+  "hold_months" numeric,
+  "hold_because" text NOT NULL,
+  "sellability" text NOT NULL,
+  "sellability_because" text NOT NULL,
+  "pyt_price" numeric(10,2),
+  "pyt_price_because" text NOT NULL
 );
 -- @@
 CREATE TABLE public."cost_object_assignments" (
@@ -378,6 +498,26 @@ CREATE TABLE public."cost_objects" (
   "estimated_value_confidence" text
 );
 -- @@
+CREATE TABLE public."crew_day_links" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "service_date" date NOT NULL,
+  "token_hash" text NOT NULL,
+  "time_zone" text NOT NULL,
+  "expires_at" timestamp with time zone NOT NULL,
+  "created_by" uuid NOT NULL,
+  "created_at" timestamp with time zone NOT NULL,
+  "revoked_at" timestamp with time zone,
+  "revoked_by" uuid,
+  "last_used_at" timestamp with time zone
+);
+-- @@
+CREATE TABLE public."crew_link_rate" (
+  "client_key" text NOT NULL,
+  "window_start" timestamp with time zone NOT NULL,
+  "hits" integer NOT NULL
+);
+-- @@
 CREATE TABLE public."cultivar_plants" (
   "id" uuid NOT NULL,
   "tag_id" text NOT NULL,
@@ -412,7 +552,11 @@ CREATE TABLE public."customer_addresses" (
   "updated_at" timestamp with time zone NOT NULL,
   "kind" text NOT NULL,
   "source" text,
-  "import_run_id" uuid
+  "import_run_id" uuid,
+  "latitude" double precision,
+  "longitude" double precision,
+  "geocoded_at" timestamp with time zone,
+  "geocode_status" text
 );
 -- @@
 CREATE TABLE public."customer_emails" (
@@ -501,7 +645,89 @@ CREATE TABLE public."deliveries" (
   "started_at" timestamp with time zone,
   "completed_at" timestamp with time zone,
   "review_asked_at" timestamp with time zone,
-  "review_ask_outcome" text
+  "review_ask_outcome" text,
+  "completed_by_name" text,
+  "review_ask_held_at" timestamp with time zone,
+  "route_position" integer,
+  "routed_at" timestamp with time zone,
+  "routed_by" uuid,
+  "team_id" uuid,
+  "order_status_before_finish" text,
+  "latitude" double precision,
+  "longitude" double precision,
+  "coordinate_set_at" timestamp with time zone
+);
+-- @@
+CREATE TABLE public."delivery_day_estimates" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "service_date" date NOT NULL,
+  "team_id" uuid,
+  "reason" text NOT NULL,
+  "stops" integer NOT NULL,
+  "trees" integer NOT NULL,
+  "gallons" numeric(12,2),
+  "drive_minutes" integer,
+  "miles" numeric(10,2),
+  "threshold_hours" numeric(6,2) NOT NULL,
+  "planting_minutes_per_tree" integer NOT NULL,
+  "settings_were_set" boolean NOT NULL,
+  "total_hours" numeric(6,2) NOT NULL,
+  "drive_known" boolean NOT NULL,
+  "suggested_teams" integer NOT NULL,
+  "chosen_teams" integer,
+  "chosen_by" uuid,
+  "chosen_at" timestamp with time zone,
+  "working" jsonb NOT NULL,
+  "created_at" timestamp with time zone NOT NULL,
+  "created_by" uuid
+);
+-- @@
+CREATE TABLE public."delivery_route_plans" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "delivery_date" date NOT NULL,
+  "team_id" uuid,
+  "routed_at" timestamp with time zone NOT NULL,
+  "routed_by" uuid,
+  "stops" integer NOT NULL,
+  "miles" numeric(10,2),
+  "minutes" integer,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."delivery_stop_events" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "delivery_id" uuid NOT NULL,
+  "link_id" uuid,
+  "action" text NOT NULL,
+  "actor_name" text NOT NULL,
+  "actor_user_id" uuid,
+  "device_id" text NOT NULL,
+  "note" text,
+  "occurred_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."delivery_team_members" (
+  "id" uuid NOT NULL,
+  "team_id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "name" text NOT NULL,
+  "active" boolean NOT NULL,
+  "sort_order" integer NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."delivery_teams" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "name" text NOT NULL,
+  "active" boolean NOT NULL,
+  "sort_order" integer NOT NULL,
+  "vendor_id" uuid,
+  "created_at" timestamp with time zone NOT NULL,
+  "updated_at" timestamp with time zone NOT NULL
 );
 -- @@
 CREATE TABLE public."inventory_count_sessions" (
@@ -544,6 +770,22 @@ CREATE TABLE public."invitations" (
   "person_id" uuid
 );
 -- @@
+CREATE TABLE public."item_recipes" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "qb_item_id" text,
+  "inventory_id" uuid,
+  "yield_quantity" numeric NOT NULL,
+  "yield_unit" text NOT NULL,
+  "build_minutes" numeric,
+  "build_minutes_because" text NOT NULL,
+  "notes" text,
+  "created_at" timestamp with time zone NOT NULL,
+  "updated_at" timestamp with time zone NOT NULL,
+  "actual_yield_cubic_yards" numeric,
+  "actual_yield_because" text
+);
+-- @@
 CREATE TABLE public."labor_resource_wages" (
   "resource_id" uuid NOT NULL,
   "business_id" uuid NOT NULL,
@@ -572,6 +814,16 @@ CREATE TABLE public."labor_resources" (
   "created_at" timestamp with time zone NOT NULL,
   "updated_at" timestamp with time zone NOT NULL,
   "person_id" uuid
+);
+-- @@
+CREATE TABLE public."labour_rates" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "who" text NOT NULL,
+  "hourly_rate" numeric NOT NULL,
+  "effective_from" date NOT NULL,
+  "note" text,
+  "created_at" timestamp with time zone NOT NULL
 );
 -- @@
 CREATE TABLE public."losses" (
@@ -700,7 +952,8 @@ CREATE TABLE public."order_items" (
   "discount_pct" numeric(5,2),
   "discount_amt" numeric(10,2),
   "description" text,
-  "sku" text
+  "sku" text,
+  "qbo_item_id" text
 );
 -- @@
 CREATE TABLE public."order_service_selections" (
@@ -747,7 +1000,9 @@ CREATE TABLE public."orders" (
   "qb_doc_number" text,
   "sale_date" date,
   "receipt_id" uuid,
-  "import_run_id" uuid
+  "import_run_id" uuid,
+  "relinked_from_customer_id" uuid,
+  "ship_date" date
 );
 -- @@
 CREATE TABLE public."people" (
@@ -823,6 +1078,18 @@ CREATE TABLE public."production_plans" (
   "updated_at" timestamp with time zone NOT NULL
 );
 -- @@
+CREATE TABLE public."production_rung_dates" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "inventory_id" uuid NOT NULL,
+  "entered_on" date NOT NULL,
+  "unit_value" numeric,
+  "note" text,
+  "recorded_by" uuid,
+  "recorded_at" timestamp with time zone NOT NULL,
+  "seq" bigint NOT NULL
+);
+-- @@
 CREATE TABLE public."receipts" (
   "id" uuid NOT NULL,
   "business_id" uuid NOT NULL,
@@ -848,6 +1115,24 @@ CREATE TABLE public."receipts" (
   "vendor_id" uuid,
   "receipt_number" text,
   "receipt_number_original" text
+);
+-- @@
+CREATE TABLE public."recipe_components" (
+  "id" uuid NOT NULL,
+  "recipe_id" uuid NOT NULL,
+  "position" integer NOT NULL,
+  "name" text NOT NULL,
+  "quantity" numeric NOT NULL,
+  "unit" text NOT NULL,
+  "component_qb_item_id" text,
+  "component_inventory_id" uuid,
+  "note" text,
+  "created_at" timestamp with time zone NOT NULL,
+  "updated_at" timestamp with time zone NOT NULL,
+  "typed_pack_cost" numeric,
+  "typed_pack_size" numeric,
+  "typed_pack_unit" text,
+  "typed_because" text
 );
 -- @@
 CREATE TABLE public."role_definitions" (
@@ -882,7 +1167,8 @@ CREATE TABLE public."service_offerings" (
   "created_at" timestamp with time zone NOT NULL,
   "compliance_title" text,
   "compliance_body" text,
-  "service_note" text
+  "service_note" text,
+  "price_source" text NOT NULL
 );
 -- @@
 CREATE TABLE public."social_drafts" (
@@ -944,6 +1230,30 @@ CREATE TABLE public."vendors" (
   "preference_note" text,
   "notes" text,
   "created_at" timestamp with time zone NOT NULL,
+  "updated_at" timestamp with time zone NOT NULL
+);
+-- @@
+CREATE TABLE public."warranty_claims" (
+  "id" uuid NOT NULL,
+  "business_id" uuid NOT NULL,
+  "customer_id" uuid NOT NULL,
+  "address_id" uuid,
+  "original_order_id" uuid NOT NULL,
+  "original_order_item_id" uuid NOT NULL,
+  "variety" text NOT NULL,
+  "size" text NOT NULL,
+  "qty" integer NOT NULL,
+  "approved_by" uuid,
+  "approved_at" timestamp with time zone,
+  "status" text NOT NULL,
+  "replaces_claim_id" uuid,
+  "replacement_order_id" uuid,
+  "replacement_order_item_id" uuid,
+  "presumed_from_invoice" boolean NOT NULL,
+  "unvalidated" boolean NOT NULL,
+  "notes" text,
+  "created_at" timestamp with time zone NOT NULL,
+  "created_by" uuid,
   "updated_at" timestamp with time zone NOT NULL
 );
 -- @@
@@ -1133,6 +1443,59 @@ BEGIN
           'success');
 
   RETURN QUERY SELECT true, NULL::text, v_role_before, p_role_key, v_perms_before, v_resolved;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.assign_stops_team(p_business_id uuid, p_stop_ids uuid[], p_team_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid   uuid := auth.uid();
+  v_role  text;
+  v_name  text;
+  v_n     int;
+  v_valid int;
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries to set a team.');
+  END IF;
+
+  v_n := coalesce(array_length(p_stop_ids, 1), 0);
+  IF v_n = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'nothing_to_assign', 'message', 'No stops were chosen.');
+  END IF;
+
+  IF p_team_id IS NOT NULL THEN
+    SELECT name INTO v_name FROM public.delivery_teams
+     WHERE id = p_team_id AND business_id = p_business_id AND active;
+    IF v_name IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'team_not_available',
+        'message', 'That team is not on this business, or it has been retired.');
+    END IF;
+  END IF;
+
+  SELECT count(*) INTO v_valid FROM public.deliveries
+   WHERE id = ANY(p_stop_ids) AND business_id = p_business_id AND coalesce(status, '') <> 'cancelled';
+  IF v_valid <> v_n THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'stop_not_found',
+      'message', 'That set names ' || (v_n - v_valid)::text || ' stop(s) that are not this business''s.');
+  END IF;
+
+  UPDATE public.deliveries SET team_id = p_team_id
+   WHERE id = ANY(p_stop_ids) AND business_id = p_business_id;
+
+  SELECT role INTO v_role FROM public.business_members
+   WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (p_business_id, v_uid, v_role, 'stop.team_assigned', 'team', coalesce(p_team_id::text, 'unassigned'),
+          jsonb_build_object('stops', v_n, 'stop_ids', to_jsonb(p_stop_ids), 'team_name', v_name), 'success');
+
+  RETURN jsonb_build_object('ok', true, 'assigned', v_n, 'team_id', p_team_id, 'team_name', v_name);
 END;
 $function$;
 -- @@
@@ -1326,6 +1689,67 @@ BEGIN
   RETURN QUERY SELECT p_counted_qty, v_delta, v_ledger, true, 'applied'::text;
 END $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.create_crew_day_link(p_business_id uuid, p_service_date date, p_time_zone text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid      uuid := auth.uid();
+  v_role     text;
+  v_token    text;
+  v_expires  timestamptz;
+  v_id       uuid;
+  v_prev     uuid;
+  v_revoked  int := 0;
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries to make a crew link.');
+  END IF;
+  IF p_service_date IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'bad_date', 'message', 'A day is required.');
+  END IF;
+  IF p_time_zone IS NULL OR NOT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name = p_time_zone) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'bad_time_zone', 'message', 'This device did not give a time zone we recognise.');
+  END IF;
+  IF p_service_date < (now() AT TIME ZONE p_time_zone)::date THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'past_day', 'message', 'That day has already passed.');
+  END IF;
+
+  v_expires := ((p_service_date + 1)::timestamp + time '06:00') AT TIME ZONE p_time_zone;
+  SELECT role INTO v_role FROM public.business_members
+   WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+
+  -- Reissue: the day's live link (if any) stops working the moment the new one exists.
+  FOR v_prev IN
+    UPDATE public.crew_day_links SET revoked_at = now(), revoked_by = v_uid
+     WHERE business_id = p_business_id AND service_date = p_service_date AND revoked_at IS NULL
+    RETURNING id
+  LOOP
+    v_revoked := v_revoked + 1;
+    INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+    VALUES (p_business_id, v_uid, v_role, 'crew_link.revoked', 'crew_day_link', v_prev::text,
+            jsonb_build_object('service_date', p_service_date, 'reason', 'reissued'), 'success');
+  END LOOP;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+  INSERT INTO public.crew_day_links (business_id, service_date, token_hash, time_zone, expires_at, created_by)
+  VALUES (p_business_id, p_service_date, encode(digest(v_token, 'sha256'), 'hex'), p_time_zone, v_expires, v_uid)
+  RETURNING id INTO v_id;
+
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (p_business_id, v_uid, v_role, 'crew_link.created', 'crew_day_link', v_id::text,
+          jsonb_build_object('service_date', p_service_date, 'expires_at', v_expires,
+                             'time_zone', p_time_zone, 'replaced', v_revoked), 'success');
+
+  RETURN jsonb_build_object('ok', true, 'link_id', v_id, 'token', v_token,
+                            'service_date', p_service_date, 'expires_at', v_expires, 'replaced', v_revoked);
+END;
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.create_invitation(p_business_id uuid, p_actor_user_id uuid, p_name text, p_role_key text, p_email text DEFAULT NULL::text, p_phone text DEFAULT NULL::text)
  RETURNS TABLE(applied boolean, reason text, invitation_id uuid, invite_token text, new_member_id uuid, resolved_permissions jsonb)
  LANGUAGE plpgsql
@@ -1427,6 +1851,131 @@ BEGIN
           'success');
 
   RETURN QUERY SELECT true, NULL::text, v_inv_id, v_token, v_member_id, v_resolved;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.crew_day_read(p_token text, p_client_key text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  r record;
+BEGIN
+  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;
+  SELECT * INTO r FROM public.crew_link_resolve(p_token);
+  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;
+  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = (r.link).id;
+  RETURN jsonb_build_object('ok', true,
+    'business_name', (SELECT name FROM public.businesses WHERE id = (r.link).business_id),
+    'service_date', (r.link).service_date,
+    'expires_at', (r.link).expires_at,
+    -- When the day was planned. NULL = never routed, and the page says so in plain words rather
+    -- than presenting the creation order as if it were a plan.
+    'routed_at', (SELECT max(d.routed_at) FROM public.deliveries d
+                   WHERE d.business_id = (r.link).business_id AND d.delivery_date = (r.link).service_date
+                     AND d.route_position IS NOT NULL),
+    'stops', public.crew_day_stops((r.link).business_id, (r.link).service_date));
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.crew_day_stops(p_business_id uuid, p_service_date date)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+  SELECT coalesce(jsonb_agg(s.j ORDER BY s.route_position NULLS LAST, s.created_at, s.id), '[]'::jsonb)
+  FROM (
+    SELECT d.created_at, d.id, d.route_position, jsonb_build_object(
+      'id', d.id,
+      'route_position', d.route_position,
+      'address_line1', d.address_line1, 'city', d.city, 'state', d.state, 'zip', d.zip,
+      'customer_name', nullif(trim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')), ''),
+      'customer_phone', c.phone,
+      'instructions', d.notes,
+      'service_type', d.service_type,
+      'status', d.status,
+      'started_at', d.started_at,
+      'completed_at', d.completed_at,
+      'completed_by_name', d.completed_by_name,
+      'has_order', d.order_id IS NOT NULL,
+      'lines', coalesce((
+        SELECT jsonb_agg(jsonb_build_object(
+                 'item', coalesce(nullif(bi.name, ''), nullif(oi.description, ''), nullif(oi.sku, ''), 'Item'),
+                 'size', bi.size,
+                 'quantity', oi.quantity) ORDER BY oi.id)
+          FROM public.order_items oi
+          LEFT JOIN public.business_inventory bi ON bi.id = oi.business_inventory_id AND bi.business_id = d.business_id
+         WHERE d.order_id IS NOT NULL AND oi.order_id = d.order_id), '[]'::jsonb),
+      'notes', coalesce((
+        SELECT jsonb_agg(jsonb_build_object('note', e.note, 'by', e.actor_name, 'at', e.occurred_at) ORDER BY e.occurred_at)
+          FROM public.delivery_stop_events e
+         WHERE e.delivery_id = d.id AND e.action = 'note'), '[]'::jsonb)
+    ) AS j
+    FROM public.deliveries d
+    LEFT JOIN public.customers c ON c.id = d.customer_id AND c.business_id = d.business_id
+    WHERE d.business_id = p_business_id
+      AND d.delivery_date = p_service_date
+      AND coalesce(d.status, '') <> 'cancelled'
+  ) s;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.crew_link_hit(p_client_key text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_key  text := left(coalesce(nullif(p_client_key, ''), 'unknown'), 128);
+  v_win  timestamptz := date_trunc('minute', now());
+  v_hits int;
+BEGIN
+  INSERT INTO public.crew_link_rate AS r (client_key, window_start, hits) VALUES (v_key, v_win, 1)
+  ON CONFLICT (client_key, window_start) DO UPDATE SET hits = r.hits + 1
+  RETURNING hits INTO v_hits;
+  DELETE FROM public.crew_link_rate WHERE client_key = v_key AND window_start < now() - interval '1 hour';
+  RETURN v_hits <= 60;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.crew_link_resolve(p_token text, OUT link crew_day_links, OUT code text)
+ RETURNS record
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+BEGIN
+  code := NULL;
+  IF p_token IS NULL OR p_token !~ '^[0-9a-f]{64}$' THEN code := 'invalid'; RETURN; END IF;
+  SELECT * INTO link FROM public.crew_day_links WHERE token_hash = encode(digest(p_token, 'sha256'), 'hex');
+  IF NOT FOUND THEN code := 'invalid'; RETURN; END IF;
+  IF link.revoked_at IS NOT NULL THEN code := 'revoked'; RETURN; END IF;
+  IF now() >= link.expires_at THEN code := 'expired'; RETURN; END IF;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.crew_stop_act(p_token text, p_client_key text, p_stop_id uuid, p_action text, p_actor_name text, p_device_id text, p_note text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  r      record;
+  v_link public.crew_day_links;
+  v_out  jsonb;
+BEGIN
+  IF NOT public.crew_link_hit(p_client_key) THEN RETURN jsonb_build_object('ok', false, 'code', 'rate_limited'); END IF;
+  SELECT * INTO r FROM public.crew_link_resolve(p_token);
+  IF r.code IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'code', r.code); END IF;
+  v_link := r.link;
+  v_out := public.stop_progress_apply(v_link.business_id, p_stop_id, p_action, p_actor_name, p_device_id,
+                                      v_link.id, p_note, NULL, 'crew_link', v_link.service_date);
+  UPDATE public.crew_day_links SET last_used_at = now() WHERE id = v_link.id;
+  RETURN v_out;
 END;
 $function$;
 -- @@
@@ -1854,6 +2403,26 @@ AS $function$
                AND b.owner_id = auth.uid());
 $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.get_planting_materials(p_business_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT CASE
+    WHEN NOT public.is_active_member(p_business_id) THEN NULL
+    ELSE COALESCE((
+      SELECT jsonb_strip_nulls(jsonb_build_object(
+        'installMixContainerVolumesPerTree', c.config -> 'installMixContainerVolumesPerTree',
+        'ropeFeetPerTPost',                  c.config -> 'ropeFeetPerTPost',
+        'bubblersPerTree',                   c.config -> 'bubblersPerTree',
+        'deerFenceTPostsPerTree',            c.config -> 'deerFenceTPostsPerTree',
+        'trueGallonsPerCubicYard',           c.config -> 'trueGallonsPerCubicYard'))
+        FROM public.business_operations_config c
+       WHERE c.business_id = p_business_id), '{}'::jsonb)
+  END
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.guard_customer_derived_contact()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2085,6 +2654,164 @@ BEGIN
 END;
 $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.recipe_link_must_survive_a_wipe()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+DECLARE v_id uuid; v_run uuid; v_qb text;
+BEGIN
+  -- ⚠️ IF, not CASE: plpgsql resolves the field reference in EVERY branch of a CASE expression, so
+  -- `NEW.component_inventory_id` was looked up on `item_recipes` too and the trigger died with
+  -- "record new has no field". An IF statement is parsed branch by branch, as it executes.
+  IF TG_TABLE_NAME = 'item_recipes' THEN
+    v_id := NEW.inventory_id;
+  ELSE
+    v_id := NEW.component_inventory_id;
+  END IF;
+  IF v_id IS NULL THEN RETURN NEW; END IF;
+  SELECT bi.import_run_id, bi.qb_item_id INTO v_run, v_qb FROM public.business_inventory bi WHERE bi.id = v_id;
+  IF v_run IS NOT NULL THEN
+    RAISE EXCEPTION 'recipe_link_must_survive_a_wipe: that product came from a catalogue load, so a link by row id would be erased by the next reload and would block it. Link it by its QuickBooks item id (%) instead.', COALESCE(v_qb, 'none recorded');
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.record_build_run(p_business_id uuid, p_recipe_id uuid, p_batches numeric, p_note text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_recipe      public.item_recipes%ROWTYPE;
+  v_target      uuid;
+  v_run         uuid := gen_random_uuid();
+  v_component   record;
+  v_moved       int := 0;
+  v_unlinked    jsonb := '[]'::jsonb;
+  v_made        numeric;
+  v_ledger_id   uuid;
+  v_recorded    boolean := true;
+  v_writes      boolean;
+BEGIN
+  IF NOT public.is_active_member(p_business_id) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_a_member',
+      'message', 'You are not a member of this business.');
+  END IF;
+  IF NOT public.has_permission(p_business_id, 'inventory:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_allowed',
+      'message', 'Recording a build needs permission to change stock.');
+  END IF;
+  IF p_batches IS NULL OR p_batches <= 0 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'bad_batches',
+      'message', 'Say how many batches were built — it must be more than zero.');
+  END IF;
+
+  SELECT * INTO v_recipe FROM public.item_recipes
+   WHERE id = p_recipe_id AND business_id = p_business_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'no_recipe',
+      'message', 'That recipe does not belong to this business.');
+  END IF;
+
+  SELECT b.qbo_writes_enabled INTO v_writes FROM public.businesses b WHERE b.id = p_business_id;
+
+  IF v_recipe.qb_item_id IS NOT NULL THEN
+    SELECT id INTO v_target FROM public.business_inventory
+     WHERE business_id = p_business_id AND qb_item_id = v_recipe.qb_item_id AND retired_at IS NULL
+     ORDER BY created_at DESC LIMIT 1;
+  ELSE
+    v_target := v_recipe.inventory_id;
+  END IF;
+  IF v_target IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'no_stock_row',
+      'message', 'This recipe has no stock row to put the finished units into. Re-link it to the item first.');
+  END IF;
+
+  FOR v_component IN
+    SELECT c.id, c.name, c.quantity, c.unit,
+           COALESCE(c.component_inventory_id,
+                    (SELECT bi.id FROM public.business_inventory bi
+                      WHERE bi.business_id = p_business_id
+                        AND bi.qb_item_id = c.component_qb_item_id
+                        AND bi.retired_at IS NULL
+                      ORDER BY bi.created_at DESC LIMIT 1)) AS stock_id
+      FROM public.recipe_components c
+     WHERE c.recipe_id = p_recipe_id
+     ORDER BY c.position, c.name
+  LOOP
+    IF v_component.stock_id IS NULL THEN
+      v_unlinked := v_unlinked || jsonb_build_object('name', v_component.name,
+        'quantity', v_component.quantity * p_batches, 'unit', v_component.unit);
+      CONTINUE;
+    END IF;
+    INSERT INTO public.business_inventory_ledger
+      (business_id, inventory_id, delta, kind, reason, source_type, source_id, actor_user_id, occurred_at)
+    VALUES (p_business_id, v_component.stock_id, -(v_component.quantity * p_batches), 'consume',
+            format('consumed by a build of %s', v_recipe.yield_unit), 'build_run', v_run, auth.uid(), now())
+    RETURNING id INTO v_ledger_id;
+    -- 🔴 A DISCARDED ROW RETURNS NOTHING. That is the only signal the test-mode trigger gives.
+    IF v_ledger_id IS NULL THEN v_recorded := false; END IF;
+    UPDATE public.business_inventory
+       SET qty = GREATEST(0, COALESCE(qty, 0) - (v_component.quantity * p_batches))
+     WHERE id = v_component.stock_id;
+    v_moved := v_moved + 1;
+  END LOOP;
+
+  v_made := v_recipe.yield_quantity * p_batches;
+  v_ledger_id := NULL;
+  INSERT INTO public.business_inventory_ledger
+    (business_id, inventory_id, delta, kind, reason, source_type, source_id, actor_user_id, occurred_at)
+  VALUES (p_business_id, v_target, v_made, 'build',
+          COALESCE(p_note, format('built %s %s', v_made, v_recipe.yield_unit)), 'build_run', v_run, auth.uid(), now())
+  RETURNING id INTO v_ledger_id;
+  IF v_ledger_id IS NULL THEN v_recorded := false; END IF;
+  UPDATE public.business_inventory SET qty = COALESCE(qty, 0) + v_made WHERE id = v_target;
+
+  RETURN jsonb_build_object('ok', true, 'run_id', v_run, 'made', v_made, 'unit', v_recipe.yield_unit,
+    'components_moved', v_moved, 'components_not_stocked', v_unlinked,
+    -- 🔴 THE TWO NEW FIELDS. A screen that says "built 5 yards" must be able to say "not recorded".
+    'ledger_recorded', v_recorded,
+    'test_mode', (v_writes IS DISTINCT FROM true),
+    'message', CASE WHEN v_recorded THEN NULL
+                    ELSE 'The stock moved, but this business is in test mode, so the movement was not recorded in the ledger.' END);
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.record_operations_config_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  k    text;
+  oldv jsonb;
+  newv jsonb;
+BEGIN
+  -- Union of the keys on BOTH sides, so a key ADDED or REMOVED is recorded, not only one edited.
+  FOR k IN
+    SELECT jsonb_object_keys(NEW.config)
+    UNION
+    SELECT jsonb_object_keys(COALESCE(OLD.config, '{}'::jsonb))
+  LOOP
+    oldv := CASE WHEN OLD IS NULL THEN NULL ELSE OLD.config -> k END;
+    newv := NEW.config -> k;
+    -- `IS DISTINCT FROM`, never `<>`: a key that appears or disappears has a NULL on one side, and
+    -- `<>` returns NULL there — so the IF would not fire and the change would go unrecorded. That
+    -- is a guard that cannot fire, on the exact rows most worth recording (R-33).
+    IF oldv IS DISTINCT FROM newv THEN
+      INSERT INTO public.business_operations_config_history
+        (business_id, config_key, old_value, new_value, changed_by)
+      VALUES (NEW.business_id, k, oldv, newv, auth.uid());
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.record_order_event(p_business_id uuid, p_order_id uuid, p_event_type text, p_actor_user_id uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text, p_occurred_at timestamp with time zone DEFAULT now())
  RETURNS uuid
  LANGUAGE plpgsql
@@ -2130,6 +2857,54 @@ BEGIN
 END;
 $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.reject_day_estimate_delete()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'delivery_day_estimates is append-only: DELETE is not permitted'
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.reject_day_estimate_rewrite()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF NEW.business_id IS DISTINCT FROM OLD.business_id
+     OR NEW.service_date IS DISTINCT FROM OLD.service_date
+     OR NEW.team_id     IS DISTINCT FROM OLD.team_id
+     OR NEW.reason      IS DISTINCT FROM OLD.reason
+     OR NEW.stops       IS DISTINCT FROM OLD.stops
+     OR NEW.trees       IS DISTINCT FROM OLD.trees
+     OR NEW.gallons     IS DISTINCT FROM OLD.gallons
+     OR NEW.drive_minutes IS DISTINCT FROM OLD.drive_minutes
+     OR NEW.miles         IS DISTINCT FROM OLD.miles
+     OR NEW.threshold_hours IS DISTINCT FROM OLD.threshold_hours
+     OR NEW.planting_minutes_per_tree IS DISTINCT FROM OLD.planting_minutes_per_tree
+     OR NEW.settings_were_set IS DISTINCT FROM OLD.settings_were_set
+     OR NEW.total_hours     IS DISTINCT FROM OLD.total_hours
+     OR NEW.drive_known     IS DISTINCT FROM OLD.drive_known
+     OR NEW.suggested_teams IS DISTINCT FROM OLD.suggested_teams
+     OR NEW.working         IS DISTINCT FROM OLD.working
+     OR NEW.created_at      IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'delivery_day_estimates is append-only: only the team choice may be recorded'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  -- A decision is made once. Changing your mind is a NEW estimate, not an edit of the old one.
+  IF OLD.chosen_teams IS NOT NULL AND NEW.chosen_teams IS DISTINCT FROM OLD.chosen_teams THEN
+    RAISE EXCEPTION 'this estimate already records a choice: record a new estimate instead'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.reject_inventory_ledger_mutation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2138,6 +2913,30 @@ CREATE OR REPLACE FUNCTION public.reject_inventory_ledger_mutation()
 AS $function$
 BEGIN
   RAISE EXCEPTION 'business_inventory_ledger is append-only: % is not permitted (D-50 — a correction is a NEW row, never an edit)', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.reject_rung_date_mutation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'production_rung_dates is append-only: % is not permitted (a correction is a NEW row, never an edit)', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.reject_stop_event_update()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'delivery_stop_events is append-only: UPDATE is not permitted'
     USING ERRCODE = 'insufficient_privilege';
 END;
 $function$;
@@ -2224,6 +3023,36 @@ BEGIN
           'success');
 
   RETURN QUERY SELECT true, NULL::text, v_new;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.revoke_crew_day_link(p_link_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid  uuid := auth.uid();
+  v_link public.crew_day_links%ROWTYPE;
+  v_role text;
+BEGIN
+  SELECT * INTO v_link FROM public.crew_day_links WHERE id = p_link_id;
+  IF NOT FOUND OR v_uid IS NULL OR NOT public.is_active_member(v_link.business_id)
+     OR NOT public.has_permission(v_link.business_id, 'deliveries:update') THEN
+    -- One answer for "no such link" and "not yours": a link id from another business reveals nothing.
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted', 'message', 'That link cannot be changed from here.');
+  END IF;
+  IF v_link.revoked_at IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', true, 'already', true);
+  END IF;
+  SELECT role INTO v_role FROM public.business_members
+   WHERE business_id = v_link.business_id AND user_id = v_uid AND active LIMIT 1;
+  UPDATE public.crew_day_links SET revoked_at = now(), revoked_by = v_uid WHERE id = p_link_id;
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (v_link.business_id, v_uid, v_role, 'crew_link.revoked', 'crew_day_link', p_link_id::text,
+          jsonb_build_object('service_date', v_link.service_date, 'reason', 'revoked'), 'success');
+  RETURN jsonb_build_object('ok', true, 'already', false);
 END;
 $function$;
 -- @@
@@ -2349,6 +3178,239 @@ BEGIN
     RETURN QUERY SELECT true, NULL::text, NULL::uuid, NULL::text, NULL::jsonb, NULL::jsonb;
   END IF;
   RETURN;
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.save_route_order(p_business_id uuid, p_service_date date, p_stop_ids uuid[])
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_team uuid;
+BEGIN
+  -- ✏️ TWICE SIMPLIFIED, BOTH TIMES BY THE MUTATION RUN RATHER THAN BY REVIEW (ledger #362).
+  -- Draft 1 had a branch for "all on ONE team" that did what the fallback already did. Draft 2
+  -- kept a branch for "nothing on a team", and that was redundant too: with no teamed stop the
+  -- SELECT below simply returns NULL, which is exactly the unsplit-day call. Both mutants
+  -- SURVIVED by being EQUIVALENT — the code had two ways to say one thing, so breaking one said
+  -- nothing. What is left is the whole rule: find a team among these stops, and hand the set to
+  -- the six-argument function, which owns every refusal.
+  SELECT team_id INTO v_team FROM public.deliveries
+   WHERE id = ANY(p_stop_ids) AND business_id = p_business_id AND team_id IS NOT NULL
+   ORDER BY team_id LIMIT 1;   -- deterministic: "whichever row comes first" is not a rule
+  RETURN public.save_route_order(p_business_id, p_service_date, p_stop_ids, v_team, NULL, NULL);
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.save_route_order(p_business_id uuid, p_service_date date, p_stop_ids uuid[], p_team_id uuid, p_miles numeric, p_minutes integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid       uuid := auth.uid();
+  v_role      text;
+  v_now       timestamptz := now();
+  v_n         int;
+  v_valid     int;
+  v_clear     int;
+  v_teamless  text;
+  v_teams     text;
+  v_team_name text;
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries to save a route.');
+  END IF;
+  IF p_service_date IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'bad_date', 'message', 'A day is required.');
+  END IF;
+
+  v_n := coalesce(array_length(p_stop_ids, 1), 0);
+  IF v_n = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'nothing_to_save',
+      'message', 'No stops were routed, so there is no order to save.');
+  END IF;
+  IF v_n <> (SELECT count(DISTINCT x) FROM unnest(p_stop_ids) x) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'duplicate_stop',
+      'message', 'The same stop appears twice in that route.');
+  END IF;
+
+  SELECT count(*) INTO v_valid
+    FROM public.deliveries d
+   WHERE d.id = ANY(p_stop_ids) AND d.business_id = p_business_id
+     AND d.delivery_date = p_service_date AND coalesce(d.status, '') <> 'cancelled';
+  IF v_valid <> v_n THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_on_this_day',
+      'message', 'That route names ' || (v_n - v_valid)::text || ' stop(s) that are not on this day.');
+  END IF;
+
+  -- ── [[R-169]] ⓪ A SPLIT DAY MUST BE ROUTED BY TEAM ────────────────────────────────────────
+  -- 🔴 FOUND BY THE MUTATION RUN, NOT BY REVIEW (ledger #362). The first draft let a NULL team
+  -- route the "unsplit day" unconditionally — so a set whose stops DO belong to teams was written
+  -- across both crews, with the clear scoped to `team_id IS NULL` and therefore touching nothing.
+  -- That is Saturday's shape through a different door. A day that has been split is routed BY TEAM
+  -- or not at all; the unsplit day stays available for the business that has never split one.
+  IF p_team_id IS NULL THEN
+    SELECT string_agg(DISTINCT t.name, ', ' ORDER BY t.name) INTO v_teams
+      FROM public.deliveries d
+      JOIN public.delivery_teams t ON t.id = d.team_id
+     WHERE d.id = ANY(p_stop_ids) AND d.team_id IS NOT NULL;
+    IF v_teams IS NOT NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'team_required', 'teams', v_teams,
+        'message', 'These stops belong to ' || v_teams || '. Route one team at a time.');
+    END IF;
+  END IF;
+
+  -- ── [[R-169]] ① A STOP WITH NO TEAM STOPS THE ROUTE, AND IT IS NAMED ──────────────────────
+  IF p_team_id IS NOT NULL THEN
+    SELECT string_agg(label, ', ' ORDER BY label) INTO v_teamless FROM (
+      SELECT coalesce(nullif(btrim(c.first_name || ' ' || c.last_name), ''), d.address_line1, 'a stop') AS label
+        FROM public.deliveries d
+        LEFT JOIN public.customers c ON c.id = d.customer_id
+       WHERE d.id = ANY(p_stop_ids) AND d.team_id IS NULL) q;
+    IF v_teamless IS NOT NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'stop_without_team', 'stops', v_teamless,
+        'message', v_teamless || ' has no team — assign it to a team first.');
+    END IF;
+
+    -- ── ② A SET SPANNING TWO TEAMS IS REFUSED BY NAME ───────────────────────────────────────
+    SELECT string_agg(DISTINCT t.name, ', ' ORDER BY t.name) INTO v_teams
+      FROM public.deliveries d
+      JOIN public.delivery_teams t ON t.id = d.team_id
+     WHERE d.id = ANY(p_stop_ids) AND d.team_id <> p_team_id;
+    IF v_teams IS NOT NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'mixed_teams', 'teams', v_teams,
+        'message', 'That set also contains stops for ' || v_teams || '. Route one team at a time.');
+    END IF;
+
+    SELECT name INTO v_team_name FROM public.delivery_teams
+     WHERE id = p_team_id AND business_id = p_business_id;
+    IF v_team_name IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'team_not_available',
+        'message', 'That team is not on this business.');
+    END IF;
+  END IF;
+
+  -- Write the sequence. WITH ORDINALITY is the order given — the optimiser's answer, unchanged.
+  UPDATE public.deliveries d
+     SET route_position = o.ord, routed_at = v_now, routed_by = v_uid
+    FROM unnest(p_stop_ids) WITH ORDINALITY AS o(stop_id, ord)
+   WHERE d.id = o.stop_id AND d.business_id = p_business_id AND d.delivery_date = p_service_date;
+
+  -- 🔴 THE SATURDAY FIX. Re-routing still REPLACES — a dropped stop must lose its number or the
+  -- phone shows a sequence with a hole — but only WITHIN THE TEAM BEING ROUTED. Routing Team 1
+  -- no longer touches a single stop of Team 2's.
+  UPDATE public.deliveries d
+     SET route_position = NULL, routed_at = NULL, routed_by = NULL
+   WHERE d.business_id = p_business_id AND d.delivery_date = p_service_date
+     AND NOT (d.id = ANY(p_stop_ids)) AND d.route_position IS NOT NULL
+     AND d.team_id IS NOT DISTINCT FROM p_team_id;
+  GET DIAGNOSTICS v_clear = ROW_COUNT;
+
+  -- The plan row: one per team per day, replaced on a re-route.
+  DELETE FROM public.delivery_route_plans
+   WHERE business_id = p_business_id AND delivery_date = p_service_date
+     AND team_id IS NOT DISTINCT FROM p_team_id;
+  INSERT INTO public.delivery_route_plans
+         (business_id, delivery_date, team_id, routed_at, routed_by, stops, miles, minutes)
+  VALUES (p_business_id, p_service_date, p_team_id, v_now, v_uid, v_n, p_miles, p_minutes);
+
+  SELECT role INTO v_role FROM public.business_members
+   WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (p_business_id, v_uid, v_role, 'route.saved', 'delivery_day', p_service_date::text,
+          jsonb_build_object('stops', v_n, 'dropped_from_plan', v_clear, 'stop_ids', to_jsonb(p_stop_ids),
+                             'team_id', p_team_id, 'team_name', v_team_name,
+                             'miles', p_miles, 'minutes', p_minutes), 'success');
+
+  RETURN jsonb_build_object('ok', true, 'saved', v_n, 'dropped_from_plan', v_clear, 'routed_at', v_now,
+                            'team_id', p_team_id, 'team_name', v_team_name,
+                            'miles', p_miles, 'minutes', p_minutes);
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.save_team(p_business_id uuid, p_team_id uuid, p_name text, p_active boolean, p_vendor_id uuid, p_member_names text[])
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid    uuid := auth.uid();
+  v_role   text;
+  v_name   text := nullif(btrim(coalesce(p_name, '')), '');
+  v_id     uuid;
+  v_names  text[];
+  v_n      int;
+  v_active boolean := coalesce(p_active, true);
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries to edit teams.');
+  END IF;
+  IF v_name IS NULL OR length(v_name) > 60 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'name_required', 'message', 'A team needs a name (up to 60 characters).');
+  END IF;
+
+  SELECT array_agg(x ORDER BY ord) INTO v_names
+    FROM (SELECT btrim(n) x, ord FROM unnest(coalesce(p_member_names, '{}'::text[])) WITH ORDINALITY AS t(n, ord)
+           WHERE nullif(btrim(n), '') IS NOT NULL) q;
+  v_names := coalesce(v_names, '{}'::text[]);
+  v_n := coalesce(array_length(v_names, 1), 0);
+  IF v_n > 0 AND v_n <> (SELECT count(DISTINCT lower(x)) FROM unnest(v_names) x) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'duplicate_member',
+      'message', 'That team lists the same person twice.');
+  END IF;
+  IF EXISTS (SELECT 1 FROM unnest(v_names) x WHERE length(x) > 60) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'member_name_too_long', 'message', 'A name is longer than 60 characters.');
+  END IF;
+
+  IF p_vendor_id IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM public.vendors WHERE id = p_vendor_id AND business_id = p_business_id) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'vendor_not_found', 'message', 'That contractor is not on this business.');
+  END IF;
+
+  IF p_team_id IS NULL THEN
+    BEGIN
+      INSERT INTO public.delivery_teams (business_id, name, active, vendor_id, sort_order)
+      VALUES (p_business_id, v_name, v_active, p_vendor_id,
+              coalesce((SELECT max(sort_order) + 1 FROM public.delivery_teams WHERE business_id = p_business_id), 0))
+      RETURNING id INTO v_id;
+    EXCEPTION WHEN unique_violation THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'name_taken', 'message', 'There is already a team with that name.');
+    END;
+  ELSE
+    SELECT id INTO v_id FROM public.delivery_teams WHERE id = p_team_id AND business_id = p_business_id;
+    IF v_id IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'team_not_found', 'message', 'That team cannot be changed from here.');
+    END IF;
+    BEGIN
+      UPDATE public.delivery_teams SET name = v_name, active = v_active, vendor_id = p_vendor_id, updated_at = now()
+       WHERE id = v_id;
+    EXCEPTION WHEN unique_violation THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'name_taken', 'message', 'There is already a team with that name.');
+    END;
+  END IF;
+
+  DELETE FROM public.delivery_team_members WHERE team_id = v_id;
+  INSERT INTO public.delivery_team_members (team_id, business_id, name, sort_order)
+  SELECT v_id, p_business_id, x, ord FROM unnest(v_names) WITH ORDINALITY AS t(x, ord);
+
+  SELECT role INTO v_role FROM public.business_members
+   WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (p_business_id, v_uid, v_role, CASE WHEN p_team_id IS NULL THEN 'team.created' ELSE 'team.updated' END,
+          'team', v_id::text,
+          jsonb_build_object('name', v_name, 'active', v_active, 'vendor_id', p_vendor_id,
+                             'members', to_jsonb(v_names), 'member_count', v_n), 'success');
+
+  RETURN jsonb_build_object('ok', true, 'team_id', v_id, 'name', v_name, 'active', v_active, 'members', v_n);
 END;
 $function$;
 -- @@
@@ -2919,6 +3981,121 @@ BEGIN
 END;
 $function$;
 -- @@
+CREATE OR REPLACE FUNCTION public.stop_act(p_business_id uuid, p_stop_id uuid, p_action text, p_note text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_uid  uuid := auth.uid();
+  v_name text;
+  v_role text;
+BEGIN
+  IF v_uid IS NULL OR NOT public.is_active_member(p_business_id)
+     OR NOT public.has_permission(p_business_id, 'deliveries:update') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'not_permitted',
+      'message', 'You need permission to change deliveries.');
+  END IF;
+  SELECT nullif(btrim(coalesce(name, '')), ''), role INTO v_name, v_role
+    FROM public.business_members WHERE business_id = p_business_id AND user_id = v_uid AND active LIMIT 1;
+  -- A member row with no name still gets an honest attribution rather than a blank one.
+  RETURN public.stop_progress_apply(p_business_id, p_stop_id, p_action, coalesce(v_name, 'A team member'),
+                                    'app-session', NULL, p_note, v_uid, v_role, NULL);
+END;
+$function$;
+-- @@
+CREATE OR REPLACE FUNCTION public.stop_progress_apply(p_business_id uuid, p_stop_id uuid, p_action text, p_actor_name text, p_device_id text, p_link_id uuid, p_note text, p_actor_user_id uuid, p_actor_role text, p_service_date date)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_stop   public.deliveries%ROWTYPE;
+  v_name   text := nullif(btrim(coalesce(p_actor_name, '')), '');
+  v_device text := nullif(btrim(coalesce(p_device_id, '')), '');
+  v_note   text := nullif(btrim(coalesce(p_note, '')), '');
+  v_now    timestamptz := now();
+  v_change boolean := true;
+BEGIN
+  -- VALIDATE (§1.6 item 3): refuse, never fabricate.
+  IF p_action IS NULL OR p_action NOT IN ('start', 'done', 'undo_done', 'note') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'bad_action');
+  END IF;
+  IF v_name IS NULL OR length(v_name) > 60 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'name_required', 'message', 'Enter your name first.');
+  END IF;
+  IF v_device IS NULL OR length(v_device) < 8 OR length(v_device) > 100 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'device_required');
+  END IF;
+  IF p_action = 'note' AND (v_note IS NULL OR length(v_note) > 1000) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'note_required', 'message', 'Type a note (up to 1000 characters).');
+  END IF;
+  IF p_action <> 'note' THEN v_note := NULL; END IF;
+
+  -- The stop must belong to this business, and — for a crew link — to the link's own DAY.
+  SELECT * INTO v_stop FROM public.deliveries
+   WHERE id = p_stop_id AND business_id = p_business_id
+     AND (p_service_date IS NULL OR delivery_date = p_service_date)
+     AND coalesce(status, '') <> 'cancelled'
+   FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'not_on_this_day'); END IF;
+
+  IF p_action = 'start' THEN
+    IF v_stop.started_at IS NOT NULL OR v_stop.status = 'fulfilled' THEN v_change := false;
+    ELSE UPDATE public.deliveries SET started_at = v_now WHERE id = v_stop.id;
+    END IF;
+
+  ELSIF p_action = 'done' THEN
+    -- The stop is done. The ORDER is not touched (tech-debt #319), no stock moves, and the review
+    -- ask is HELD: recorded here, sent by nothing (David, 2026-09-17 — never spend it on a tap).
+    IF v_stop.status = 'fulfilled' THEN v_change := false;
+    ELSE
+      UPDATE public.deliveries
+         SET status = 'fulfilled',
+             completed_at = v_now,
+             started_at = coalesce(started_at, v_now),
+             completed_by_name = v_name,
+             review_ask_held_at = CASE WHEN review_asked_at IS NULL THEN v_now ELSE review_ask_held_at END
+       WHERE id = v_stop.id;
+    END IF;
+
+  ELSIF p_action = 'undo_done' THEN
+    IF v_stop.status <> 'fulfilled' THEN v_change := false;
+    ELSIF v_stop.completed_by_name IS NULL OR v_stop.review_asked_at IS NOT NULL THEN
+      RETURN jsonb_build_object('ok', false, 'code', 'not_undoable',
+        'message', CASE WHEN v_stop.review_asked_at IS NOT NULL
+                        THEN 'A review was already asked for this stop, so it cannot be reopened here.'
+                        ELSE 'This stop was completed before the platform recorded who, so it cannot be reopened here.' END);
+    ELSE
+      UPDATE public.deliveries
+         SET status = 'scheduled',
+             started_at = CASE WHEN started_at = completed_at THEN NULL ELSE started_at END,
+             completed_at = NULL,
+             completed_by_name = NULL,
+             review_ask_held_at = NULL
+       WHERE id = v_stop.id;
+    END IF;
+  END IF;
+
+  IF v_change THEN
+    INSERT INTO public.delivery_stop_events (business_id, delivery_id, link_id, action, actor_name, actor_user_id, device_id, note, occurred_at)
+    VALUES (p_business_id, v_stop.id, p_link_id, p_action, v_name, p_actor_user_id, v_device, v_note, v_now);
+  END IF;
+
+  INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+  VALUES (p_business_id, p_actor_user_id, p_actor_role, 'crew_stop.' || p_action, 'delivery', v_stop.id::text,
+          jsonb_build_object('link_id', p_link_id, 'service_date', v_stop.delivery_date,
+                             'actor_name', v_name, 'device_id', v_device, 'note', v_note, 'changed', v_change),
+          CASE WHEN v_change THEN 'success' ELSE 'no_change' END);
+
+  RETURN jsonb_build_object('ok', true, 'changed', v_change,
+    'stop', (SELECT x FROM jsonb_array_elements(public.crew_day_stops(p_business_id, v_stop.delivery_date)) x
+              WHERE x->>'id' = v_stop.id::text));
+END;
+$function$;
+-- @@
 CREATE OR REPLACE FUNCTION public.sync_customer_flat_contact(p_customer_id uuid)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -3013,15 +4190,26 @@ DECLARE
   v_n             int;
   r               record;
   v_p_orders      int;
+  v_unlinked      int;                       -- captures put back on their twin (ledger #372)
+  v_h_orders      int;                       -- history orders this load wrote (ledger #363)
+  v_h_lines       int;                       -- and their lines
   v_p_lines       int;
   v_p_stops       int;
   v_inventory     int;
   v_customers     int;
   v_unretired     int;
+  v_writes        boolean;
 BEGIN
   IF p_business_id IS NULL OR p_run_id IS NULL THEN
     RAISE EXCEPTION 'undo_import_run requires a business and a run id';
   END IF;
+
+  -- 🔴 IS THIS BUSINESS IN TEST MODE? (ledger #348 · David, 2026-09-16, restated 2026-09-17:
+  -- *"the wipe must work regardless of what users entered or changed during testing"*.) The flag is
+  -- read ONCE, here. An unreadable or NULL flag counts as WRITES ON — the stricter behaviour, so a
+  -- missing answer never widens what the undo takes.
+  SELECT b.qbo_writes_enabled INTO v_writes FROM public.businesses b WHERE b.id = p_business_id;
+  v_writes := COALESCE(v_writes, true);
 
   -- Serialise two undos of the same tenant (a double press, two tabs). Released at COMMIT.
   PERFORM pg_advisory_xact_lock(hashtext('undo_import_run:' || p_business_id::text));
@@ -3037,7 +4225,32 @@ BEGIN
     JOIN public.customers c ON c.id = o.customer_id
    WHERE o.business_id = p_business_id
      AND c.business_id = p_business_id AND c.import_run_id = p_run_id
-     AND NOT (o.order_kind IS NOT DISTINCT FROM 'test' AND o.import_run_id IS NOT DISTINCT FROM p_run_id);
+     AND NOT (o.order_kind IS NOT DISTINCT FROM 'test' AND o.import_run_id IS NOT DISTINCT FROM p_run_id)
+     -- ── R-165, AS SHARPENED 2026-09-21 (David, ledger #363) ─────────────────────────────────
+     -- ONE TENANT LOAD, ONE ID: the wipe REMOVES everything the load created. A history order
+     -- this load wrote is therefore not merely exempt from the refusal — it is DELETED below,
+     -- in the same transaction, BEFORE the customers it points at. Exempting it without
+     -- deleting it would achieve nothing: `orders_customer_id_fkey` is RESTRICT, so the customer
+     -- delete would refuse anyway, one step later and with a worse error.
+     --
+     -- 🔴 KEYED ON THIS LOAD'S RUN, NOT ON `order_kind` AND NOT ON 'any import'.
+     -- `order_kind = 'history'` covers THREE doors and only one is re-derivable:
+     --    · the QuickBooks API import  (19 today) — re-derivable; this load's are deleted
+     --    · the OCR capture            (16 today) — A PHOTOGRAPH OF A DOCUMENT
+     --    · the backfill script         (9 today) — same origin, receipts since gone
+     -- The latter 25 carry NO import_run_id, so they are never matched here and never deleted.
+     -- R-160: only live captures are never removed. They must KEEP making the undo refuse, and
+     -- a bare `order_kind` test would have exempted all 25 SILENTLY.
+     --
+     -- ⚠️ `IS NOT DISTINCT FROM`, NEVER `=`, AND THIS IS NOT STYLE. With `=`, an OCR order
+     -- (import_run_id NULL) makes `NULL = p_run_id` → NULL, so `TRUE AND NULL` → NULL, `NOT NULL`
+     -- → NULL, and the row is dropped from the COUNT — the undo would stop refusing on exactly
+     -- the 25 rows this clause exists to protect, silently. The null-safe form is why the `test`
+     -- clause above is written the same way.
+     --
+     -- A history order carrying a DIFFERENT run's id is NOT exempt: it still counts, so the undo
+     -- REFUSES and names it. Fail-loud, not fail-silent.
+     AND NOT (o.order_kind IS NOT DISTINCT FROM 'history' AND o.import_run_id IS NOT DISTINCT FROM p_run_id);
 
   SELECT count(*) INTO v_live_lines
     FROM public.order_items oi
@@ -3057,19 +4270,23 @@ BEGIN
         WHERE o.id = d.order_id AND o.business_id = p_business_id
           AND o.order_kind = 'test' AND o.import_run_id = p_run_id);
 
-  -- 🔴 #335: a run customer's CONTACT rows go with it only if they carry THIS run's id — the import
-  -- (and the migrations/reload that stood in for it) tagged them. An untagged row was added by a
-  -- person after the import: it is live, and the undo refuses rather than take it.
-  SELECT (SELECT count(*) FROM public.customer_phones t JOIN public.customers c ON c.id = t.customer_id
-           WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
-             AND t.import_run_id IS DISTINCT FROM p_run_id)
-       + (SELECT count(*) FROM public.customer_emails t JOIN public.customers c ON c.id = t.customer_id
-           WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
-             AND t.import_run_id IS DISTINCT FROM p_run_id)
-       + (SELECT count(*) FROM public.customer_addresses t JOIN public.customers c ON c.id = t.customer_id
-           WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
-             AND t.import_run_id IS DISTINCT FROM p_run_id)
-    INTO v_live_contacts;
+  -- 🔴 #335, AMENDED BY #348: a contact row a PERSON added to a run customer blocks the undo only
+  -- when WRITES ARE ON. In TEST MODE nothing a person typed may stand in the way of the wipe — they
+  -- are testing, and testing to them is testing (David). The rows are removed below, tagged or not.
+  IF v_writes THEN
+    SELECT (SELECT count(*) FROM public.customer_phones t JOIN public.customers c ON c.id = t.customer_id
+             WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
+               AND t.import_run_id IS DISTINCT FROM p_run_id)
+         + (SELECT count(*) FROM public.customer_emails t JOIN public.customers c ON c.id = t.customer_id
+             WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
+               AND t.import_run_id IS DISTINCT FROM p_run_id)
+         + (SELECT count(*) FROM public.customer_addresses t JOIN public.customers c ON c.id = t.customer_id
+             WHERE c.business_id = p_business_id AND c.import_run_id = p_run_id
+               AND t.import_run_id IS DISTINCT FROM p_run_id)
+      INTO v_live_contacts;
+  ELSE
+    v_live_contacts := 0;
+  END IF;
 
   -- Every other single-column FK into the two parents, from the catalog.
   FOR r IN
@@ -3107,6 +4324,31 @@ BEGIN
       'other_references', v_other);
   END IF;
 
+  -- ①0 🔴 PUT THE CAPTURES BACK BEFORE ANYTHING IS DELETED (R-165's re-link half, ledger #372).
+  --   A re-linked capture is a PHOTOGRAPHED invoice moved onto the reloaded customer and stamped
+  --   with this run. It must survive the wipe (R-160: only live captures are never removed) — but
+  --   while it carries the run id, ①b below would DELETE it. So it is unlinked FIRST:
+  --   `customer_id` goes back to the row it came from and the run id is cleared, and by the time
+  --   ①b runs there is nothing of it left for the run to claim.
+  --
+  -- 🔴 `relinked_from_customer_id` IS WHY THIS IS POSSIBLE AND WHY IT IS A COLUMN. The twin cannot
+  --   be DERIVED after the fact — a capture's previous customer is recorded nowhere else, and
+  --   guessing it by NAME is exactly what the link itself refuses to do (two of the nineteen
+  --   differ in spelling: David Ferraro/Ferrara, Luis Gomez Candanoza/Luis Candanoza). The link
+  --   writes down where it came from; the wipe reads it back.
+  --
+  -- ⚠️ THE TWIN IS NEVER DELETED, which is what makes this safe: it carries no import_run_id, so
+  --   the customer delete below cannot see it. It is the capture's home between loads.
+  WITH u AS (UPDATE public.orders
+                SET customer_id = relinked_from_customer_id,
+                    import_run_id = NULL,
+                    relinked_from_customer_id = NULL
+              WHERE business_id = p_business_id
+                AND import_run_id = p_run_id
+                AND relinked_from_customer_id IS NOT NULL
+             RETURNING 1)
+    SELECT count(*) INTO v_unlinked FROM u;
+
   -- ── WRITES — one transaction; any failure below rolls back every one of them ─────────────
   -- ① the run's PRACTICE orders and their children (the same children handleDelete removes,
   --   plus the delivery stop checkout scheduled for a delivery order — practice too).
@@ -3134,22 +4376,59 @@ BEGIN
              RETURNING 1)
     SELECT count(*) INTO v_p_orders FROM d;
 
+  -- ①b THE LOAD'S HISTORY ORDERS AND THEIR LINES (ledger #363). Same shape as ① above, one
+  --   word different, and it runs BEFORE products and customers because those are what it
+  --   unblocks. `order_items.order_id` is ON DELETE CASCADE, so the lines would go anyway; they
+  --   are deleted explicitly so the COUNT can be reported — the idiom ① already uses.
+  --   ⚠️ `deliveries` is NOT touched here. Its FK to orders is ON DELETE SET NULL, so a stop
+  --   outlives the order and keeps every field Lauren typed. No stop carries this run today:
+  --   phases 1 and 2 write no deliveries, and `deliveries` has no import_run_id column at all.
+  --   WHEN history deliveries are built, they get one and a DELETE belongs here beside this.
+  DELETE FROM public.order_compliance_records WHERE order_id IN (
+    SELECT o.id FROM public.orders o
+     WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id);
+  DELETE FROM public.order_service_selections WHERE order_id IN (
+    SELECT o.id FROM public.orders o
+     WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id);
+  WITH d AS (DELETE FROM public.order_items WHERE order_id IN (
+               SELECT o.id FROM public.orders o
+                WHERE o.business_id = p_business_id AND o.order_kind = 'history' AND o.import_run_id = p_run_id)
+             RETURNING 1)
+    SELECT count(*) INTO v_h_lines FROM d;
+  WITH d AS (DELETE FROM public.orders
+              WHERE business_id = p_business_id AND order_kind = 'history' AND import_run_id = p_run_id
+             RETURNING 1)
+    SELECT count(*) INTO v_h_orders FROM d;
+
   -- ② products, ③ customers — products first: a practice line could only have anchored to them,
   --   and those lines are already gone.
   WITH d AS (DELETE FROM public.business_inventory
               WHERE business_id = p_business_id AND import_run_id = p_run_id RETURNING 1)
     SELECT count(*) INTO v_inventory FROM d;
-  -- #335: the run's contact rows, then the customers. customer_addresses is RESTRICT, so it MUST go
-  -- first; phones and emails would cascade, but are removed explicitly so the count is reported.
-  -- The pre-flight guaranteed every contact row of a run customer carries this run's id.
-  WITH d AS (DELETE FROM public.customer_phones
-              WHERE business_id = p_business_id AND import_run_id = p_run_id RETURNING 1)
+  -- #335, AMENDED BY #348: the run customers' contact rows, then the customers themselves.
+  -- `customer_addresses` is RESTRICT, so it MUST go first; phones and emails would cascade, but are
+  -- removed explicitly so the count is reported. A row is taken when it carries THIS run's id, or —
+  -- IN TEST MODE ONLY — when it sits on a run customer at all, whoever typed it.
+  WITH d AS (DELETE FROM public.customer_phones t
+              WHERE (t.business_id = p_business_id AND t.import_run_id = p_run_id)
+                 OR (NOT v_writes AND EXISTS (SELECT 1 FROM public.customers c
+                      WHERE c.id = t.customer_id AND c.business_id = p_business_id
+                        AND c.import_run_id = p_run_id))
+              RETURNING 1)
     SELECT v_contacts + count(*) INTO v_contacts FROM d;
-  WITH d AS (DELETE FROM public.customer_emails
-              WHERE business_id = p_business_id AND import_run_id = p_run_id RETURNING 1)
+  WITH d AS (DELETE FROM public.customer_emails t
+              WHERE (t.business_id = p_business_id AND t.import_run_id = p_run_id)
+                 OR (NOT v_writes AND EXISTS (SELECT 1 FROM public.customers c
+                      WHERE c.id = t.customer_id AND c.business_id = p_business_id
+                        AND c.import_run_id = p_run_id))
+              RETURNING 1)
     SELECT v_contacts + count(*) INTO v_contacts FROM d;
-  WITH d AS (DELETE FROM public.customer_addresses
-              WHERE business_id = p_business_id AND import_run_id = p_run_id RETURNING 1)
+  WITH d AS (DELETE FROM public.customer_addresses t
+              WHERE (t.business_id = p_business_id AND t.import_run_id = p_run_id)
+                 OR (NOT v_writes AND EXISTS (SELECT 1 FROM public.customers c
+                      WHERE c.id = t.customer_id AND c.business_id = p_business_id
+                        AND c.import_run_id = p_run_id))
+              RETURNING 1)
     SELECT v_contacts + count(*) INTO v_contacts FROM d;
   WITH d AS (DELETE FROM public.customers
               WHERE business_id = p_business_id AND import_run_id = p_run_id RETURNING 1)
@@ -3165,10 +4444,147 @@ BEGIN
     'refused', false,
     'practice_orders_deleted', v_p_orders, 'practice_lines_deleted', v_p_lines,
     'practice_deliveries_deleted', v_p_stops,
+    'captures_unlinked', v_unlinked, 'history_orders_deleted', v_h_orders, 'history_lines_deleted', v_h_lines,
     'inventory_deleted', v_inventory, 'customers_deleted', v_customers,
     'contact_rows_deleted', v_contacts, 'unretired', v_unretired);
 END;
 $function$;
+-- @@
+REVOKE ALL ON FUNCTION adjust_inventory_manual(uuid,uuid,integer,uuid,text,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION adjust_inventory_manual(uuid,uuid,integer,uuid,text,text,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION adjust_inventory_qty(uuid,uuid,integer,uuid,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assert_movement_actor(uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assert_movement_actor(uuid,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assign_member_role(uuid,uuid,uuid,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assign_member_role(uuid,uuid,uuid,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION assign_stops_team(uuid,uuid[],uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION assign_stops_team(uuid,uuid[],uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_group_variant_sizes(uuid,uuid,text,uuid[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_group_variant_sizes(uuid,uuid,text,uuid[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_promote_create_inventory(uuid,uuid,text,integer,text,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_promote_create_inventory(uuid,uuid,text,integer,text,text,text,text,uuid,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION count_reconcile_inventory(uuid,uuid,integer,uuid,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION count_reconcile_inventory(uuid,uuid,integer,uuid,text,text,uuid,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION create_crew_day_link(uuid,date,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION create_crew_day_link(uuid,date,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION create_invitation(uuid,uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION create_invitation(uuid,uuid,text,text,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_day_read(text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_day_stops(uuid,date) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_link_hit(text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_link_resolve(text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION crew_stop_act(text,text,uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION discovery_create_inventory(uuid,text,text,text,text,uuid,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION discovery_rescan_clear(uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION edit_receipt_line_items(uuid,jsonb,boolean) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION edit_receipt_line_items(uuid,jsonb,boolean) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION emit_inventory_movement(uuid,uuid,integer,text,text,text,uuid,uuid,timestamp with time zone,text,uuid,text) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION get_business_tax_rate(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION get_business_tax_rate(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION get_planting_materials(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION get_planting_materials(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION import_write_price(uuid,uuid,uuid,numeric,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION import_write_price(uuid,uuid,uuid,numeric,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION record_build_run(uuid,uuid,numeric,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION record_build_run(uuid,uuid,numeric,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION record_order_event(uuid,uuid,text,uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION reset_invitation_expiry(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION reset_invitation_expiry(uuid,uuid,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION revoke_crew_day_link(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION revoke_crew_day_link(uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_role_permissions(uuid,uuid,text,text,text,text,jsonb,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_role_permissions(uuid,uuid,text,text,text,text,jsonb,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_route_order(uuid,date,uuid[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_route_order(uuid,date,uuid[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_route_order(uuid,date,uuid[],uuid,numeric,integer) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_route_order(uuid,date,uuid[],uuid,numeric,integer) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION save_team(uuid,uuid,text,boolean,uuid,text[]) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION save_team(uuid,uuid,text,boolean,uuid,text[]) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION seed_business_modules(uuid,uuid,jsonb) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION seed_business_modules(uuid,uuid,jsonb) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_module_state(uuid,text,boolean,boolean,jsonb,uuid,integer) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_module_state(uuid,text,boolean,boolean,jsonb,uuid,integer) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_profile(uuid,uuid,text,text,text,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_profile(uuid,uuid,text,text,text,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION set_business_tax_rate(uuid,numeric,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION set_business_tax_rate(uuid,numeric,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION soft_delete_inventory(uuid,uuid,uuid,text,timestamp with time zone) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION soft_delete_inventory(uuid,uuid,uuid,text,timestamp with time zone) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION start_module_trial(uuid,text,integer,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION start_module_trial(uuid,text,integer,uuid) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION stop_act(uuid,uuid,text,text) FROM PUBLIC, anon, authenticated;
+-- @@
+GRANT EXECUTE ON FUNCTION stop_act(uuid,uuid,text,text) TO authenticated;
+-- @@
+REVOKE ALL ON FUNCTION stop_progress_apply(uuid,uuid,text,text,text,uuid,text,uuid,text,date) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION sync_customer_flat_contact(uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+REVOKE ALL ON FUNCTION undo_import_run(uuid,uuid) FROM PUBLIC, anon, authenticated;
+-- @@
+CREATE SEQUENCE IF NOT EXISTS public.production_rung_dates_seq_seq;
 -- @@
 ALTER TABLE public."addons" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3187,6 +4603,38 @@ ALTER TABLE public."audit_log" ALTER COLUMN "detail" SET DEFAULT '{}'::jsonb;
 ALTER TABLE public."audit_log" ALTER COLUMN "outcome" SET DEFAULT 'success'::text;
 -- @@
 ALTER TABLE public."audit_log" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."books_report_results" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."books_report_results" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."books_report_runs" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."books_report_runs" ALTER COLUMN "ran_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."books_report_runs" ALTER COLUMN "walks" SET DEFAULT '[]'::jsonb;
+-- @@
+ALTER TABLE public."books_report_runs" ALTER COLUMN "complete" SET DEFAULT false;
+-- @@
+ALTER TABLE public."books_report_runs" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."build_run_components" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."build_run_components" ALTER COLUMN "consumed" SET DEFAULT false;
+-- @@
+ALTER TABLE public."build_run_components" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "yield_measured" SET DEFAULT false;
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "cost_incomplete" SET DEFAULT true;
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "freight_spread" SET DEFAULT 'equal_per_item'::text;
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "built_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."build_runs" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."business_accounting_secrets" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
@@ -3224,6 +4672,12 @@ ALTER TABLE public."business_inventory" ALTER COLUMN "created_at" SET DEFAULT no
 -- @@
 ALTER TABLE public."business_inventory" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."business_inventory" ALTER COLUMN "item_type" SET DEFAULT 'purchased'::text;
+-- @@
+ALTER TABLE public."business_inventory" ALTER COLUMN "qty_basis" SET DEFAULT 'placeholder'::text;
+-- @@
+ALTER TABLE public."business_inventory" ALTER COLUMN "qty_basis_because" SET DEFAULT ''::text;
+-- @@
 ALTER TABLE public."business_inventory_ledger" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."business_inventory_ledger" ALTER COLUMN "occurred_at" SET DEFAULT now();
@@ -3250,6 +4704,14 @@ ALTER TABLE public."business_modules" ALTER COLUMN "created_at" SET DEFAULT now(
 -- @@
 ALTER TABLE public."business_modules" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."business_not_stock_items" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."business_not_stock_items" ALTER COLUMN "fix_at_source" SET DEFAULT true;
+-- @@
+ALTER TABLE public."business_not_stock_items" ALTER COLUMN "active" SET DEFAULT true;
+-- @@
+ALTER TABLE public."business_not_stock_items" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."business_operating_days" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."business_operating_days" ALTER COLUMN "created_at" SET DEFAULT now();
@@ -3261,6 +4723,10 @@ ALTER TABLE public."business_operations_config" ALTER COLUMN "config" SET DEFAUL
 ALTER TABLE public."business_operations_config" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."business_operations_config" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."business_operations_config_history" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."business_operations_config_history" ALTER COLUMN "changed_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."business_pmi_schedule" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3328,6 +4794,14 @@ ALTER TABLE public."channels" ALTER COLUMN "sort_order" SET DEFAULT 100;
 -- @@
 ALTER TABLE public."channels" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."component_purchase_links" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."component_purchase_links" ALTER COLUMN "freight_spread" SET DEFAULT 'equal_per_item'::text;
+-- @@
+ALTER TABLE public."component_purchase_links" ALTER COLUMN "confirmed_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."component_purchase_links" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."container_ladder" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."container_ladder" ALTER COLUMN "aliases" SET DEFAULT '{}'::text[];
@@ -3339,6 +4813,28 @@ ALTER TABLE public."container_ladder" ALTER COLUMN "active" SET DEFAULT true;
 ALTER TABLE public."container_ladder" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."container_ladder" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "install_t_posts_per_tree" SET DEFAULT 0;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "install_t_posts_because" SET DEFAULT 'not set — no posts until somebody enters them'::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "is_large" SET DEFAULT false;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "is_large_because" SET DEFAULT 'not set — not large until somebody says so'::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "caliper_because" SET DEFAULT 'not set — no caliper recorded for this size'::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "install_price_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "grow_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "hold_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "sellability" SET DEFAULT 'sold'::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "sellability_because" SET DEFAULT ''::text;
+-- @@
+ALTER TABLE public."container_ladder" ALTER COLUMN "pyt_price_because" SET DEFAULT ''::text;
 -- @@
 ALTER TABLE public."cost_object_assignments" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3375,6 +4871,12 @@ ALTER TABLE public."cost_objects" ALTER COLUMN "cost_shape" SET DEFAULT 'ONE_TIM
 ALTER TABLE public."cost_objects" ALTER COLUMN "cost_nature" SET DEFAULT 'CAPEX'::text;
 -- @@
 ALTER TABLE public."cost_objects" ALTER COLUMN "cost_source" SET DEFAULT 'MANUAL'::text;
+-- @@
+ALTER TABLE public."crew_day_links" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."crew_day_links" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."crew_link_rate" ALTER COLUMN "hits" SET DEFAULT 0;
 -- @@
 ALTER TABLE public."cultivar_plants" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3446,6 +4948,38 @@ ALTER TABLE public."deliveries" ALTER COLUMN "status" SET DEFAULT 'scheduled'::t
 -- @@
 ALTER TABLE public."deliveries" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."delivery_day_estimates" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."delivery_day_estimates" ALTER COLUMN "working" SET DEFAULT '[]'::jsonb;
+-- @@
+ALTER TABLE public."delivery_day_estimates" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."delivery_route_plans" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."delivery_route_plans" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."delivery_stop_events" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."delivery_stop_events" ALTER COLUMN "occurred_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."delivery_team_members" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."delivery_team_members" ALTER COLUMN "active" SET DEFAULT true;
+-- @@
+ALTER TABLE public."delivery_team_members" ALTER COLUMN "sort_order" SET DEFAULT 0;
+-- @@
+ALTER TABLE public."delivery_team_members" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."delivery_teams" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."delivery_teams" ALTER COLUMN "active" SET DEFAULT true;
+-- @@
+ALTER TABLE public."delivery_teams" ALTER COLUMN "sort_order" SET DEFAULT 0;
+-- @@
+ALTER TABLE public."delivery_teams" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."delivery_teams" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."inventory_count_sessions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."inventory_count_sessions" ALTER COLUMN "status" SET DEFAULT 'in_progress'::text;
@@ -3476,6 +5010,14 @@ ALTER TABLE public."invitations" ALTER COLUMN "expires_at" SET DEFAULT (now() + 
 -- @@
 ALTER TABLE public."invitations" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."item_recipes" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."item_recipes" ALTER COLUMN "build_minutes_because" SET DEFAULT 'not timed — nobody has timed a build yet'::text;
+-- @@
+ALTER TABLE public."item_recipes" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."item_recipes" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."labor_resource_wages" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."labor_resource_wages" ALTER COLUMN "updated_at" SET DEFAULT now();
@@ -3485,6 +5027,12 @@ ALTER TABLE public."labor_resources" ALTER COLUMN "id" SET DEFAULT gen_random_uu
 ALTER TABLE public."labor_resources" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."labor_resources" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."labour_rates" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."labour_rates" ALTER COLUMN "effective_from" SET DEFAULT CURRENT_DATE;
+-- @@
+ALTER TABLE public."labour_rates" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."losses" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3616,6 +5164,14 @@ ALTER TABLE public."production_plans" ALTER COLUMN "created_at" SET DEFAULT now(
 -- @@
 ALTER TABLE public."production_plans" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."production_rung_dates" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."production_rung_dates" ALTER COLUMN "recorded_by" SET DEFAULT auth.uid();
+-- @@
+ALTER TABLE public."production_rung_dates" ALTER COLUMN "recorded_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."production_rung_dates" ALTER COLUMN "seq" SET DEFAULT nextval('production_rung_dates_seq_seq'::regclass);
+-- @@
 ALTER TABLE public."receipts" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
 ALTER TABLE public."receipts" ALTER COLUMN "status" SET DEFAULT 'captured'::text;
@@ -3623,6 +5179,14 @@ ALTER TABLE public."receipts" ALTER COLUMN "status" SET DEFAULT 'captured'::text
 ALTER TABLE public."receipts" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."receipts" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."recipe_components" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."recipe_components" ALTER COLUMN "position" SET DEFAULT 0;
+-- @@
+ALTER TABLE public."recipe_components" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."recipe_components" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."role_definitions" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3651,6 +5215,8 @@ ALTER TABLE public."service_offerings" ALTER COLUMN "is_active" SET DEFAULT true
 ALTER TABLE public."service_offerings" ALTER COLUMN "sort_order" SET DEFAULT 0;
 -- @@
 ALTER TABLE public."service_offerings" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."service_offerings" ALTER COLUMN "price_source" SET DEFAULT 'fixed'::text;
 -- @@
 ALTER TABLE public."social_drafts" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
@@ -3682,9 +5248,29 @@ ALTER TABLE public."vendors" ALTER COLUMN "created_at" SET DEFAULT now();
 -- @@
 ALTER TABLE public."vendors" ALTER COLUMN "updated_at" SET DEFAULT now();
 -- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
+-- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "status" SET DEFAULT 'proposed'::text;
+-- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "presumed_from_invoice" SET DEFAULT false;
+-- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "unvalidated" SET DEFAULT false;
+-- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "created_at" SET DEFAULT now();
+-- @@
+ALTER TABLE public."warranty_claims" ALTER COLUMN "updated_at" SET DEFAULT now();
+-- @@
 ALTER TABLE public."addons" ADD CONSTRAINT "addons_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."audit_log" ADD CONSTRAINT "audit_log_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."books_report_results" ADD CONSTRAINT "books_report_results_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."books_report_runs" ADD CONSTRAINT "books_report_runs_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."build_run_components" ADD CONSTRAINT "build_run_components_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."business_accounting_secrets" ADD CONSTRAINT "business_accounting_secrets_pkey" PRIMARY KEY (business_id);
 -- @@
@@ -3702,9 +5288,13 @@ ALTER TABLE public."business_members" ADD CONSTRAINT "business_members_pkey" PRI
 -- @@
 ALTER TABLE public."business_modules" ADD CONSTRAINT "business_modules_pkey" PRIMARY KEY (business_id, module_key);
 -- @@
+ALTER TABLE public."business_not_stock_items" ADD CONSTRAINT "business_not_stock_items_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."business_operating_days" ADD CONSTRAINT "business_operating_days_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."business_operations_config" ADD CONSTRAINT "business_operations_config_pkey" PRIMARY KEY (business_id);
+-- @@
+ALTER TABLE public."business_operations_config_history" ADD CONSTRAINT "business_operations_config_history_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."business_pmi_schedule" ADD CONSTRAINT "business_pmi_schedule_pkey" PRIMARY KEY (id);
 -- @@
@@ -3726,6 +5316,8 @@ ALTER TABLE public."campaigns" ADD CONSTRAINT "campaigns_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."channels" ADD CONSTRAINT "channels_pkey" PRIMARY KEY (name);
 -- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."cost_object_assignments" ADD CONSTRAINT "cost_object_assignments_pkey" PRIMARY KEY (id);
@@ -3733,6 +5325,10 @@ ALTER TABLE public."cost_object_assignments" ADD CONSTRAINT "cost_object_assignm
 ALTER TABLE public."cost_object_edges" ADD CONSTRAINT "cost_object_edges_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."cost_objects" ADD CONSTRAINT "cost_objects_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."crew_day_links" ADD CONSTRAINT "crew_day_links_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."crew_link_rate" ADD CONSTRAINT "crew_link_rate_pkey" PRIMARY KEY (client_key, window_start);
 -- @@
 ALTER TABLE public."cultivar_plants" ADD CONSTRAINT "plants_pkey" PRIMARY KEY (id);
 -- @@
@@ -3746,15 +5342,29 @@ ALTER TABLE public."customers" ADD CONSTRAINT "customers_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."deliveries" ADD CONSTRAINT "deliveries_pkey" PRIMARY KEY (id);
 -- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."delivery_route_plans" ADD CONSTRAINT "delivery_route_plans_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."delivery_stop_events" ADD CONSTRAINT "delivery_stop_events_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."delivery_team_members" ADD CONSTRAINT "team_members_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."delivery_teams" ADD CONSTRAINT "teams_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."inventory_count_sessions" ADD CONSTRAINT "inventory_count_sessions_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."inventory_counts" ADD CONSTRAINT "inventory_counts_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."invitations" ADD CONSTRAINT "invitations_pkey" PRIMARY KEY (id);
 -- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."labor_resource_wages" ADD CONSTRAINT "labor_resource_wages_pkey" PRIMARY KEY (resource_id);
 -- @@
 ALTER TABLE public."labor_resources" ADD CONSTRAINT "labor_resources_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."labour_rates" ADD CONSTRAINT "labour_rates_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."losses" ADD CONSTRAINT "losses_pkey" PRIMARY KEY (id);
 -- @@
@@ -3792,7 +5402,11 @@ ALTER TABLE public."production_plan_lines" ADD CONSTRAINT "production_plan_lines
 -- @@
 ALTER TABLE public."production_plans" ADD CONSTRAINT "production_plans_pkey" PRIMARY KEY (id);
 -- @@
+ALTER TABLE public."production_rung_dates" ADD CONSTRAINT "production_rung_dates_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_pkey" PRIMARY KEY (id);
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_pkey" PRIMARY KEY (id);
 -- @@
 ALTER TABLE public."role_definitions" ADD CONSTRAINT "role_definitions_pkey" PRIMARY KEY (id);
 -- @@
@@ -3806,11 +5420,15 @@ ALTER TABLE public."vendor_preferences" ADD CONSTRAINT "vendor_preferences_pkey"
 -- @@
 ALTER TABLE public."vendors" ADD CONSTRAINT "vendors_pkey" PRIMARY KEY (id);
 -- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_pkey" PRIMARY KEY (id);
+-- @@
 ALTER TABLE public."business_discovery_profiles" ADD CONSTRAINT "business_discovery_profiles_business_id_source_url_key" UNIQUE (business_id, source_url);
 -- @@
 ALTER TABLE public."business_display_standards" ADD CONSTRAINT "business_display_standards_business_id_domain_group_key_key" UNIQUE (business_id, domain, group_key);
 -- @@
 ALTER TABLE public."business_position_responsibilities" ADD CONSTRAINT "business_position_responsibil_position_id_responsibility_id_key" UNIQUE (position_id, responsibility_id);
+-- @@
+ALTER TABLE public."crew_day_links" ADD CONSTRAINT "crew_day_links_token_hash_key" UNIQUE (token_hash);
 -- @@
 ALTER TABLE public."cultivar_plants" ADD CONSTRAINT "plants_tag_id_key" UNIQUE (tag_id);
 -- @@
@@ -3824,7 +5442,25 @@ ALTER TABLE public."nursery_profiles" ADD CONSTRAINT "nursery_profiles_business_
 -- @@
 ALTER TABLE public."people" ADD CONSTRAINT "people_auth_user_id_key" UNIQUE (auth_user_id);
 -- @@
+ALTER TABLE public."build_run_components" ADD CONSTRAINT "build_run_components_price_source_check" CHECK (((price_source IS NULL) OR (price_source = ANY (ARRAY['receipt'::text, 'typed'::text]))));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_batches_check" CHECK ((batches > (0)::numeric));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_freight_spread_check" CHECK ((freight_spread = ANY (ARRAY['equal_per_item'::text, 'pro_rata_by_value'::text])));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_labour_cost_check" CHECK (((labour_cost IS NULL) OR (labour_cost >= (0)::numeric)));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_materials_cost_check" CHECK (((materials_cost IS NULL) OR (materials_cost >= (0)::numeric)));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_total_cost_check" CHECK (((total_cost IS NULL) OR (total_cost >= (0)::numeric)));
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_yield_cubic_yards_check" CHECK (((yield_cubic_yards IS NULL) OR (yield_cubic_yards >= (0)::numeric)));
+-- @@
 ALTER TABLE public."business_inventory" ADD CONSTRAINT "business_inventory_cost_confidence_check" CHECK ((cost_confidence = ANY (ARRAY['CONFIRMED'::text, 'DERIVED'::text, 'ESTIMATED'::text, 'UNKNOWN'::text])));
+-- @@
+ALTER TABLE public."business_inventory" ADD CONSTRAINT "business_inventory_item_type_check" CHECK ((item_type = ANY (ARRAY['purchased'::text, 'grown'::text, 'manufactured'::text])));
+-- @@
+ALTER TABLE public."business_inventory" ADD CONSTRAINT "business_inventory_qty_basis_check" CHECK ((qty_basis = ANY (ARRAY['counted'::text, 'derived'::text, 'placeholder'::text])));
 -- @@
 ALTER TABLE public."business_inventory" ADD CONSTRAINT "business_inventory_unit_kind_check" CHECK (((unit_kind IS NULL) OR (unit_kind = ANY (ARRAY['container'::text, 'volume'::text, 'weight'::text, 'length'::text, 'each'::text]))));
 -- @@
@@ -3844,7 +5480,27 @@ ALTER TABLE public."campaigns" ADD CONSTRAINT "campaigns_campaign_type_check" CH
 -- @@
 ALTER TABLE public."campaigns" ADD CONSTRAINT "campaigns_status_check" CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text])));
 -- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_freight_spread_check" CHECK ((freight_spread = ANY (ARRAY['equal_per_item'::text, 'pro_rata_by_value'::text])));
+-- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_pack_size_check" CHECK (((pack_size IS NULL) OR (pack_size > (0)::numeric)));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_caliper_max_inches_check" CHECK ((caliper_max_inches > (0)::numeric));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_caliper_min_inches_check" CHECK ((caliper_min_inches > (0)::numeric));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_caliper_range_check" CHECK (((caliper_max_inches IS NULL) OR ((caliper_min_inches IS NOT NULL) AND (caliper_max_inches >= caliper_min_inches))));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_grow_months_check" CHECK (((grow_months IS NULL) OR (grow_months > (0)::numeric)));
+-- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_handling_minutes_check" CHECK (((handling_minutes IS NULL) OR (handling_minutes > (0)::numeric)));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_hold_months_check" CHECK (((hold_months IS NULL) OR (hold_months > (0)::numeric)));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_install_t_posts_per_tree_check" CHECK ((install_t_posts_per_tree >= 0));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_pyt_price_positive_check" CHECK (((pyt_price IS NULL) OR (pyt_price > (0)::numeric)));
+-- @@
+ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_sellability_check" CHECK ((sellability = ANY (ARRAY['sold'::text, 'rarely_sold'::text, 'never_sold'::text])));
 -- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_volume_gallons_check" CHECK (((volume_gallons IS NULL) OR (volume_gallons > (0)::numeric)));
 -- @@
@@ -3886,11 +5542,45 @@ ALTER TABLE public."cost_objects" ADD CONSTRAINT "cost_objects_substantiation_ch
 -- @@
 ALTER TABLE public."cultivar_plants" ADD CONSTRAINT "plants_plant_type_check" CHECK ((plant_type = ANY (ARRAY['tree'::text, 'shrub'::text, 'perennial'::text, 'annual'::text, 'garden'::text])));
 -- @@
+ALTER TABLE public."customer_addresses" ADD CONSTRAINT "customer_addresses_geocode_consistent" CHECK (((geocode_status IS NULL) OR ((geocode_status = 'found'::text) AND (latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (geocoded_at IS NOT NULL)) OR ((geocode_status = 'not_found'::text) AND (latitude IS NULL) AND (longitude IS NULL))));
+-- @@
 ALTER TABLE public."customer_addresses" ADD CONSTRAINT "customer_addresses_kind_check" CHECK ((kind = ANY (ARRAY['billing'::text, 'shipping'::text, 'both'::text])));
+-- @@
+ALTER TABLE public."deliveries" ADD CONSTRAINT "deliveries_coordinate_complete" CHECK ((((latitude IS NULL) AND (longitude IS NULL)) OR ((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (coordinate_set_at IS NOT NULL))));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_chosen_teams_check" CHECK (((chosen_teams IS NULL) OR (chosen_teams >= 1)));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_drive_minutes_check" CHECK (((drive_minutes IS NULL) OR (drive_minutes >= 0)));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_planting_minutes_per_tree_check" CHECK ((planting_minutes_per_tree >= 0));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_reason_check" CHECK ((reason = ANY (ARRAY['route_save'::text, 'inputs_changed'::text])));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_stops_check" CHECK ((stops >= 0));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_suggested_teams_check" CHECK ((suggested_teams = ANY (ARRAY[1, 2])));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_threshold_hours_check" CHECK ((threshold_hours > (0)::numeric));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_total_hours_check" CHECK ((total_hours >= (0)::numeric));
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_trees_check" CHECK ((trees >= 0));
+-- @@
+ALTER TABLE public."delivery_stop_events" ADD CONSTRAINT "delivery_stop_events_action_check" CHECK ((action = ANY (ARRAY['start'::text, 'done'::text, 'undo_done'::text, 'note'::text])));
+-- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_actual_yield_cubic_yards_check" CHECK (((actual_yield_cubic_yards IS NULL) OR (actual_yield_cubic_yards > (0)::numeric)));
+-- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_build_minutes_check" CHECK (((build_minutes IS NULL) OR (build_minutes >= (0)::numeric)));
+-- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_one_identity" CHECK (((qb_item_id IS NOT NULL) <> (inventory_id IS NOT NULL)));
+-- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_yield_quantity_check" CHECK ((yield_quantity > (0)::numeric));
 -- @@
 ALTER TABLE public."labor_resources" ADD CONSTRAINT "labor_resources_rate_basis_check" CHECK ((rate_basis = ANY (ARRAY['HOURLY'::text, 'FLAT_FEE'::text])));
 -- @@
 ALTER TABLE public."labor_resources" ADD CONSTRAINT "labor_resources_resource_type_check" CHECK ((resource_type = ANY (ARRAY['EMPLOYEE'::text, 'CONTRACTOR'::text])));
+-- @@
+ALTER TABLE public."labour_rates" ADD CONSTRAINT "labour_rates_hourly_rate_check" CHECK ((hourly_rate > (0)::numeric));
 -- @@
 ALTER TABLE public."modules" ADD CONSTRAINT "modules_tier_required_check" CHECK ((tier_required = ANY (ARRAY['starter'::text, 'growth'::text, 'enterprise'::text])));
 -- @@
@@ -3914,7 +5604,17 @@ ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_reconcile_status_check" C
 -- @@
 ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_status_check" CHECK ((status = ANY (ARRAY['captured'::text, 'confirmed'::text])));
 -- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_quantity_check" CHECK ((quantity > (0)::numeric));
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_typed_pack_cost_check" CHECK (((typed_pack_cost IS NULL) OR (typed_pack_cost > (0)::numeric)));
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_typed_pack_size_check" CHECK (((typed_pack_size IS NULL) OR (typed_pack_size > (0)::numeric)));
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_typed_price_is_whole" CHECK ((((typed_pack_cost IS NULL) AND (typed_pack_size IS NULL) AND (typed_pack_unit IS NULL)) OR ((typed_pack_cost IS NOT NULL) AND (typed_pack_size IS NOT NULL) AND (typed_pack_unit IS NOT NULL))));
+-- @@
 ALTER TABLE public."service_offerings" ADD CONSTRAINT "service_offerings_category_check" CHECK ((category = ANY (ARRAY['transport'::text, 'addon'::text, 'maintenance'::text, 'inspection'::text, 'subscription'::text])));
+-- @@
+ALTER TABLE public."service_offerings" ADD CONSTRAINT "service_offerings_price_source_check" CHECK ((price_source = ANY (ARRAY['fixed'::text, 'container_ladder'::text])));
 -- @@
 ALTER TABLE public."service_offerings" ADD CONSTRAINT "service_offerings_price_type_check" CHECK ((price_type = ANY (ARRAY['flat'::text, 'per_unit'::text])));
 -- @@
@@ -3934,9 +5634,27 @@ ALTER TABLE public."social_drafts" ADD CONSTRAINT "social_drafts_status_check" C
 -- @@
 ALTER TABLE public."vendor_aliases" ADD CONSTRAINT "vendor_aliases_source_check" CHECK ((source = ANY (ARRAY['owner'::text, 'capture'::text])));
 -- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_qty_check" CHECK ((qty > 0));
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_size_check" CHECK ((btrim(size) <> ''::text));
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_status_check" CHECK ((status = ANY (ARRAY['proposed'::text, 'approved'::text, 'declined'::text, 'void'::text])));
+-- @@
 ALTER TABLE public."addons" ADD CONSTRAINT "addons_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id);
 -- @@
 ALTER TABLE public."audit_log" ADD CONSTRAINT "audit_log_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."books_report_results" ADD CONSTRAINT "books_report_results_run_id_fkey" FOREIGN KEY (run_id) REFERENCES books_report_runs(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."books_report_runs" ADD CONSTRAINT "books_report_runs_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."build_run_components" ADD CONSTRAINT "build_run_components_build_run_id_fkey" FOREIGN KEY (build_run_id) REFERENCES build_runs(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."build_run_components" ADD CONSTRAINT "build_run_components_inventory_id_fkey" FOREIGN KEY (inventory_id) REFERENCES business_inventory(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."build_runs" ADD CONSTRAINT "build_runs_recipe_id_fkey" FOREIGN KEY (recipe_id) REFERENCES item_recipes(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."business_accounting_secrets" ADD CONSTRAINT "business_accounting_secrets_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
@@ -3964,9 +5682,13 @@ ALTER TABLE public."business_members" ADD CONSTRAINT "fk_business_members_invite
 -- @@
 ALTER TABLE public."business_modules" ADD CONSTRAINT "business_modules_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
+ALTER TABLE public."business_not_stock_items" ADD CONSTRAINT "business_not_stock_items_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
 ALTER TABLE public."business_operating_days" ADD CONSTRAINT "business_operating_days_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."business_operations_config" ADD CONSTRAINT "business_operations_config_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."business_operations_config_history" ADD CONSTRAINT "business_operations_config_history_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."business_pmi_schedule" ADD CONSTRAINT "business_pmi_schedule_asset_id_fkey" FOREIGN KEY (asset_id) REFERENCES cost_objects(id) ON DELETE CASCADE;
 -- @@
@@ -3998,6 +5720,14 @@ ALTER TABLE public."campaign_posts" ADD CONSTRAINT "campaign_posts_platform_fkey
 -- @@
 ALTER TABLE public."campaigns" ADD CONSTRAINT "campaigns_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_component_id_fkey" FOREIGN KEY (component_id) REFERENCES recipe_components(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_receipt_id_fkey" FOREIGN KEY (receipt_id) REFERENCES receipts(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."component_purchase_links" ADD CONSTRAINT "component_purchase_links_vendor_id_fkey" FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL;
+-- @@
 ALTER TABLE public."container_ladder" ADD CONSTRAINT "container_ladder_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."cost_object_assignments" ADD CONSTRAINT "cost_object_assignments_asset_id_fkey" FOREIGN KEY (asset_id) REFERENCES cost_objects(id) ON DELETE CASCADE;
@@ -4019,6 +5749,8 @@ ALTER TABLE public."cost_objects" ADD CONSTRAINT "cost_objects_parent_id_fkey" F
 ALTER TABLE public."cost_objects" ADD CONSTRAINT "cost_objects_receipt_id_fkey" FOREIGN KEY (receipt_id) REFERENCES receipts(id) ON DELETE SET NULL;
 -- @@
 ALTER TABLE public."cost_objects" ADD CONSTRAINT "cost_objects_resource_id_fkey" FOREIGN KEY (resource_id) REFERENCES labor_resources(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."crew_day_links" ADD CONSTRAINT "crew_day_links_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."cultivar_plants" ADD CONSTRAINT "cultivar_plants_inventory_id_fkey" FOREIGN KEY (inventory_id) REFERENCES business_inventory(id) ON DELETE SET NULL;
 -- @@
@@ -4046,6 +5778,30 @@ ALTER TABLE public."deliveries" ADD CONSTRAINT "deliveries_customer_id_fkey" FOR
 -- @@
 ALTER TABLE public."deliveries" ADD CONSTRAINT "deliveries_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL;
 -- @@
+ALTER TABLE public."deliveries" ADD CONSTRAINT "deliveries_team_id_fkey" FOREIGN KEY (team_id) REFERENCES delivery_teams(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_day_estimates" ADD CONSTRAINT "delivery_day_estimates_team_id_fkey" FOREIGN KEY (team_id) REFERENCES delivery_teams(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."delivery_route_plans" ADD CONSTRAINT "delivery_route_plans_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_route_plans" ADD CONSTRAINT "delivery_route_plans_team_id_fkey" FOREIGN KEY (team_id) REFERENCES delivery_teams(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_stop_events" ADD CONSTRAINT "delivery_stop_events_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_stop_events" ADD CONSTRAINT "delivery_stop_events_delivery_id_fkey" FOREIGN KEY (delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_stop_events" ADD CONSTRAINT "delivery_stop_events_link_id_fkey" FOREIGN KEY (link_id) REFERENCES crew_day_links(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."delivery_team_members" ADD CONSTRAINT "team_members_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_team_members" ADD CONSTRAINT "team_members_team_id_fkey" FOREIGN KEY (team_id) REFERENCES delivery_teams(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_teams" ADD CONSTRAINT "teams_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."delivery_teams" ADD CONSTRAINT "teams_vendor_id_fkey" FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL;
+-- @@
 ALTER TABLE public."inventory_count_sessions" ADD CONSTRAINT "inventory_count_sessions_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."inventory_counts" ADD CONSTRAINT "inventory_counts_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
@@ -4058,6 +5814,10 @@ ALTER TABLE public."invitations" ADD CONSTRAINT "invitations_business_id_fkey" F
 -- @@
 ALTER TABLE public."invitations" ADD CONSTRAINT "invitations_person_id_fkey" FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE SET NULL;
 -- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."item_recipes" ADD CONSTRAINT "item_recipes_inventory_id_fkey" FOREIGN KEY (inventory_id) REFERENCES business_inventory(id) ON DELETE CASCADE;
+-- @@
 ALTER TABLE public."labor_resource_wages" ADD CONSTRAINT "labor_resource_wages_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."labor_resource_wages" ADD CONSTRAINT "labor_resource_wages_resource_id_fkey" FOREIGN KEY (resource_id) REFERENCES labor_resources(id) ON DELETE CASCADE;
@@ -4065,6 +5825,8 @@ ALTER TABLE public."labor_resource_wages" ADD CONSTRAINT "labor_resource_wages_r
 ALTER TABLE public."labor_resources" ADD CONSTRAINT "labor_resources_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."labor_resources" ADD CONSTRAINT "labor_resources_person_id_fkey" FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."labour_rates" ADD CONSTRAINT "labour_rates_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."losses" ADD CONSTRAINT "losses_nursery_id_fkey" FOREIGN KEY (nursery_id) REFERENCES nurseries(id) ON DELETE CASCADE;
 -- @@
@@ -4108,6 +5870,8 @@ ALTER TABLE public."orders" ADD CONSTRAINT "orders_customer_id_fkey" FOREIGN KEY
 -- @@
 ALTER TABLE public."orders" ADD CONSTRAINT "orders_receipt_id_fkey" FOREIGN KEY (receipt_id) REFERENCES receipts(id) ON DELETE SET NULL;
 -- @@
+ALTER TABLE public."orders" ADD CONSTRAINT "orders_relinked_from_customer_id_fkey" FOREIGN KEY (relinked_from_customer_id) REFERENCES customers(id) ON DELETE SET NULL;
+-- @@
 ALTER TABLE public."people" ADD CONSTRAINT "people_auth_user_id_fkey" FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
 -- @@
 ALTER TABLE public."plant_events" ADD CONSTRAINT "plant_events_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id);
@@ -4124,11 +5888,19 @@ ALTER TABLE public."production_plan_lines" ADD CONSTRAINT "production_plan_lines
 -- @@
 ALTER TABLE public."production_plans" ADD CONSTRAINT "production_plans_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
+ALTER TABLE public."production_rung_dates" ADD CONSTRAINT "production_rung_dates_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."production_rung_dates" ADD CONSTRAINT "production_rung_dates_inventory_id_fkey" FOREIGN KEY (inventory_id) REFERENCES business_inventory(id) ON DELETE CASCADE;
+-- @@
 ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_uploaded_by_fkey" FOREIGN KEY (uploaded_by) REFERENCES auth.users(id);
 -- @@
 ALTER TABLE public."receipts" ADD CONSTRAINT "receipts_vendor_id_fkey" FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_component_inventory_id_fkey" FOREIGN KEY (component_inventory_id) REFERENCES business_inventory(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."recipe_components" ADD CONSTRAINT "recipe_components_recipe_id_fkey" FOREIGN KEY (recipe_id) REFERENCES item_recipes(id) ON DELETE CASCADE;
 -- @@
 ALTER TABLE public."role_definitions" ADD CONSTRAINT "role_definitions_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
@@ -4150,9 +5922,37 @@ ALTER TABLE public."vendor_preferences" ADD CONSTRAINT "vendor_preferences_vendo
 -- @@
 ALTER TABLE public."vendors" ADD CONSTRAINT "vendors_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
 -- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_address_id_fkey" FOREIGN KEY (address_id) REFERENCES customer_addresses(id) ON DELETE RESTRICT;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_business_id_fkey" FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_original_order_id_fkey" FOREIGN KEY (original_order_id) REFERENCES orders(id) ON DELETE RESTRICT;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_original_order_item_id_fkey" FOREIGN KEY (original_order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_replacement_order_id_fkey" FOREIGN KEY (replacement_order_id) REFERENCES orders(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_replacement_order_item_id_fkey" FOREIGN KEY (replacement_order_item_id) REFERENCES order_items(id) ON DELETE SET NULL;
+-- @@
+ALTER TABLE public."warranty_claims" ADD CONSTRAINT "warranty_claims_replaces_claim_id_fkey" FOREIGN KEY (replaces_claim_id) REFERENCES warranty_claims(id) ON DELETE SET NULL;
+-- @@
 CREATE INDEX audit_log_actor_action_idx ON public.audit_log USING btree (business_id, actor_user_id, action, created_at DESC);
 -- @@
 CREATE INDEX audit_log_business_created_idx ON public.audit_log USING btree (business_id, created_at DESC);
+-- @@
+CREATE INDEX books_report_results_rule_idx ON public.books_report_results USING btree (rule_id, rule_version);
+-- @@
+CREATE INDEX books_report_results_run_idx ON public.books_report_results USING btree (run_id);
+-- @@
+CREATE INDEX books_report_runs_business_idx ON public.books_report_runs USING btree (business_id, ran_at DESC);
+-- @@
+CREATE INDEX build_run_components_run_idx ON public.build_run_components USING btree (build_run_id);
+-- @@
+CREATE INDEX build_runs_business_idx ON public.build_runs USING btree (business_id, built_at DESC);
+-- @@
+CREATE INDEX build_runs_recipe_idx ON public.build_runs USING btree (recipe_id, built_at DESC);
 -- @@
 CREATE INDEX business_display_standards_lookup_idx ON public.business_display_standards USING btree (business_id, domain);
 -- @@
@@ -4176,15 +5976,21 @@ CREATE INDEX business_inventory_ledger_lot_idx ON public.business_inventory_ledg
 -- @@
 CREATE INDEX business_inventory_ledger_source_idx ON public.business_inventory_ledger USING btree (source_type, source_id);
 -- @@
+CREATE UNIQUE INDEX business_not_stock_items_uidx ON public.business_not_stock_items USING btree (business_id, qb_item_id);
+-- @@
 CREATE INDEX business_operating_days_business_idx ON public.business_operating_days USING btree (business_id);
 -- @@
 CREATE UNIQUE INDEX business_operating_days_exception_uniq ON public.business_operating_days USING btree (business_id, on_date) WHERE (on_date IS NOT NULL);
 -- @@
 CREATE UNIQUE INDEX business_operating_days_pattern_uniq ON public.business_operating_days USING btree (business_id, weekday) WHERE (weekday IS NOT NULL);
 -- @@
+CREATE INDEX business_operations_config_history_key_idx ON public.business_operations_config_history USING btree (business_id, config_key, changed_at DESC);
+-- @@
 CREATE INDEX bpr_position_idx ON public.business_position_responsibilities USING btree (position_id);
 -- @@
 CREATE UNIQUE INDEX business_positions_title_key ON public.business_positions USING btree (business_id, lower(title));
+-- @@
+CREATE INDEX component_purchase_links_by_component ON public.component_purchase_links USING btree (component_id, confirmed_at DESC);
 -- @@
 CREATE INDEX container_ladder_business_active_idx ON public.container_ladder USING btree (business_id, active, sort_order);
 -- @@
@@ -4212,9 +6018,13 @@ CREATE INDEX idx_cost_objects_business_node ON public.cost_objects USING btree (
 -- @@
 CREATE INDEX idx_cost_objects_parent ON public.cost_objects USING btree (parent_id);
 -- @@
+CREATE UNIQUE INDEX crew_day_links_one_live_per_day ON public.crew_day_links USING btree (business_id, service_date) WHERE (revoked_at IS NULL);
+-- @@
 CREATE INDEX idx_plants_tag_id_lower ON public.cultivar_plants USING btree (lower(tag_id));
 -- @@
 CREATE INDEX customer_addresses_customer_idx ON public.customer_addresses USING btree (business_id, customer_id) WHERE active;
+-- @@
+CREATE INDEX customer_addresses_geocoded_at ON public.customer_addresses USING btree (business_id, geocoded_at) WHERE (geocoded_at IS NOT NULL);
 -- @@
 CREATE UNIQUE INDEX customer_addresses_one_default ON public.customer_addresses USING btree (business_id, customer_id) WHERE (is_default AND active);
 -- @@
@@ -4246,9 +6056,25 @@ CREATE INDEX deliveries_business_date_idx ON public.deliveries USING btree (busi
 -- @@
 CREATE UNIQUE INDEX deliveries_business_qb_invoice_uidx ON public.deliveries USING btree (business_id, qb_invoice_id);
 -- @@
+CREATE INDEX deliveries_by_team_day ON public.deliveries USING btree (business_id, delivery_date, team_id);
+-- @@
+CREATE INDEX deliveries_route_order ON public.deliveries USING btree (business_id, delivery_date, route_position);
+-- @@
 CREATE INDEX idx_deliveries_date_service ON public.deliveries USING btree (business_id, delivery_date, service_type);
 -- @@
 CREATE INDEX idx_deliveries_order_id ON public.deliveries USING btree (order_id) WHERE (order_id IS NOT NULL);
+-- @@
+CREATE INDEX delivery_day_estimates_day_idx ON public.delivery_day_estimates USING btree (business_id, service_date, created_at DESC);
+-- @@
+CREATE UNIQUE INDEX delivery_route_plans_one_per_team_day ON public.delivery_route_plans USING btree (business_id, delivery_date, team_id) WHERE (team_id IS NOT NULL);
+-- @@
+CREATE UNIQUE INDEX delivery_route_plans_one_per_unsplit_day ON public.delivery_route_plans USING btree (business_id, delivery_date) WHERE (team_id IS NULL);
+-- @@
+CREATE INDEX delivery_stop_events_by_stop ON public.delivery_stop_events USING btree (delivery_id, occurred_at);
+-- @@
+CREATE INDEX delivery_team_members_by_team ON public.delivery_team_members USING btree (team_id, sort_order);
+-- @@
+CREATE UNIQUE INDEX delivery_teams_one_live_name_per_business ON public.delivery_teams USING btree (business_id, lower(btrim(name))) WHERE active;
 -- @@
 CREATE INDEX inventory_count_sessions_business_idx ON public.inventory_count_sessions USING btree (business_id, started_at DESC);
 -- @@
@@ -4256,9 +6082,15 @@ CREATE INDEX inventory_counts_business_idx ON public.inventory_counts USING btre
 -- @@
 CREATE INDEX inventory_counts_session_idx ON public.inventory_counts USING btree (session_id);
 -- @@
+CREATE UNIQUE INDEX item_recipes_one_per_qb_item ON public.item_recipes USING btree (business_id, qb_item_id) WHERE (qb_item_id IS NOT NULL);
+-- @@
+CREATE UNIQUE INDEX item_recipes_one_per_row ON public.item_recipes USING btree (business_id, inventory_id) WHERE (inventory_id IS NOT NULL);
+-- @@
 CREATE INDEX idx_labor_resource_wages_business ON public.labor_resource_wages USING btree (business_id);
 -- @@
 CREATE INDEX idx_labor_resources_business ON public.labor_resources USING btree (business_id);
+-- @@
+CREATE INDEX labour_rates_by_business ON public.labour_rates USING btree (business_id, effective_from DESC);
 -- @@
 CREATE INDEX idx_losses_nursery ON public.losses USING btree (nursery_id, occurred_at DESC);
 -- @@
@@ -4274,6 +6106,8 @@ CREATE INDEX compliance_records_order_idx ON public.order_compliance_records USI
 -- @@
 CREATE INDEX idx_order_items_order ON public.order_items USING btree (order_id);
 -- @@
+CREATE INDEX order_items_qbo_item_idx ON public.order_items USING btree (qbo_item_id) WHERE (qbo_item_id IS NOT NULL);
+-- @@
 CREATE INDEX idx_orders_import_run ON public.orders USING btree (business_id, import_run_id) WHERE (import_run_id IS NOT NULL);
 -- @@
 CREATE INDEX idx_orders_kind ON public.orders USING btree (business_id, order_kind) WHERE (order_kind IS NOT NULL);
@@ -4281,6 +6115,10 @@ CREATE INDEX idx_orders_kind ON public.orders USING btree (business_id, order_ki
 CREATE INDEX idx_orders_receipt_id ON public.orders USING btree (receipt_id) WHERE (receipt_id IS NOT NULL);
 -- @@
 CREATE INDEX idx_orders_sale_date ON public.orders USING btree (business_id, sale_date);
+-- @@
+CREATE INDEX orders_relinked_from_idx ON public.orders USING btree (relinked_from_customer_id) WHERE (relinked_from_customer_id IS NOT NULL);
+-- @@
+CREATE INDEX orders_ship_date_idx ON public.orders USING btree (business_id, ship_date) WHERE (ship_date IS NOT NULL);
 -- @@
 CREATE UNIQUE INDEX uidx_orders_business_qb_invoice ON public.orders USING btree (business_id, qb_invoice_id);
 -- @@
@@ -4302,7 +6140,11 @@ CREATE INDEX production_plan_lines_source_idx ON public.production_plan_lines US
 -- @@
 CREATE INDEX production_plans_business_status_idx ON public.production_plans USING btree (business_id, status);
 -- @@
+CREATE INDEX production_rung_dates_lot_idx ON public.production_rung_dates USING btree (business_id, inventory_id, recorded_at DESC, seq DESC);
+-- @@
 CREATE INDEX receipts_vendor_id_idx ON public.receipts USING btree (vendor_id);
+-- @@
+CREATE INDEX recipe_components_by_recipe ON public.recipe_components USING btree (recipe_id, "position");
 -- @@
 CREATE UNIQUE INDEX role_definitions_floor_key ON public.role_definitions USING btree (role_key) WHERE (business_id IS NULL);
 -- @@
@@ -4319,6 +6161,14 @@ CREATE INDEX vendor_preferences_vendor_id_idx ON public.vendor_preferences USING
 CREATE UNIQUE INDEX vendors_business_name_uidx ON public.vendors USING btree (business_id, lower(btrim(name)));
 -- @@
 CREATE INDEX vendors_business_preferred_idx ON public.vendors USING btree (business_id, preferred);
+-- @@
+CREATE INDEX warranty_claims_business_status_idx ON public.warranty_claims USING btree (business_id, status, created_at DESC);
+-- @@
+CREATE UNIQUE INDEX warranty_claims_one_open_per_line ON public.warranty_claims USING btree (original_order_item_id) WHERE ((replacement_order_id IS NULL) AND (status = ANY (ARRAY['proposed'::text, 'approved'::text])));
+-- @@
+CREATE INDEX warranty_claims_original_item_idx ON public.warranty_claims USING btree (original_order_item_id);
+-- @@
+CREATE INDEX warranty_claims_owed_idx ON public.warranty_claims USING btree (business_id) WHERE ((replacement_order_id IS NULL) AND (status = 'approved'::text));
 -- @@
 CREATE VIEW public."vendor_preferences_resolved" AS SELECT vp.id,
     vp.business_id,
@@ -4370,6 +6220,8 @@ CREATE TRIGGER business_operating_days_updated_at BEFORE UPDATE ON public.busine
 -- @@
 CREATE TRIGGER business_operations_config_updated_at BEFORE UPDATE ON public.business_operations_config FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
+CREATE TRIGGER trg_operations_config_history AFTER INSERT OR UPDATE ON public.business_operations_config FOR EACH ROW EXECUTE FUNCTION record_operations_config_change();
+-- @@
 CREATE TRIGGER business_pmi_schedule_updated_at BEFORE UPDATE ON public.business_pmi_schedule FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
 CREATE TRIGGER business_positions_updated_at BEFORE UPDATE ON public.business_positions FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
@@ -4402,7 +6254,15 @@ CREATE TRIGGER customers_updated_at BEFORE UPDATE ON public.customers FOR EACH R
 -- @@
 CREATE TRIGGER trg_customers_derived_contact_guard BEFORE INSERT OR UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION guard_customer_derived_contact();
 -- @@
+CREATE TRIGGER trg_delivery_day_estimates_append_only BEFORE UPDATE ON public.delivery_day_estimates FOR EACH ROW EXECUTE FUNCTION reject_day_estimate_rewrite();
+-- @@
+CREATE TRIGGER trg_delivery_day_estimates_no_delete BEFORE DELETE ON public.delivery_day_estimates FOR EACH ROW EXECUTE FUNCTION reject_day_estimate_delete();
+-- @@
+CREATE TRIGGER trg_delivery_stop_events_immutable BEFORE UPDATE ON public.delivery_stop_events FOR EACH ROW EXECUTE FUNCTION reject_stop_event_update();
+-- @@
 CREATE TRIGGER inventory_count_sessions_updated_at BEFORE UPDATE ON public.inventory_count_sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
+-- @@
+CREATE TRIGGER trg_item_recipes_link_survives BEFORE INSERT OR UPDATE ON public.item_recipes FOR EACH ROW EXECUTE FUNCTION recipe_link_must_survive_a_wipe();
 -- @@
 CREATE TRIGGER labor_resource_wages_updated_at BEFORE UPDATE ON public.labor_resource_wages FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
@@ -4414,9 +6274,13 @@ CREATE TRIGGER production_plan_lines_updated_at BEFORE UPDATE ON public.producti
 -- @@
 CREATE TRIGGER production_plans_updated_at BEFORE UPDATE ON public.production_plans FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
+CREATE TRIGGER trg_rung_dates_immutable BEFORE DELETE OR UPDATE ON public.production_rung_dates FOR EACH ROW EXECUTE FUNCTION reject_rung_date_mutation();
+-- @@
 CREATE TRIGGER receipts_updated_at BEFORE UPDATE ON public.receipts FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
 -- @@
 CREATE TRIGGER trg_receipts_snapshot_and_line_guard BEFORE UPDATE ON public.receipts FOR EACH ROW EXECUTE FUNCTION guard_receipt_snapshot_and_lines();
+-- @@
+CREATE TRIGGER trg_recipe_components_link_survives BEFORE INSERT OR UPDATE ON public.recipe_components FOR EACH ROW EXECUTE FUNCTION recipe_link_must_survive_a_wipe();
 -- @@
 CREATE TRIGGER trg_role_definitions_updated_at BEFORE UPDATE ON public.role_definitions FOR EACH ROW EXECUTE FUNCTION set_role_definitions_updated_at();
 -- @@
@@ -4431,6 +6295,14 @@ CREATE TRIGGER vendors_updated_at BEFORE UPDATE ON public.vendors FOR EACH ROW E
 ALTER TABLE public."addons" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."audit_log" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."books_report_results" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."books_report_runs" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."build_run_components" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."build_runs" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_accounting_secrets" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -4448,9 +6320,13 @@ ALTER TABLE public."business_members" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_modules" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."business_not_stock_items" ENABLE ROW LEVEL SECURITY;
+-- @@
 ALTER TABLE public."business_operating_days" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_operations_config" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."business_operations_config_history" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."business_pmi_schedule" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -4472,6 +6348,8 @@ ALTER TABLE public."campaigns" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."channels" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."component_purchase_links" ENABLE ROW LEVEL SECURITY;
+-- @@
 ALTER TABLE public."container_ladder" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."cost_object_assignments" ENABLE ROW LEVEL SECURITY;
@@ -4479,6 +6357,10 @@ ALTER TABLE public."cost_object_assignments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."cost_object_edges" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."cost_objects" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."crew_day_links" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."crew_link_rate" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."cultivar_plants" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -4492,15 +6374,29 @@ ALTER TABLE public."customers" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."deliveries" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."delivery_day_estimates" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."delivery_route_plans" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."delivery_stop_events" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."delivery_team_members" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."delivery_teams" ENABLE ROW LEVEL SECURITY;
+-- @@
 ALTER TABLE public."inventory_count_sessions" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."inventory_counts" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."invitations" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."item_recipes" ENABLE ROW LEVEL SECURITY;
+-- @@
 ALTER TABLE public."labor_resource_wages" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."labor_resources" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."labour_rates" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."losses" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -4538,7 +6434,11 @@ ALTER TABLE public."production_plan_lines" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."production_plans" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."production_rung_dates" ENABLE ROW LEVEL SECURITY;
+-- @@
 ALTER TABLE public."receipts" ENABLE ROW LEVEL SECURITY;
+-- @@
+ALTER TABLE public."recipe_components" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."role_definitions" ENABLE ROW LEVEL SECURITY;
 -- @@
@@ -4552,6 +6452,8 @@ ALTER TABLE public."vendor_preferences" ENABLE ROW LEVEL SECURITY;
 -- @@
 ALTER TABLE public."vendors" ENABLE ROW LEVEL SECURITY;
 -- @@
+ALTER TABLE public."warranty_claims" ENABLE ROW LEVEL SECURITY;
+-- @@
 CREATE POLICY "addons_business_owner" ON public."addons" AS PERMISSIVE FOR ALL TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'service_offerings:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'service_offerings:update'::text)));
 -- @@
 CREATE POLICY "addons_select_public" ON public."addons" AS PERMISSIVE FOR SELECT TO public USING (true);
@@ -4563,6 +6465,44 @@ CREATE POLICY "audit_insert" ON public."audit_log" AS PERMISSIVE FOR INSERT TO "
   WHERE (businesses.owner_id = auth.uid()))) OR is_active_member(business_id)) AND ((actor_user_id IS NULL) OR (actor_user_id = auth.uid()))));
 -- @@
 CREATE POLICY "audit_owner_read" ON public."audit_log" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'audit_log:read'::text)));
+-- @@
+CREATE POLICY "books_report_results_member_insert" ON public."books_report_results" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM books_report_runs r
+  WHERE ((r.id = books_report_results.run_id) AND is_active_member(r.business_id) AND has_permission(r.business_id, 'settings:read'::text)))));
+-- @@
+CREATE POLICY "books_report_results_member_select" ON public."books_report_results" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM books_report_runs r
+  WHERE ((r.id = books_report_results.run_id) AND is_active_member(r.business_id) AND has_permission(r.business_id, 'settings:read'::text)))));
+-- @@
+CREATE POLICY "books_report_results_owner_all" ON public."books_report_results" AS PERMISSIVE FOR ALL TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM (books_report_runs r
+     JOIN businesses b ON ((b.id = r.business_id)))
+  WHERE ((r.id = books_report_results.run_id) AND (b.owner_id = auth.uid()))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM (books_report_runs r
+     JOIN businesses b ON ((b.id = r.business_id)))
+  WHERE ((r.id = books_report_results.run_id) AND (b.owner_id = auth.uid())))));
+-- @@
+CREATE POLICY "books_report_runs_member_insert" ON public."books_report_runs" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:read'::text)));
+-- @@
+CREATE POLICY "books_report_runs_member_select" ON public."books_report_runs" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:read'::text)));
+-- @@
+CREATE POLICY "books_report_runs_owner_all" ON public."books_report_runs" AS PERMISSIVE FOR ALL TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = books_report_runs.business_id) AND (b.owner_id = auth.uid()))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = books_report_runs.business_id) AND (b.owner_id = auth.uid())))));
+-- @@
+CREATE POLICY "build_run_components_member_insert" ON public."build_run_components" AS PERMISSIVE FOR INSERT TO public WITH CHECK ((EXISTS ( SELECT 1
+   FROM build_runs r
+  WHERE ((r.id = build_run_components.build_run_id) AND has_permission(r.business_id, 'inventory:update'::text)))));
+-- @@
+CREATE POLICY "build_run_components_member_select" ON public."build_run_components" AS PERMISSIVE FOR SELECT TO public USING ((EXISTS ( SELECT 1
+   FROM build_runs r
+  WHERE ((r.id = build_run_components.build_run_id) AND is_active_member(r.business_id)))));
+-- @@
+CREATE POLICY "build_runs_member_insert" ON public."build_runs" AS PERMISSIVE FOR INSERT TO public WITH CHECK (has_permission(business_id, 'inventory:update'::text));
+-- @@
+CREATE POLICY "build_runs_member_select" ON public."build_runs" AS PERMISSIVE FOR SELECT TO public USING (is_active_member(business_id));
 -- @@
 CREATE POLICY "bas_owner_all" ON public."business_accounting_secrets" AS PERMISSIVE FOR ALL TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'accounting:connect'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'accounting:connect'::text)));
 -- @@
@@ -4602,6 +6542,10 @@ CREATE POLICY "bm_self_update" ON public."business_members" AS PERMISSIVE FOR UP
 -- @@
 CREATE POLICY "business_modules_member_select" ON public."business_modules" AS PERMISSIVE FOR SELECT TO public USING (is_active_member(business_id));
 -- @@
+CREATE POLICY "business_not_stock_items_member_select" ON public."business_not_stock_items" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'inventory:read'::text)));
+-- @@
+CREATE POLICY "business_not_stock_items_member_write" ON public."business_not_stock_items" AS PERMISSIVE FOR ALL TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
+-- @@
 CREATE POLICY "business_operating_days_member_delete" ON public."business_operating_days" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
 -- @@
 CREATE POLICY "business_operating_days_member_insert" ON public."business_operating_days" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
@@ -4621,6 +6565,12 @@ CREATE POLICY "business_operations_config_owner_all" ON public."business_operati
   WHERE ((b.id = business_operations_config.business_id) AND (b.owner_id = auth.uid()))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM businesses b
   WHERE ((b.id = business_operations_config.business_id) AND (b.owner_id = auth.uid())))));
+-- @@
+CREATE POLICY "business_operations_config_history_member_select" ON public."business_operations_config_history" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:read'::text)));
+-- @@
+CREATE POLICY "business_operations_config_history_owner_select" ON public."business_operations_config_history" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = business_operations_config_history.business_id) AND (b.owner_id = auth.uid())))));
 -- @@
 CREATE POLICY "business_pmi_schedule_member_all" ON public."business_pmi_schedule" AS PERMISSIVE FOR ALL TO public USING (is_active_member(business_id)) WITH CHECK (is_active_member(business_id));
 -- @@
@@ -4678,6 +6628,12 @@ CREATE POLICY "campaigns_owner" ON public."campaigns" AS PERMISSIVE FOR ALL TO "
 -- @@
 CREATE POLICY "channels_authenticated_select" ON public."channels" AS PERMISSIVE FOR SELECT TO "authenticated" USING (true);
 -- @@
+CREATE POLICY "component_links_member_select" ON public."component_purchase_links" AS PERMISSIVE FOR SELECT TO public USING (is_active_member(business_id));
+-- @@
+CREATE POLICY "component_links_settings_insert" ON public."component_purchase_links" AS PERMISSIVE FOR INSERT TO public WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
+-- @@
+CREATE POLICY "component_links_settings_update" ON public."component_purchase_links" AS PERMISSIVE FOR UPDATE TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
+-- @@
 CREATE POLICY "container_ladder_member_select" ON public."container_ladder" AS PERMISSIVE FOR SELECT TO "authenticated" USING (is_active_member(business_id));
 -- @@
 CREATE POLICY "container_ladder_settings_insert" ON public."container_ladder" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
@@ -4708,6 +6664,8 @@ CREATE POLICY "cost_objects_member_select" ON public."cost_objects" AS PERMISSIV
 -- @@
 CREATE POLICY "cost_objects_member_update" ON public."cost_objects" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'costs:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'costs:update'::text)));
 -- @@
+CREATE POLICY "crew_day_links_member_select" ON public."crew_day_links" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:update'::text)));
+-- @@
 CREATE POLICY "anon_select_plants" ON public."cultivar_plants" AS PERMISSIVE FOR SELECT TO "anon" USING (true);
 -- @@
 CREATE POLICY "cultivar_plants_member_delete" ON public."cultivar_plants" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'inventory:delete'::text)));
@@ -4724,13 +6682,13 @@ CREATE POLICY "customer_addresses_member_select" ON public."customer_addresses" 
 -- @@
 CREATE POLICY "customer_addresses_member_update" ON public."customer_addresses" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'customers:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'customers:update'::text)));
 -- @@
-CREATE POLICY "customer_emails_member_insert" ON public."customer_emails" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'customers:create'::text)));
+CREATE POLICY "customer_emails_member_insert" ON public."customer_emails" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND (has_permission(business_id, 'customers:read'::text) OR has_permission(business_id, 'customers:create'::text) OR has_permission(business_id, 'customers:update'::text))));
 -- @@
 CREATE POLICY "customer_emails_member_select" ON public."customer_emails" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'customers:read'::text)));
 -- @@
 CREATE POLICY "customer_emails_member_update" ON public."customer_emails" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'customers:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'customers:update'::text)));
 -- @@
-CREATE POLICY "customer_phones_member_insert" ON public."customer_phones" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'customers:create'::text)));
+CREATE POLICY "customer_phones_member_insert" ON public."customer_phones" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND (has_permission(business_id, 'customers:read'::text) OR has_permission(business_id, 'customers:create'::text) OR has_permission(business_id, 'customers:update'::text))));
 -- @@
 CREATE POLICY "customer_phones_member_select" ON public."customer_phones" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'customers:read'::text)));
 -- @@
@@ -4752,6 +6710,20 @@ CREATE POLICY "deliveries_member_select" ON public."deliveries" AS PERMISSIVE FO
 -- @@
 CREATE POLICY "deliveries_member_update" ON public."deliveries" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:update'::text)));
 -- @@
+CREATE POLICY "delivery_day_estimates_member_choose" ON public."delivery_day_estimates" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (has_permission(business_id, 'deliveries:update'::text)) WITH CHECK (has_permission(business_id, 'deliveries:update'::text));
+-- @@
+CREATE POLICY "delivery_day_estimates_member_insert" ON public."delivery_day_estimates" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK (has_permission(business_id, 'deliveries:update'::text));
+-- @@
+CREATE POLICY "delivery_day_estimates_member_select" ON public."delivery_day_estimates" AS PERMISSIVE FOR SELECT TO "authenticated" USING (has_permission(business_id, 'deliveries:read'::text));
+-- @@
+CREATE POLICY "delivery_route_plans_member_select" ON public."delivery_route_plans" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:read'::text)));
+-- @@
+CREATE POLICY "delivery_stop_events_member_select" ON public."delivery_stop_events" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:read'::text)));
+-- @@
+CREATE POLICY "delivery_team_members_member_select" ON public."delivery_team_members" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:read'::text)));
+-- @@
+CREATE POLICY "delivery_teams_member_select" ON public."delivery_teams" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'deliveries:read'::text)));
+-- @@
 CREATE POLICY "inventory_count_sessions_member_all" ON public."inventory_count_sessions" AS PERMISSIVE FOR ALL TO public USING (is_active_member(business_id)) WITH CHECK (is_active_member(business_id));
 -- @@
 CREATE POLICY "inventory_count_sessions_owner_all" ON public."inventory_count_sessions" AS PERMISSIVE FOR ALL TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'inventory:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'inventory:update'::text)));
@@ -4768,6 +6740,12 @@ CREATE POLICY "invitations_member_select" ON public."invitations" AS PERMISSIVE 
 -- @@
 CREATE POLICY "invitations_member_update" ON public."invitations" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'team:create'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'team:create'::text)));
 -- @@
+CREATE POLICY "item_recipes_member_select" ON public."item_recipes" AS PERMISSIVE FOR SELECT TO public USING (is_active_member(business_id));
+-- @@
+CREATE POLICY "item_recipes_settings_insert" ON public."item_recipes" AS PERMISSIVE FOR INSERT TO public WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
+-- @@
+CREATE POLICY "item_recipes_settings_update" ON public."item_recipes" AS PERMISSIVE FOR UPDATE TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'settings:update'::text)));
+-- @@
 CREATE POLICY "lrw_member_delete" ON public."labor_resource_wages" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'wages:delete'::text)));
 -- @@
 CREATE POLICY "lrw_member_insert" ON public."labor_resource_wages" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'wages:create'::text)));
@@ -4783,6 +6761,12 @@ CREATE POLICY "labor_resources_member_insert" ON public."labor_resources" AS PER
 CREATE POLICY "labor_resources_member_select" ON public."labor_resources" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'wages:read'::text)));
 -- @@
 CREATE POLICY "labor_resources_member_update" ON public."labor_resources" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'wages:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'wages:update'::text)));
+-- @@
+CREATE POLICY "labour_rates_money_insert" ON public."labour_rates" AS PERMISSIVE FOR INSERT TO public WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'pricing_recipe:update'::text)));
+-- @@
+CREATE POLICY "labour_rates_money_select" ON public."labour_rates" AS PERMISSIVE FOR SELECT TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'pricing_recipe:read'::text)));
+-- @@
+CREATE POLICY "labour_rates_money_update" ON public."labour_rates" AS PERMISSIVE FOR UPDATE TO public USING ((is_active_member(business_id) AND has_permission(business_id, 'pricing_recipe:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'pricing_recipe:update'::text)));
 -- @@
 CREATE POLICY "losses_all_owner" ON public."losses" AS PERMISSIVE FOR ALL TO public USING ((EXISTS ( SELECT 1
    FROM nurseries n
@@ -4878,6 +6862,18 @@ CREATE POLICY "production_plans_owner_all" ON public."production_plans" AS PERMI
    FROM businesses b
   WHERE ((b.id = production_plans.business_id) AND (b.owner_id = auth.uid())))));
 -- @@
+CREATE POLICY "production_rung_dates_member_insert" ON public."production_rung_dates" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'inventory:update'::text)));
+-- @@
+CREATE POLICY "production_rung_dates_member_select" ON public."production_rung_dates" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'inventory:read'::text)));
+-- @@
+CREATE POLICY "production_rung_dates_owner_insert" ON public."production_rung_dates" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = production_rung_dates.business_id) AND (b.owner_id = auth.uid())))));
+-- @@
+CREATE POLICY "production_rung_dates_owner_select" ON public."production_rung_dates" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM businesses b
+  WHERE ((b.id = production_rung_dates.business_id) AND (b.owner_id = auth.uid())))));
+-- @@
 CREATE POLICY "receipts_member_delete" ON public."receipts" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'costs:delete'::text)));
 -- @@
 CREATE POLICY "receipts_member_insert" ON public."receipts" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'costs:create'::text)));
@@ -4885,6 +6881,20 @@ CREATE POLICY "receipts_member_insert" ON public."receipts" AS PERMISSIVE FOR IN
 CREATE POLICY "receipts_member_select" ON public."receipts" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'costs:read'::text)));
 -- @@
 CREATE POLICY "receipts_member_update" ON public."receipts" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((is_active_member(business_id) AND has_permission(business_id, 'costs:update'::text))) WITH CHECK ((is_active_member(business_id) AND has_permission(business_id, 'costs:update'::text)));
+-- @@
+CREATE POLICY "recipe_components_member_select" ON public."recipe_components" AS PERMISSIVE FOR SELECT TO public USING ((EXISTS ( SELECT 1
+   FROM item_recipes r
+  WHERE ((r.id = recipe_components.recipe_id) AND is_active_member(r.business_id)))));
+-- @@
+CREATE POLICY "recipe_components_settings_insert" ON public."recipe_components" AS PERMISSIVE FOR INSERT TO public WITH CHECK ((EXISTS ( SELECT 1
+   FROM item_recipes r
+  WHERE ((r.id = recipe_components.recipe_id) AND is_active_member(r.business_id) AND has_permission(r.business_id, 'settings:update'::text)))));
+-- @@
+CREATE POLICY "recipe_components_settings_update" ON public."recipe_components" AS PERMISSIVE FOR UPDATE TO public USING ((EXISTS ( SELECT 1
+   FROM item_recipes r
+  WHERE ((r.id = recipe_components.recipe_id) AND is_active_member(r.business_id) AND has_permission(r.business_id, 'settings:update'::text))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM item_recipes r
+  WHERE ((r.id = recipe_components.recipe_id) AND is_active_member(r.business_id) AND has_permission(r.business_id, 'settings:update'::text)))));
 -- @@
 CREATE POLICY "rd_owner_write" ON public."role_definitions" AS PERMISSIVE FOR ALL TO "authenticated" USING (((business_id IS NOT NULL) AND (business_id IN ( SELECT businesses.id
    FROM businesses
@@ -4943,5 +6953,11 @@ CREATE POLICY "vendors_member_update" ON public."vendors" AS PERMISSIVE FOR UPDA
   WHERE ((business_members.business_id = vendors.business_id) AND (business_members.user_id = auth.uid()) AND (business_members.active = true)))));
 -- @@
 CREATE POLICY "vendors_owner_all" ON public."vendors" AS PERMISSIVE FOR ALL TO public USING (is_business_owner(business_id)) WITH CHECK (is_business_owner(business_id));
+-- @@
+CREATE POLICY "warranty_claims_member_select" ON public."warranty_claims" AS PERMISSIVE FOR SELECT TO "authenticated" USING (has_permission(business_id, 'deliveries:read'::text));
+-- @@
+CREATE POLICY "warranty_claims_member_update" ON public."warranty_claims" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (has_permission(business_id, 'deliveries:update'::text)) WITH CHECK (has_permission(business_id, 'deliveries:update'::text));
+-- @@
+CREATE POLICY "warranty_claims_member_write" ON public."warranty_claims" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK (has_permission(business_id, 'deliveries:update'::text));
 -- @@
 RESET check_function_bodies;

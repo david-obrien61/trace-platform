@@ -69,7 +69,17 @@ export interface RungDraft {
   /** HOLD — months it then stays on this rung before it must move up. '' = UNKNOWN. */
   holdMonths: string;
   holdBecause: string;
+  /** 'sold' | 'rarely_sold' | 'never_sold'. A closed axis, so it is a picker, never free text. */
+  sellability: string;
+  sellabilityBecause: string;
 }
+
+/** The three values, in the order the picker offers them, with the words the owner reads. */
+export const SELLABILITY_OPTIONS = [
+  { value: 'sold', label: 'Sold at this size' },
+  { value: 'rarely_sold', label: 'Sold at this size, but rarely' },
+  { value: 'never_sold', label: 'Never sold — a production size only' },
+] as const;
 
 /** The reason a rung carries when nobody has set its install price — the migration's own wording. */
 export const INSTALL_PRICE_NOT_SET = 'not set — the counter types an amount for this size';
@@ -83,6 +93,8 @@ export const CALIPER_NOT_SET = 'not set — no caliper recorded for this size';
 export const GROW_NOT_SET = 'not set — nobody has said how long this size takes to become sellable';
 /** The reason a rung carries when nobody has stated how long a tree holds on this size. */
 export const HOLD_NOT_SET = 'not set — nobody has said how long a tree holds at this size';
+/** The reason a rung carries while `sold` is the platform's assumption rather than the owner's word. */
+export const SELLABILITY_NOT_SET = 'not set — assumed sold until somebody says otherwise';
 
 const numText = (n: number | null): string => (n == null ? '' : String(n));
 
@@ -107,6 +119,8 @@ export function draftFromRung(r: Rung): RungDraft {
     growBecause: r.growBecause,
     holdMonths: numText(r.holdMonths),
     holdBecause: r.holdBecause,
+    sellability: r.sellability,
+    sellabilityBecause: r.sellabilityBecause,
   };
 }
 
@@ -133,6 +147,9 @@ export function draftForNewRung(ladder: Ladder): RungDraft {
     // new size that nobody chose — and a date is exactly what people act on.
     growMonths: '', growBecause: GROW_NOT_SET,
     holdMonths: '', holdBecause: HOLD_NOT_SET,
+    // A new size is assumed SOLD, which is what every screen already assumes about every rung. The
+    // owner narrows it; the platform never decides a size is production-only on their behalf.
+    sellability: 'sold', sellabilityBecause: SELLABILITY_NOT_SET,
   };
 }
 
@@ -224,6 +241,14 @@ export function rungDraftProblems(d: RungDraft, ladder: Ladder, editingLabel: st
       : 'Months to hold must be a number above 0, or left blank if nobody has measured it.');
   }
   if (!d.holdBecause.trim()) out.push('Say where the hold figure came from — even "not set".');
+  if (!SELLABILITY_OPTIONS.some((o) => o.value === d.sellability)) {
+    out.push('Choose whether this size is sold, rarely sold, or never sold.');
+  }
+  // 🔴 SAYING A SIZE IS NEVER SOLD IS A DECISION WITH TEETH — it takes the size off the plan's
+  // sellable-from column entirely — so unlike the default it may not be silent.
+  if (d.sellability === 'never_sold' && !d.sellabilityBecause.trim()) {
+    out.push('Say why this size is never sold — it stops the plan ever giving it a sellable date.');
+  }
   return out;
 }
 
@@ -257,5 +282,7 @@ export function draftToRow(d: RungDraft) {
     grow_because: d.growBecause.trim(),
     hold_months: typeof optionalPositive(d.holdMonths) === 'number' ? Number(d.holdMonths) : null,
     hold_because: d.holdBecause.trim(),
+    sellability: d.sellability,
+    sellability_because: d.sellabilityBecause.trim(),
   };
 }

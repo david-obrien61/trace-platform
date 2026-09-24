@@ -106,6 +106,22 @@ const ALLOWED = new Map([
   ['scripts/measure-production-plan-mutants.mjs',          'names them inside mutant strings only — mutates the PLANNER, never the derive'],
   ['scripts/seed-uppot-harness.mjs',                       'names them in its own console output to say the projection has NOT run on seeded rows'],
 
+  // ── THE POTTING RECORD, added 2026-09-23 (ledger #391) ──────────────────────────────────────
+  // 🔴 A FOURTH MODE, AND IT IS NEITHER A DERIVE, AN EDITABLE SURFACE, NOR A READER OF THE
+  // PROJECTION. `production_rung_dates.unit_value` is a DIFFERENT COLUMN ON A DIFFERENT TABLE: a
+  // SNAPSHOT of which rung a lot entered, captured once at write time and never recomputed. It is
+  // the same vocabulary `production_plan_lines.from_unit_value` / `to_unit_value` already use for
+  // "a rung as a number", which is why it is not renamed to dodge this grep.
+  // ⚠️ Nothing here computes a unit, writes `business_inventory.unit_*`, or renders one editable.
+  // 🔴 THIS IS TECH-DEBT #190's THIRD INSTANCE and it strengthens the case the second one made:
+  // the cap matches on the NAME, so it cannot tell a snapshot on another table from the derived
+  // projection, and every future table that records a rung will land on this list. Fixing the cap
+  // to assert the WRITE TARGET is a build of its own, not a clause inside a grow-ladder build.
+  ['packages/shared/src/production/rungDates.ts',           'SNAPSHOT: names production_rung_dates.unit_value — another table, captured once, never derived'],
+  ['packages/shared/src/production/rungDates.test.ts',      'its test'],
+  ['scripts/sql-harness/rung-dates-391.pglite.mjs',         'names it inside the migration harness only — inserts the snapshot, never business_inventory'],
+  ['scripts/sql-harness/rule26-grow-ladder-391.pglite.mjs', 'same: the §6 r26 hand-off harness inserts the production_rung_dates snapshot column, never business_inventory'],
+
   // ── THE CATALOGUE IMPORT, added 2026-09-06 (ledger #277) ────────────────────────────────────
   // 🔴 THE SECOND INSTANCE OF TECH-DEBT #190 IN TWO DAYS, WHICH IS THE ARGUMENT FOR FIXING THE CAP
   // RATHER THAN THE LIST. Neither entry derives a unit or makes one editable; the writer spreads

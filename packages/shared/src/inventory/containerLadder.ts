@@ -174,6 +174,22 @@ export interface Rung {
   holdMonths: number | null;
   /** Where that hold figure came from. Required for the same reason `handlingBecause` is. */
   holdBecause: string;
+  /**
+   * Is stock ever SOLD at this rung? David, 2026-09-23, from LAWNS: *"RUNGS NEVER SOLD: slips,
+   * 4-inch, plugs. 3/5 gallon sells rarely and stays sellable."*
+   *
+   * 🔴 `never_sold` IS NOT "UNKNOWN GROW". A production-only rung has no sellable date because
+   * nothing is ever sold there — that is a settled fact, not a missing measurement — so the plan
+   * says *"not sold at this size"* and NEVER "UNKNOWN". David ruled this on the customer's
+   * contrarian seat: UNKNOWN invites somebody to go and fill in a number that should not exist.
+   *
+   * ⚠️ `rarely_sold` BEHAVES EXACTLY LIKE `sold` everywhere in the code today. It records an
+   * owner's statement rather than driving a branch, and it is named here so nobody later "tidies"
+   * the three values into a boolean and loses it.
+   */
+  sellability: 'sold' | 'rarely_sold' | 'never_sold';
+  /** Where that came from. '' = nobody has said, and `sold` is then the platform's assumption. */
+  sellabilityBecause: string;
   /** False = retired. Still resolves for history; never offered. */
   active: boolean;
 }
@@ -496,6 +512,7 @@ export const LADDER_FIELDS = [
   'install_price', 'install_price_because',
   'pyt_price', 'pyt_price_because',
   'grow_months', 'grow_because', 'hold_months', 'hold_because',
+  'sellability', 'sellability_because',
   'active',
 ] as const;
 
@@ -514,6 +531,7 @@ export interface LadderRow {
   pyt_price: number | string | null; pyt_price_because: string | null;
   grow_months: number | string | null; grow_because: string | null;
   hold_months: number | string | null; hold_because: string | null;
+  sellability: string | null; sellability_because: string | null;
   active: boolean;
 }
 
@@ -552,6 +570,12 @@ export function rungFromRow(r: LadderRow): Rung {
     growBecause: r.grow_because || 'not set',
     holdMonths: numOrNull(r.hold_months),
     holdBecause: r.hold_because || 'not set',
+    // The database column is NOT NULL DEFAULT 'sold'. A null here means the row came back without
+    // it — an unapplied migration — and `sold` is the reading that leaves every screen behaving as
+    // it did before this column existed. An unrecognised value is treated the same way, deliberately:
+    // a fourth value must not silently stop a rung being sellable.
+    sellability: r.sellability === 'never_sold' || r.sellability === 'rarely_sold' ? r.sellability : 'sold',
+    sellabilityBecause: r.sellability_because || 'not set',
     active: r.active,
   };
 }

@@ -20,7 +20,7 @@ import {
   resolveConfig,
 } from '@trace/shared/production';
 import {
-  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, PYT_PRICE_NOT_SET, GROW_NOT_SET, HOLD_NOT_SET, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems,
+  CALIPER_NOT_SET, COPIED_POSTS_NOTE, INSTALL_PRICE_NOT_SET, GROW_NOT_SET, HOLD_NOT_SET, SELLABILITY_NOT_SET, SELLABILITY_OPTIONS, draftForNewRung, draftFromRung, draftToRow, nextSortOrder, rungDraftProblems, PYT_PRICE_NOT_SET
 } from './containerLadderDraft';
 
 let passed = 0, failed = 0;
@@ -37,6 +37,7 @@ const rung = (label: string, sortOrder: number, posts: number, extra: Partial<Ru
   installPrice: null, installPriceBecause: 'not set',
   pytPrice: null, pytPriceBecause: 'not set',
   growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
+  sellability: 'sold' as const, sellabilityBecause: 'not set',
   active: true, ...extra,
 });
 const LAWNS: Ladder = [
@@ -350,6 +351,26 @@ const LAWNS: Ladder = [
   const trip = draftFromRung({ ...LAWNS[1], growMonths: 6, growBecause: 'David 2026-09-18', holdMonths: null, holdBecause: 'not set' });
   ok(trip.growMonths === '6' && trip.holdMonths === '',
     '🔴 G6 rung → draft keeps a set grow as text and an unset hold as blank — opening the editor changes nothing');
+
+  // ── SELLABILITY (ledger #391, R-184/R-185) ───────────────────────────────────────────────────
+  ok(fresh.sellability === 'sold' && fresh.sellabilityBecause === SELLABILITY_NOT_SET,
+    '🔴 G7 a new size is assumed SOLD, with a reason saying that is the platform\'s assumption and not the owner\'s word');
+  ok(SELLABILITY_OPTIONS.length === 3 && SELLABILITY_OPTIONS.map((o) => o.value).join(',') === 'sold,rarely_sold,never_sold',
+    'G7 exactly three values, in the order the picker offers them');
+
+  // 🔴 SAYING "NEVER SOLD" TAKES THE SIZE OFF THE SELLABLE-FROM COLUMN ENTIRELY, so unlike the
+  // default it may not be silent. This is the one sellability rule with teeth.
+  ok(rungDraftProblems({ ...base, sellability: 'never_sold', sellabilityBecause: '  ' }, LAWNS, null)
+      .some((p) => /never sold/.test(p)),
+    '🔴 G8 marking a size NEVER SOLD with no reason is refused — it stops the plan ever dating that size');
+  ok(rungDraftProblems({ ...base, sellability: 'never_sold', sellabilityBecause: 'production only' }, LAWNS, null).length === 0,
+    'G8 …and with a reason it is accepted');
+  ok(rungDraftProblems({ ...base, sellability: 'sold', sellabilityBecause: '  ' }, LAWNS, null).length === 0,
+    '⚠️ G8 SELF-CATCH: a blank reason on the DEFAULT is fine — the rule bites only on the value that changes behaviour');
+  ok(rungDraftProblems({ ...base, sellability: 'sometimes' }, LAWNS, null).some((p) => /sold, rarely sold, or never sold/.test(p)),
+    'G9 a value outside the three is refused in the client too, not only by the database CHECK');
+  ok(draftToRow({ ...base, sellability: 'never_sold', sellabilityBecause: ' production only ' }).sellability_because === 'production only',
+    'G9 the reason is trimmed on the way to the row');
 }
 
 console.log(`\ncontainerSizesSettings: ${passed} passed, ${failed} failed`);

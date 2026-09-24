@@ -67,14 +67,19 @@ UPDATE public.container_ladder
 --   WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 --
 -- (S3) EXACTLY ONE rung has a grow figure, and it is the 15 gal at 6.
---      Expect 9 rows: '15 gal' = 6, every other grow_months NULL.
+--      ⚠️ THE ROW COUNT IS NOT PINNED — LAWNS may add a container size at any time, and a V-block
+--      that fails for that reason is a V-block people learn to ignore. What is asserted is the
+--      RELATION: exactly one rung carries a grow figure, and it is the 15 gal.
 --   SELECT label, sort_order, grow_months, hold_months, grow_because
 --   FROM public.container_ladder
 --   WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
 --   ORDER BY sort_order;
 --
--- (S4) The count, stated as a single number so it is hard to misread. Expect 1.
---   SELECT count(*) FILTER (WHERE grow_months IS NOT NULL) AS rungs_with_grow,
---          count(*)                                       AS rungs_total
+-- (S4) The relation, as a single line that is hard to misread.
+--      PASS = `rungs_with_grow` is 1 AND `the_one` is '15 gal'. `rungs_total` is printed for
+--      context only — it is NOT an expected value, and it will change as LAWNS adds sizes.
+--   SELECT count(*) FILTER (WHERE grow_months IS NOT NULL)        AS rungs_with_grow,
+--          min(label)  FILTER (WHERE grow_months IS NOT NULL)     AS the_one,
+--          count(*)                                              AS rungs_total_context_only
 --   FROM public.container_ladder
 --   WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';

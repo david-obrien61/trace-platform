@@ -547,6 +547,18 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
 
     ⚠️ **Numbered 24 by APPENDING**, per the notes on r18–r20: other documents cite these rules by number, and renumbering to satisfy a reading order breaks references to fix a preference.
 
+25. **EVERY FIGURE IN A REPORT IS LABELLED LIVE OR FIXTURE, AND A FIXTURE NEVER APPEARS WHERE A MEASUREMENT BELONGS (binding — David, 2026-09-24).**
+
+    Any number Thunder puts in front of David carries its provenance: **LIVE** (read from the database now), **FIXTURE** (a test double, a seed, a stand-in), or its **snapshot source and date** — *"QB export 2026-09-24"*, *"live-schema snapshot 2026-09-17"*. A figure with no label is treated as a claim, not a measurement.
+
+    🔴 **THE FAILURE THIS PREVENTS IS NOT A WRONG NUMBER — IT IS A RIGHT-LOOKING ONE.** A fixture figure and a live figure render identically, and the reader has no way to tell which they are acting on. This platform has paid for it repeatedly: the ladder-coverage counts produced by a SQL join rather than the resolver; *"5 of 5 V-blocks PASS"* from a read-only simulation; a probe reporting `13 of 14` while never reaching the column it was about. In every case the number was real — of the wrong population.
+
+    ⚠️ **A COUNT READ FROM A STALE SNAPSHOT IS A FIXTURE, NOT A MEASUREMENT.** `live-schema-public.sql` is a snapshot with a date in its first line; a figure derived from it is labelled with that date, never as LIVE. The same is true of any seeded tenant: **Test Dave's is a fixture** and LAWNS is live, and a number from one must never be presented as the other.
+
+    **HOW.** State it inline, where the number is — `632 live lots (LIVE 2026-09-24)`, `3 rungs (FIXTURE)`. In a table, a provenance column. Where a figure cannot be obtained live and a fixture stands in, say so in the same sentence rather than in a footnote.
+
+    ⚠️ **Numbered 25 by APPENDING**, per the notes on r18–r23 — other documents cite these rules by number.
+
 26. **ANY SQL HANDED TO DAVID IS EXECUTED END TO END BEFORE HAND-OFF — EVERY STATEMENT, IN ONE `BEGIN … COMMIT`, AGAINST `live-schema-public.sql` WITH ITS DEFAULTS LOADED. A READ-ONLY SIMULATION IS NOT VERIFICATION (binding — David, 2026-09-23; ledger #395).**
 
     A data file, migration or V-block set that David will paste into the SQL editor is **run first**, in PGlite, against the live schema snapshot: the whole file, top to bottom, including every `INSERT` — then its V-blocks, then **the whole file a second time** to prove idempotence. Only then does it get a SHA and a hand-off.
@@ -554,6 +566,15 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
     🔴 **THE INSTANCE, AND IT IS MINE.** `2026-09-23-restore-lost-capture-lines.sql` was handed over with *"5 of 5 V-blocks PASS"*. It had been checked by a **read-only SELECT simulation** that computed what the post-state would look like. David pasted it and it died on its third statement — `ERROR 42804: column "detail" is of type jsonb but expression is of type text` — aborting the transaction and writing nothing, with tomorrow's load list still missing eight trees.
 
     🔴 **THE SIMULATION COULD NOT HAVE CAUGHT IT, AND THAT IS THE WHOLE POINT: IT NEVER EXECUTED AN INSERT.** It was structurally incapable of failing on the only statement that mattered. A green from a check that cannot fail is not evidence — [[R-33]] — and this is that defect inside the verification of a file, not inside the file.
+
+    🔴 **SHARPENED 2026-09-24 (David), AFTER THE CHECKS I WROTE COULD NOT BE RUN AT ALL.**
+    **EVERY V-BLOCK MUST RUN AS-IS IN THE SUPABASE SQL EDITOR — no psql variables, no placeholders, no value David has to fill in.** A check that needs a business or lot id **looks it up inside itself**: a `DO` block that selects a real row, probes it, and `RAISE`s its verdict, so the probe rolls back and the message *is* the report. And **the harness must execute the V-block TEXT exactly as David will paste it**, never a substituted copy.
+
+    **THE INSTANCE, AND IT IS MINE (ledger #391).** `20260924a` applied cleanly; V1, V2, V3 and V5 passed. **V4, V4b and V6 never ran** — I had written them with `:bid`, `:lot`, `':bid_of_that_user'`, which the editor cannot fill: `42601 syntax error at or near ":"`, `22P02 invalid input syntax for type uuid`. So the append-only guard, the current-is-latest tiebreak and the tenant-isolation probe were **unproven on the live database while being reported as written**.
+
+    🔴 **AND MY HARNESS COULD NOT HAVE CAUGHT IT, WHICH IS THE REAL LESSON.** `rung-dates-391.pglite.mjs` proved those behaviours by issuing **its own SQL with real ids substituted in**. It never executed the V-block text, so it was structurally incapable of noticing a placeholder — tech-debt **#182**'s shape (*a probe that cannot reach the thing it is about*), sitting inside the verification rather than the code. **The fix is the POPULATION, not more assertions:** `vblocks-as-pasted-391.pglite.mjs` takes the V-block text as its subject, runs it verbatim, and carries a negative control that re-plants a `:bid` and requires the run to fail.
+
+
 
     ⚠️ **THE FIXTURE WAS ALREADY GOOD ENOUGH. THE METHOD WAS THE DEFECT.** `scripts/sql-harness/fixtures/live-schema-public.sql` already carried `"detail" jsonb NOT NULL`; executing against it would have failed in one second. Nothing needed to be built first — the snapshot had the answer and was not asked.
 
