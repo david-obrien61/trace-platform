@@ -91,6 +91,20 @@ export type CustomerAddress = {
   active: boolean;
   created_at?: string;
   updated_at?: string;
+  // ── Added by `20260923c` (the address check) and selected since 2026-09-24. Before that the
+  //    columns existed in the database and NO reader could see them.
+  /** Where this address is, when Google could place it. NULL when never geocoded. */
+  latitude?: number | null;
+  longitude?: number | null;
+  /** When the coordinate was fetched — the 30-day clock (Google ToS §6.3.1), not a cache hint. */
+  geocoded_at?: string | null;
+  /** found · not_found · null (never attempted). `not_found` means SAVED and UNVERIFIED, and a
+   *  delivery to it must never be priced (David 2026-09-18). */
+  geocode_status?: string | null;
+  /** billing · shipping · both — David's 2026-09-09 model: one bill-to, many delivery addresses. */
+  kind?: string | null;
+  source?: string | null;
+  import_run_id?: string | null;
 };
 
 

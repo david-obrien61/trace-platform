@@ -5,6 +5,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
 import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
 import { ShipToPicker } from '@trace/shared/components/customers/ShipToPicker';
+import { planAddressStep, applyGeocodeToStep, addressLine, type StepQuestion } from '@trace/shared/business-logic/addressStep';
 import { customerOrderFill } from '../components/customers/customerFieldRegistry';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
 import type { CustomerInput } from '../types/customer';
@@ -244,6 +245,52 @@ export function CustomerCapture() {
     setStep({ kind: 'add' }); // same form, now pre-filled — the operator confirms and continues
   }
 
+  // ── THE ONE STEP: "where do the trees go?" ──────────────────────────────────────────────────
+  // David 2026-09-24: picking the address and checking it are the SAME moment. This holds the ONE
+  // question the step may ask; `null` is the ordinary case and means nothing is asked at all.
+  // The saved site the picker chose, with its coordinate — null when the address was typed.
+  const [pickedSite, setPickedSite] = useState<{ latitude?: number | null; longitude?: number | null; geocoded_at?: string | null; geocode_status?: string | null } | null>(null);
+  const [addrQuestion, setAddrQuestion] = useState<StepQuestion | null>(null);
+  const [addrChecking, setAddrChecking] = useState(false);
+
+  /** Run the check behind whatever was picked or typed. Returns true when checkout may continue. */
+  async function addressStepPasses(): Promise<boolean> {
+    if (!deliveryRequired || !address.trim()) return true;          // nothing to place
+    const chosen = {
+      line1: address.trim(), city: city.trim(), state: state.trim(), zip: zip.trim(),
+      // A picked saved site carries its own coordinate and status; a typed one carries neither.
+      latitude: pickedSite?.latitude ?? null, longitude: pickedSite?.longitude ?? null,
+      geocoded_at: pickedSite?.geocoded_at ?? null, geocode_status: pickedSite?.geocode_status ?? null,
+    };
+    const plan = planAddressStep(chosen, new Date());
+    console.log('[TRACE:DELIVERY] address step', { geocode: plan.geocode, ask: plan.question.ask, reason: plan.reason });
+    if (!plan.geocode) {
+      // 🔴 THE SILENT PATH. A saved address found within 30 days asks nothing and costs no request.
+      if (plan.question.ask === 'none') return true;
+      setAddrQuestion(plan.question);
+      return false;
+    }
+    setAddrChecking(true);
+    try {
+      // 🔴 THROUGH OUR OWN SERVER. The Google key has NO application restriction, so it must never
+      // reach the browser — the proxy rides `customers/create` (api/ is 12 of 12, §6 r11).
+      const res = await fetch('/api/customers/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'geocode', businessId, address: addressLine(chosen) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      const r = applyGeocodeToStep(body?.google ?? body, addressLine(chosen));
+      if (r.question.ask === 'none') { setAddrQuestion(null); return true; }
+      setAddrQuestion(r.question);
+      return false;
+    } catch (e) {
+      // Rule 24: a service failure degrades to plain typing — it never blocks entry, and it never
+      // silently stores an unlocated address as located.
+      console.log('[TRACE:DELIVERY] geocode unreachable — continuing unlocated', { message: (e as Error).message });
+      return true;
+    } finally { setAddrChecking(false); }
+  }
+
   async function handleSubmit() {
     setTouched(true);
     if (hasErrors) {
@@ -321,6 +368,10 @@ export function CustomerCapture() {
     // customer who ALREADY had one on file never reached the stop. `customerUpsert` is
     // fill-never-clobber, so the customer row kept the old address, and `scheduleCheckoutDelivery`
     // read the stop's address back off that row. The typed address was silently discarded.
+    // 🔴 THE CHECK RUNS BEFORE THE ORDER MOVES ON. If it has a question, checkout stops here and
+    // asks it once; the answer re-enters through the same path.
+    if (!(await addressStepPasses())) return;
+
     setShipTo(deliveryRequired && address.trim()
       ? {
           line1: address.trim() || null,
@@ -478,7 +529,13 @@ export function CustomerCapture() {
             businessId={businessId ?? null}
             customerId={attachedCustomerId ?? pickerCustomerId}
             current={{ line1: address, city, state, zip }}
-            onChoose={(a) => { setAddress(a.line1); setCity(a.city); setState(a.state); setZip(a.zip); }}
+            onChoose={(a, _shipTo, site) => {
+              setAddress(a.line1); setCity(a.city); setState(a.state); setZip(a.zip);
+              // 🔴 REMEMBERED SO THE CHECK CAN STAY SILENT. A saved site already carries its
+              // coordinate and the date it was found; without this the step would geocode an
+              // address we already located and could ask a question nobody needs to answer.
+              setPickedSite(site ?? null);
+            }}
           />
         )}
 

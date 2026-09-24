@@ -36,7 +36,9 @@ export type ShipToPickerProps = {
   /** The address currently in the form beside this control — what "typed" means right now. */
   current: { line1: string; city: string; state: string; zip: string };
   /** Fill the form from a chosen site. The picker never writes; the page owns its own fields. */
-  onChoose: (address: { line1: string; city: string; state: string; zip: string }, chosen: ShipToInput) => void;
+  /** The third argument is the ROW as stored — it carries the coordinate and its 30-day
+   *  clock, so a caller can tell a located saved site from a typed one WITHOUT geocoding again. */
+  onChoose: (address: { line1: string; city: string; state: string; zip: string }, chosen: ShipToInput, site?: CustomerAddress) => void;
 };
 
 export function ShipToPicker({ db, businessId, customerId, current, onChoose }: ShipToPickerProps) {
@@ -76,7 +78,7 @@ export function ShipToPicker({ db, businessId, customerId, current, onChoose }: 
   function choose(s: CustomerAddress) {
     const address = { line1: s.line1 ?? '', city: s.city ?? '', state: s.state ?? '', zip: s.zip ?? '' };
     if (TRACE_SITES) console.log('[TRACE:SITES] site chosen at checkout', { siteId: s.id, label: s.label });
-    onChoose(address, { ...address, source: 'saved_site', siteId: s.id });
+    onChoose(address, { ...address, source: 'saved_site', siteId: s.id }, s);
   }
 
   return (
