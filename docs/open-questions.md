@@ -87,6 +87,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#395 — capture discarded Lauren's corrections; the footing guard**
+- 🔴 **OPEN — THE SWEEP IS THE REAL REMAINING RISK, AND FOOTING DOES NOT COVER IT.** The guard catches missing MONEY. An order whose lines foot can still carry the wrong VARIETY, SIZE or QUANTITY against what Lauren corrected, and nothing compares them. 53 receipts where `line_items` differs from `line_items_original` need a line-by-line comparison, upcoming deliveries first. Owner: ledger #395 part 3.
+- ⚠️ **OPEN — `held` is a new `deliveries.status` value with no CHECK constraint behind it.** Nothing refuses a typo'd status on that column (measured: no CHECK on `deliveries.status` or `orders.status`). A constraint would make the vocabulary real rather than conventional. Owner: ledger #395.
+- ⚠️ **OPEN — `deliveryIngestWriter` still filters `cancelled` only.** Deliberate: excluding `held` from a dedupe READ could re-create a stop that is merely waiting on Lauren. Worth a decision rather than a default. Owner: ledger #395.
+- ⚠️ **OPEN — §6 numbering gap.** Rule 24 exists only on `origin/feat/warranty-claims`; rule 25 is assigned and written nowhere; 26 is filed on this branch. Owner: David.
+
 **#370 — mix planning: the MRP engine, every figure labelled (MERGED and LIVE, engine only)**
 - 🔴 **NOTHING TO CLICK, BY DAVID'S OWN RULING (2026-09-23): mix planning is below the go-live bar, so it ships as an ENGINE ONLY and `mixRequirement` has ZERO callers.** Do not read its output as a screen, and do not board a card for a surface that does not exist. Owner: `packages/shared/src/costing/mixPlanning.ts`.
 - ⚠️ **THE PROVENANCE WORDING IS DAVID'S AND IS UNMADE:** the live constant says *"starting number, not counted"*, his sentence said *"placeholder, never counted"*. I used the live words so one wording serves both surfaces and did NOT touch the constant — it renders in the checkout picker Lauren uses. Changed once, in `SEEDED_NOTE`, and both follow. Owner: `packages/cultivar-os/src/lib/inventoryStates.ts`.

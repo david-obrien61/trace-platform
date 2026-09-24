@@ -50,7 +50,7 @@ const PAUL_LINES = [
 const build = (over: any = {}) => buildHistoryOrder({
   businessId: 'biz-1', customerId: 'cust-1', receiptId: 'rec-1',
   documentDate: '2026-08-26', documentTotal: 1677.88,
-  lineItemsOriginal: PAUL_LINES, decoded: decodeCapturedDocument(envelope(PAUL)),
+  documentLines: PAUL_LINES, decoded: decodeCapturedDocument(envelope(PAUL)),
   deliveryDate: '2026-08-29', serviceType: 'planting', ...over,
 });
 
@@ -164,7 +164,7 @@ const build = (over: any = {}) => buildHistoryOrder({
   const dropped = buildHistoryOrder({
     businessId: 'b', customerId: 'c', receiptId: 'r',
     documentDate: '2026-08-26', documentTotal: 1677.88,
-    lineItemsOriginal: [PAUL_LINES[0]],                       // the Trip Charge line never transcribed
+    documentLines: [PAUL_LINES[0]],                       // the Trip Charge line never transcribed
     decoded: decodeCapturedDocument(envelope(PAUL)),          // header still says 1550 + 127.88 = 1677.88
   });
   ok(Math.abs(dropped.order.subtotal + dropped.order.tax_amount - dropped.order.total_amount) < 0.005,

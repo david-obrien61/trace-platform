@@ -308,7 +308,7 @@ export function planOrderForStop(
     // Backfilling nineteen sales in one afternoon must not report as that afternoon's revenue.
     documentDate: invoice.txnDate,
     documentTotal: Number(invoice.totalAmt ?? 0),
-    lineItemsOriginal: null,
+    documentLines: null,
     lines: content.lines,
     decoded: {
       sourceDocumentNumber: invoice.docNumber,
