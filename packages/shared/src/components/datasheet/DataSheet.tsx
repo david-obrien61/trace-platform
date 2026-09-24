@@ -10,6 +10,7 @@
 //               8 consumers today, all cultivar-os; it is reachable from any vertical and from
 //               `packages/shared` itself since the 2026-09-03 promotion.
 // DEPENDENCIES: `react` + `lucide-react` (icons) + the two files beside it, which import NOTHING.
+import { matchesHaystack } from './searchSpec';
 //               NO supabase, NO business context, NO permission hook, NO router — presentational.
 //               Each consuming page owns its data fetch + write handlers and wires them into
 //               the column render functions (which call the exported inline cell components).
@@ -284,7 +285,12 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     // The second dimension is AND-ed with the first: they are different questions, so a row
     // must satisfy both to survive. Independent state, so clearing one does not clear the other.
     if (extraFilter && extra !== 'all') out = out.filter(r => extraFilter.get(r) === extra);
-    if (q) out = out.filter(r => searchText(r).toLowerCase().includes(q));
+    // 🔴 ONE MATCHER, EVERY SURFACE (ledger #388, David 2026-09-23). This was
+    // `searchText(r).toLowerCase().includes(q)` — a plain substring, which meant the roster could
+    // not match "creek shoal" against "Shoal Creek Vitex" (checkout's own search always could),
+    // and could not find "Centre Court" when Lauren typed "Center". `matchesHaystack` is the
+    // SHARED rule: folded substring, then token subset. **Every DataSheet consumer gains both.**
+    if (q) out = out.filter(r => matchesHaystack(searchText(r), q));
     const col = columns.find(c => c.key === sortKey);
     if (col?.sortVal) {
       const sv = col.sortVal;

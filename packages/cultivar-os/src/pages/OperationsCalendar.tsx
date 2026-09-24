@@ -244,7 +244,8 @@ export function OperationsCalendar() {
       .from('deliveries')
       .select('id, delivery_date, service_type, notes, address_line1, city, customers ( first_name, last_name )')
       .eq('business_id', businessId!)
-      .neq('status', 'cancelled')
+      // held AND cancelled are both off the calendar — same reason (#395)
+      .neq('status', 'cancelled').neq('status', 'held')
       .gte('delivery_date', windowStart)
       .lt('delivery_date', windowEnd)
       .order('delivery_date', { ascending: true });

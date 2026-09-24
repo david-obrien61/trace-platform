@@ -138,25 +138,73 @@ COMMIT;
 --   SELECT policyname, cmd FROM pg_policies
 --   WHERE tablename = 'business_operations_config_history' AND cmd <> 'SELECT';
 --
--- (V2) 🔴 THE TRIGGER ACTUALLY FIRES, AND RECORDS ONLY WHAT MOVED.
---      Expect ONE row: config_key 'windowStart', old NULL → new "2026-11-04".
---   BEGIN;
+-- 🔴 V2–V4 ARE SELF-CONTAINED `DO` BLOCKS AND EACH ENDS IN A RED ERROR ON PURPOSE (§6 r26,
+--    sharpened 2026-09-24). They look their own ids up, probe, and RAISE their verdict — the RAISE
+--    is what ROLLS THE WRITE BACK. **Read the message text**: it begins `V2 PASS ✅` or `V2 FAIL 🔴`.
+--    An earlier draft used psql placeholders (`:bid`) which the Supabase SQL editor cannot fill, so
+--    the equivalent checks on `20260924a` never ran at all — that is the defect this shape removes.
+--    Paste each block whole; they are independent.
+--
+-- (V2 + V3) THE TRIGGER FIRES, RECORDS ONLY WHAT MOVED, AND WRITES NOTHING FOR A NO-OP SAVE.
+--   DO $v2$
+--   DECLARE
+--     v_bid uuid; v_before int; v_after_change int; v_after_noop int; v_keys text;
+--   BEGIN
+--     SELECT business_id INTO v_bid FROM public.business_operations_config ORDER BY business_id LIMIT 1;
+--     IF v_bid IS NULL THEN
+--       RAISE EXCEPTION 'V2 CANNOT RUN ⚠️ — no row in business_operations_config. NOT a pass.';
+--     END IF;
+--
+--     SELECT count(*) INTO v_before FROM public.business_operations_config_history WHERE business_id = v_bid;
+--
+--     -- ONE key changes. A 24-key blob is saved whole, so "only what moved" is the whole claim.
 --     UPDATE public.business_operations_config
---        SET config = config || '{"windowStart":"2026-11-04"}'::jsonb
---      WHERE business_id = :bid;
---     SELECT config_key, old_value, new_value FROM public.business_operations_config_history
---     WHERE business_id = :bid ORDER BY changed_at DESC LIMIT 5;
---   ROLLBACK;
+--        SET config = config || jsonb_build_object('windowStart', '2026-11-04')
+--      WHERE business_id = v_bid;
+--     SELECT count(*) INTO v_after_change FROM public.business_operations_config_history WHERE business_id = v_bid;
 --
--- (V3) 🔴 A SAVE THAT CHANGES NOTHING WRITES NOTHING (§0b). The two counts must be EQUAL.
---   BEGIN;
---     SELECT count(*) AS before_ FROM public.business_operations_config_history WHERE business_id = :bid;
---     UPDATE public.business_operations_config SET config = config WHERE business_id = :bid;
---     SELECT count(*) AS after_ FROM public.business_operations_config_history WHERE business_id = :bid;
---   ROLLBACK;
+--     -- Now a save that changes NOTHING.
+--     UPDATE public.business_operations_config SET config = config WHERE business_id = v_bid;
+--     SELECT count(*) INTO v_after_noop FROM public.business_operations_config_history WHERE business_id = v_bid;
 --
--- (V4) 🔴 AC-3 CROSS-TENANT PROBE — impersonated, not as postgres. Expect ZERO rows.
---   SET LOCAL ROLE authenticated;
---   SET LOCAL request.jwt.claims = '{"sub":"<a user_id who is a member of ONE business>"}';
---   SELECT count(*) FROM public.business_operations_config_history WHERE business_id <> ':bid_of_that_user';
---   RESET ROLE;
+--     SELECT string_agg(config_key, ',' ORDER BY config_key) INTO v_keys
+--     FROM public.business_operations_config_history
+--     WHERE business_id = v_bid AND changed_at >= now() - interval '1 minute';
+--
+--     IF v_after_change = v_before + 1 AND v_after_noop = v_after_change AND v_keys LIKE '%windowStart%' THEN
+--       RAISE EXCEPTION 'V2 PASS ✅ / V3 PASS ✅ — one changed key wrote exactly ONE row (%), and a save that changed nothing wrote NOTHING (% -> % -> %). (rolled back)', v_keys, v_before, v_after_change, v_after_noop;
+--     ELSE
+--       RAISE EXCEPTION 'V2/V3 FAIL 🔴 — before=% after_change=% after_noop=% keys=%. Expected +1 then +0.', v_before, v_after_change, v_after_noop, v_keys;
+--     END IF;
+--   END
+--   $v2$;
+--
+-- (V4) TENANT SCOPING — the predicate the member policy rests on.
+--      ⚠️ Same honest limit as `20260924a`'s V6: this runs as `postgres`, for whom RLS is not
+--      enforced, so it cannot demonstrate a refused SELECT. It calls `is_active_member` — the
+--      SECURITY DEFINER function the member policy delegates to — under a real member's claims.
+--   DO $v4$
+--   DECLARE v_user uuid; v_own uuid; v_other uuid; v_a boolean; v_b boolean; v_pol int;
+--   BEGIN
+--     SELECT bm.user_id, bm.business_id INTO v_user, v_own
+--     FROM public.business_members bm
+--     WHERE bm.active
+--       AND (SELECT count(DISTINCT b2.business_id) FROM public.business_members b2
+--             WHERE b2.user_id = bm.user_id AND b2.active) = 1
+--     ORDER BY bm.user_id LIMIT 1;
+--     SELECT b.id INTO v_other FROM public.businesses b WHERE b.id <> v_own ORDER BY b.id LIMIT 1;
+--     IF v_user IS NULL OR v_other IS NULL THEN
+--       RAISE EXCEPTION 'V4 CANNOT RUN ⚠️ — needs an active member of exactly ONE business and a second business. NOT a pass.';
+--     END IF;
+--     PERFORM set_config('request.jwt.claim.sub', v_user::text, true);
+--     v_a := public.is_active_member(v_own);
+--     v_b := public.is_active_member(v_other);
+--     SELECT count(*) INTO v_pol FROM pg_policies
+--     WHERE tablename = 'business_operations_config_history' AND qual LIKE '%is_active_member%';
+--     IF v_a AND NOT v_b AND v_pol >= 1 THEN
+--       RAISE EXCEPTION 'V4 PASS ✅ — is_active_member is TRUE for the member''s own business and FALSE for another, and % member policy/policies delegate to it.', v_pol;
+--     ELSE
+--       RAISE EXCEPTION 'V4 FAIL 🔴 — own=% other=% policies=%.', v_a, v_b, v_pol;
+--     END IF;
+--   END
+--   $v4$;

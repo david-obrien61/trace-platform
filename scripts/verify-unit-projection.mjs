@@ -120,6 +120,7 @@ const ALLOWED = new Map([
   ['packages/shared/src/production/rungDates.ts',           'SNAPSHOT: names production_rung_dates.unit_value — another table, captured once, never derived'],
   ['packages/shared/src/production/rungDates.test.ts',      'its test'],
   ['scripts/sql-harness/rung-dates-391.pglite.mjs',         'names it inside the migration harness only — inserts the snapshot, never business_inventory'],
+  ['scripts/sql-harness/rule26-grow-ladder-391.pglite.mjs', 'same: the §6 r26 hand-off harness inserts the production_rung_dates snapshot column, never business_inventory'],
 
   // ── THE CATALOGUE IMPORT, added 2026-09-06 (ledger #277) ────────────────────────────────────
   // 🔴 THE SECOND INSTANCE OF TECH-DEBT #190 IN TWO DAYS, WHICH IS THE ARGUMENT FOR FIXING THE CAP

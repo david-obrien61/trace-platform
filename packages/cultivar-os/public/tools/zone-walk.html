@@ -6,6 +6,39 @@
   Run times and Panel A descriptions are seeded from the panel sheets
   photographed 2026-09-09. Plant list seeded from the QuickBooks item
   export of 2026-09-10 (553 nursery-stock items).
+
+  ── EMITTER SECTION REBUILT 2026-09-23, David's ruling ──
+  WAS: one emitter TYPE chip row per zone (Spaghetti / Bubbler / Micro-spray /
+  Overhead / None-hand / Something else), one GPH "Rate…" dropdown, one "How many".
+  All three are GONE. LAWNS does not use those categories, Joel never enters a flow
+  rate, and one answer per ZONE cannot describe a zone holding two pot sizes.
+  NOW: on EACH PLANT ROW — a COLOUR (Black / Green / Light green / Other / Not sure),
+  EMITTERS PER POT, and POTS. The tool multiplies; Joel never totals anything in his
+  head. A new row inherits the row above's colour and per-pot figure, editable, and
+  records that it was inherited — so if he changes it we learn that two sizes differ
+  without anyone having to ask.
+
+  🔴 NO GPH IS STORED OR SHOWN. Colour->flow is MANUFACTURER-SPECIFIC and is tenant
+  config we do not yet hold: measured 2026-09-23, the Ewing export names the colour
+  and a relative band (LO/MED/HI FLOW) and contains no GPH, GPM or PSI figure at all.
+  Water per day reads "pending - colour not yet mapped" until David and Joel confirm
+  BOTH the pressure LAWNS runs at AND the rate. A guessed rate would be
+  indistinguishable from a measured one.
+
+  WHAT THE THREE COLOURS ARE, from LAWNS's own Ewing invoices (2025-03-21 -> 2026-08-31):
+    Black        12002230  BLACK 160 SPOT SPITTER HI-FLOW    300 bought
+    Green        12002240  GRN 160 SPOT SPITTER MED-FLOW     600 bought
+    Light green  12002250  LT GRN 160 SPOT SPITTER LO-FLOW   700 bought
+  ⚠️ THE "160" IS THE SPRAY ARC IN DEGREES, NOT A FLOW RATE. It is the only number
+  printed beside the colour, which is exactly why it gets mistaken for one.
+  ⚠️ "Spot Spitter" is the product name of Roberts Irrigation (now Primerus), so that
+  is the LIKELY brand - it is NOT CONFIRMED. Ewing is a distributor and the export
+  names no manufacturer. Any published GPH table applies only once the brand is known,
+  which is half of why there is no gph field here.
+
+  ⚠️ OLD WALKS ARE NOT CONVERTED. The storage key is unchanged, the new per-plant
+  fields are optional, and a record written by the previous version loads with them
+  empty. The three exported walks (2026-09-16 / -18 / -21) stay exactly as recorded.
 -->
 <html lang="en">
 <head>
@@ -83,6 +116,16 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--green);outline-o
 
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .plantrow{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.pblock{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;background:#fcfdfb}
+.pblock .chips.cols{margin:2px 0 8px}
+.pblock .chips.cols button{min-height:44px;font-size:14px;padding:4px 10px}
+.pblock .cother{width:100%;margin-bottom:8px}
+.ptot{font-size:13px;color:var(--muted);margin-top:8px}
+.ptot b{color:var(--green)}
+.inh{display:block;color:var(--amber);font-size:12px;margin-top:2px}
+.emsum{background:var(--ok-bg);border:1px solid #b7d3a8;border-radius:10px;
+  padding:9px 12px;font-size:13.5px;color:var(--ok);margin:10px 0 2px}
+.pend{color:var(--muted);font-size:12.5px}
 .plantrow .pick{flex:1}
 .plantrow .qty{width:96px;flex:0 0 auto}
 .plantrow .del{width:52px;flex:0 0 auto;min-height:var(--tap);border:2px solid var(--line);
@@ -173,10 +216,34 @@ const KEY = 'lawns-zone-walk-v1';
 
 const STATUS = [['inuse','In use'],['none','No valve'],['off','Switched off'],
                 ['fault','Broken'],['unknown','Not sure']];
-const EMITTER = [['spaghetti','Spaghetti'],['bubbler','Bubbler'],['micro','Micro-spray'],
-                 ['overhead','Overhead spray'],['drip','Drip line'],['none','None / hand'],
-                 ['other','Something else']];
-const RATE = ['', '0.5 GPH','1 GPH','2 GPH','3 GPH','4 GPH','per foot','not sure'];
+
+// ── EMITTERS — David's ruling, 2026-09-23 ──────────────────────────────────────
+// Joel identifies a COLOUR and nothing else. The old EMITTER type chips (Spaghetti,
+// Bubbler, Micro-spray, Overhead, None/hand, Something else) and the GPH `RATE`
+// dropdown are GONE: LAWNS does not use those categories and Joel never enters a
+// flow rate. He picks a colour, says how many emitters are in a pot and how many
+// pots there are; the platform does the arithmetic.
+//
+// 🔴 COLOUR → GPH IS TENANT CONFIG AND IS NOT IN THIS FILE. Drip colour codes are
+//    MANUFACTURER-SPECIFIC — there is no cross-brand standard, so a colour means
+//    nothing without knowing whose emitter it is. Measured 2026-09-23: the Ewing
+//    export names the colour and a relative band (LT GRN…LO-FLOW / GRN…MED-FLOW /
+//    BLACK…HI-FLOW) and carries NO GPH, GPM or PSI figure anywhere — 0 hits across
+//    the whole workbook. So the mapping is not derivable from what we hold, and a
+//    guessed GPH would read as measured. Until David and Joel confirm it, water is
+//    reported as PENDING. Store the colour; never invent the rate.
+//    The three colours, as LAWNS actually buys them (Ewing codes):
+//      black    12002230  BLACK 160 SPOT SPITTER HI-FLOW
+//      green    12002240  GRN 160 SPOT SPITTER MED-FLOW
+//      ltgreen  12002250  LT GRN 160 SPOT SPITTER LO-FLOW
+//    ⚠️ "160" is the SPRAY ARC IN DEGREES, not a flow rate — it is the only number
+//       beside the colour and it is the one that gets misread as one.
+//    ⚠️ "Spot Spitter" is Roberts Irrigation's (now Primerus) product name, so that is
+//       the LIKELY brand and is NOT CONFIRMED — Ewing is a distributor and names no
+//       manufacturer. No gph field is added until David and Joel confirm the pressure
+//       LAWNS runs at and the rate.
+const COLOUR = [['black','Black'],['green','Green'],['ltgreen','Light green'],
+                ['other','Other'],['unsure','Not sure']];
 
 let data = {};                       // "A7" -> {...}
 let panel = 'A', zone = 1;
@@ -187,9 +254,15 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }
                  catch(e){ document.getElementById('warn').textContent =
                    'COULD NOT SAVE ON THIS DEVICE — export now, before you go any further.'; } }
 const key = () => panel + zone;
-function rec(){ return data[key()] || (data[key()] = {plants:[],status:'',emitter:'',rate:'',count:'',notes:''}); }
+function rec(){ return data[key()] || (data[key()] = {plants:[],status:'',notes:''}); }
+// A placement carries its own emitters now (David 2026-09-23): a zone holding 15s and 30s
+// gets an answer per SIZE, because a 30-gallon pot is not on the same number of emitters as
+// a 15. Old records load untouched — the fields are simply absent and render empty.
+function plantRec(p){ if(p.colour===undefined) p.colour='';
+  if(p.perPot===undefined) p.perPot=''; if(p.pots===undefined) p.pots='';
+  if(p.colourOther===undefined) p.colourOther=''; return p; }
 function filled(k){ const r=data[k]; if(!r) return false;
-  return !!(r.status || r.emitter || r.notes || (r.plants||[]).length); }
+  return !!(r.status || r.notes || (r.plants||[]).length); }
 
 // ── render ────────────────────────────────────────────────────
 function renderPanels(){
@@ -223,16 +296,9 @@ function renderDetail(){
     <label>What's growing here</label>
     <div id="plants"></div>
     <button class="addbtn" id="addplant">+ Add a plant</button>
-    <p class="hint">Rough numbers are fine — the count walk gets the exact ones.</p>
-
-    <label>Emitters</label>
-    <div class="chips" id="em">${EMITTER.map(([v,l])=>
-      `<button data-v="${v}" aria-pressed="${r.emitter===v}">${l}</button>`).join('')}</div>
-    <div class="row2" style="margin-top:10px">
-      <select id="rate">${RATE.map(x=>
-        `<option value="${x}" ${r.rate===x?'selected':''}>${x||'Rate…'}</option>`).join('')}</select>
-      <input id="count" inputmode="numeric" placeholder="How many" value="${r.count||''}">
-    </div>
+    <p class="hint">For each one: the emitter colour, how many emitters are in one pot,
+      and how many pots. We work out the rest.</p>
+    <div id="emsum"></div>
 
     <label>Anything worth saying</label>
     <textarea id="notes" placeholder="Leaks, dry spots, what it used to be…">${r.notes||''}</textarea>
@@ -240,30 +306,100 @@ function renderDetail(){
   renderPlants();
   document.getElementById('st').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
     r.status = r.status===b.dataset.v ? '' : b.dataset.v; save(); refresh(); };
-  document.getElementById('em').onclick = e=>{ const b=e.target.closest('button'); if(!b)return;
-    r.emitter = r.emitter===b.dataset.v ? '' : b.dataset.v; save(); refresh(); };
-  document.getElementById('rate').onchange = e=>{ r.rate=e.target.value; save(); };
-  document.getElementById('count').oninput = e=>{ r.count=e.target.value; save(); };
   document.getElementById('notes').oninput = e=>{ r.notes=e.target.value; save(); updateGrid(); };
-  document.getElementById('addplant').onclick = ()=>{ r.plants.push({label:'',qty:''});
+  // Ruling 5 — a new row INHERITS the colour and emitters-per-pot of the one above it,
+  // editable. `inherited` records that it arrived as a default: if Joel changes it, we
+  // learn that two sizes in one zone differ WITHOUT anyone having to ask him.
+  document.getElementById('addplant').onclick = ()=>{
+    const prev = r.plants[r.plants.length-1];
+    r.plants.push(plantRec({label:'', qty:'',
+      colour: prev ? (prev.colour||'') : '', colourOther: prev ? (prev.colourOther||'') : '',
+      perPot: prev ? (prev.perPot||'') : '', pots:'',
+      inherited: !!(prev && (prev.colour || prev.perPot))}));
     save(); renderPlants(); };
+}
+// ── emitters, per placement ───────────────────────────────────────────────────
+// emitters = per-pot x pots. That is ARITHMETIC over two numbers Joel can SEE, not an
+// estimate typed into a field called "count" — which is why it is asked this way.
+function emittersOf(p){
+  const a = parseInt(p.perPot,10), b = parseInt(p.pots,10);
+  return (a>0 && b>0) ? a*b : null;
+}
+function colourLabel(p){
+  if (p.colour === 'other') return (p.colourOther||'').trim() || 'Other';
+  const c = COLOUR.find(x=>x[0]===p.colour);
+  return c ? c[1] : '';
 }
 function renderPlants(){
   const r = rec();
-  document.getElementById('plants').innerHTML = r.plants.map((p,i)=>`
-    <div class="plantrow">
-      <input class="pick" list="plantlist" data-i="${i}" placeholder="Start typing a name…"
-             value="${(p.label||'').replace(/"/g,'&quot;')}">
-      <input class="qty" data-i="${i}" inputmode="numeric" placeholder="approx"
-             value="${p.qty||''}">
-      <button class="del" data-i="${i}" title="remove">×</button>
-    </div>`).join('');
-  document.querySelectorAll('#plants .pick').forEach(el=>el.oninput = e=>{
-    r.plants[+e.target.dataset.i].label = e.target.value; save(); updateGrid(); });
-  document.querySelectorAll('#plants .qty').forEach(el=>el.oninput = e=>{
-    r.plants[+e.target.dataset.i].qty = e.target.value; save(); updateGrid(); });
+  document.getElementById('plants').innerHTML = r.plants.map((p,i)=>{
+    plantRec(p);
+    const n = emittersOf(p);
+    return `
+    <div class="pblock" data-i="${i}">
+      <div class="plantrow">
+        <input class="pick" list="plantlist" data-i="${i}" placeholder="Start typing a name…"
+               value="${(p.label||'').replace(/"/g,'&quot;')}">
+        <button class="del" data-i="${i}" title="remove">×</button>
+      </div>
+      <div class="chips cols" data-i="${i}">${COLOUR.map(([v,l])=>
+        `<button data-v="${v}" data-i="${i}" aria-pressed="${p.colour===v}">${l}</button>`).join('')}</div>
+      ${p.colour==='other' ? `<input class="cother" data-i="${i}" placeholder="What colour?"
+        value="${(p.colourOther||'').replace(/"/g,'&quot;')}">` : ''}
+      <div class="row2">
+        <input class="perpot" data-i="${i}" inputmode="numeric"
+               placeholder="Emitters in one pot" value="${p.perPot||''}">
+        <input class="pots" data-i="${i}" inputmode="numeric"
+               placeholder="How many pots" value="${p.pots||''}">
+      </div>
+      <div class="ptot">${n!==null
+        ? `${p.perPot} per pot &times; ${p.pots} pots = <b>${n} emitters</b>`
+        : 'Emitters in one pot &times; pots = the total. Fill both in.'}${
+        p.inherited && (p.colour||p.perPot) ? ' <span class="inh">same as the row above &mdash; change it if it differs</span>' : ''}</div>
+    </div>`;}).join('');
+
+  const set = (sel, fn, redraw) => document.querySelectorAll('#plants '+sel).forEach(el=>{
+    const h = e => { const i=+e.target.dataset.i;
+      fn(plantRec(r.plants[i]), e.target.value, r.plants[i]); save();
+      if (redraw) renderPlants(); updateGrid(); emitterSummary(); };
+    if (el.tagName==='INPUT') el.oninput = h; });
+  set('.pick',  (p,v)=>{ p.label=v; });
+  set('.cother',(p,v)=>{ p.colourOther=v; p.inherited=false; });
+  set('.perpot',(p,v)=>{ p.perPot=v; p.inherited=false; }, false);
+  set('.pots',  (p,v)=>{ p.pots=v; }, false);
+  // the per-pot / pots boxes need the total under them to update as he types
+  document.querySelectorAll('#plants .perpot, #plants .pots').forEach(el=>{
+    el.oninput = e => { const i=+e.target.dataset.i, p=plantRec(r.plants[i]);
+      if (e.target.classList.contains('perpot')) { p.perPot=e.target.value; p.inherited=false; }
+      else p.pots = e.target.value;
+      const n = emittersOf(p);
+      const box = e.target.closest('.pblock').querySelector('.ptot');
+      box.innerHTML = n!==null ? `${p.perPot} per pot &times; ${p.pots} pots = <b>${n} emitters</b>`
+                               : 'Emitters in one pot &times; pots = the total. Fill both in.';
+      save(); updateGrid(); emitterSummary(); }; });
+  document.querySelectorAll('#plants .cols').forEach(el=>el.onclick = e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    const p = plantRec(r.plants[+b.dataset.i]);
+    p.colour = p.colour===b.dataset.v ? '' : b.dataset.v;
+    p.inherited = false; save(); renderPlants(); updateGrid(); emitterSummary(); });
   document.querySelectorAll('#plants .del').forEach(el=>el.onclick = e=>{
     r.plants.splice(+e.target.dataset.i,1); save(); renderPlants(); refresh(); });
+  emitterSummary();
+}
+
+// 🔴 The zone's water is NOT shown, because it cannot be known yet: no colour in this
+// platform has a GPH behind it. Saying "pending" is the honest answer; a number here
+// would read as measured. Emitter TOTALS are shown, because those are just arithmetic.
+function emitterSummary(){
+  const box = document.getElementById('emsum'); if(!box) return;
+  const r = rec(), rows = (r.plants||[]).filter(p=>emittersOf(p)!==null);
+  if (!rows.length) { box.innerHTML=''; return; }
+  const total = rows.reduce((a,p)=>a+emittersOf(p),0);
+  const cols = [...new Set(rows.map(colourLabel).filter(Boolean))];
+  box.innerHTML = `<div class="emsum"><b>${total} emitters</b> in this zone${
+    cols.length ? ' &middot; ' + cols.join(', ') : ''}<br>
+    <span class="pend">Water per day: pending &mdash; colour not yet mapped to a flow rate.</span></div>`;
+  // (the colour is the fact we keep; the rate is a lookup nobody has confirmed yet)
 }
 function updateGrid(){
   const rows=[];
@@ -273,10 +409,15 @@ function updateGrid(){
     const lab = (STATUS.find(s=>s[0]===st)||['','—'])[1];
     rows.push(`<tr data-done="1"><td class="z" data-k="${k}">${k}</td>
       <td>${PANELS[p].run[n-1]}</td>
-      <td>${(r.plants||[]).filter(x=>x.label).map(x=>
-        x.label + (x.qty?` <span style="color:#6b7a63">· ${x.qty}</span>`:'')).join('<br>')||'—'}</td>
-      <td>${[ (EMITTER.find(e=>e[0]===r.emitter)||['',''])[1], r.rate, r.count&&('×'+r.count)]
-            .filter(Boolean).join(' · ')||'—'}</td>
+      <td>${(r.plants||[]).filter(x=>x.label).map(x=>{
+        const n = emittersOf(x);
+        return x.label + (n!==null ? ` <span style="color:#6b7a63">· ${n} emitters</span>` : '');
+      }).join('<br>')||'—'}</td>
+      <td>${(()=>{ const rows=(r.plants||[]).filter(x=>emittersOf(x)!==null);
+        if(!rows.length) return '—';
+        const t=rows.reduce((a,x)=>a+emittersOf(x),0);
+        const c=[...new Set(rows.map(colourLabel).filter(Boolean))];
+        return `${t}${c.length?' · '+c.join(', '):''}`; })()}</td>
       <td><span class="tag t-${st}">${lab}</span></td>
       <td>${(r.notes||'').replace(/</g,'&lt;')}</td></tr>`);
   }
@@ -306,13 +447,27 @@ document.getElementById('prev').onclick = ()=>{ if(zone>1){zone--;}
   refresh(); window.scrollTo({top:0}); };
 
 document.getElementById('export').onclick = ()=>{
-  const out = {captured_at:new Date().toISOString(), tenant:'LAWNS', zones:[]};
+  const out = {captured_at:new Date().toISOString(), tenant:'LAWNS',
+    // Travels WITH the file, because whoever imports this will not have the tool open.
+    emitter_note: {
+      colours: {
+        black:   {ewing_code:'12002230', description:'BLACK 160 SPOT SPITTER HI-FLOW'},
+        green:   {ewing_code:'12002240', description:'GRN 160 SPOT SPITTER MED-FLOW'},
+        ltgreen: {ewing_code:'12002250', description:'LT GRN 160 SPOT SPITTER LO-FLOW'}
+      },
+      arc_not_flow: 'The 160 in the product name is the spray arc in DEGREES, not a flow rate.',
+      brand: 'LIKELY Roberts Irrigation / Primerus ("Spot Spitter" is their product name) — NOT CONFIRMED. Ewing is a distributor and the export names no manufacturer.',
+      gph: 'DELIBERATELY ABSENT. Colour→flow is manufacturer-specific tenant config. No GPH until David and Joel confirm the pressure LAWNS runs at and the rate. Do not infer one.'
+    },
+    zones:[]};
   for(const p of Object.keys(PANELS)) for(let n=1;n<=22;n++){
     const k=p+n, r=data[k]; if(!r||!filled(k)) continue;
+    // Zone-level emitter_type / emitter_rate / emitter_count are GONE (David 2026-09-23).
+    // Emitters belong to the PLACEMENT — see each plant below. Walks already exported in
+    // the old shape are left exactly as they were recorded; nothing converts them.
     out.zones.push({zone:k, panel:p, zone_number:n,
       run_minutes:PANELS[p].run[n-1],
-      status:r.status||null, emitter_type:r.emitter||null,
-      emitter_rate:r.rate||null, emitter_count:r.count||null,
+      status:r.status||null,
       notes:r.notes||null,
       plants:(r.plants||[]).filter(x=>x.label).map(x=>{
         // #291 — TRIM ON THE WAY OUT, never at capture. What the walker typed stays as typed in
@@ -324,9 +479,21 @@ document.getElementById('export').onclick = ()=>{
         // and matched:false. Free to fix only while nothing consumes the export (#266).
         const label = x.label.trim();
         const hit = PLANTS.find(pl=>pl.label===label);
+        const perPot = parseInt(x.perPot,10), pots = parseInt(x.pots,10);
+        const total  = (perPot>0 && pots>0) ? perPot*pots : null;
         return {label, qty_approx:x.qty||null,
                 item_id:hit?hit.id:null, sku:hit?hit.sku:null,
-                matched:!!hit};
+                matched:!!hit,
+                // the colour is the FACT. gph is deliberately absent: no mapping exists
+                // yet, and an invented rate would be indistinguishable from a measured one.
+                emitter_colour: x.colour || null,
+                emitter_colour_other: x.colour==='other' ? ((x.colourOther||'').trim()||null) : null,
+                emitters_per_pot: perPot>0 ? perPot : null,
+                pots: pots>0 ? pots : null,
+                emitters_total: total,
+                // true = arrived as the row above's answer and was never changed.
+                // It is how we learn whether two sizes in one zone share a figure.
+                emitter_inherited: !!x.inherited};
       })});
   }
   const blob = new Blob([JSON.stringify(out,null,2)],{type:'application/json'});

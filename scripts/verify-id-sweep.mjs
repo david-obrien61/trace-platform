@@ -48,7 +48,6 @@
 // ============================================================
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { migrationsAtRef } from './lib/migrationSlots.mjs';
 
 const STRICT = process.argv.includes('--strict');
 const SELF_TEST = process.argv.includes('--self-test');
@@ -539,11 +538,12 @@ const IDLE_WINDOW_H = 24;
 const refAgeH = (ref) => {
   try { return (Date.now() / 1000 - +git('log', '-1', '--format=%ct', ref).trim()) / 3600; } catch { return null; }
 };
-// 🔴 ONE HOME FOR THIS OPERATION (§6 r8). It was inline here; `migration-slot` needed the same
-// enumeration, so it moved to scripts/lib/migrationSlots.mjs rather than being copied. ⚠️ That
-// module ALSO reads working directories, which this cap deliberately does not — see its header for
-// why a migration file is usually untracked, and why that is `migration:slot`'s job, not this one's.
-const migrationsAt = (ref) => new Set(migrationsAtRef(ref, git));
+const migrationsAt = (ref) => {
+  try {
+    return new Set(git('ls-tree', '--name-only', '-r', ref, 'supabase/migrations/')
+      .split('\n').map(x => x.trim()).filter(Boolean).map(x => x.replace(/^supabase\/migrations\//, '')));
+  } catch { return new Set(); }
+};
 
 const mainIdsAll = new Set();
 for (const [, cfg] of Object.entries(SPACES)) for (const id of fileClaims(show(MAIN, cfg.file), cfg)) mainIdsAll.add(`${cfg.label}:${id}`);
