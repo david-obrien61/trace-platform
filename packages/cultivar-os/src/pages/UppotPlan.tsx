@@ -51,7 +51,7 @@ import { resolveRung, rungsAbove, type Ladder } from '@trace/shared/inventory';
 import { loadContainerLadder, type LadderRead } from '../lib/containerLadderRead';
 import {
   planLots, arithmeticCheck, basisSentence, splitPenalty, minutesPerPot, startingGallons,
-  WITHHELD_REASON,
+  growUnknownSentence, WITHHELD_REASON,
   type LotInput, type ResolvedConfig, type Estimate,
 } from '@trace/shared/production';
 import { loadPlanLots, type PlanLotsRead } from '../lib/uppotPlanRead';
@@ -273,7 +273,7 @@ export default function UppotPlan() {
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13, background: '#fff' }}>
             <thead>
               <tr style={{ background: SAGE, textAlign: 'left' }}>
-                {['Variety', 'In now', 'Going to', 'On hand', 'Keep', 'Cushion', 'Could pot', 'UPPOT NOW', 'Still sellable', 'Mix yd³', 'Hours'].map((h) => (
+                {['Variety', 'In now', 'Going to', 'On hand', 'Keep', 'Cushion', 'Could pot', 'UPPOT NOW', 'Still sellable', 'Mix yd³', 'Hours', 'Sellable from'].map((h) => (
                   <th key={h} style={{ padding: '8px 6px', borderBottom: '2px solid #cfe0bd', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -337,6 +337,38 @@ export default function UppotPlan() {
                     <td style={{ padding: '6px' }}>{batch ? n0(batch.split.stillSellable) : '—'}</td>
                     <td style={{ padding: '6px' }}>{batch ? batch.mixTotal.toFixed(2) : '—'}</td>
                     <td style={{ padding: '6px' }}>{batch ? batch.crewHoursAtBatch.toFixed(1) : '—'}</td>
+                    {/* ── 🔴 THE GRADUATION DATE (ledger #390) ─────────────────────────────────
+                        `planLots` has computed this on every batch since ledger #276 and NOTHING
+                        HAS EVER RENDERED IT. That is the whole of this build's screen work: the
+                        model was written, tested and thrown away at the call site.
+                        Three states and they are genuinely different — a date · UNKNOWN because
+                        nobody has set GROW on the target rung · and no uppot window set, which
+                        leaves every batch undated for a reason that has nothing to do with the
+                        ladder. Each says which, because "—" for all three is what let this sit
+                        unnoticed. */}
+                    <td style={{ padding: '6px' }}>
+                      {!batch ? '—' : batch.firstSellable ? (
+                        <>
+                          <strong>{batch.firstSellable}</strong>
+                          <div style={{ fontSize: 11, color: '#888' }}>
+                            {n0(batch.arriveSellable)} trees
+                            {batch.growMonths.known && batch.growMonths.source === 'rung'
+                              ? ` · ${batch.growMonths.months} mo on ${batch.growMonths.rungLabel}`
+                              : batch.growMonths.known ? ` · ${batch.growMonths.months} mo (business default)` : ''}
+                          </div>
+                        </>
+                      ) : cfg && !cfg.ops.windowStart ? (
+                        <span style={{ color: '#A32D2D', fontSize: 12 }}>
+                          no uppot window set
+                          <div style={{ fontSize: 11, color: '#888' }}>Settings → Operations</div>
+                        </span>
+                      ) : (
+                        <span style={{ color: '#A32D2D', fontSize: 12 }}>
+                          {growUnknownSentence(batch.growMonths)}
+                          <div style={{ fontSize: 11, color: '#888' }}>Settings → Container sizes</div>
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
