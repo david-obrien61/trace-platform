@@ -23,7 +23,7 @@ import { estimateDay, CAPACITY_COPY, type CapacityEstimate } from '../lib/capaci
 import { inputsFromLoadModel, settingsFromConfig, snapshotEstimate, recordTeamChoice } from '../lib/dayEstimate';
 import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { shipToLine } from '../lib/stopWrites';
-import { teamRouteProblem } from '../lib/teamRouteGate';
+import { teamRouteProblem, type GateInput } from '../lib/teamRouteGate';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
 
@@ -588,7 +588,7 @@ export function DeliveryRoute() {
   // how it came to return null on the empty case without anything noticing (ledger #400).
   const selectionTeamProblem = React.useMemo(() => {
     if (!dateParam) return null;
-    return teamRouteProblem({
+    const gate: GateInput = {
       teamId: teamParam,
       teamName: teamLabel(teams, teamParam),
       stops: (stopData?.stops ?? []).map(x => ({
@@ -599,7 +599,8 @@ export function DeliveryRoute() {
         who: customerDisplayName(x.customers, 'A stop'),
       })),
       selected,
-    });
+    };
+    return teamRouteProblem(gate);
   }, [dateParam, teamParam, selected, stopData, teams]);
 
   // ── 🔴 "ROUTE THIS TEAM" NOW ROUTES (David, 2026-09-24) ───────────────────────────────────────
@@ -626,6 +627,9 @@ export function DeliveryRoute() {
     autoRoutedRef.current = key;
     if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] team arrival — routing', selected.size, 'stops for', teamParam);
     buildRoute();
+    // `buildRoute` is re-created every render, so listing it would re-route on every render; the
+    // (date, team) ref is the real guard. Same suppression, same reason, as the rebuild effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateParam, teamParam, loading, canBuild, selectionTeamProblem, selected]);
 
   // A stop changed while a route was on screen → rebuild from the re-read, once it has landed. The link
