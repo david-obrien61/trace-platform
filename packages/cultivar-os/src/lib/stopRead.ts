@@ -114,7 +114,14 @@ export async function readStops(
   db: SupabaseClient, businessId: string, scope: StopScope, opts: { readLines: boolean },
 ): Promise<{ ok: true; value: StopRead } | { ok: false; error: string }> {
   const q = (cols: string) => {
-    let b = db.from('deliveries').select(cols).eq('business_id', businessId).neq('status', 'cancelled');
+    // 🔴 `cancelled` AND `held` ARE BOTH OFF THE SCHEDULE, and this one filter is what puts
+    // them there — the route, the load list, the crew link and the day's stop count all read
+    // through here (ledger #383 proved that by removing a cancelled stop from all of them).
+    // `held` is a document whose lines do not foot to its own subtotal (#395): the crew must
+    // not load from a sheet the office has not settled. It is NOT deleted and NOT cancelled —
+    // it returns to the schedule the moment Lauren corrects or confirms it.
+    let b = db.from('deliveries').select(cols).eq('business_id', businessId)
+      .neq('status', 'cancelled').neq('status', 'held');
     if (scope.kind === 'day') b = b.eq('delivery_date', scope.date);
     // `.or(is null, gte)`, not a bare floor: undated stops are grouped LAST by the schedule, and a bare
     // `.gte` would silently drop a state the screen already handles.
