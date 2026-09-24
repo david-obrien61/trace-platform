@@ -1,4 +1,24 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 NOT APPLIED — RETIRED IN PLACE 2026-09-24. DO NOT APPLY.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- Superseded in part by David's 2026-09-21 ONE-COLUMN ruling: `order_items.qbo_item_id`, meaning
+-- "the QuickBooks item this line is for", written from the invoice on captured lines and from the
+-- lot on live lines. **`lot_qb_item_id` must NOT be created as well** — and this file adds it to
+-- both `order_items` and `inventory_counts`, so as written it contradicts the ruling.
+--
+-- The OTHER half — `customer_qb_id` on `orders`, `deliveries` and `customer_addresses` — is
+-- PENDING David's ruling. It is neither approved nor abandoned.
+--
+-- MEASURED LIVE 2026-09-24: none of the five columns this file adds exists on any of those tables.
+-- The file is in the corpus, on `main`, and not in the database — which is why every guard that
+-- derives a column list from the corpus disagreed with production until this marker existed.
+--
+-- Retired in place following tech-debt #248's precedent (David, 2026-09-11): a migration that will
+-- not run is MARKED, not deleted, so apply-state checks stop reporting it beside migrations that
+-- genuinely wait. **COMMENT ONLY — no SQL below this header is touched** (§6 r1).
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+
+-- ════════════════════════════════════════════════════════════════════════════════════════════
 -- DRAFT — NOT FOR APPLY
 -- 20260916b — RECORDS THAT MUST SURVIVE A WIPE-AND-RELOAD, KEYED ON THE QUICKBOOKS ID · ledger #342
 -- ════════════════════════════════════════════════════════════════════════════════════════════
