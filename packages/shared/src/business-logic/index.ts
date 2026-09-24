@@ -177,6 +177,8 @@ export {
   writePricingConfig,
   mergePricingConfig,
   fetchTaxRate,
+  readTaxRate,
+  type TaxRateResult,
   fetchAttachedCustomerTier,
 } from './financialDataAccess';
 export type { LaborResourceRow } from './financialDataAccess';
