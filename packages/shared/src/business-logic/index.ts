@@ -297,3 +297,5 @@ export {
   ladderPriceKindFor, LADDER_PRICE_KINDS, type LadderPriceKind,
   type LadderPriceableLine, type LadderPricedLine, type LadderPricing,
 } from './ladderPricing';
+
+export { primaryOrderLine, type SummarisableLine } from './primaryOrderLine';

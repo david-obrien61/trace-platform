@@ -110,9 +110,17 @@ const MAP = {
   placement: { qbo_item_id: '19', qbo_item_name: 'Tree Placement' },
 };
 
+// ✏️ CORRECTED 2026-09-23 (ledger #394): THE MAPPING GOES ON THE ORDER LINE, NOT ON THE LOT —
+// and the old fixture described a place the live data never uses. It put `qbo_item_id` on the
+// embedded `business_inventory`, which made every probe here pass while the real push refused
+// every goods line, because the real query embeds `business_inventory ( name, size, sku )` and
+// fetches no item id at all. **The fixture was more generous than the system** — tech-debt #138's
+// class, and the reason a green suite sat over a 422 nobody could reproduce.
+// LIVE 2026-09-23: `order_items.qbo_item_id` is populated on 3,679 of 3,899 LAWNS lines; the
+// embedded lot carries `qb_item_id` (no `o`) and the embed does not ask for it.
 const MAPPED_ITEMS = [
-  { ...ORDER_ITEMS[0], business_inventory: { ...ORDER_ITEMS[0].business_inventory, ...MAP.vitex } },
-  { ...ORDER_ITEMS[1], business_inventory: { ...ORDER_ITEMS[1].business_inventory, ...MAP.oak } },
+  { ...ORDER_ITEMS[0], ...MAP.vitex },
+  { ...ORDER_ITEMS[1], ...MAP.oak },
 ];
 const MAPPED_SERVICES = [
   { ...SERVICE_SELECTIONS[0], service_offerings: { ...SERVICE_SELECTIONS[0].service_offerings, ...MAP.delivery } },
@@ -580,6 +588,58 @@ function tierDiscountedServiceIsRetailPlusAdjustment(): void {
   ok(Math.abs(Number(plainSvc?.Amount) - 1350.00) <= 0.005, 'J8 …and its single line carries the full 1350.00');
 }
 
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// K · 🔴 THE GOODS LINE'S ITEM REF COMES FROM THE ORDER LINE — EVERY PUSH 422'd WITHOUT IT
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// Until ledger #394 the goods line passed `item.business_inventory` as its backing row, while the
+// query that loads the items embeds `business_inventory ( name, size, sku )` — **no item id at
+// all**. `qboItemMappingOf` looked for `qbo_item_id` on an object holding three unrelated fields,
+// found nothing, and the push refused with `QBO_ITEM_UNMAPPED`.
+//
+// 🔴 NOT A COLUMN-NAME MISMATCH — THE ID WAS NEVER FETCHED. That distinction is the whole fix:
+// `order_items.qbo_item_id` is populated on 3,679 of 3,899 LAWNS lines (LIVE 2026-09-23), so the
+// data was there the whole time on the row the builder already had in hand.
+//
+// ⚠️ AND IT IS THE RIGHT SOURCE, NOT MERELY A REACHABLE ONE: it is the id FROZEN AT CHARGE.
+// Reading the lot's mapping instead would re-point an old invoice at whatever the catalogue says
+// today — the same class of mistake as recomputing a historic price (D-43).
+function goodsItemRefComesFromTheOrderLine(): void {
+  // The 436 fixture with the mapping on the ORDER LINE, which is where it lives live, and with
+  // business_inventory carrying ONLY what the real embed fetches.
+  const ITEMS = [
+    { quantity: 4, unit_price: 124.00, subtotal: 496.00, retail_unit: 124.00, discount_pct: 0, discount_amt: 0,
+      qbo_item_id: '47', qbo_item_name: 'Nursery Stock:Trees',
+      business_inventory_id: 'lot-vitex',
+      business_inventory: { name: 'Shoal Creek Vitex', size: '30', sku: null } },
+  ];
+  const lines = linesOf(build({ orderItems: ITEMS, serviceSelections: MAPPED_SERVICES }));
+  const tree = lines.find(l => String(l.Description ?? '').startsWith('Shoal Creek Vitex'));
+  ok(!!tree, 'K1 the tree line is built at all — it was REFUSED before this fix');
+  ok(tree?.SalesItemLineDetail?.ItemRef?.value === '47',
+     `K2 🔴 its ItemRef comes from the ORDER LINE's qbo_item_id — got ${JSON.stringify(tree?.SalesItemLineDetail?.ItemRef)}`);
+  ok(tree?.SalesItemLineDetail?.ItemRef?.name === 'Nursery Stock:Trees',
+     'K3 …with the name the order line froze, so the invoice books where it booked at charge');
+
+  // 🔴 THE NEGATIVE CONTROL, AND IT IS THE ONE THAT PROVES THE REFUSAL STILL WORKS. An order line
+  // with NO id must STILL be refused — the fix must not have turned the guard off. TRACE never
+  // picks an item: "that is how every tree came to book as generic income."
+  const UNMAPPED = [{ ...ITEMS[0], qbo_item_id: null, qbo_item_name: null }];
+  const refused = build({ orderItems: UNMAPPED, serviceSelections: MAPPED_SERVICES });
+  ok(!refused.ok, 'K4 🔴 an order line with NO qbo_item_id is STILL REFUSED — the fix did not disable the guard');
+  ok((refused as { unmapped?: Array<{ label: string }> }).unmapped?.some(u => /Shoal Creek Vitex/.test(u.label)) ?? false,
+     'K5 …and the refusal NAMES the line, so the owner knows which one to map');
+
+  // 🔴 AND THE LOT'S OWN MAPPING IS NOT CONSULTED. If the builder fell back to the lot, an old
+  // invoice would follow the catalogue's CURRENT answer rather than the one frozen at charge.
+  const DRIFTED = [{ ...ITEMS[0], qbo_item_id: '47',
+    business_inventory: { name: 'Shoal Creek Vitex', size: '30', sku: null, qbo_item_id: '999', qb_item_id: '999' } }];
+  const drifted = linesOf(build({ orderItems: DRIFTED, serviceSelections: MAPPED_SERVICES }));
+  const d = drifted.find(l => String(l.Description ?? '').startsWith('Shoal Creek Vitex'));
+  ok(d?.SalesItemLineDetail?.ItemRef?.value === '47',
+     `K6 🔴 the lot says 999 and the invoice still says 47 — the id frozen at charge wins (D-43)`);
+}
+
 function main(): void {
   reasonIsGone();
   shapeSurvives();
@@ -590,6 +650,7 @@ function main(): void {
   surchargeIsRevenue();
   tierDiscountIsNative();
   tierDiscountedServiceIsRetailPlusAdjustment();
+  goodsItemRefComesFromTheOrderLine();
   probesCanFail();
   console.log(`\n  ${passed} passed, ${failed} failed`);
   if (failed) {
