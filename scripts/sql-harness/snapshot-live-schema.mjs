@@ -79,6 +79,16 @@ for (const { t } of tables) {
 }
 // 2. functions (bodies unchecked, so order among them does not matter)
 for (const f of fns) out.push(`${f.def.trim()};`);
+// 3a. 🔴 SEQUENCES ANY DEFAULT DEPENDS ON — WITHOUT THESE THE SNAPSHOT DOES NOT LOAD AT ALL.
+// A `serial`/`bigserial` column's default is `nextval('<table>_<col>_seq'::regclass)`, and the
+// sequence is a separate object this dump never emitted. The first such column in the corpus
+// (`production_rung_dates.seq`, 2026-09-24) made the refreshed fixture fail on load with
+// `relation "production_rung_dates_seq_seq" does not exist` — which broke EVERY writer-registry
+// path test at once, not just the new table's. Derived from the defaults themselves, so it cannot
+// go stale: whatever a default calls `nextval` on gets created first.
+const seqs = [...new Set(cols.flatMap(c => [...String(c.def ?? '').matchAll(/nextval\('([^']+)'/g)].map(m => m[1])))];
+for (const sname of seqs) out.push(`CREATE SEQUENCE IF NOT EXISTS ${sname.includes('.') ? sname : `public.${sname}`};`);
+
 // 3. defaults and generated columns
 for (const c of cols) {
   if (c.gen) out.push(`ALTER TABLE public.${q(c.t)} ADD COLUMN ${q(c.col)} ${c.type} GENERATED ALWAYS AS ${c.def.startsWith('(') ? c.def : `(${c.def})`} STORED;`);

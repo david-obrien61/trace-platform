@@ -30,14 +30,15 @@ process.env.SUPABASE_SERVICE_KEY = 'service';
 process.env.VITE_SUPABASE_ANON_KEY = 'anon';
 
 const ROOT = process.env.PATH_TEST_ROOT ?? process.cwd();
-const MIGRATION = ['20260917c_crew_day_link.sql',
-  // …and the route-order migration on top of it, in the order David applies them (ledger #351).
-  '20260917e_route_order_is_saved.sql',
-  // …then teams, the rename, and the PER-TEAM route ([[R-169]], ledger #362 piece 2). The WHOLE
-  // chain, because `save_route_order` is REPLACED by the last of them — testing the older one
-  // would prove a writer that is about to stop existing.
-  '20260921a_teams.sql', '20260923a_delivery_teams_rename.sql', '20260923b_route_order_per_team.sql',
-].map(f => readFileSync(`${ROOT}/supabase/migrations/${f}`, 'utf8')).join('\n');
+// 🔴 NO MIGRATION REPLAY ANY MORE, AND THE REASON IS THE SNAPSHOT (2026-09-24, ledger #391).
+// This chain was replayed on top of the fixture because the fixture was generated 2026-09-17 and
+// predated every one of these migrations. It has since been refreshed from the live database, which
+// carries them all — so replaying them now fails with `relation "delivery_teams" already exists`.
+// The snapshot IS the record of what is applied (`npm run verify:snapshot-fresh`), so a path test
+// that also replays an applied migration is asserting the same thing twice and breaking on the
+// second. If a migration this test needs is NOT yet applied, add it back through
+// `openLiveDb({ migrations: [...] })` — that option exists for exactly that case.
+const MIGRATION = '';
 const ONLY = process.env.PATH_ONLY ? new Set(process.env.PATH_ONLY.split(',')) : null;
 
 const B = 'b0000000-0000-4000-8000-00000000000b';

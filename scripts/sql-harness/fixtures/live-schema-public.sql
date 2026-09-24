@@ -1,4 +1,4 @@
--- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-24T16:39:26.044Z
+-- LIVE public SCHEMA SNAPSHOT — structure only, no rows. Generated 2026-09-24T17:14:33.987Z
 -- @@
 -- by scripts/sql-harness/snapshot-live-schema.mjs. Do not edit by hand; re-run the script.
 -- @@
@@ -4403,6 +4403,8 @@ BEGIN
     'contact_rows_deleted', v_contacts, 'unretired', v_unretired);
 END;
 $function$;
+-- @@
+CREATE SEQUENCE IF NOT EXISTS public.production_rung_dates_seq_seq;
 -- @@
 ALTER TABLE public."addons" ALTER COLUMN "id" SET DEFAULT gen_random_uuid();
 -- @@
