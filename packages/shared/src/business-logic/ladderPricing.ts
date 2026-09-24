@@ -39,8 +39,7 @@
 //           clock, no I/O, so the CLIENT preview and the SERVER's authoritative recompute can call
 //           the identical function over the identical inputs and cannot drift (D-39 / STD-012).
 // OUTPUTS:  LadderPriceableLine · LadderPricedLine · LadderPricing · priceLinesFromLadder ·
-//           LADDER_PRICE_SOURCE · usesLadderPricing · LadderPriceKind · LADDER_PRICE_KINDS ·
-//           ladderPriceKindFor.
+//           LADDER_PRICE_SOURCE · usesLadderPricing · ladderBlocksOrder · ladderUnpricedWords.
 //
 // 🔴 IT PRICES TWO SERVICES AND IT IS STILL ONE MODULE — ledger #399, and the reason is #388's
 //           lesson paid forward. `Plant Your Tree` prices by container size exactly as install
@@ -60,58 +59,75 @@ export function usesLadderPricing(offering: { price_source?: string | null } | n
   return offering?.price_source === LADDER_PRICE_SOURCE;
 }
 
-/** Which per-rung price a service reads. Add a service here, not a new module. */
-export type LadderPriceKind = 'install' | 'planting';
+/**
+ * How a ladder-priced service behaves when a rung carries no price.
+ *
+ * 🔴 EVERY LADDER-PRICED SERVICE READS `installPrice`. THERE IS NO SECOND PRICE COLUMN, AND THAT IS
+ * DAVID'S CORRECTION OF 2026-09-24: *"PLANT YOUR TREE uses the INSTALL LADDER'S PRICES per
+ * container size… 15 gal → the install from ladder."* An earlier draft (#399) gave Plant Your Tree
+ * its own `pyt_price` column and seeded none of it, which would have made **every** Plant Your Tree
+ * line unpriced the moment its `price_source` was switched. `pyt_price` still exists on the table —
+ * a migration is never edited (§6 r1) — and is documented there as NOT USED.
+ *
+ * 🔴 AND THE PRICE IS CHOSEN BY `price_source`, NEVER BY THE SERVICE'S NAME. The earlier draft
+ * matched `/plant your tree/i`, which meant **renaming the row in Settings would have changed what
+ * it charged**. That weakness was filed against #399's own close-out; this removes it rather than
+ * documenting it again.
+ *
+ * ⚠️ SO ONE THING IS STILL PER-SERVICE, AND IT IS A RULING RATHER THAN A PREFERENCE: whether an
+ * unpriced line STOPS THE SALE.
+ *   · INSTALL refuses — David, 2026-09-23 (c): *"never $0, never a guess, never refused."*
+ *   · PLANT YOUR TREE does not — David, 2026-09-24: *"'I don't know' → the installer identifies it
+ *     on the install day and LAWNS AMENDS the order to add the charge."*
+ *
+ * 🔴 WITH THE NAME GONE, THE ONLY EXISTING COLUMN THAT SEPARATES THEM IS `category`, AND THIS IS
+ * THE ONE JUDGEMENT IN THIS FILE RATHER THAN A QUOTED RULING. Installation is `transport`; Plant
+ * Your Tree is `addon`. The reading: **an addon is an EXTRA, and an extra nobody has priced yet can
+ * be added later; anything else is part of how the order is fulfilled, and an order that cannot
+ * price that cannot go.**
+ *
+ * 🔴 IT IS WRITTEN AS *"BLOCK UNLESS `addon`"*, NOT *"BLOCK IF `transport`"*, AND A TEST MADE ME
+ * CHANGE IT. The first draft was the second form, which made an offering with NO category
+ * non-blocking — and §C, a probe written for #386 and untouched since, went red because the
+ * unpriced line stopped asking for a reason. That was the test telling me the DEFAULT was on the
+ * wrong side: an unknown category taking the non-blocking path can put a silently free line on an
+ * invoice, while an unknown category taking the blocking path can only ever refuse a sale until
+ * somebody types a number. **Refusal charges MORE, never less** (§1.6 gate 10) — so blocking is the
+ * default and NOT blocking is the explicit, categorised exception.
+ *
+ * ⚠️ If a tenant ever needs a blocking addon or a non-blocking transport, this is where a real
+ * `blocks_when_unpriced` column belongs, and that is David's call rather than a default taken here.
+ */
+export function ladderBlocksOrder(
+  offering: { category?: string | null } | null | undefined,
+): boolean {
+  return (offering?.category ?? '') !== 'addon';
+}
 
 /**
- * What each priceable service reads off the rung, and what it does when the rung is empty.
+ * The words a line shows when the ladder cannot price it.
  *
- * 🔴 `blocksOrder` IS THE ONE PLACE THE TWO SERVICES GENUINELY DIVERGE, AND IT IS DECLARED RATHER
- * THAN CODED AT EACH CALL SITE. Install REFUSES to be sold without an amount — David's ruling (c),
- * 2026-09-23: *"never $0, never a guess, never refused"*, so the counter must type one before the
- * order can go. Plant Your Tree does the opposite, by David's ruling of 2026-09-24: *"'I don't
- * know' → the installer identifies it on the install day and LAWNS AMENDS the order to add the
- * charge."* **An unpriced planting line must NOT stop the sale.** Two call sites read this
- * (CartReview's Send guard and `submit.ts`'s server-side recompute); hardcoding it in each is
- * exactly how they come to disagree.
+ * Two sentences, and the difference is not decoration: for a tree the business is DELIVERING, a
+ * missing size is a gap somebody must fill before the order can go. For a tree THE CUSTOMER ALREADY
+ * OWNS, it is a plan — they do not know what their own pot is, and the installer will say on the
+ * day. "No size recorded" would read as a data-entry failure; the other reads as what happens next.
  */
-export const LADDER_PRICE_KINDS: Record<LadderPriceKind, {
-  /** The Rung field holding the price. */
-  price: 'installPrice' | 'pytPrice';
-  /** The Rung field saying where that price came from. */
-  because: 'installPriceBecause' | 'pytPriceBecause';
-  /** Does an owed amount stop the order being sent? */
-  blocksOrder: boolean;
-  /** What the line says when its size reached a rung that carries no price. */
-  unpriced: (rungLabel: string) => string;
-  /** What the line says when the size reached NO rung, appended to the resolver's own sentence. */
-  unplaceable: (resolverDetail: string) => string;
-}> = {
-  install: {
-    price: 'installPrice',
-    because: 'installPriceBecause',
-    blocksOrder: true,
-    // Names the rung, because the fix is one number on one row of the ladder and the person
-    // reading this is the person who can set it.
-    unpriced: (label) => `No price is set for ${label}. Type the amount for this line, with a reason.`,
-    unplaceable: (detail) => detail,
-  },
-  planting: {
-    price: 'pytPrice',
-    because: 'pytPriceBecause',
-    // 🔴 FALSE, AND IT IS A RULING, NOT A PREFERENCE. See the note on this table.
-    blocksOrder: false,
-    unpriced: (label) => `No Plant Your Tree price is set for ${label}. Type the amount, or leave it for the install day and amend the order then.`,
-    // 🔴 THE WORDS DAVID ASKED FOR, VERBATIM IN SPIRIT: the size is not missing, it is NOT YET
-    // KNOWN — the customer does not know what their own tree is potted in and the installer will
-    // say on the day. "No size recorded" would read as a data-entry failure; this is a plan.
-    unplaceable: (detail) => `Size to be confirmed on install day — priced then, by amendment. (${detail})`,
-  },
-};
-
-/** The kind a service offering prices by. Today it is its name; when a column exists, that. */
-export function ladderPriceKindFor(offering: { name?: string | null } | null | undefined): LadderPriceKind {
-  return /plant your tree/i.test(offering?.name ?? '') ? 'planting' : 'install';
+export function ladderUnpricedWords(
+  offering: { category?: string | null } | null | undefined,
+): { unpriced: (rungLabel: string) => string; unplaceable: (resolverDetail: string) => string } {
+  return ladderBlocksOrder(offering)
+    ? {
+        // Names the rung, because the fix is one number on one row of the ladder and the person
+        // reading this is the person who can set it.
+        unpriced: (label) => `No price is set for ${label}. Type the amount for this line, with a reason.`,
+        // The resolver's four reasons are already written for a person; repeating them in different
+        // words would be two sentences for one fact, and the copy that drifts.
+        unplaceable: (detail) => detail,
+      }
+    : {
+        unpriced: (label) => `No price is set for ${label}. Type the amount, or leave it for the install day and amend the order then.`,
+        unplaceable: (detail) => `Size to be confirmed on install day — priced then, by amendment. (${detail})`,
+      };
 }
 
 /** One cart line, reduced to the only two things pricing-by-size needs. */
@@ -174,9 +190,10 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 export function priceLinesFromLadder(
   ladder: Ladder,
   lines: readonly LadderPriceableLine[],
-  kind: LadderPriceKind = 'install',
+  /** The service being priced — read for its WORDS only; every service reads the same price. */
+  offering?: { category?: string | null } | null,
 ): LadderPricing {
-  const spec = LADDER_PRICE_KINDS[kind];
+  const words = ladderUnpricedWords(offering);
   const priced: LadderPricedLine[] = lines.map((l) => {
     const qty = Number(l.quantity) || 0;
     const base = { name: l.name ?? null, size: l.size ?? null, quantity: qty };
@@ -188,12 +205,13 @@ export function priceLinesFromLadder(
       // a tree we did not sell an unknown size is a plan for the install day, not a data gap.
       return {
         ...base, rungLabel: null, unitPrice: null, lineTotal: null, needsAmount: true,
-        reason: spec.unplaceable(res.detail),
+        reason: words.unplaceable(res.detail),
       };
     }
 
     const rung = res.rung;
-    const price = rung[spec.price];
+    // ONE price column for every ladder-priced service — David, 2026-09-24.
+    const price = rung.installPrice;
     if (price == null) {
       return {
         ...base,
@@ -201,7 +219,7 @@ export function priceLinesFromLadder(
         unitPrice: null,
         lineTotal: null,
         needsAmount: true,
-        reason: spec.unpriced(rung.label),
+        reason: words.unpriced(rung.label),
       };
     }
 
@@ -212,7 +230,7 @@ export function priceLinesFromLadder(
       unitPrice: round2(unit),
       lineTotal: round2(unit * qty),
       needsAmount: false,
-      reason: `${rung.label} — ${rung[spec.because]}`,
+      reason: `${rung.label} — ${rung.installPriceBecause}`,
     };
   });
 

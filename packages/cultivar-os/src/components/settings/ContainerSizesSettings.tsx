@@ -158,9 +158,11 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
         <Field
           label="Install price for one tree of this size"
           note={<>
-            What the customer is charged to have ONE tree of this size planted in. Used at checkout
-            when a service is priced by size. <strong>Blank means no price is set</strong> — the
-            counter is then asked for an amount, with a reason. Never enter 0: that charges nothing.
+            What the customer is charged to have ONE tree of this size planted in. <strong>Every
+            service that prices by size reads this one number</strong> — an install, and “Plant Your
+            Tree” for a tree the customer already owns (David, 2026-09-24). <strong>Blank means no
+            price is set</strong> — the counter is then asked for an amount, with a reason. Never
+            enter 0: that charges nothing, and the database now refuses it.
             {SHEET_PRICE[draft.label] !== undefined && (
               <SheetComparison label={draft.label} typed={draft.installPrice} />
             )}
@@ -173,31 +175,11 @@ function RungForm({ draft, setDraft, problems, onSave, onCancel, saving, saveLab
           <input style={input} value={draft.installPriceBecause} onChange={(e) => put('installPriceBecause', e.target.value)} />
         </Field>
       </div>
-      {/* ── PLANT YOUR TREE (ledger #399) ────────────────────────────────────────────────────
-          🔴 A SEPARATE PRICE FROM INSTALL, BECAUSE IT IS A SEPARATE JOB, AND LAWNS'S OWN HISTORY
-          IS WHAT SAYS SO. Every Plant-Your-Tree line they have ever invoiced — an Olive, a
-          Japanese Maple, yaupons moved within a garden — is a tree they did not sell. There is no
-          tree to deliver and no warranty; the size is the CUSTOMER'S pot, which is why David's
-          rule has them say it and the installer confirm it on the day.
-          ⚠️ EVERY RUNG SHIPS BLANK AND THAT IS NOT AN OVERSIGHT: `20260924d` deliberately seeds
-          none, because those five invoices carry no size of their own to take a median from. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-        <Field
-          label="Plant Your Tree price for one tree of this size"
-          note={<>
-            What the customer is charged to have ONE tree <strong>they already own</strong> planted
-            at this size. <strong>Blank means no price is set</strong> — the line then says the size
-            is to be confirmed on the install day and the charge is added by amendment, and the order
-            can still be taken. Never enter 0: that charges nothing.
-          </>}
-        >
-          <input style={input} type="number" step="any" min={0} placeholder="not set"
-            value={draft.pytPrice} onChange={(e) => put('pytPrice', e.target.value)} />
-        </Field>
-        <Field label="Where the Plant Your Tree price came from">
-          <input style={input} value={draft.pytPriceBecause} onChange={(e) => put('pytPriceBecause', e.target.value)} />
-        </Field>
-      </div>
+      {/* ── THERE IS NO SECOND PRICE TO EDIT (ledger #404) ────────────────────────────────────
+          🔴 DAVID, 2026-09-24: *"PLANT YOUR TREE uses the INSTALL LADDER'S PRICES per container
+          size… 15 gal → the install from ladder."* #399 put a separate "Plant Your Tree price"
+          field here for four hours. It is GONE — a second field for one fact is STD-011, and the
+          one that drifts is always the one fewer people look at. The price above serves BOTH. */}
       {/* ── THE GROWING SCHEDULE (ledger #390) ───────────────────────────────────────────────
           Two numbers, and they are the whole grow ladder: GROW is how long after potting a tree on
           this size can be SOLD; HOLD is how long it then stays before it must move up. David,
@@ -366,12 +348,12 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
                   {standardCaliperHeightInches(r) != null
                     ? <> · <span style={{ color: '#666' }}>{CALIPER_STANDARD.name} would measure it at {standardCaliperHeightInches(r)} in</span></>
                     : null}
-                  {/* ── THE TWO PRICES, SIDE BY SIDE (ledger #399) ────────────────────────
-                      🔴 NEITHER WAS ON THIS LINE BEFORE, AND THE INSTALL PRICE'S ABSENCE WAS THE
-                      REAL GAP: it has been editable since #386 and readable only by opening the
-                      rung one at a time, so "which sizes do we not price?" — the exact question
-                      the null path exists to make answerable — took nine clicks. Adding PYT alone
-                      would have left that standing, so both are here.
+                  {/* ── THE PRICE, ON THE LINE (ledger #386, corrected #404) ──────────────
+                      🔴 THE INSTALL PRICE WAS NOT ON THIS LINE BEFORE AND THAT WAS THE REAL GAP:
+                      it has been editable since #386 and readable only by opening the rung one at
+                      a time, so "which sizes do we not price?" — the exact question the null path
+                      exists to make answerable — took nine clicks. It is ONE number now, because
+                      every ladder-priced service reads it (ledger #404).
                       ⚠️ "not set" IS PRINTED, NOT HIDDEN, AND IT IS THE COMMON ANSWER (A9 —
                       absent is not empty). A blank where a price belongs reads as a price of
                       nothing; these words read as a decision nobody has made yet. */}
@@ -381,12 +363,6 @@ export default function ContainerSizesSettings({ businessId, canWrite }: Props) 
                       ? <span style={{ color: AMBER }}>not set</span>
                       : <>${Number(r.installPrice).toFixed(2)}</>}{' '}
                     <span style={{ color: '#777' }}>({r.installPriceBecause})</span>
-                    {' · '}
-                    <strong>plant your tree</strong>{' '}
-                    {r.pytPrice == null
-                      ? <span style={{ color: AMBER }}>not set</span>
-                      : <>${Number(r.pytPrice).toFixed(2)}</>}{' '}
-                    <span style={{ color: '#777' }}>({r.pytPriceBecause})</span>
                   </div>
                 </div>
               </div>
