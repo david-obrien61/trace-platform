@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { customerDisplayName } from '../../../shared/src/utils/personName';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer, saveTypedContact, contactEditFromInput } from '../../../shared/src/business-logic/customerUpsert';
@@ -1513,7 +1514,11 @@ async function handleCreate(req: any, res: any) {
             // name and NULL is the true value (David's ruling; 20260907_customers_last_name_nullable).
             // This was the ONE unguarded interpolation of 76 references: it would have rendered
             // "Bob null" on the order. Every other reader already used `?? ''`.
-            customerName:  `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim(),
+            // ✏️ 2026-09-24: the `?? ''` guard above fixed "Bob null" but left the OTHER half —
+            // an ORGANISATION has no first or last name at all, so this rendered EMPTY for the
+            // 519 LAWNS customers who carry only a business name. The shared resolver reads
+            // display_name → organization_name → first+last → email (ledger #403).
+            customerName:  customerDisplayName(customer, String(customer?.email ?? '').trim()),
             plantName:     plantLabel,
             container:     firstPlant?.current_container,
             invoiceNumber,
