@@ -1,13 +1,14 @@
 {
   "_about": [
     "Migrations whose CREATE TABLE the live-schema snapshot does NOT carry, each with the reason it is legitimately absent. Read by `npm run verify:snapshot-fresh` (scripts/verify-snapshot-fresh.mjs).",
-    "\ud83d\udd34 THIS LIST PRUNES ITSELF IN BOTH DIRECTIONS. An entry whose table the snapshot has since gained is STALE and FAILS THE BUILD; so is an entry for a migration that no longer exists, or one that creates no table at all. It cannot rot into unread noise the way a hand-maintained gap list does (tech-debt #73).",
+    "🔴 THIS LIST PRUNES ITSELF IN BOTH DIRECTIONS. An entry whose table the snapshot has since gained is STALE and FAILS THE BUILD; so is an entry for a migration that no longer exists, or one that creates no table at all. It cannot rot into unread noise the way a hand-maintained gap list does (tech-debt #73).",
     "Every entry below was CHECKED AGAINST THE LIVE DATABASE on 2026-09-24, not inferred from the file.",
-    "To clear one: apply the migration, then re-run `SUPABASE_PAT=\u2026 node scripts/sql-harness/snapshot-live-schema.mjs` and delete its line."
+    "To clear one: apply the migration, then re-run `SUPABASE_PAT=… node scripts/sql-harness/snapshot-live-schema.mjs` and delete its line."
   ],
   "notYetApplied": {
-    "20260529_campaigns.sql": "LIVE-CHECKED 2026-09-24: `campaign_tone_samples` does not exist. The rest of this migration IS applied (`campaigns`, `campaign_posts` are live) \u2014 only this table was never created. Whether it is wanted at all is open; `campaign_posts` has 0 rows on every tenant and the generate path has never written one.",
-    "20260612_business_assets_inventory_pmi_service.sql": "LIVE-CHECKED 2026-09-24: `business_assets` does not exist. Superseded \u2014 the asset work landed on `business_inventory` with `item_type`, not a separate table. Left declared rather than the migration deleted, because deleting an applied-in-part migration is its own decision (\u00a76 r1: never edit an existing migration).",
-    "20260921a_teams.sql": "LIVE-CHECKED 2026-09-24: `teams` and `team_members` do not exist \u2014 and that is CORRECT. [[R-168]] renamed them to `delivery_teams` / `delivery_team_members` (20260923a, applied), and BOTH of those ARE live. The original names are absent by design, not by omission."
+    "20260529_campaigns.sql": "LIVE-CHECKED 2026-09-24: `campaign_tone_samples` does not exist. The rest of this migration IS applied (`campaigns`, `campaign_posts` are live) — only this table was never created. Whether it is wanted at all is open; `campaign_posts` has 0 rows on every tenant and the generate path has never written one.",
+    "20260612_business_assets_inventory_pmi_service.sql": "LIVE-CHECKED 2026-09-24: `business_assets` does not exist. Superseded — the asset work landed on `business_inventory` with `item_type`, not a separate table. Left declared rather than the migration deleted, because deleting an applied-in-part migration is its own decision (§6 r1: never edit an existing migration).",
+    "20260921a_teams.sql": "LIVE-CHECKED 2026-09-24: `teams` and `team_members` do not exist — and that is CORRECT. [[R-168]] renamed them to `delivery_teams` / `delivery_team_members` (20260923a, applied), and BOTH of those ARE live. The original names are absent by design, not by omission.",
+    "20260924e_delivery_rings.sql": "LIVE-CHECKED 2026-09-24: `business_delivery_rings` does not exist (PGRST205 against the live database, not inferred from the file). WRITTEN THIS SESSION and handed to David to run in the SQL editor — it is the address check ④, the delivery rings. It ships EMPTY on purpose: no migration seeds a ring for any tenant. Clear this line when he applies it and the snapshot is regenerated."
   }
 }

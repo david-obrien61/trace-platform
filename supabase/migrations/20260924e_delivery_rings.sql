@@ -15,9 +15,18 @@
 --
 -- WHAT THE SEED WILL PROPOSE, measured 2026-09-24 so the shape is known before the screen exists:
 -- 566 trip-charge lines across 564 orders, 16 distinct amounts, and **403 of them — 71% — are
--- $50**. At the $3.50 loaded mile (round trip) David set on 2026-09-16 that is about 7 miles one
--- way, with the next steps at $100, $150 and $250. So the proposal is one ring and three steps,
+-- $50**, with the next steps at $100, $150 and $250. So the proposal is one ring and three steps,
 -- not a gradient — and every one of them arrives marked "seeded from N invoices" and editable.
+--
+-- ⚠️ WHAT THOSE CHARGES MEAN IN MILES IS NOT SETTLED, AND THIS MIGRATION DOES NOT SETTLE IT.
+-- $3.50 per loaded mile is David's rate (2026-09-12). **The DEFINITION of a loaded mile is an
+-- OPEN QUESTION in his own queue** — `docs/RULINGS.md` line 288 carries "the definition of a
+-- loaded mile" and "ring radii" among the items awaiting his answer. Read as a ROUND TRIP, $50
+-- is about 7 miles out; read ONE WAY it is about 14. That is a factor of two on every ring, so
+-- the widget shows BOTH readings side by side and a person chooses. ✏️ An earlier draft of this
+-- header stated the round-trip reading as though David had settled it — he has not, and a
+-- migration comment asserting a decision nobody made is exactly the written declaration nobody
+-- checks that R-26 is about.
 --
 -- ⚠️ THE SEED IS NOT COMPLETE UNTIL THE ADDRESSES ARE GEOCODED. Deriving a radius from a CHARGE
 -- assumes the rate held; deriving it from a DISTANCE measures what LAWNS actually did. Today 0 of
