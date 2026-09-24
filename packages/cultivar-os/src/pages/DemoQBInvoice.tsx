@@ -10,6 +10,7 @@
 // OUTPUTS: an order-backed QB invoice preview. Display-only — does NOT touch the real integration.
 // ============================================================
 import { useEffect, useState } from 'react';
+import { customerDisplayName } from '@trace/shared/utils/personName';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { orderItemName, orderItemTag, orderItemAnchor } from '../lib/orderItemName';
@@ -159,7 +160,7 @@ function QBInvoicePreview() {
           bizName:    biz?.name ?? null,
           bizAddress: biz?.address ?? null,
           bizPhone:   biz?.phone ?? null,
-          billToName:  cust ? `${cust.first_name ?? ''} ${cust.last_name ?? ''}`.trim() || null : null,
+          billToName:  cust ? customerDisplayName(cust, String(cust.email ?? '')).trim() || null : null,
           billToEmail: cust?.email ?? null,
           lines,
         });

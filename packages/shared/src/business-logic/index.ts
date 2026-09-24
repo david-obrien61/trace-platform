@@ -294,3 +294,5 @@ export {
   priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE,
   type LadderPriceableLine, type LadderPricedLine, type LadderPricing,
 } from './ladderPricing';
+
+export { primaryOrderLine, type SummarisableLine } from './primaryOrderLine';
