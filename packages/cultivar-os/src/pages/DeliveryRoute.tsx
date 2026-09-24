@@ -23,6 +23,7 @@ import { estimateDay, CAPACITY_COPY, type CapacityEstimate } from '../lib/capaci
 import { inputsFromLoadModel, settingsFromConfig, snapshotEstimate, recordTeamChoice } from '../lib/dayEstimate';
 import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { shipToLine } from '../lib/stopWrites';
+import { teamRouteProblem } from '../lib/teamRouteGate';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
 
@@ -579,17 +580,53 @@ export function DeliveryRoute() {
   // The database refuses a team-less or mixed set and is the authority; this only moves the SAME
   // answer in front of Lauren before she waits on Directions. It never permits anything: a set
   // this misses is still refused on the way in, which is why the guard tests drive the writer.
+  // 🔴 THE EMPTY CASE IS NOW A SENTENCE, NOT A SILENCE (David, 2026-09-24; §6 r24).
+  // This returned null when `selected` was empty, so a crew with nothing routable rendered a GREYED
+  // BUTTON AND NO WORDS — the screen answered "why can't I route?" with nothing at all. That is the
+  // same class as a helper turning a failure into an empty list: an absence read as an answer.
+  // 🔴 THE "WHY NOT" LIVES IN `teamRouteGate.ts` SO IT CAN BE PROBED. It was inline here, which is
+  // how it came to return null on the empty case without anything noticing (ledger #400).
   const selectionTeamProblem = React.useMemo(() => {
-    if (!dateParam || !teamParam || selected.size === 0) return null;
-    const chosen = (stopData?.stops ?? []).filter(x => selected.has(x.id));
-    const teamless = chosen.filter(x => !x.team_id)
-      .map(x => customerDisplayName(x.customers, 'A stop'));
-    if (teamless.length) return `${teamless.join(', ')} has no team — assign it to a team first.`;
-    const others = [...new Set(chosen.filter(x => x.team_id && x.team_id !== teamParam)
-      .map(x => teamLabel(teams, x.team_id)))];
-    if (others.length) return `That set also contains stops for ${others.join(', ')}. Route one team at a time.`;
-    return null;
+    if (!dateParam) return null;
+    return teamRouteProblem({
+      teamId: teamParam,
+      teamName: teamLabel(teams, teamParam),
+      stops: (stopData?.stops ?? []).map(x => ({
+        id: x.id,
+        team_id: x.team_id,
+        // the SAME routability test the selection uses, passed in so the two cannot drift
+        address: shipToLine(x),
+        who: customerDisplayName(x.customers, 'A stop'),
+      })),
+      selected,
+    });
   }, [dateParam, teamParam, selected, stopData, teams]);
+
+  // ── 🔴 "ROUTE THIS TEAM" NOW ROUTES (David, 2026-09-24) ───────────────────────────────────────
+  // THE DEFECT, MEASURED RATHER THAN GUESSED: the schedule's `Route this team` navigated here with
+  // the crew's stops preselected AND STOPPED. `buildRoute` had exactly one caller — the button
+  // labelled "Route N Stops" — so nothing routed until Lauren pressed a SECOND button. From her
+  // seat the control named "Route this team" produced no route: it did nothing. Lauren worked
+  // around it by routing the whole day and unticking the other crew, TWO WEEKENDS RUNNING.
+  //
+  // ⚠️ IT FIRES ONCE PER (date, team) AND ONLY WHEN ARRIVED AT WITH `?team=`. Not on every render,
+  // not on the whole-day view: a day route is a deliberate act and must stay a deliberate press.
+  // The ref is keyed, so re-routing the SAME crew after a change is still Lauren's decision.
+  const autoRoutedRef = React.useRef('');
+  useEffect(() => {
+    if (!dateParam || !teamParam || loading) return;
+    const key = `${dateParam}|${teamParam}`;
+    if (autoRoutedRef.current === key) return;
+    // A refusal is already on screen — do not paper over it by routing anyway.
+    if (selectionTeamProblem || !canBuild) {
+      if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] team arrival did NOT auto-route —',
+        selectionTeamProblem ? `refused: ${selectionTeamProblem}` : 'nothing routable');
+      return;
+    }
+    autoRoutedRef.current = key;
+    if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] team arrival — routing', selected.size, 'stops for', teamParam);
+    buildRoute();
+  }, [dateParam, teamParam, loading, canBuild, selectionTeamProblem, selected]);
 
   // A stop changed while a route was on screen → rebuild from the re-read, once it has landed. The link
   // is derived from `displayStops`, so rebuilding the stops is what makes it carry the new address.
