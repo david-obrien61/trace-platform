@@ -139,14 +139,16 @@ SELECT 'V2 container_ladder_pyt_price_positive_check exists BY NAME' AS check,
  WHERE conrelid = 'container_ladder'::regclass
    AND conname  = 'container_ladder_pyt_price_positive_check';
 
--- V3 — 🔴 RUN THIS ONE ALONE. AN ERROR IS THE PASS.
+-- V3 — 🔴 RUN THIS ONE ALONE. AN ERROR IS THE PASS. (Run it AFTER V1/V2, BEFORE V4–V7.)
 -- [[R-33]]: a guard nobody has watched refuse is a claim, not a guard. This WRITES,
 -- and it must fail. Expect: ERROR 23514, naming container_ladder_pyt_price_positive_check.
 -- If it SUCCEEDS, a free planting can be stored and the constraint is not doing its job.
---   UPDATE container_ladder SET pyt_price = 0
---    WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND sort_order = (
---          SELECT min(sort_order) FROM container_ladder
---           WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74');
+-- ⚠️ IT IS LIVE SQL, NOT A COMMENT, AND IT RUNS AS-IS (§6 r26). It writes, it fails, and the
+-- failure is atomic — the statement is rolled back and no rung is left holding a 0.
+UPDATE container_ladder SET pyt_price = 0
+ WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
+   AND sort_order = (SELECT min(sort_order) FROM container_ladder
+                      WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74');
 
 -- V4 — 🔴 EVERY RUNG SAYS WHY, ON EVERY TENANT. Expect: PASS, 0 silent.
 -- The D-9 assertion, and it is a SHAPE assertion: it does not care how many rungs

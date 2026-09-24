@@ -46,7 +46,17 @@ import { readFileSync } from 'node:fs';
 import { openLiveDb } from '../path-tests/lib/liveDb.mjs';
 
 const FILE = `${process.cwd()}/supabase/migrations/20260924d_container_ladder_pyt_price.sql`;
-const MIG = readFileSync(FILE, 'utf8');
+const WHOLE = readFileSync(FILE, 'utf8');
+
+// 🔴 V3 IS LIVE SQL THAT MUST FAIL, SO IT IS SPLIT OUT AND RUN ON ITS OWN — exactly as its own
+// header tells David to run it. Running the file straight through would abort at V3 and prove
+// nothing about V4–V7. The text below is LIFTED FROM THE FILE, never retyped, so P3 exercises the
+// statement David will paste and cannot drift from it.
+const V3_RE = /UPDATE container_ladder SET pyt_price = 0\n[\s\S]*?;\n/;
+const V3 = (WHOLE.match(V3_RE) || [''])[0];
+if (!V3) { console.error('FAIL could not find V3 in the migration — the harness would silently skip it'); process.exit(1); }
+/** Everything except V3 — what runs in one go. */
+const MIG = WHOLE.replace(V3_RE, '');
 /** The LAWNS data file David runs after the migration — §6 r26 covers it too. */
 const DATA = readFileSync(`${process.cwd()}/docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql`, 'utf8');
 
@@ -149,11 +159,11 @@ if (!applied.ok) { console.error('\nNothing further can be measured.'); process.
      `P2/V2 the named CHECK exists — ${r.def || '(none)'}`);
 }
 
-// P3 / V3 — 🔴 IT REFUSES A ZERO, AND THE ERROR NAMES THE CONSTRAINT.
+// P3 / V3 — 🔴 THE FILE'S OWN V3, RUN VERBATIM. IT REFUSES A ZERO AND NAMES THE CONSTRAINT.
 {
-  const z = await run(db, `update public.container_ladder set pyt_price = 0 where business_id='${LAWNS}' and label='15 gal'`);
+  const z = await run(db, V3);
   ok(!z.ok && /container_ladder_pyt_price_positive_check/.test(z.error || ''),
-     `P3/V3 a 0 price is REFUSED by name — ${z.ok ? 'IT WAS ACCEPTED' : z.error.split('\n')[0]}`);
+     `P3/V3 the file's own V3 statement is REFUSED by name — ${z.ok ? 'IT WAS ACCEPTED' : z.error.split('\n')[0]}`);
 }
 
 // P4 — a negative is refused too. 0 is the value the design is about; negative is the other way out.
