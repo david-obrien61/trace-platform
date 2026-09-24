@@ -238,7 +238,12 @@ export function CartReview() {
   // a legitimate way past an unpriced rung, and the Send button must not stay dead after it.
   const installBlocks = plantingOn && installNeedsAmount && !installAmountGiven;
 
-  const transportComputed = selectedTransport ? computedAmt(selectedTransport) : 0;
+  // 🔴 THE PREVIEW AGREES WITH THE SERVER. `api/orders/submit` suppresses the transport line for
+  // an address nobody can place; showing a charge here that the submit then drops would be a price
+  // that changes between the screen and the receipt. The server stays authoritative — this mirrors
+  // it, it does not decide it (§1.6 item 10).
+  const shipToUnplaceable = shipTo?.unplaceable === true;
+  const transportComputed = (selectedTransport && !shipToUnplaceable) ? computedAmt(selectedTransport) : 0;
   // A ladder-priced service has no unit price to multiply; its baseline is what the ladder summed.
   const plantingComputed  = plantingOn && plantingOffering
     ? (ladderPricing ? ladderPricing.pricedTotal : computedAmt(plantingOffering))

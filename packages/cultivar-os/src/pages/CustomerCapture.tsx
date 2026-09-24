@@ -254,6 +254,8 @@ export function CustomerCapture() {
   const [addrChecking, setAddrChecking] = useState(false);
   // Set the moment a question is answered, so re-entering handleSubmit cannot ask it twice.
   const [addrAnswered, setAddrAnswered] = useState(false);
+  // Remembered so the Review preview suppresses the charge the same way submit will.
+  const [addrUnplaceable, setAddrUnplaceable] = useState(false);
 
   /** Run the check behind whatever was picked or typed. Returns true when checkout may continue. */
   async function addressStepPasses(): Promise<boolean> {
@@ -385,6 +387,7 @@ export function CustomerCapture() {
           state: state.trim()   || null,
           zip:   zip.trim()     || null,
           source: 'typed',
+          unplaceable: addrUnplaceable || undefined,
         }
       : null);
     navigate('/checkout/review');
@@ -664,7 +667,7 @@ export function CustomerCapture() {
               wrong — only that it cannot be found (David's ruling 1). */}
           <div style={{ color: '#991b1b', lineHeight: 1.5 }}>{addrQuestion.message}</div>
           <button className="btn" style={{ width: '100%', minHeight: 48, marginTop: 10 }}
-            onClick={() => { setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
+            onClick={() => { setAddrUnplaceable(true); setAddrAnswered(true); setAddrQuestion(null); void handleSubmit(); }}>
             Yes, it's correct — save it anyway
           </button>
         </div>

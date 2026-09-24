@@ -74,6 +74,11 @@ export type ShipToInput = {
   source: 'billing' | 'saved_site' | 'typed';
   /** Provenance only. NEVER resolved at read time. */
   siteId?: string | null;
+  /** 🔴 DISPLAY ONLY — the server decides the money. Set when the address check could not place
+   *  this address and the person chose to save it anyway. The checkout previews read it so they
+   *  show the same suppressed delivery charge `api/orders/submit` will apply; a preview promising
+   *  a charge the submit then drops is a price that changes between the screen and the receipt. */
+  unplaceable?: boolean;
 };
 
 export type CustomerAddress = {

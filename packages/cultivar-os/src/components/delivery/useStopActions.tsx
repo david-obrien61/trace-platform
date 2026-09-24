@@ -179,6 +179,27 @@ export function useStopActions(
     });
     if (TRACE_DELIVERY) console.log('[TRACE:STOP] ship-to save —', out.kind, out);
     if (out.kind === 'saved') {
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // 🔴 RULING 4 — A CHANGED ADDRESS NEVER SILENTLY RE-PRICES AN ALREADY-INVOICED ORDER
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // David, 2026-09-23. This is the surface where it can happen: the order is done, the
+      // invoice is out, and someone corrects the street on the stop. Re-pricing the delivery
+      // then would change a number the customer has already been billed — the no-recompute-history
+      // invariant, and the reason nothing here touches money.
+      //
+      // ⚠️ IT IS ENFORCED BY ABSENCE, WHICH IS WHY IT IS WRITTEN DOWN. There is no re-price call
+      // to guard; the protection is that this path writes the ADDRESS and nothing else. A future
+      // edit that "helpfully" recalculates the trip charge here would break the ruling without
+      // touching a single line that mentions it, so the rule lives at the place it would be
+      // broken rather than only in a document.
+      //
+      // David's note: this should rarely arise — the address is corrected at the counter while
+      // the customer is sitting there — but the rule holds for when it does.
+      if (TRACE_DELIVERY) {
+        console.log('[TRACE:STOP] address changed — order NOT re-priced (ruling 4, no-recompute-history)', {
+          stopId: d.id, orderId: d.order_id ?? null,
+        });
+      }
       // Raised BEFORE the refresh, not after: `onChanged()` unmounts the card list on two of the
       // three screens, and state set after an await that outlives the component is the defect this
       // moved to fix. Here it is page state, so the order is a choice rather than a hazard — and
