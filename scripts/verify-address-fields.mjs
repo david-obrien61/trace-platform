@@ -90,8 +90,6 @@ const DECLARED = {
   // (#73), and then it is not protecting the NEW forms either — which is the half that matters,
   // because the seven below are known and a new one would not be. Each line comes off as its
   // surface is wired.
-  'packages/cultivar-os/src/pages/ReceiptKeeper.tsx':
-    'OWED — invoice capture creating a new customer.',
   'packages/cultivar-os/src/pages/DeliveryRoute.tsx':
     'DECIDE FIRST, then wire or retire: its address box feeds a MAP LINK and is never saved ' +
     '(tech-debt #316, declared as not-a-capture in writer-registry.json). If a typed address ' +

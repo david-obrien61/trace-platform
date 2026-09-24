@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { ContactValueResult } from '@trace/shared/business-logic/contactWriter';
+import { AddressInput } from '@trace/shared/components/AddressInput';
 import { ContactResultList } from '@trace/shared/components/customers/ContactResultList';
 import { authHeaders } from '@trace/shared/auth';
 import { useInput } from '@trace/shared/hooks/useDevice';
@@ -1374,8 +1375,17 @@ export function ReceiptKeeper() {
 
                 <div style={FIELD_ROW}>
                   <label style={LABEL}>Bill-to address</label>
-                  <input style={{ ...INPUT, marginBottom: 6 }} value={invoice.billLine1}
-                    onChange={e => setInvoice(p => ({ ...p, billLine1: e.target.value }))} placeholder="Street" />
+                  {/* 🔴 THE SHARED FIELD HERE TOO. Invoice capture CREATES customers, so a bad
+                      address typed here becomes a customer record nobody corrects until a truck
+                      is lost. Picking a suggestion fills the city and state below it. */}
+                  <AddressInput
+                    businessId={businessId ?? null}
+                    bias={null}
+                    label=""
+                    value={{ line1: invoice.billLine1, city: invoice.billCity, state: invoice.billState, zip: invoice.billZip }}
+                    onChange={(v) => setInvoice(p => ({ ...p, billLine1: v.line1,
+                      billCity: v.city || p.billCity, billState: v.state || p.billState }))}
+                  />
                   <div style={TRIPLE_ROW}>
                     <input style={{ ...INPUT, flex: 2 }} value={invoice.billCity}
                       onChange={e => setInvoice(p => ({ ...p, billCity: e.target.value }))} placeholder="City" />
@@ -1388,8 +1398,17 @@ export function ReceiptKeeper() {
 
                 <div style={FIELD_ROW}>
                   <label style={LABEL}>Ship-to / delivery address</label>
-                  <input style={{ ...INPUT, marginBottom: 6 }} value={invoice.shipLine1}
-                    onChange={e => setInvoice(p => ({ ...p, shipLine1: e.target.value }))} placeholder="Street (if different)" />
+                  {/* 🔴 THE SHARED FIELD HERE TOO. Invoice capture CREATES customers, so a bad
+                      address typed here becomes a customer record nobody corrects until a truck
+                      is lost. Picking a suggestion fills the city and state below it. */}
+                  <AddressInput
+                    businessId={businessId ?? null}
+                    bias={null}
+                    label=""
+                    value={{ line1: invoice.shipLine1, city: invoice.shipCity, state: invoice.shipState, zip: invoice.shipZip }}
+                    onChange={(v) => setInvoice(p => ({ ...p, shipLine1: v.line1,
+                      shipCity: v.city || p.shipCity, shipState: v.state || p.shipState }))}
+                  />
                   <div style={TRIPLE_ROW}>
                     <input style={{ ...INPUT, flex: 2 }} value={invoice.shipCity}
                       onChange={e => setInvoice(p => ({ ...p, shipCity: e.target.value }))} placeholder="City" />
