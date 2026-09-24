@@ -90,7 +90,10 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
     const q = value.line1.trim();
     if (!businessId || q.length < 3) { setSuggestions([]); return; }
     if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
+    // The callback is deliberately NOT async: setTimeout discards what it returns, so an async
+    // callback hands back a promise nobody holds — a rejection would surface as an unhandled
+    // rejection rather than as Rule 24's visible message. The work is wrapped and voided instead.
+    debounce.current = setTimeout(() => { void (async () => {
       try {
         const res = await fetch('/api/customers/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -112,7 +115,7 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
         // Rule 24 — the field keeps working, the ③ check will do the rest.
         setDegraded(true); setSuggestions([]);
       }
-    }, 250);
+    })(); }, 250);
     return () => { if (debounce.current) clearTimeout(debounce.current); };
   }, [value.line1, businessId, bias]);
 
