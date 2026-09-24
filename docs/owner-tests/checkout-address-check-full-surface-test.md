@@ -153,18 +153,24 @@ In any address field, type **`153 Twin Cr`** and stop.
 **PASS:** a list of real, complete addresses appears and one of them can be picked.
 **FAIL:** no list at all, or a list you cannot pick from.
 
-🔴 **DO NOT EXPECT THE RIGHT TOWN FIRST, AND THAT IS A KNOWN GAP, NOT A TEST FAILURE.**
-Measured 2026-09-24: unbiased, this query returns *Apex, North Carolina* and *Washington, West
-Virginia* before anything in Texas. **Location bias is NOT in force yet** — `CustomerCapture.tsx`
-sets the bias centre to `null`, because the bias centre must be the tenant's OWN located address
-and LAWNS's yard has no coordinate stored yet. It gets one when the bulk geocode runs.
+**PASS:** **`153 Twin Creekview Ln, Georgetown`** is the FIRST suggestion.
 
-⚠️ **THIS MATTERS MORE THAN IT SOUNDS.** A picked suggestion is stored as located with no second
-check, so an unbiased list can hand someone a confident, real, wrong-state address. Until the bias
-is wired, **read the town on a suggestion before you tap it.**
-✏️ An earlier draft of this card asserted the Georgetown result as a PASS. It would have failed on
-every run — a card asserting a proof nobody can perform, which is exactly what OP-14 clause 3 calls
-worse than no card at all.
+⚠️ **LOCATION BIAS IS NOT WIRED YET AND THIS CARD STILL PASSES WITHOUT IT.** `CustomerCapture` sets
+the bias centre to `null` until the yard's own coordinate is stored. Re-measured 2026-09-24 against
+the real depot: unbiased and biased BOTH put Twin Creekview first. Bias changes ranks 2–5 from
+scattered (Jonestown PA, Comanche, Del Valle) to Central Texas (Manchaca, Dripping Springs, Burnet)
+— a shorter list of plausible neighbours, so a smaller chance of a mis-tap.
+
+✏️ **A CORRECTION TO THIS CARD'S FIRST DRAFT.** It said unbiased returns *Apex, North Carolina* and
+told you not to expect the right town. That figure did not reproduce when measured again with the
+region filter the proxy actually sends. It had been written into the code comment, this card and
+two reports without anyone re-deriving it — [[R-26]], inside the build that exists to stop exactly
+that.
+
+🔴 **WHAT HAS NOT CHANGED: autocomplete does not catch everything.** Type **`Long Wed`** (for
+Longwedge). Measured the same day, biased on the yard: it returns Sullivan ME, Wedowee AL,
+Salisbury NC — nothing in Texas at all. **A list that looks confident can still hold nothing you
+want.** That is why the ③ check exists behind it.
 
 ---
 

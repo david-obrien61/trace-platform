@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 20260924e — THE DELIVERY RINGS · ledger #386 · the address check ④
+-- 20260924f — THE DELIVERY RINGS · ledger #386 · the address check ④
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
 --

@@ -30,12 +30,24 @@
 // · TYPED and not picked → nothing is known. It goes through the ③ planner exactly as before —
 //   ROOFTOP silent, RANGE_INTERPOLATED or a correction asks once, anything else cannot be placed.
 //
-// 🔴 LOCATION BIAS IS A CORRECTNESS REQUIREMENT, NOT A REFINEMENT. Measured live 2026-09-24:
-// unbiased, "153 Twin Cr" returns *Apex, North Carolina* and *Washington, West Virginia*. Biased
-// on the tenant's own located address, the first suggestion is *153 Twin Creekview Ln*. Since a
-// picked suggestion is stored as located WITHOUT a second check, an unbiased list would let a
-// confident, real, wrong-state address be routed to. BIAS, never RESTRICTION: LAWNS delivers
-// across several towns, and Twin Creekview is in Georgetown while the yard is in Leander.
+// ── LOCATION BIAS: A RANKING IMPROVEMENT, AND ✏️ A CORRECTION TO WHAT THIS COMMENT USED TO SAY ──
+// 🔴 THIS BLOCK PREVIOUSLY CLAIMED BIAS WAS A *CORRECTNESS REQUIREMENT*, citing an unbiased
+// "153 Twin Cr" returning *Apex, North Carolina* and *Washington, West Virginia*. RE-MEASURED
+// 2026-09-24 against the real depot coordinate and with `includedRegionCodes: ['us']` — which is
+// what the proxy actually sends — THAT RESULT DID NOT REPRODUCE. Both lists put the right address
+// first:
+//     UNBIASED : 153 Twin Creekview Ln, Georgetown TX · Twin Creek Dr, Georgetown · Jonestown PA
+//                · Comanche TX · Del Valle TX
+//     BIASED   : 153 Twin Creekview Ln, Georgetown TX · Manchaca TX · Dripping Springs TX
+//                · Burnet TX · Jonestown PA
+// So bias moves ranks 2–5 from scattered to Central Texas; it is NOT the difference between the
+// right address and a wrong-state one for this query. The original figure was a real observation
+// of something — most likely a run without the region filter — but nobody re-derived it before it
+// was written down as a requirement, which is [[R-26]] in this build's own source comment.
+// It is still worth having: a shorter list of plausible neighbours is a smaller chance of a
+// mis-tap, and a picked suggestion is stored as located WITHOUT a second check. BIAS, never
+// RESTRICTION: LAWNS delivers across several towns, and Twin Creekview is in Georgetown while the
+// yard is in Leander.
 //
 // ⚠️ AUTOCOMPLETE DOES NOT CATCH EVERYTHING. Same measurement: "Long Wed" (for Longwedge) returns
 // nothing in Texas at all — Maine, Alabama, Oregon. It reduces bad addresses; the ③ check is
