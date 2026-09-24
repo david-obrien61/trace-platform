@@ -26,6 +26,7 @@ import { supabase } from '../../lib/supabase';
 import { rankItemChoices, type ItemChoice, type ItemRow } from '../../lib/itemLineEntry';
 import { CHECKOUT_SEARCH_PLACEHOLDER, CHECKOUT_ITEM_SEARCH } from '../../lib/checkoutSearchSpec';
 import { searchedColumns } from '@trace/shared/components/datasheet/searchSpec';
+import { describeOnHand } from '../../lib/onHandProvenance';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -38,7 +39,10 @@ interface Props {
 // every column the declared getters read, so a field cannot be searched without being fetched —
 // which is the silent half of #384's family: a searched field that was never selected matches
 // nothing, exactly as quietly as a field that was never searched.
-const SELECT = [...new Set(['id', 'qty', 'sell_price', ...searchedColumns(CHECKOUT_ITEM_SEARCH)])].join(', ');
+// 🔴 `qty_basis` AND `qty_basis_at` ARE FETCHED BECAUSE THE FIGURE CANNOT BE SHOWN WITHOUT THEM
+// (R-176). A row read without them renders "basis unknown", not a bare number and not a silent
+// "placeholder" — a bundle that has not been told is a different fact from a lot nobody counted.
+const SELECT = [...new Set(['id', 'qty', 'sell_price', 'qty_basis', 'qty_basis_at', ...searchedColumns(CHECKOUT_ITEM_SEARCH)])].join(', ');
 
 export function ItemLineEntry({ businessId, onAdd }: Props) {
   const [rows, setRows]   = useState<ItemRow[] | null>(null);
@@ -135,9 +139,19 @@ export function ItemLineEntry({ businessId, onAdd }: Props) {
                 {c.indistinguishable && <span style={S.warn}> · no size recorded — can’t be told apart by typing</span>}
               </span>
               <span style={S.rowMeta}>
+                {/* 🔴 NEVER A BARE FIGURE (R-176). `describeOnHand` always appends the basis —
+                    "10 · placeholder", "12 · counted 20 Sep" — because a bare number on a till is
+                    a promise that somebody knows. Live: 512 of LAWNS's 632 lots are a flat import
+                    default. ⚠️ A placeholder is SHOWN, not hidden and not softened: running out is
+                    what triggers a count, and the block at sale is that trigger. */}
                 {c.unsellable
                   ? <span style={S.bad}>{c.unsellable}</span>
-                  : <>{Number(c.row.qty)} on hand · ${Number(c.row.sell_price).toFixed(2)}</>}
+                  : <>
+                      <span style={describeOnHand(c.row).trusted ? undefined : S.untrusted}>
+                        {describeOnHand(c.row).text}
+                      </span>
+                      {' on hand · $'}{Number(c.row.sell_price).toFixed(2)}
+                    </>}
               </span>
             </li>
           ))}
@@ -159,6 +173,9 @@ const S: Record<string, React.CSSProperties> = {
   warn:    { color: '#b45309', fontSize: '0.8125rem' },
   rowMeta: { fontSize: '0.8125rem', color: '#6b7280', whiteSpace: 'nowrap' },
   bad:     { color: '#A32D2D', fontWeight: 600 },
+  // An unverified figure is marked, not hidden — amber, the same colour every other
+  // not-yet-established fact on this platform uses.
+  untrusted: { color: '#b45309', fontWeight: 600 },
   none:    { padding: '12px', fontSize: '0.875rem', color: '#6b7280' },
   qtyRow:  { display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, padding: '10px 12px', background: '#f0f7ea', borderRadius: 10 },
   qtyName: { flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#1a2e0a' },

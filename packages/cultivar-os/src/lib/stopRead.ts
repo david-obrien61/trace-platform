@@ -98,7 +98,7 @@ const CUSTOMER_JOIN =
   // ✏️ THE LEGACY FOUR ARE GONE FROM THIS JOIN (ledger #335). They were carried beside the
   // `billing_*` four so a reader could fall back; there is one column set now, so there is
   // nothing to fall back to and nothing that could disagree.
-  'customers ( first_name, last_name, phone, email, billing_line1, billing_city, billing_state, billing_zip )';
+  'customers ( first_name, last_name, display_name, organization_name, customer_type, phone, email, billing_line1, billing_city, billing_state, billing_zip )';
 const STOP_COLS_CORE =
   `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, created_at, ${CUSTOMER_JOIN}`;
 const STOP_COLS_FULL =

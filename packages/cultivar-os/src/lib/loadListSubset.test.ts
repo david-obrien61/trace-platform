@@ -76,6 +76,7 @@ function ok(cond: boolean, msg: string): void {
     label, aliases, sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'test',
     installTPostsPerTree: posts, installTPostsBecause: 'test', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
     installPrice: null, installPriceBecause: 'not set',
+    pytPrice: null, pytPriceBecause: 'not set',
     growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
     sellability: 'sold' as const, sellabilityBecause: 'not set', active: true,
   });
@@ -171,6 +172,7 @@ function ok(cond: boolean, msg: string): void {
     label, aliases: [], sortOrder, volumeGallons, handlingMinutes: null, handlingBecause: 'test',
     installTPostsPerTree: posts, installTPostsBecause: 'test', caliperMinInches: null, caliperMaxInches: null, caliperBecause: 'not set',
     installPrice: null, installPriceBecause: 'not set',
+    pytPrice: null, pytPriceBecause: 'not set',
     growMonths: null, growBecause: 'not set', holdMonths: null, holdBecause: 'not set',
     sellability: 'sold' as const, sellabilityBecause: 'not set', active: true,
   });

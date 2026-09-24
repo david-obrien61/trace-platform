@@ -1,6 +1,6 @@
 # OPEN QUESTIONS — everything waiting on David, in one place
 
-**Last updated: 2026-09-23** (ledger #388 — one search module; four lines. Before that: ledger #387 — the back arrow keeps the order; four lines, one of them a card that is PASS when it loses your order. Before that: ledger #386 — basic checkout: nine new lines, four of them blocking, and three migrations that must be applied in order before any of it can be run. Before that: ledger #379 — §6 r22 adopted; six stranded filings copied onto main. Before that: (ledger #347 — the crew day link; built, not merged, migration not applied. Prior: ledger #345 — the writer registry; contacts registered; not merged. Prior: ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
+**Last updated: 2026-09-23** (ledger #393 — provenance at the till. Before that: ledger #388 — one search module; four lines. Before that: ledger #387 — the back arrow keeps the order; four lines, one of them a card that is PASS when it loses your order. Before that: ledger #386 — basic checkout: nine new lines, four of them blocking, and three migrations that must be applied in order before any of it can be run. Before that: ledger #379 — §6 r22 adopted; six stranded filings copied onto main. Before that: (ledger #347 — the crew day link; built, not merged, migration not applied. Prior: ledger #345 — the writer registry; contacts registered; not merged. Prior: ledger #342 — during testing nothing writes the record; practice orders go with their import; migrations written, none applied. All blocks below, newest first.) · **also** ledger #335 second pass — CARD 4 then merge; the three migrations go on first; a new question on retiring seeded addresses; the contact writer has no caller. Prior: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Last updated: 2026-09-17** (ledger #343 — the container ladder is the one source for sizes; apply its migration BEFORE merging. Previous: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Last updated: 2026-09-18** (Lightning hold-list validation — tech-debt #327–#341 filed, five questions added. Before that: ledger #352 — the bubbler is billed; water monitor kits per installed tree. Before that: ledger #350 — the load list prints an allow-list, NOT merged. Before that: ledger #343 — the container ladder is the one source for sizes; apply its migration BEFORE merging. Previous: ledger #341 — the preview read now asks QuickBooks for inactive records and five transaction types; step ② is a press on the merged build. All blocks below, newest first.)
 **Scope:** every question the platform cannot answer for itself, across all seven places they currently live.
@@ -97,6 +97,28 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#399 — Plant Your Tree priced by container size (built; `20260924d` APPLIED, data file still HELD)**
+- ✅ **`20260924d_container_ladder_pyt_price.sql` — APPLIED BY DAVID 2026-09-24, AND VERIFIED LIVE FROM THIS SIDE (2026-09-24 17:36 UTC):** both columns present · the named CHECK `container_ladder_pyt_price_positive_check` present · **0 rungs priced on any tenant** (the seed writes no price, by design) · **0 rungs silent** (every one carries its reason). The merge gate is met.
+- ⛔ **OPEN — THEN, AND ONLY AFTER THE BRANCH IS MERGED AND DEPLOYED, run `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql`** (SHA `624db4da…`). It is DATA, not a migration: it tells LAWNS's `Plant Your Tree` row to read the ladder. Run before the deploy and checkout reads a price it no longer displays.
+- 🔴 **OPEN — CARD 16 IS A DECISION, NOT A CHECK: two opposite behaviours sit on one screen.** An unpriced INSTALL kills the Send button (R-171 (c), *"never $0, never a guess"*); an unpriced PLANTING does not (David 2026-09-24, *"the installer identifies it on the install day and LAWNS AMENDS the order"*). Both are David's own rulings, a day apart. **Say now if the contrast reads wrong — it is right once and confusing forever.**
+- ⚠️ **OPEN — EVERY RUNG SHIPS UNPRICED AND THAT IS THE DESIGNED STATE.** LAWNS's five historical PYT lines are all for trees LAWNS did not sell, so none carries a size to take a median from. Lauren sets the figures in Settings → Container sizes as she learns them. Do not read "not set" as a broken apply.
+- 🔴 **OPEN — `install_price` HAS NO CHECK CONSTRAINT AT ALL.** `20260923e` shipped without one, so a **$0 install** — the single value that design exists to keep off a screen — can be written today by any writer that forgets. `pyt_price` has a named one (`container_ladder_pyt_price_positive_check`). **Filed not fixed: adding it needs a live read first to prove no 0 is already stored, and doing that inside this build is the drift the gate exists to catch.**
+- 🟡 **OPEN — WHICH LADDER PRICE A SERVICE READS IS DECIDED BY ITS NAME.** `ladderPriceKindFor` matches `/plant your tree/i` because `service_offerings` has no column saying which rung field a row reads, so **renaming the row in Settings would silently change the price it charges.** The durable fix is a `ladder_price_kind` column; that is a migration and David's call, not a default taken here.
+
+**#394 — the QuickBooks goods line's ItemRef (built; no migration)**
+- 🔴 **OPEN — CARD 20 IS DAVID'S PUSH TEST, AND IT MUST BE SELF-COLLECT ONLY.** Place a Test Dave's order with **no install and no delivery**, and push it. The service rows have no QuickBooks item of their own yet, so including one would refuse for an unrelated reason and you would not know which failure you were looking at. PASS = the invoice lands with its goods lines.
+- ⚠️ **OPEN — SERVICE LINES ARE STILL UNMAPPED AND ARE NOT THIS BUILD'S WORK.** `service_offerings` has no QuickBooks item column at all. Four of seven already have an item in LAWNS's own history — **TC 186 · Tailgate Delivery 117 · TB 185 · Installation 137** — and **PYT is 164**, **TT is 203**. The answerable review sheet is on David's Desktop; C3 is held until he saves his answers.
+- ✏️ **RECORDED, NOT OPEN — WHY THE SUITE COULD NOT HAVE CAUGHT IT, WHICH IS THE FINDING RATHER THAN THE FIX ([[R-33]] (c)).** `MAPPED_ITEMS` put the QuickBooks mapping on the EMBEDDED LOT — a place live data never uses — so every probe passed while the real push refused every goods line on every tenant. **A fixture more generous than the system**, tech-debt #138's class. The fixture now carries the mapping on the ORDER LINE, where live data carries it.
+
+**#403 — the customer's name on every surface**
+- 🔴 **OPEN — A LEDGER ID CLAIMED IN A LIVE LOCK OWNER FILE IS INVISIBLE TO EVERY REPO SWEEP.** CHECKOUT-BASIC found my #399 clash by reading `~/Desktop/trace-heavy.lock/owner`; `verify:id-sweep` cannot read it, because the lock is per-machine state the repo deliberately does not track. Between taking a number and pushing the reservation there is a window where the only record is a file no check looks at — **#398 was invisible that way this morning.** A line in the sweep instructions ("read the lock owner file before reserving") closes it. **Not added on a peer's word — David's call.** Owner: David.
+- 🟡 **OPEN — 466 PEOPLE ARE TYPED AS ORGANIZATIONS (tech-debt #362) AND THIS BUILD DOES NOT TOUCH CLASSIFICATION.** `customerDisplayName()` prefers `organization_name` when `customer_type = 'organization'`, so a misclassified person shows their org name. Correct per the ruling, wrong per reality, for those rows. A propose-and-confirm list for Lauren (org names that look like persons, e.g. Aaron Hunt; persons carrying an org name) is sized but not built. Owner: tech-debt #362.
+
+**#393 — provenance at the till (built; `20260923m` APPLIED 2026-09-24)**
+- ✅ **`20260923m_inventory_qty_provenance.sql` — APPLIED BY DAVID 2026-09-24.** V1 PASS · V2 PASS (632 lots, 632 `placeholder`, 0 `counted`, 0 `derived`, 0 silent) · V3 PASS · **V4 FAIL 511/120/1 and the FAIL is the world moving, not the migration** — lot `8ab5ab55` (SFCM2) went 10 → 1 in test mode on 2026-09-23 21:46Z, after the figure was cut; the migration moves no quantity, and V4 pinning a live count is exactly what **Rule 26** now forbids · V5 PASS 1,210 rows · V6 refused `guessed` with `business_inventory_qty_basis_check` (**the error IS the pass**) · V7 PASS 0.
+- 🔴 **THIS DESCRIBES THE NUMBER; IT DOES NOT FIX IT.** The purchases-minus-sales derivation has **no inputs**: zero purchase-kind ledger rows, and 3,924 of 3,925 order lines unlinked to a lot. **A marked placeholder is not a solved count.** The real work is a purchase side and a lot linkage. Owner: **David** (scope).
+- ⚠️ **CARD 9's worst failure is a HIDDEN placeholder, not a bare number** — hiding the row removes the trigger the low placeholder exists to fire. Owner: the board, CARD 9.
+
 **#390 + #391 — the grow ladder (build, BUILDER-COMPLETE, 4 migrations WRITTEN not applied)**
 - ⛔ **OPEN — APPLY IN THIS ORDER, THEN MERGE, NEVER THE OTHER WAY ROUND: `20260923h` → `20260924a` → `20260924b` → `20260924c`.** Every ladder read on the platform selects the new columns, so merging first makes the load list, uppot plan, count screen and import preview all fail with 42703. Owner: the migration files.
 - 🔴 **OPEN — THE UPPOT WINDOW DATES IN `docs/decisions/2026-09-23-lawns-grow-ladder-step0.sql` ARE A DECISION, NOT A MEASUREMENT.** It carries 2026-11-04 → 2026-11-12 from David's own workbook; he is confirming with Joel. Without a window, every batch is undated and the plan says so. Owner: David.
@@ -106,52 +128,6 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - 🟡 **OPEN — `rung-dates` IS NOT IN THE WRITER REGISTRY AND CANNOT BE UNTIL THE MIGRATION IS APPLIED.** A registered path test must run on `live-schema-public.sql`, which is a snapshot of the live database; `production_rung_dates` is not in it. Registering now would declare a test that cannot run. Register in the pass that follows the apply + re-snapshot. Owner: `writer-registry.json` → `proposed`.
 - ✏️ **DISCLOSED — I COMMITTED ONCE IN THE SHARED CHECKOUT (§6 r20) during build (a)** and reset it; David's 20 untracked files were untouched. Recorded so it is not discovered later as a mystery.
 - ✏️ **DISCLOSED — I YIELDED SLOT `20260923i` TO ANOTHER SESSION.** `migration:slot` caught `20260923i_warranty_claims.sql` in `wt-warranty`, uncommitted and in no ref, while this build was writing. Mine renumbered to j/k/l. Nobody adjudicated; my work was unmerged and cheaper to move.
-
-**1 · `20260905_production_planning` — ✅ ANSWERED 2026-09-15. NOT A QUESTION ANY MORE, AND IT WAS
-NEVER THE BLOCKER IT CLAIMED TO BE.**
-🔴 **THE CLAIM IS STRUCK: David ran it live on `c99a4c5` — he changed values in Settings → Operations
-and they PERSISTED ACROSS A RELOAD.** A value that survives a reload was written to and read back from
-`business_operations_config` under real RLS. **The table exists and the save path works.** 🔴 **And the refutation was ALREADY ON `main`:** `docs/recon/2026-09-12-one-fact-many-homes.md`
-(committed 2026-09-12) carries the catalog read for all three tables — `rls=true`, 4 policies each —
-and says *"All three exist … it is describing yesterday."* **This file and that one have contradicted
-each other on `main` for three days.**
-⚠️ **STILL GENUINELY UNPROVEN, and it is a CARD not a blocker: nobody has driven an Uppot plan COMMIT
-end to end.** Unproven is not broken — and the difference is the whole point of this correction.
-🔴 **This was the #1 item on this list for four days and it was false**, gating tech-debt **#299**,
-which is now unblocked. → tech-debt **#253** ✅ RESOLVED
-
-**2 · WHO MAY SEE THE EQUIPMENT LIST WITHOUT SEEING WHAT IT COST?**
-*"Equipment lives in `cost_objects` (confidential, gated on `costs:read`); maintaining it is `pmi:*`.
-So someone who holds `pmi:*` and not `costs:read` gets a locked screen with nothing to maintain."*
-**Joel is in exactly that state today** — `/pmi` shows him nothing. → `RULINGS.md` OWED · tech-debt **#262**
-
-**3 · HOW DOES FOLLOW-UP GET TURNED ON?** Catalog 30-day clock, by hand in SQL, or core.
-`followup_engine` is a `planned` tile and `/subscription` offers **no Turn on**, so the review ask
-**cannot fire on any tenant** whatever link you enter. → CLAUDE.md §3 #300 · tech-debt **#270**
-
-**4 · LAWNS'S THREE SERVICE ROWS — you write them, Thunder cannot.**
-Trip charge (533 lines, $40,760) · Tailgate Delivery (127 lines, $18,990) · self-collect (no line).
-All four rows read `category='addon'` today. 🔴 **Blocked on tech-debt #251** — checkout offers one
-staff/flat row, so trip charge and tailgate would hide one of the two. → CLAUDE.md §4
-
-**5 · THE 8-HOUR RULE — WHAT EXACTLY WAS RULED?**
-*"The backlog lists 'Crew capacity / the 8-hour rule — ruled, not built' and gives no wording. A
-ruling cannot be numbered without its words."* → `RULINGS.md` OWED
-
-**6 · THE YARD-WORKER PERMISSION SET — confirm or amend.** Proposed `inventory:read`,
-`deliveries:read`, `deliveries:update`, `pmi:read`, `pmi:update`; excluded `inventory:reconcile`,
-every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collides with question 2.
-→ `RULINGS.md` OWED
-
-**7 · THE COARSE SPLIT — A or B?** `businesses_owner_update` guards the profile fields **and**
-`owner_id` / `qbo_writes_enabled` on one policy, and RLS has no column-level restriction.
-→ `RULINGS.md` OWED
-
----
-
-## THE THREE NEWEST SESSIONS' QUESTIONS (§3 holds these for three sessions only)
-
-> ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
 **#397 / #398 — tax rate fails closed; the refusal reaches Lauren**
 - 🔴 **OPEN — SECTION 4: THE SELF-SERVICE CYCLE HAS THREE SETTLED DEFECTS, ALL STILL OPEN.** (a) Preview/Import disable on `busy` only — **the import panel makes no run-state query at all**, so there is nothing to gate on; (b) the Undo panel's ONLY query reads `business_inventory`, so a customers-only run leaves Undo unrendered and the tenant stranded; (h) **65 `business_id` tables, 6 carry `import_run_id`, 59 unclassified** — the wipe's correctness rests on memory. (a) and (b) are ONE build: a run-state query both the gate and the Undo read. **(h) is the irreversible one** and needs David to confirm the classification, not me to guess it. Owner: ledger #398 · section 4.
@@ -167,7 +143,7 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 **#370 — mix planning: the MRP engine, every figure labelled (MERGED and LIVE, engine only)**
 - 🔴 **NOTHING TO CLICK, BY DAVID'S OWN RULING (2026-09-23): mix planning is below the go-live bar, so it ships as an ENGINE ONLY and `mixRequirement` has ZERO callers.** Do not read its output as a screen, and do not board a card for a surface that does not exist. Owner: `packages/shared/src/costing/mixPlanning.ts`.
 - ⚠️ **THE PROVENANCE WORDING IS DAVID'S AND IS UNMADE:** the live constant says *"starting number, not counted"*, his sentence said *"placeholder, never counted"*. I used the live words so one wording serves both surfaces and did NOT touch the constant — it renders in the checkout picker Lauren uses. Changed once, in `SEEDED_NOTE`, and both follow. Owner: `packages/cultivar-os/src/lib/inventoryStates.ts`.
-- 🔴 **`20260923m` IS NOT APPLIED — measured live, `qty_basis` columns = 0.** On apply, this path reads the stored basis via CHECKOUT-BASIC's `describeOnHand` and the `opening_stock_seed` inference is retired for it. ⚠️ `describeOnHand` has a FOURTH state, `unknown`, which is NOT `placeholder` — it means the SELECT did not ask for the basis columns, so the switch must name `qty_basis, qty_basis_at` or every row reads "basis unknown". Owner: CHECKOUT-BASIC's `feat/qty-provenance`.
+- ✅ **`20260923m` IS APPLIED (2026-09-24) — this line said NOT APPLIED and is corrected rather than left standing.** LADDER can switch `fetchSeededLots`/`mixPlanning` to the stored basis via `describeOnHand` now. ⚠️ The SELECT must name `qty_basis, qty_basis_at` or every row reads the FOURTH state `unknown`, which is *"we did not ask"*, not *"nobody counted"*.
 - 🟡 **WHICH ITEM IS THE MADE MIX — LAUREN'S ANSWER, NOT A DEFAULT.** Twelve live candidates, all never counted; `chosenItemId` stays null until she names one. ⚠️ **The set is TWELVE, not the seven in the prompt:** 48/49/50/53/54 are *"Regular Compost Mix, w/o Fertilizer"*. Owner: tenant config.
 - 🟡 **FERTILISER PER YARD OF MIX is a recipe line nobody has given a figure for** — and the *"w/o Fertilizer"* rows above are the same question wearing an item name. Owner: the recipe builder.
 - 🟡 **NOBODY HAS EVER COUNTED A YARD OF MIX.** Item 174 reads 10 with no ledger row of any kind. Every verdict rests on that until someone counts it — which is why the verdict says so out loud. Owner: a count.

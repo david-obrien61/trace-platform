@@ -8,8 +8,12 @@
 > 🔴 **AND THE LAST TOKEN MUST READ `prod`.** An amber **`PREVIEW <branch>`**, **`prod⚠ <branch>`**,
 > **`env?`** or **`local`** is **not production**, and a matching SHA does not rescue it. *(tech-debt #280 ②.)*
 
-**Capability:** 2.1 Cart / QR checkout · container sizes · **Ledger:** #386 · **Rulings:** R-171 (a)–(f), R-172
-**Board: 0 of 14 covered** — 13 `owed`, **1 `needs-test` with its reason (CARD 13: a prerequisite I could not establish — read it before planning that run).** Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
+**Capability:** 2.1 Cart / QR checkout · container sizes · **Ledger:** #386, **#399** · **Rulings:** R-171 (a)–(f), R-172
+**Board: 0 of 18 covered** — 17 `owed`, **1 `needs-test` with its reason (CARD 13: a prerequisite I could not establish — read it before planning that run).** Thunder writes the cards and sets `owed`; **only David's live run flips a card to `covered`, with a date.**
+
+🔴 **CARDS 15–18 ARE LEDGER #399 — PLANT YOUR TREE, PRICED BY CONTAINER SIZE.** They need ONE more
+migration and ONE more piece of data, both listed at CARD 15. They are the same surface as CARDS 1–14
+and deliberately not a second board (STD-011: two documents answering one question drift).
 
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 
@@ -244,3 +248,89 @@ applies only to invoices written from TRACE from now on.
 🔴 **THIS CARD IS A DECISION, NOT A CHECK.** David's ruling (f) says to flag it before the first real
 invoice, *"it changes what the customer sees."* **If you do not like it, say so before LAWNS bills
 anybody this way** — it is far cheaper to change now than after a customer has seen both shapes.
+
+---
+
+## LEDGER #399 — PLANT YOUR TREE, PRICED BY CONTAINER SIZE (David, 2026-09-24)
+
+✅ **`supabase/migrations/20260924d_container_ladder_pyt_price.sql` — APPLIED 2026-09-24.** Verified
+live the same day: both columns, the named CHECK, **0 rungs priced on any tenant** and **0 rungs
+silent**. *(V3 is live SQL that must ERROR `23514` — that error is the pass.)*
+
+🔴 **ONE THING STILL TO RUN, AND ONLY IN THIS ORDER: `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql`**
+— DATA, not a migration. It tells LAWNS's `Plant Your Tree` row to read the ladder.
+**Run it only AFTER this branch is merged and deployed**, or checkout reads a price it no longer shows.
+⚠️ **Until it runs, CARDS 15–17 will show the old flat price and that is not a failure** — the row is
+still `fixed` and nothing has told it otherwise.
+
+⚠️ **AND EXPECT EVERY RUNG TO SAY "not set" — THAT IS THE DESIGNED STATE, NOT A BROKEN APPLY.**
+The migration seeds **no price at all**, on purpose. LAWNS has invoiced five Plant-Your-Tree lines
+ever — $100 *(an Olive)*, $450×10 *(yaupons moved within a garden)*, $300 *(a Japanese Maple)*, $0
+*(the in-your-pot demo)* and one at $150 — and **every one is a tree LAWNS did not sell**, so on
+each of those invoices the container size belongs to a **different line**. There is nothing to take
+a median from. Lauren sets the figures as she learns them; until then the line says so.
+
+### CARD 15 — a 15 gal Plant Your Tree prices itself from the ladder
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #399
+
+**Settings → Container sizes → 15 gal → Edit.** Put **90** in *Plant Your Tree price for one tree of
+this size*, and in *Where the Plant Your Tree price came from* type **`testing, 2026-09-24`**. Save.
+Then start an order on **Test Dave's**, add ONE 15-gallon tree, and turn on **Plant Your Tree**.
+
+**PASS:** the Plant Your Tree line shows **$90.00**, and beside it the words **`by container size ·
+1 of 1 priced`** instead of *"per plant · ×1"*.
+🔴 **FAIL IF IT SHOWS $125** — that is the old scalar price, which means the data file has not run
+or the deploy is not live. **$125 is David's own demo figure, not Lauren's price**, and nothing
+should ever charge it again.
+⚠️ **Put the 90 back to blank afterwards** if you do not want it standing — or leave it; it is Test
+Dave's, and CARD 18 wants at least one rung priced.
+
+### CARD 16 — 🔴 "I DON'T KNOW WHAT IT'S POTTED IN" SAVES THE ORDER ANYWAY
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #399 — David 2026-09-24
+
+**This is the card the whole build is for.** Same order, but add a tree whose **size is blank or a
+size the ladder does not carry** (a 7 gallon does it — LAWNS has no 7 gal rung).
+
+**PASS — all four, and the fourth is the one that matters:**
+1. The Plant Your Tree line reads **`Size to be confirmed on install day — priced then, by
+   amendment.`** — not *"no size recorded"*, which would read as somebody's mistake.
+2. A **blue** box names the tree and says how many are not priced yet.
+3. It says **"The order can still be sent"**, and tells you what IS being charged today.
+4. 🔴 **THE SEND BUTTON IS LIVE.** Send it.
+
+🔴 **CONTRAST THIS WITH CARD 9 AND SATISFY YOURSELF THE DIFFERENCE IS DELIBERATE.** An unpriced
+**install** kills the Send button until somebody types an amount — *"never $0, never a guess, never
+refused"*, your ruling of 2026-09-23. An unpriced **planting** does not, by your ruling of
+2026-09-24: *"the installer identifies it on the install day and LAWNS AMENDS the order."* **Two
+opposite behaviours on one screen is the kind of thing that is right once and confusing forever —
+say now if the contrast reads wrong to you.**
+
+### CARD 17 — the unpriced trees are charged NOTHING today, and the total says so
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #399 · STD-012
+
+Take CARD 16's order to the end and look at the total, then open the order again from **Orders**.
+
+**PASS:** the Plant Your Tree line contributes **only the priced trees** (the 15 gal at $90, nothing
+for the 7 gal), and the same figure appears on the saved order — **the screen's number and the
+server's number agree**, because both ran the same function.
+🔴 **WHAT MAKES A $0 CONTRIBUTION HONEST IS THE BLUE BOX ON CARD 16 — NOTHING ELSE.** If you can
+reach a total that silently omits a tree *without* that box on screen, **that is a fail and it is the
+serious kind**: a customer charged nothing for work LAWNS will do.
+
+### CARD 18 — an unpriced rung says WHY, at a glance, without opening it
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David · **COVERS:** #399 · R-170 / D-9
+
+**Settings → Container sizes.** Read the list without clicking Edit on anything.
+
+**PASS:** on **Settings → Container sizes**, under each size's name and beside its caliper, you see a
+new line reading **`install $204.00 (…) · plant your tree not set (…)`** — both prices on screen, each
+followed by the sentence saying where it came from, with **`not set` shown in amber rather than as a
+blank**. The Plant Your Tree reasons should say LAWNS has five historical lines and none of them
+carries a size.
+⚠️ **THE INSTALL PRICE WAS NOT ON THIS LIST BEFORE TODAY EITHER** — it has been editable since #386
+and readable only one rung at a time, so *"which sizes do we not price?"* took nine clicks. Both were
+added together; if you only wanted Plant Your Tree, say so.

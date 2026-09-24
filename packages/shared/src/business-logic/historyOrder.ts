@@ -277,6 +277,11 @@ export interface HistoryOrderInput {
   documentLines: any;
   decoded: CapturedDocument | null;
   deliveryDate?: string | null;
+  /** QuickBooks Invoice.ShipDate — when the goods went out, as the owner's books record it.
+   *  🔴 DISTINCT FROM deliveryDate, which is a PLANNING field the schedule and route read. Writing
+   *  a historical ShipDate into that would put finished invoices on Lauren's schedule as scheduled
+   *  days (ledger #392). NULL = the books carried none, never "it shipped today". */
+  shipDate?: string | null;
   serviceType?: string | null;
   /** The delivery row's own status. Drives the order status — see historyOrderStatus. */
   deliveryStatus?: string | null;
@@ -315,6 +320,7 @@ export interface HistoryOrderDraft {
     qb_doc_number: string | null;
     notes: string | null;
     delivery_date: string | null;
+    ship_date: string | null;
     subtotal: number;
     tax_amount: number;
     total_amount: number;
@@ -377,6 +383,7 @@ export function buildHistoryOrder(input: HistoryOrderInput): HistoryOrderDraft {
       qb_doc_number: input.qbDocNumber ?? null,
       notes: input.notes ?? null,
       delivery_date: input.deliveryDate ?? null,
+      ship_date: input.shipDate ?? null,
       subtotal,
       tax_amount: tax,
       total_amount: round2(total),

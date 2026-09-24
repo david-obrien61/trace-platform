@@ -9,7 +9,7 @@ import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
   fetchAttachedCustomerTier,
   readTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
-  priceLinesFromLadder, usesLadderPricing,
+  priceLinesFromLadder, usesLadderPricing, ladderPriceKindFor, LADDER_PRICE_KINDS,
   type PricingLineInput, type DiscountType, type OrderTaxExemption, type LadderPricing,
 } from '@trace/shared/business-logic';
 import type { Ladder } from '@trace/shared/inventory';
@@ -230,6 +230,25 @@ export function CartReview() {
         name: l.plant.common_name ?? l.plant.species ?? null,
       })))
     : null;
+  // ── A LADDER-PRICED ADDON PRICES BY SIZE TOO (ledger #399) ───────────────────────────────
+  // 🔴 KEYED ON `price_source`, NEVER ON THE SERVICE'S NAME. `Plant Your Tree` is the row this was
+  // built for, but nothing here knows that: a tenant that puts a third service on the ladder gets
+  // this behaviour with no code change (AC-1). Same pure function submit.ts runs, over the same
+  // cart — this is a PREVIEW, and submit recomputes it from the server's sizes.
+  const addonLadderPricing = new Map<string, LadderPricing>();
+  if (ladder) {
+    for (const s of otherAddons) {
+      if (!s.selected || !usesLadderPricing(s.offering)) continue;
+      addonLadderPricing.set(s.offering.id, priceLinesFromLadder(ladder, items.map(l => ({
+        size: l.plant.current_container || null,
+        quantity: l.quantity,
+        name: l.plant.common_name ?? l.plant.species ?? null,
+      })), ladderPriceKindFor(s.offering)));
+    }
+  }
+  /** The rule-computed baseline for ANY service — the ladder's sum when it prices by size. */
+  const baselineAmt = (o: ServiceOffering) => addonLadderPricing.get(o.id)?.pricedTotal ?? computedAmt(o);
+
   // Which lines are still owed an amount, and whether the counter has supplied one.
   const installNeedsAmount = !!ladderPricing && !ladderPricing.allPriced;
   const installOverride    = plantingOffering ? serviceOverride[plantingOffering.id] : undefined;
@@ -276,11 +295,19 @@ export function CartReview() {
   // BASELINE while submit (which passes it) charges the overridden price: precisely the
   // Review-vs-submit divergence STD-012 exists to prevent. The editor requires a reason, so one is
   // always present; passing it keeps preview === charge by construction rather than by luck.
-  const svcInput = (o: ServiceOffering): PricingLineInput => ({
-    kind: 'service', name: o.name, unitPrice: Number(o.price), qty: effQty(o),
-    overrideTotal: serviceOverride[o.id]?.amount ?? null,
-    overrideReason: serviceOverride[o.id]?.reason ?? null,
-  });
+  const svcInput = (o: ServiceOffering): PricingLineInput => {
+    // A ladder-priced service has already been summed across its lines, so it enters as ONE unit at
+    // that total. `price × qty` would charge the scalar column `price_source` says is unused.
+    const lp = addonLadderPricing.get(o.id);
+    return {
+      kind: 'service', name: o.name,
+      unitPrice: lp ? lp.pricedTotal : Number(o.price),
+      qty:       lp ? 1              : effQty(o),
+      tierEligible: !!lp,
+      overrideTotal: serviceOverride[o.id]?.amount ?? null,
+      overrideReason: serviceOverride[o.id]?.reason ?? null,
+    };
+  };
   // The planting line when it prices per size: ONE unit at the ladder's total, and tier-eligible
   // (ruling (d)) — LAWNS's install is billed inside the plant SKU today, where the tier has always
   // reached it, so splitting it out must not quietly raise a contractor's price.
@@ -343,7 +370,7 @@ export function CartReview() {
     if (selectedTransport) serviceLines.push({ name: selectedTransport.name, amount: transportAmount });
     if (plantingOn && plantingOffering) serviceLines.push({ name: plantingOffering.name, amount: plantingTotal });
     if (nettingActive && nettingSel) serviceLines.push({ name: nettingSel.offering.name, amount: nettingTotal });
-    for (const s of otherAddons) if (s.selected) serviceLines.push({ name: s.offering.name, amount: effAmt(s.offering, computedAmt(s.offering)) });
+    for (const s of otherAddons) if (s.selected) serviceLines.push({ name: s.offering.name, amount: effAmt(s.offering, baselineAmt(s.offering)) });
 
     // Owner/manager price overrides for the honored path — only for services actually in the order.
     const activeIds = new Set<string>([
@@ -632,15 +659,17 @@ export function CartReview() {
             <ServiceRow
               key={s.offering.id}
               name={s.offering.name}
-              rule={s.offering.price_type === 'per_unit' ? `per plant · ×${effQty(s.offering)}` : 'per order · ×1'}
-              amount={effAmt(s.offering, computedAmt(s.offering))}
-              editable={s.offering.price_type === 'per_unit'}
+              rule={addonLadderPricing.has(s.offering.id)
+                ? `by container size · ${addonLadderPricing.get(s.offering.id)!.lines.length - addonLadderPricing.get(s.offering.id)!.linesNeedingAmount} of ${addonLadderPricing.get(s.offering.id)!.lines.length} priced`
+                : (s.offering.price_type === 'per_unit' ? `per plant · ×${effQty(s.offering)}` : 'per order · ×1')}
+              amount={effAmt(s.offering, baselineAmt(s.offering))}
+              editable={s.offering.price_type === 'per_unit' && !addonLadderPricing.has(s.offering.id)}
               qty={effQty(s.offering)}
               onQty={s.offering.price_type === 'per_unit' ? (q => setQty(s.offering, q)) : undefined}
               included
               onToggle={() => toggleService(s.offering.id)}
               canOverride={canOverride}
-              baseline={computedAmt(s.offering)}
+              baseline={baselineAmt(s.offering)}
               override={serviceOverride[s.offering.id]}
               onOverride={next => setOverride(s.offering.id, next)}
             />
@@ -648,7 +677,12 @@ export function CartReview() {
             <div key={s.offering.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <button onClick={() => toggleService(s.offering.id)} style={linkBtn}>+ Add {s.offering.name}</button>
               <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-                ${Number(s.offering.price).toFixed(2)}{s.offering.price_type === 'per_unit' ? '/plant' : ''}
+                {/* 🔴 A LADDER-PRICED ROW HAS NO SCALAR PRICE AND MUST NOT SHOW ONE. `price` is the
+                    unused column on such a row — printing it would quote a number nobody charges
+                    (D-9). What it says instead is where the price comes from. */}
+                {usesLadderPricing(s.offering)
+                  ? 'priced by container size'
+                  : `$${Number(s.offering.price).toFixed(2)}${s.offering.price_type === 'per_unit' ? '/plant' : ''}`}
               </span>
             </div>
           )
@@ -804,6 +838,49 @@ export function CartReview() {
           )}
         </div>
       )}
+
+      {/* ── A LADDER-PRICED ADDON WITH UNPRICED LINES — SAID, NOT HIDDEN, AND NOT BLOCKING ──────
+          🔴 THIS IS THE OPPOSITE OF THE INSTALL NOTICE DIRECTLY ABOVE, AND IT IS A RULING, NOT A
+          STYLE CHOICE. David, 2026-09-24: *"'I don't know' → the installer identifies it on the
+          install day and LAWNS AMENDS the order to add the charge."* So the Send buttons stay
+          LIVE. `blocksOrder` is read from `LADDER_PRICE_KINDS` rather than written here, so this
+          notice and submit.ts's server-side gate cannot come to disagree about which it is.
+          ⚠️ WHAT MAKES A $0 CONTRIBUTION HONEST HERE IS THIS BOX. The unpriced trees add nothing
+          to today's total — which is only acceptable because the screen NAMES them and says the
+          charge comes later. Remove this and it becomes the silent $0 D-9 exists to prevent. */}
+      {[...addonLadderPricing.entries()]
+        .filter(([, lp]) => !lp.allPriced)
+        .map(([offeringId, lp]) => {
+          const offering = otherAddons.find(s => s.offering.id === offeringId)?.offering;
+          const kind = offering ? ladderPriceKindFor(offering) : 'install';
+          const blocks = LADDER_PRICE_KINDS[kind].blocksOrder;
+          const given = !!serviceOverride[offeringId];
+          return (
+            <div key={offeringId} style={{ margin: '0 16px 12px', padding: '10px 14px', background: given ? '#f0f7ea' : '#eff6ff', border: `1.5px solid ${given ? '#27500A' : '#1d4ed8'}`, borderRadius: 8 }}>
+              <p style={{ fontSize: '0.875rem', color: given ? '#27500A' : '#1e3a8a', fontWeight: 600, marginBottom: 4 }}>
+                {given
+                  ? `${offering?.name ?? 'This service'} — amount entered, with a reason.`
+                  : `${offering?.name ?? 'This service'}: ${lp.quantityNeedingAmount} ${lp.quantityNeedingAmount === 1 ? 'tree is' : 'trees are'} not priced yet.`}
+              </p>
+              {!given && (
+                <>
+                  <ul style={{ margin: '4px 0 6px 16px', padding: 0 }}>
+                    {lp.lines.filter(l => l.needsAmount).map((l, i) => (
+                      <li key={i} style={{ fontSize: '0.8125rem', color: '#1e3a8a', lineHeight: 1.5 }}>
+                        <strong>{l.name ?? 'This line'}</strong>{l.size ? ` (${l.size})` : ''} — {l.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <p style={{ fontSize: '0.8125rem', color: '#1e3a8a' }}>
+                    {blocks
+                      ? 'Enter an amount above, with a reason, before sending.'
+                      : `The order can still be sent. ${lp.pricedTotal > 0 ? `$${lp.pricedTotal.toFixed(2)} is charged for the sizes that are priced; ` : 'Nothing is charged for these today; '}the rest is added by amendment once the size is confirmed.`}
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })}
 
       {/* A FAILED LADDER READ IS NOT AN EMPTY LADDER — say which one happened (D-9). */}
       {plantingOn && plantingUsesLadder && ladderFailed && (

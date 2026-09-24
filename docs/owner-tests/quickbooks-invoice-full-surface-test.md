@@ -722,3 +722,69 @@ doing the same.
 by hand. **That is a LOWER bar than we are building to** — R-28 already refuses a line that cannot
 resolve a real item rather than pushing a wrong one. Worth knowing before over-engineering the
 re-sync story: the mature product in this space ships one-way-once, and its users accept it.
+
+### CARD 20 — 🔴 THE PUSH TEST: DOES AN ORDINARY ORDER REACH QUICKBOOKS AT ALL?
+`STATUS: owed` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, on **Test Dave's** (writes to TRACE's own QuickBooks company — sanctioned for testing) · **COVERS:** ledger #394
+
+🔴 **WHY THIS CARD EXISTS.** Until ledger #394 the invoice builder passed `item.business_inventory`
+as the goods line's backing row, while the query that loads the items embeds
+`business_inventory ( name, size, sku )` — **no item id at all**. `qboItemMappingOf` looked for
+`qbo_item_id`, found nothing, and refused. **Every goods line, on every tenant.** It is not a
+column-name mismatch: the id was never fetched. `order_items.qbo_item_id` is populated on
+**3,679 of 3,899** LAWNS lines (LIVE 2026-09-23) — the data was on the row the builder already had.
+
+⚠️ **THE TEST SUITE COULD NOT HAVE CAUGHT IT, AND THAT IS ITS OWN FINDING.** `MAPPED_ITEMS` put the
+mapping on the embedded lot, which is a place the live data never uses — a fixture **more generous
+than the system** (tech-debt #138's class). It is corrected in this build.
+
+**STEPS**
+1. Sign into **Test Dave's Tree Nest**.
+2. Start a new order and add **one ordinary tree** — anything with stock and a price. Nothing exotic;
+   this is deliberately the plainest order possible.
+3. Attach any customer (a retail one is fine — no discount tier needed for this card).
+4. Choose **self-collect** if it is offered, so no transport service line is involved.
+   🔴 **This matters: service lines are NOT fixed by #394** and would refuse on their own.
+5. Send the order, then **push it to QuickBooks**.
+
+**PASS:** QuickBooks **accepts** it. The invoice shows the tree line booked against a real item
+(not "Services", not generic income).
+
+**FAIL — and each failure means something different, so write down which you got:**
+- **`QBO_ITEM_UNMAPPED` (422)** naming the tree line → the goods fix has not reached the bundle you
+  are on, **or** that tree's order line genuinely has no `qbo_item_id` (220 of 3,899 LAWNS lines do
+  not). Check the stamp first (GATE 0).
+- **`6070 — Amount is not equal to UnitPrice * Qty`** → a different defect, not this one; ledger #386
+  §J covers that shape.
+- **Anything else** → copy the message verbatim; it is new.
+
+⚠️ **DO NOT add an install or a delivery to this order for this card.** `service_offerings` has **no
+QuickBooks item column at all**, so a service line can never map today — a push with one on it will
+refuse for a reason that has nothing to do with what this card is testing. That work is sized and
+waiting on you (see CARD 21).
+
+### CARD 21 — WHICH QUICKBOOKS ITEM DOES EACH SERVICE BOOK TO? (a decision, not a check)
+`STATUS: needs-test` · `DEVICE: desktop` · `LAST-PROVEN: —`
+**WHO:** David, with LAWNS · **COVERS:** ledger #394 — the service half, NOT BUILT
+
+`service_offerings` carries **no** QuickBooks item column, so no service line can map. Before that is
+built, each row needs an item. **Four of the seven already have one in LAWNS's own history** (LIVE
+2026-09-23 — the item id their invoices actually booked to):
+
+| service_offerings row | history item | QuickBooks item id | lines |
+|---|---|---|---|
+| **Trip Charge** | `TC` Trip Charge | **186** | 549 |
+| **Tailgate Delivery** | `Tailgate Delivery` | **117** | 116 |
+| **Tree Bubbler** | `TB` Tree Bubbler | **185** | 80 |
+| **Installation** *(ladder-priced)* | `DIW` "Deliver, Install and Warranty listed plants" | **121**? | 22 |
+| **Plant Your Tree** *(addon, $125/plant)* | 🔴 **no match in history** | — | — |
+| **Tree Tarp** | 🔴 **no match in history** | — | — |
+| **I will collect it myself** *($0)* | never invoiced — **probably needs none** | — | — |
+
+**WHAT IS OWED FROM YOU:** ① confirm **Installation → 121**, or name a different item — `DIW` bundles
+*deliver + install + warranty*, and the new Installation row is install only, so it may want its own
+item. ② name an item for **Plant Your Tree** and **Tree Tarp**. ③ confirm a **$0 self-collect** line
+should be omitted from the invoice entirely rather than pushed at zero.
+
+**Sizing, once ①–③ are answered:** ~8–12 h — a column on `service_offerings`, the import/mapping UI,
+and the builder change. **Until then CARD 13 on the checkout-install-price board cannot run.**
