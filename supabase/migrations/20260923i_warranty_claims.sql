@@ -2,7 +2,11 @@
 -- 20260923i — A WARRANTY CLAIM IS CREATED FROM THE ORIGINAL LINE, AND THE CHAIN IS WALKABLE
 --             ledger #392 · David's ruling 2026-09-23 · tech-debt #345's family
 --
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
+-- ✅ APPLIED 2026-09-24 BY DAVID in the SQL editor (§6 r17). His results, verbatim:
+--      V1 rls true, 3 policies · V2 5 indexes (pkey, business_status, one_open_per_line,
+--         original_item, owed) · V3 0 seeded
+--      V4 "V4 PASSED — sizeless refused, duplicate open claim refused, chain accepted once
+--         answered" — the error IS the pass, by design · V5 0 rows left behind
 --
 -- ✅ EVERY V-BLOCK BELOW WAS RUN IN PGLITE AGAINST THE REAL CHAIN BEFORE THIS FILE WENT NEAR THE
 --    SQL EDITOR, and V4 was extracted VERBATIM from the comments rather than re-typed:

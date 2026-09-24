@@ -2,7 +2,9 @@
 -- 20260923j — ORDERS GET A SHIP DATE OF THEIR OWN
 --             ledger #392 · David's F-task 2026-09-23
 --
--- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
+-- ✅ APPLIED 2026-09-24 BY DAVID in the SQL editor (§6 r17). His results, verbatim:
+--      V1 date / YES · V2 orders_ship_date_idx partial · V3 ship_date 0, delivery_date 59,
+--      history 1,546 · V4 "V4 PASSED — ship_date is writable and delivery_date is untouched" · V5 0
 --
 -- 🔴 THE CALL, IN ONE LINE: ship date lands in a NEW `orders.ship_date` column, NOT in
 --    `delivery_date` — because `delivery_date` is a PLANNING field the schedule and the route page
@@ -49,8 +51,12 @@ CREATE INDEX IF NOT EXISTS orders_ship_date_idx
 -- SELECT indexname, indexdef ILIKE '%ship_date IS NOT NULL%' AS is_partial
 --   FROM pg_indexes WHERE schemaname='public' AND tablename='orders' AND indexname='orders_ship_date_idx';
 --
--- V3 · NOTHING was backfilled, and nothing was overwritten → expect ship_date_set = 0, and
---      delivery_date_set UNCHANGED at 43 (the figure measured before this migration).
+-- V3 · NOTHING was backfilled, and nothing was overwritten → expect ship_date_set = 0.
+--      🔴 THIS BLOCK ORIGINALLY PINNED delivery_date_set AT 43 AND IT READ 59 ON THE DAY DAVID RAN
+--      IT — the live figure moved between writing and running, so a correct migration produced a
+--      V-block that looked wrong. That is exactly what §6 r26 forbids: a V-block must assert SHAPE
+--      or read its comparison AT RUN TIME, never hard-code a live count that drifts. The count is
+--      now reported rather than asserted, and only `ship_date_set = 0` is a claim.
 -- SELECT count(*) FILTER (WHERE ship_date IS NOT NULL)     AS ship_date_set,
 --        count(*) FILTER (WHERE delivery_date IS NOT NULL) AS delivery_date_set,
 --        count(*)                                          AS history_orders
