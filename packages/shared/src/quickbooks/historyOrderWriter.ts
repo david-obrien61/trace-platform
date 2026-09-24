@@ -321,6 +321,11 @@ export function planOrderForStop(
     qbInvoiceId: invoice.id,
     qbDocNumber: invoice.docNumber,
     deliveryDate: stop.delivery_date ?? null,
+    // 🔴 THE FIELD WAS PARSED ALL ALONG AND THEN DROPPED HERE (ledger #392). `shipmentIngest.ts`
+    // has carried `shipDate` on every invoice since it was written; this writer mapped txnDate and
+    // never read it, so 603 of LAWNS's 1,546 history orders lost a date the books already held and
+    // it had to be recovered from an export by hand. The next reload carries it.
+    shipDate: invoice.shipDate ?? null,
     // ⚠️ NOT INFERRED, AND THAT IS DAVID'S CALL RATHER THAN A GAP. `deliveries.service_type` is
     // NULL on every ingested stop because an invoice does not state whether a stop is a planting
     // or a drop-off. It is passed through as whatever the stop holds, so the day a service type
