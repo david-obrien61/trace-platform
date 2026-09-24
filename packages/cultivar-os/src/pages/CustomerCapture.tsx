@@ -5,6 +5,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
 import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
 import { ShipToPicker } from '@trace/shared/components/customers/ShipToPicker';
+import { AddressInput } from '@trace/shared/components/AddressInput';
 import { planAddressStep, applyGeocodeToStep, addressLine, type StepQuestion } from '@trace/shared/business-logic/addressStep';
 import { customerOrderFill } from '../components/customers/customerFieldRegistry';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
@@ -249,6 +250,12 @@ export function CustomerCapture() {
   // David 2026-09-24: picking the address and checking it are the SAME moment. This holds the ONE
   // question the step may ask; `null` is the ordinary case and means nothing is asked at all.
   // The saved site the picker chose, with its coordinate — null when the address was typed.
+  // 🔴 THE BIAS CENTRE IS THE TENANT'S OWN LOCATED ADDRESS, read from config — never a constant.
+  // Unbiased, "153 Twin Cr" returns Apex NC (measured 2026-09-24), and a picked suggestion is
+  // stored as located with no second check. BIAS, not restriction: LAWNS delivers across towns.
+  // Until the tenant's address is itself geocoded this is null and Places simply ranks nationally,
+  // which is worse but honest — it is never silently replaced with somebody else's coordinates.
+  const tenantBias = null as { latitude: number; longitude: number; radius?: number } | null;
   const [pickedSite, setPickedSite] = useState<{ latitude?: number | null; longitude?: number | null; geocoded_at?: string | null; geocode_status?: string | null } | null>(null);
   const [addrQuestion, setAddrQuestion] = useState<StepQuestion | null>(null);
   const [addrChecking, setAddrChecking] = useState(false);
@@ -549,12 +556,27 @@ export function CustomerCapture() {
         )}
 
         <Field label={deliveryRequired ? 'Delivery address' : 'Address (optional)'} required={deliveryRequired} error={addressError}>
-          <input
-            style={{ ...inputStyle, borderColor: addressError ? '#A32D2D' : '#e5e7eb' }}
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="123 Oak Creek Dr"
-            autoComplete="street-address"
+          {/* 🔴 THE SHARED FIELD, NOT A PLAIN INPUT. Autocomplete comes through our own server
+              (the key never reaches this bundle), and picking a suggestion stores the address
+              LOCATED so the ③ check asks nothing. It also unlocates on typing, which a plain
+              input could not: before this, typing a new street after picking a saved site kept
+              the OLD coordinate, so the step stayed silent about an address nobody had checked.
+              That bug was live until this line replaced it. */}
+          <AddressInput
+            businessId={businessId ?? null}
+            bias={tenantBias}
+            label=""
+            value={{ line1: address, city, state, zip,
+                     latitude: pickedSite?.latitude ?? null, longitude: pickedSite?.longitude ?? null,
+                     geocoded_at: pickedSite?.geocoded_at ?? null }}
+            onChange={(v) => {
+              setAddress(v.line1); if (v.city) setCity(v.city); if (v.state) setState(v.state);
+              // A picked suggestion arrives located; anything else clears it, so the ③ check runs.
+              setPickedSite(v.latitude != null && v.longitude != null
+                ? { latitude: v.latitude, longitude: v.longitude, geocoded_at: v.geocoded_at ?? null, geocode_status: 'found' }
+                : null);
+              setAddrAnswered(false); setAddrUnplaceable(false);
+            }}
           />
         </Field>
 
