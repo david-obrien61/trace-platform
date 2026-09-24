@@ -52,7 +52,16 @@ export function looksLikeAddressForm(text) {
   // Two independent address parts named as FIELDS, plus an input element. One alone is a mention;
   // together with an input they are a form. Deliberately narrow — a cap that is red on arrival
   // gets switched off (#73).
-  const parts = ['line1', 'address_line1', 'billing_line1'].filter(p => new RegExp(`['"\`]?${p}['"\`]?\\s*[:=]`).test(text));
+  // 🔴 A TYPE ANNOTATION IS NOT A FIELD. `billing_line1: string | null` in an interface matched
+  // the first version of this and flagged OrderDetail — which has no address form at all, only a
+  // row type and unrelated inputs. A cap that cries wolf gets declared away, and then it is not
+  // watching the real ones either. So a match followed by a TypeScript type is discarded.
+  const TYPEISH = /^\s*(string|number|boolean|null|undefined|Date|unknown|any|never|\w+\[\]|\{)/;
+  const parts = ['line1', 'address_line1', 'billing_line1'].filter(p => {
+    const re = new RegExp(`['"\`]?${p}['"\`]?\\s*[:=]\\s*([^\\n]{0,40})`, 'g');
+    for (const m of text.matchAll(re)) { if (!TYPEISH.test(m[1])) return true; }
+    return false;
+  });
   const hasCityOrZip = /(['"`]?(city|zip)['"`]?\s*[:=])/.test(text);
   const hasInput = /<input|<AddressInput/.test(text);
   return parts.length > 0 && hasCityOrZip && hasInput;
@@ -83,8 +92,6 @@ const DECLARED = {
   // surface is wired.
   'packages/cultivar-os/src/pages/ReceiptKeeper.tsx':
     'OWED — invoice capture creating a new customer.',
-  'packages/cultivar-os/src/pages/OrderDetail.tsx':
-    'OWED — the order screen shows and can amend a ship-to.',
   'packages/cultivar-os/src/pages/DeliveryRoute.tsx':
     'DECIDE FIRST, then wire or retire: its address box feeds a MAP LINK and is never saved ' +
     '(tech-debt #316, declared as not-a-capture in writer-registry.json). If a typed address ' +
@@ -149,6 +156,10 @@ function selfTest() {
      'P2 🔴 PROSE ABOUT line1 IS NOT A FORM — a cap that fires on comments is red on arrival and gets switched off (#73)');
   ok(!looksLikeAddressForm(`const cols = 'id, line1, city, zip';`),
      'P3 a column list is not a form — no input element');
+  ok(!looksLikeAddressForm(`interface Row { billing_line1: string | null; city: string | null } <input value={qty} />`),
+     '🔴 P3b A TYPE ANNOTATION IS NOT A FIELD — this exact shape flagged OrderDetail, which has no address form at all. A cap that cries wolf gets declared away, and then it is not watching the real ones either');
+  ok(looksLikeAddressForm(`const draft = { billing_line1: '', city: '' }; <input value={draft.billing_line1} />`),
+     'P3c …but the same NAME holding a VALUE still counts, so the tightening did not blind it');
   ok(usesSharedField(`import { AddressInput } from '@trace/shared/components/AddressInput';`), 'P4 the shared field is recognised by import');
   ok(usesSharedField(`<AddressInput value={a} onChange={setA} businessId={b} />`), 'P5 …and by use');
   ok(!isClientFile('packages/cultivar-os/api/customers/create.ts'), '🔴 P6 api/ IS NOT A CLIENT FILE — the proxy legitimately holds the key, and a cap that forbade it there would forbid the fix');
