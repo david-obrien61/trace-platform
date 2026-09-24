@@ -87,6 +87,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#397 / #398 — tax rate fails closed; the refusal reaches Lauren**
+- 🔴 **OPEN — SECTION 4: THE SELF-SERVICE CYCLE HAS THREE SETTLED DEFECTS, ALL STILL OPEN.** (a) Preview/Import disable on `busy` only — **the import panel makes no run-state query at all**, so there is nothing to gate on; (b) the Undo panel's ONLY query reads `business_inventory`, so a customers-only run leaves Undo unrendered and the tenant stranded; (h) **65 `business_id` tables, 6 carry `import_run_id`, 59 unclassified** — the wipe's correctness rests on memory. (a) and (b) are ONE build: a run-state query both the gate and the Undo read. **(h) is the irreversible one** and needs David to confirm the classification, not me to guess it. Owner: ledger #398 · section 4.
+- 🟡 **OPEN — THE `1363/1378/1380` INVOICE SERIES IS NOT IN QUICKBOOKS.** Absent from a complete 1,530-invoice export (QB export 2026-09-24). They are not lookup misses; they are documents from another source captured as LAWNS invoices. What are they? Owner: David.
+- ⚠️ **OPEN — `fetchTaxRate`'s narrow form still exists.** Kept deliberately and defined in terms of `readTaxRate`, but any NEW money path that reaches for it silently loses the error case. A verify check refusing `fetchTaxRate` in a money path would close it. Owner: ledger #397.
+
 **#395 — capture discarded Lauren's corrections; the footing guard**
 - 🔴 **OPEN — THE SWEEP IS THE REAL REMAINING RISK, AND FOOTING DOES NOT COVER IT.** The guard catches missing MONEY. An order whose lines foot can still carry the wrong VARIETY, SIZE or QUANTITY against what Lauren corrected, and nothing compares them. 53 receipts where `line_items` differs from `line_items_original` need a line-by-line comparison, upcoming deliveries first. Owner: ledger #395 part 3.
 - ⚠️ **OPEN — `held` is a new `deliveries.status` value with no CHECK constraint behind it.** Nothing refuses a typo'd status on that column (measured: no CHECK on `deliveries.status` or `orders.status`). A constraint would make the vocabulary real rather than conventional. Owner: ledger #395.
