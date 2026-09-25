@@ -1,113 +1,124 @@
 {
- "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) · invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) · superseded (a later migration rewrote the same rows) · unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
- "checks": {
-  "20260608_advert_channels_config.sql": {
-   "kind": "evidence",
-   "means": "every social_media module row carries the advert_channels key it added",
-   "sql": "(SELECT count(*) > 0 AND bool_and(config ? 'advert_channels') FROM business_modules WHERE module_key = 'social_media')"
-  },
-  "20260611_delete_debris_trace_enterprises_nursery.sql": {
-   "kind": "invariant",
-   "means": "the debris nursery row it deleted is not present",
-   "sql": "(SELECT count(*) = 0 FROM businesses WHERE id::text LIKE '11901e52%' AND business_type = 'nursery' AND name ILIKE '%TRACE%')"
-  },
-  "20260614_cost_to_produce_trace_seed.sql": {
-   "kind": "unverifiable",
-   "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists — its effect, if it ran, went with it",
-   "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
-  },
-  "20260614_cost_to_produce_restore_truncated_lines.sql": {
-   "kind": "unverifiable",
-   "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists — its effect, if it ran, went with it",
-   "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
-  },
-  "20260727_align_floor_to_bundles.sql": {
-   "kind": "superseded",
-   "means": "the role floor it aligned has been rewritten since",
-   "superseded_by": [
-    "20260727b_align_floor_assets_retired.sql",
-    "20260730a_owner_holds_all_backfill.sql"
-   ]
-  },
-  "20260727b_align_floor_assets_retired.sql": {
-   "kind": "invariant",
-   "means": "no permission alias and no role floor still carries a retired assets:* string",
-   "sql": "((SELECT count(*) = 0 FROM permission_aliases WHERE from_perm IN ('assets:read','assets:create','assets:update') OR implies_perm IN ('assets:read','assets:create','assets:update')) AND (SELECT bool_and(NOT (permissions ?| array['assets:read','assets:create','assets:update'])) FROM role_definitions WHERE business_id IS NULL))"
-  },
-  "20260729_backfill_billing_from_legacy.sql": {
-   "kind": "evidence",
-   "means": "✏️ ledger #346: the legacy column this backfill copied FROM is gone (20260915b, applied 2026-09-17), so the old invariant cannot be asked any more — and it had been false since 20260915 moved 475 phone-in-street values to the phone list. What stands is billing_* as the only address columns on customers",
-   "sql": "(SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'address_line1') AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'billing_line1'))"
-  },
-  "20260730a_owner_holds_all_backfill.sql": {
-   "kind": "superseded",
-   "means": "the OWNER floor it backfilled has been rewritten since",
-   "superseded_by": [
-    "20260730c_owner_branch_removed_and_owner_role_locked.sql",
-    "20260801_business_modules_write_narrowing.sql",
-    "20260801b_subscription_permission_and_enablement_split.sql",
-    "20260828_owner_role_carries_authority.sql",
-    "20260910b_owner_id_policies_become_permissions.sql"
-   ]
-  },
-  "20260730b_owner_member_row_invariant.sql": {
-   "kind": "invariant",
-   "means": "every business with an owner_id has an active OWNER member row for that person",
-   "sql": "(SELECT count(*) = 0 FROM businesses b WHERE b.owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM business_members m WHERE m.business_id = b.id AND m.user_id = b.owner_id AND m.role = 'OWNER' AND m.active))"
-  },
-  "20260802_trialling_modules_are_live.sql": {
-   "kind": "evidence",
-   "means": "the audit row it writes about itself exists",
-   "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.trial_access_corrected')"
-  },
-  "20260802b_module_classification_corrections.sql": {
-   "kind": "evidence",
-   "means": "the audit row it writes about itself exists",
-   "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.classification_corrected')"
-  },
-  "20260916e_remove_lawns_test_mode_ledger_rows.sql": {
-   "kind": "evidence",
-   "means": "the audit row it writes about itself exists (ledgers #335/#342)",
-   "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'ledger.test_mode_removal')"
-  },
-  "20260918a_clear_two_test_starts_lawns_saturday.sql": {
-   "kind": "evidence",
-   "means": "it cleared the two TEST starts on LAWNS Saturday 2026-09-19 (Freehill, Sappal) and wrote one audit row per stop — the rows are its fingerprint (ledger #351, tech-debt #344)",
-   "sql": "(SELECT count(*) = 2 FROM audit_log WHERE action = 'crew_stop.test_start_cleared' AND detail->>'migration' = '20260918a')"
-  },
-  "20260918b_attribution_correction_test_taps.sql": {
-   "kind": "evidence",
-   "means": "it recorded that the two crew taps typed 'Mauro' at 10:10 on 2026-09-18 were David testing, plus his test device — three append-only audit rows (ledger #351)",
-   "sql": "(SELECT count(*) = 3 FROM audit_log WHERE detail->>'migration' = '20260918b')"
-  },
-  "20260917a_keep_phone_notes_before_street_drop.sql": {
-   "kind": "evidence",
-   "means": "the five customers whose phone words lived only in the old street column each hold a phone note (ledger #346)",
-   "sql": "(SELECT count(DISTINCT customer_id) = 5 FROM customer_phones WHERE active AND note IS NOT NULL AND customer_id IN ('492e0cda-b9fb-4549-ac5c-c24d5c46c368','5fa0c32e-cc60-480d-883b-293d16881f2c','5fd58cd9-9bd9-4fd9-91c0-64632628dba6','7c775806-f3c2-463d-abbe-814e7b7f46b8','c395e570-23ac-4a4d-89e1-f43f9d79b2de'))"
-  },
-  "20260915_backfill_legacy_customer_address.sql": {
-   "kind": "evidence",
-   "means": "Paul (58e9e0f9…) — the one real address whose state and ZIP were legacy-only — carries TX in billing_state. ✏️ ledger #346: this check also required a ZIP; Paul never had one (corrected on CARD 3b 2026-09-17). Reads billing_* only, so it survives 20260915b dropping the legacy four",
-   "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX')"
-  },
-  "20260920_zero_seeded_qty_on_non_product_rows.sql": {
-   "kind": "evidence",
-   "means": "the 44 non-product rows of run bffc7713 carry qty 0, and the 587 real products still hold the seeded 10 — the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
-   "sql": "(SELECT count(*) FILTER (WHERE qb_item_id IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 0) = 44 AND count(*) FILTER (WHERE qb_item_id NOT IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 10) = 587 FROM business_inventory WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9')"
-  },
-  "20260922b_not_stock_overrides_ship_empty.sql": {
-   "kind": "evidence",
-   "means": "BOTH halves, because one file may carry one check and both are worth keeping: (1) none of the four rows 20260922 seeded for LAWNS remain — no migration-planted tenant data is left in the not-stock list; and (2) every active override still names the catalogue row its QuickBooks id points at, which is the check whose absence let 'Deposit' sit beside the id of 'Backyard Delivery'. Clause 2 holds vacuously while the list is empty and becomes load-bearing the moment an owner adds a row. ⚠️ A row an OWNER adds is legitimate and breaks neither clause: clause 1 names the four seeded ids, not the table's emptiness.",
-   "sql": "(SELECT (SELECT count(*) = 0 FROM business_not_stock_items WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND qb_item_id IN ('603','1006','1007','1120')) AND (SELECT count(*) = 0 FROM business_not_stock_items o LEFT JOIN business_inventory i ON i.business_id = o.business_id AND i.qb_item_id = o.qb_item_id WHERE o.active AND (i.name IS NULL OR i.name NOT ILIKE '%' || o.item_name || '%')))"
-  },
-  "20260923g_manager_holds_order_discount_apply.sql": {
-   "kind": "evidence",
-   "means": "every MANAGER member row, and the system MANAGER floor, carries order_discount:apply — the two things this file UPDATEs. ledger #386, R-171 (a). ⚠️ It is `evidence` and not `invariant` because the floor could only have gained that string from this migration: before it, the floor held 25 strings without it (measured live 2026-09-23) and nothing else writes role_definitions",
-   "sql": "((SELECT bool_and(permissions ? 'order_discount:apply') FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true) AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'order_discount:apply')))"  },
-  "20260922e_manager_holds_costs_read.sql": {
-   "kind": "evidence",
-   "means": "the MANAGER system floor holds costs:read, and NO MANAGER member is missing it — the two things this file UPDATEs. ledger #382, David's ruling 2026-09-22 (*the asset cost is TRACE's ESTIMATE, not the purchase price*). ⚠️ `evidence` not `invariant` for the same reason as 20260923g's entry: the floor could only have gained the string here — it held 25 without it, measured live 2026-09-22, and nothing else writes role_definitions. ⚠️ The floor clause is `count(*) = 1` rather than `bool_and`, DELIBERATELY: bool_and over zero rows is NULL, which would read as neither true nor false if the floor row ever went missing — the count asserts the row EXISTS as well as what it holds. Proven able to refuse before it was committed (§6 r19): live it reads true, and two mutants read false — the permission string changed, and MANAGER swapped for STAFF.",
-   "sql": "(SELECT (SELECT count(*) = 1 FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true AND permissions ? 'costs:read') AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'costs:read')))"
+  "_comment": "DATA-BACKFILL APPLY CHECKS. A migration whose whole effect is UPDATE/INSERT/DELETE declares no object, so its apply-state lives in the ROWS and no generic catalog check can read it. Each entry states how THAT file's effect is observed. kinds: evidence (ok = the file left a trace of itself -> APPLIED) · invariant (ok = the state it enforces holds today -> HOLDS; it cannot prove the file ran, only that nothing it fixed is broken) · superseded (a later migration rewrote the same rows) · unverifiable (ok = the reason still holds; false means this declaration is STALE and must be re-derived). `--self-test` FAILS if a data-only migration has no entry, an entry names a file that is not data-only, or a superseded_by file does not exist. First measured 2026-09-11 by hand, then declared here so nobody has to measure it again.",
+  "checks": {
+    "20260608_advert_channels_config.sql": {
+      "kind": "evidence",
+      "means": "every social_media module row carries the advert_channels key it added",
+      "sql": "(SELECT count(*) > 0 AND bool_and(config ? 'advert_channels') FROM business_modules WHERE module_key = 'social_media')"
+    },
+    "20260611_delete_debris_trace_enterprises_nursery.sql": {
+      "kind": "invariant",
+      "means": "the debris nursery row it deleted is not present",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE id::text LIKE '11901e52%' AND business_type = 'nursery' AND name ILIKE '%TRACE%')"
+    },
+    "20260614_cost_to_produce_trace_seed.sql": {
+      "kind": "unverifiable",
+      "reason": "it seeds the business_type='general' (TRACE) business, and that business no longer exists — its effect, if it ran, went with it",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
+    },
+    "20260614_cost_to_produce_restore_truncated_lines.sql": {
+      "kind": "unverifiable",
+      "reason": "it rewrites cost_to_produce on business 45830ba7 (TRACE), which no longer exists — its effect, if it ran, went with it",
+      "sql": "(SELECT count(*) = 0 FROM businesses WHERE business_type = 'general' OR id = '45830ba7-9961-403f-b048-77f022fb48dc')"
+    },
+    "20260727_align_floor_to_bundles.sql": {
+      "kind": "superseded",
+      "means": "the role floor it aligned has been rewritten since",
+      "superseded_by": [
+        "20260727b_align_floor_assets_retired.sql",
+        "20260730a_owner_holds_all_backfill.sql"
+      ]
+    },
+    "20260727b_align_floor_assets_retired.sql": {
+      "kind": "invariant",
+      "means": "no permission alias and no role floor still carries a retired assets:* string",
+      "sql": "((SELECT count(*) = 0 FROM permission_aliases WHERE from_perm IN ('assets:read','assets:create','assets:update') OR implies_perm IN ('assets:read','assets:create','assets:update')) AND (SELECT bool_and(NOT (permissions ?| array['assets:read','assets:create','assets:update'])) FROM role_definitions WHERE business_id IS NULL))"
+    },
+    "20260729_backfill_billing_from_legacy.sql": {
+      "kind": "evidence",
+      "means": "✏️ ledger #346: the legacy column this backfill copied FROM is gone (20260915b, applied 2026-09-17), so the old invariant cannot be asked any more — and it had been false since 20260915 moved 475 phone-in-street values to the phone list. What stands is billing_* as the only address columns on customers",
+      "sql": "(SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'address_line1') AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'billing_line1'))"
+    },
+    "20260730a_owner_holds_all_backfill.sql": {
+      "kind": "superseded",
+      "means": "the OWNER floor it backfilled has been rewritten since",
+      "superseded_by": [
+        "20260730c_owner_branch_removed_and_owner_role_locked.sql",
+        "20260801_business_modules_write_narrowing.sql",
+        "20260801b_subscription_permission_and_enablement_split.sql",
+        "20260828_owner_role_carries_authority.sql",
+        "20260910b_owner_id_policies_become_permissions.sql"
+      ]
+    },
+    "20260730b_owner_member_row_invariant.sql": {
+      "kind": "invariant",
+      "means": "every business with an owner_id has an active OWNER member row for that person",
+      "sql": "(SELECT count(*) = 0 FROM businesses b WHERE b.owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM business_members m WHERE m.business_id = b.id AND m.user_id = b.owner_id AND m.role = 'OWNER' AND m.active))"
+    },
+    "20260802_trialling_modules_are_live.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.trial_access_corrected')"
+    },
+    "20260802b_module_classification_corrections.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'business_modules.classification_corrected')"
+    },
+    "20260916e_remove_lawns_test_mode_ledger_rows.sql": {
+      "kind": "evidence",
+      "means": "the audit row it writes about itself exists (ledgers #335/#342)",
+      "sql": "(SELECT count(*) > 0 FROM audit_log WHERE action = 'ledger.test_mode_removal')"
+    },
+    "20260918a_clear_two_test_starts_lawns_saturday.sql": {
+      "kind": "evidence",
+      "means": "it cleared the two TEST starts on LAWNS Saturday 2026-09-19 (Freehill, Sappal) and wrote one audit row per stop — the rows are its fingerprint (ledger #351, tech-debt #344)",
+      "sql": "(SELECT count(*) = 2 FROM audit_log WHERE action = 'crew_stop.test_start_cleared' AND detail->>'migration' = '20260918a')"
+    },
+    "20260918b_attribution_correction_test_taps.sql": {
+      "kind": "evidence",
+      "means": "it recorded that the two crew taps typed 'Mauro' at 10:10 on 2026-09-18 were David testing, plus his test device — three append-only audit rows (ledger #351)",
+      "sql": "(SELECT count(*) = 3 FROM audit_log WHERE detail->>'migration' = '20260918b')"
+    },
+    "20260917a_keep_phone_notes_before_street_drop.sql": {
+      "kind": "evidence",
+      "means": "the five customers whose phone words lived only in the old street column each hold a phone note (ledger #346)",
+      "sql": "(SELECT count(DISTINCT customer_id) = 5 FROM customer_phones WHERE active AND note IS NOT NULL AND customer_id IN ('492e0cda-b9fb-4549-ac5c-c24d5c46c368','5fa0c32e-cc60-480d-883b-293d16881f2c','5fd58cd9-9bd9-4fd9-91c0-64632628dba6','7c775806-f3c2-463d-abbe-814e7b7f46b8','c395e570-23ac-4a4d-89e1-f43f9d79b2de'))"
+    },
+    "20260915_backfill_legacy_customer_address.sql": {
+      "kind": "evidence",
+      "means": "Paul (58e9e0f9…) — the one real address whose state and ZIP were legacy-only — carries TX in billing_state. ✏️ ledger #346: this check also required a ZIP; Paul never had one (corrected on CARD 3b 2026-09-17). Reads billing_* only, so it survives 20260915b dropping the legacy four",
+      "sql": "(SELECT count(*) = 1 FROM customers WHERE id = '58e9e0f9-6ac6-49c5-a954-0061f201d134' AND billing_state = 'TX')"
+    },
+    "20260920_zero_seeded_qty_on_non_product_rows.sql": {
+      "kind": "evidence",
+      "means": "the 44 non-product rows of run bffc7713 carry qty 0, and the 587 real products still hold the seeded 10 — the file's whole effect, and it cannot be produced by anything else (the seed sets 10, never 0)",
+      "sql": "(SELECT count(*) FILTER (WHERE qb_item_id IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 0) = 44 AND count(*) FILTER (WHERE qb_item_id NOT IN ('1','2','3','4','5','6','7','8','10','11','12','13','14','15','16','91','102','105','116','117','121','128','129','137','164','167','172','176','186','187','195','196','197','198','199','207','210','603','1000','1001','1006','1007','1116','1120') AND qty = 10) = 587 FROM business_inventory WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND import_run_id = 'bffc7713-d275-436c-bf8c-1ff29f3d14b9')"
+    },
+    "20260922b_not_stock_overrides_ship_empty.sql": {
+      "kind": "evidence",
+      "means": "BOTH halves, because one file may carry one check and both are worth keeping: (1) none of the four rows 20260922 seeded for LAWNS remain — no migration-planted tenant data is left in the not-stock list; and (2) every active override still names the catalogue row its QuickBooks id points at, which is the check whose absence let 'Deposit' sit beside the id of 'Backyard Delivery'. Clause 2 holds vacuously while the list is empty and becomes load-bearing the moment an owner adds a row. ⚠️ A row an OWNER adds is legitimate and breaks neither clause: clause 1 names the four seeded ids, not the table's emptiness.",
+      "sql": "(SELECT (SELECT count(*) = 0 FROM business_not_stock_items WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND qb_item_id IN ('603','1006','1007','1120')) AND (SELECT count(*) = 0 FROM business_not_stock_items o LEFT JOIN business_inventory i ON i.business_id = o.business_id AND i.qb_item_id = o.qb_item_id WHERE o.active AND (i.name IS NULL OR i.name NOT ILIKE '%' || o.item_name || '%')))"
+    },
+    "20260923g_manager_holds_order_discount_apply.sql": {
+      "kind": "evidence",
+      "means": "every MANAGER member row, and the system MANAGER floor, carries order_discount:apply — the two things this file UPDATEs. ledger #386, R-171 (a). ⚠️ It is `evidence` and not `invariant` because the floor could only have gained that string from this migration: before it, the floor held 25 strings without it (measured live 2026-09-23) and nothing else writes role_definitions",
+      "sql": "((SELECT bool_and(permissions ? 'order_discount:apply') FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true) AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'order_discount:apply')))"
+    },
+    "20260922e_manager_holds_costs_read.sql": {
+      "kind": "evidence",
+      "means": "the MANAGER system floor holds costs:read, and NO MANAGER member is missing it — the two things this file UPDATEs. ledger #382, David's ruling 2026-09-22 (*the asset cost is TRACE's ESTIMATE, not the purchase price*). ⚠️ `evidence` not `invariant` for the same reason as 20260923g's entry: the floor could only have gained the string here — it held 25 without it, measured live 2026-09-22, and nothing else writes role_definitions. ⚠️ The floor clause is `count(*) = 1` rather than `bool_and`, DELIBERATELY: bool_and over zero rows is NULL, which would read as neither true nor false if the floor row ever went missing — the count asserts the row EXISTS as well as what it holds. Proven able to refuse before it was committed (§6 r19): live it reads true, and two mutants read false — the permission string changed, and MANAGER swapped for STAFF.",
+      "sql": "(SELECT (SELECT count(*) = 1 FROM role_definitions WHERE role_key = 'MANAGER' AND business_id IS NULL AND is_system = true AND permissions ? 'costs:read') AND (SELECT count(*) = 0 FROM business_members WHERE role = 'MANAGER' AND NOT (permissions ? 'costs:read')))"
+    },
+    "20260925d_seed_lawns_delivery_rings.sql": {
+      "kind": "evidence",
+      "means": "LAWNS carries the five seeded rings at the radii David's $3.50/loaded-mile round-trip rule gives, and every one still says where it came from",
+      "sql": "(SELECT count(*) = 5 AND bool_and(origin_note ILIKE '%seeded from%') FROM business_delivery_rings WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND active AND outer_radius_miles IN (7.1, 14.3, 21.4, 35.7, 42.9))"
+    },
+    "20260925e_trip_charge_prices_from_the_ring.sql": {
+      "kind": "invariant",
+      "means": "LAWNS's Trip Charge prices from the rings and NOTHING ELSE does — the rings were derived from trip-charge history and say nothing about a tailgate drop or a backyard placement",
+      "sql": "(SELECT count(*) FILTER (WHERE name = 'Trip Charge' AND pricing_basis = 'ring') = 1 AND count(*) FILTER (WHERE name <> 'Trip Charge' AND pricing_basis = 'ring') = 0 FROM service_offerings WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74' AND category = 'transport')"
+    }
   }
- }
 }
