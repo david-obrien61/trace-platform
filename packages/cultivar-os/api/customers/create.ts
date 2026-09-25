@@ -82,15 +82,43 @@ export default async function handler(req: any, res: any) {
         // `location_type` and `partial_match` to reach its verdict (R-180) — it needs nothing else.
         return res.status(200).json({ google });
       }
-      // Autocomplete. `locationBias` is a CORRECTNESS requirement, not a refinement: unbiased,
-      // "153 Twin Cr" returns Apex NC and Washington WV — measured 2026-09-24 — and a picked
-      // suggestion is stored as located with no second check. Biased on the tenant's own address
-      // the first result is "153 Twin Creekview Ln". BIAS, never restriction: LAWNS delivers
-      // across several towns and Twin Creekview is in Georgetown, not Leander.
+      // ── AUTOCOMPLETE: BIAS BY DEFAULT, RESTRICTION FOR A SHIP-TO ────────────────────────────
+      // ✏️ THIS COMMENT USED TO CALL BIAS A "CORRECTNESS REQUIREMENT", citing an unbiased
+      // "153 Twin Cr" returning Apex NC and Washington WV. RE-MEASURED 2026-09-24 against the
+      // real depot with the region filter this endpoint sends: IT DID NOT REPRODUCE — both
+      // biased and unbiased put 153 Twin Creekview Ln, Georgetown FIRST. Bias tightens ranks
+      // 2–5 to Central Texas. Worth having, not a rescue. This was the THIRD copy of that
+      // retracted claim in the repo, which is why a figure written into three files and
+      // re-derived in none is [[R-26]] rather than a typo.
+      //
+      // 🔴 RESTRICTION IS DIFFERENT AND IT IS FOR DELIVERY ADDRESSES ONLY (David, 2026-09-24:
+      // *"shouldn't the radius map be the boundary so PA and WV don't show up?"*). Typing
+      // `101 Crupp` — a real Liberty Hill stop — offered Austin TX and four out-of-state streets,
+      // and the right answer not at all. A ship-to is restricted to the tenant's service area;
+      // a BILLING, CONTACT or VENDOR address keeps bias only, because a tenant legitimately buys
+      // from out of state and refusing that is a worse defect than ranking it low.
+      //
+      // ⚠️ THE CALLER DECIDES, AND SENDS NOTHING WHEN IT HAS NOTHING. `restrictMiles` arrives only
+      // when a real boundary exists — an outer ring, or a radius seeded from real deliveries.
+      // No radius is ever invented here; a made-up boundary refuses real customers silently.
       const bias = req.body?.bias;
       const body: Record<string, unknown> = { input: text, includedRegionCodes: ['us'] };
-      if (bias && typeof bias.latitude === 'number' && typeof bias.longitude === 'number') {
-        body.locationBias = { circle: { center: { latitude: bias.latitude, longitude: bias.longitude },
+      const centre = bias && typeof bias.latitude === 'number' && typeof bias.longitude === 'number'
+        ? { latitude: bias.latitude, longitude: bias.longitude } : null;
+      const restrictMiles = typeof req.body?.restrictMiles === 'number' && req.body.restrictMiles > 0
+        ? req.body.restrictMiles : null;
+      if (centre && restrictMiles) {
+        // Google caps a circle at 50,000 m. A service area larger than that degrades to BIAS
+        // rather than to a silently smaller boundary — a clipped radius would refuse the very
+        // customers furthest out, which is the opposite of what a wide service area means.
+        const metres = Math.round(restrictMiles * 1609.34);
+        if (metres <= 50000) {
+          body.locationRestriction = { circle: { center: centre, radius: metres } };
+        } else {
+          body.locationBias = { circle: { center: centre, radius: 50000 } };
+        }
+      } else if (centre) {
+        body.locationBias = { circle: { center: centre,
                                         radius: typeof bias.radius === 'number' ? bias.radius : 50000 } };
       }
       if (typeof req.body?.sessionToken === 'string') body.sessionToken = req.body.sessionToken;

@@ -57,6 +57,7 @@
 // check runs. It never blocks entry, and it never stores an unlocated address as located.
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
+import { townMismatch, type TownMismatch } from '../business-logic/addressSuggestion';
 
 export interface AddressValue {
   line1: string;
@@ -80,6 +81,19 @@ interface Props {
   /** The tenant's own located address, biasing the suggestions. Read from config, never a
    *  constant: a second tenant is not in Leander. */
   bias?: { latitude: number; longitude: number; radius?: number } | null;
+  /**
+   * 🔴 WHAT THIS ADDRESS IS FOR, and it changes how hard the boundary is (David, 2026-09-24).
+   * · 'delivery' — a ship-to. Suggestions are RESTRICTED to the service area when one exists, so
+   *   West Virginia cannot appear for a Liberty Hill street.
+   * · 'anywhere' — billing, a contact, a vendor. BIAS ONLY. A tenant legitimately buys from out
+   *   of state, and restricting these would make correct addresses impossible to enter, which is
+   *   a worse defect than ranking them low.
+   * Defaults to 'anywhere': the looser, non-refusing behaviour, so a surface that forgets to say
+   * cannot silently start refusing real addresses.
+   */
+  purpose?: 'delivery' | 'anywhere';
+  /** Miles from `bias` that a DELIVERY field may offer from. Null = no boundary, bias only. */
+  serviceAreaMiles?: number | null;
   label?: string;
   disabled?: boolean;
 }
@@ -89,10 +103,12 @@ function newSessionToken(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function AddressInput({ value, onChange, businessId, bias, label = 'Street address', disabled }: Props) {
+export function AddressInput({ value, onChange, businessId, bias, purpose = 'anywhere', serviceAreaMiles = null, label = 'Street address', disabled }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [degraded, setDegraded] = useState(false);
+  /** The town question, when taking a suggestion would move the customer to another town. */
+  const [townAsk, setTownAsk] = useState<{ q: TownMismatch; s: Suggestion } | null>(null);
   const session = useRef<string>(newSessionToken());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -112,6 +128,9 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
           body: JSON.stringify({
             action: 'autocomplete', businessId, address: q,
             bias: bias ?? undefined, sessionToken: session.current,
+            // 🔴 A SHIP-TO IS RESTRICTED; EVERYTHING ELSE IS ONLY BIASED. Sent only when there is
+            // a real boundary to send — an invented radius would refuse real customers silently.
+            restrictMiles: purpose === 'delivery' && serviceAreaMiles ? serviceAreaMiles : undefined,
           }),
         });
         if (!res.ok) { setDegraded(true); setSuggestions([]); return; }
@@ -129,11 +148,32 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
       }
     })(); }, 250);
     return () => { if (debounce.current) clearTimeout(debounce.current); };
-  }, [value.line1, businessId, bias]);
+    // 🔴 THE DEPENDENCIES ARE THE BIAS **VALUES**, NOT THE OBJECT — and this is a defect caught
+    // before it shipped, on the day the bias was first wired. A caller that builds the bias inline
+    // (`{ latitude: b.lat, longitude: b.lng }`) hands a NEW OBJECT IDENTITY on every render, so an
+    // effect depending on the object re-fires every render: a fetch per render, quota burnt in a
+    // loop, and a suggestion list that flickers. Depending on the numbers makes the component
+    // immune to how its caller happens to construct them, which is the shared control's job —
+    // a caller should not have to memoise to avoid a loop it cannot see.
+  }, [value.line1, businessId, bias?.latitude, bias?.longitude, bias?.radius, purpose, serviceAreaMiles]);
+
+  /**
+   * A tap on a suggestion. 🔴 IT DOES NOT COMMIT — it asks first when the suggestion is in a
+   * different town from the one the person typed. Measured 2026-09-24: `101 Crupp`, a real
+   * Liberty Hill delivery, offers `101 Crupp Ct, Austin` first and the correct street not at all.
+   * A picked suggestion is stored as LOCATED with no second check, so one tap would send a truck
+   * 34 miles the wrong way.
+   */
+  function choose(s: Suggestion) {
+    const q = townMismatch({ city: value.city, zip: value.zip }, s.text);
+    if (q.differs) { setOpen(false); setTownAsk({ q, s }); return; }
+    void pick(s);
+  }
 
   /** Picking makes the address LOCATED — the coordinate comes back with the place. */
   async function pick(s: Suggestion) {
     setOpen(false);
+    setTownAsk(null);
     try {
       const res = await fetch('/api/customers/create', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -181,7 +221,7 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
         <div style={{ position: 'absolute', zIndex: 60, left: 0, right: 0, background: '#fff',
                       border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', marginTop: 4 }}>
           {suggestions.map(s => (
-            <button key={s.placeId || s.text} onClick={() => { void pick(s); }}
+            <button key={s.placeId || s.text} onClick={() => { choose(s); }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.7rem 0.8rem',
                        background: 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', fontSize: '0.92rem' }}>
               {s.text}
@@ -189,6 +229,40 @@ export function AddressInput({ value, onChange, businessId, bias, label = 'Stree
           ))}
         </div>
       )}
+      {/* 🔴 ALWAYS OFFERED, NEVER HIDDEN (David, 2026-09-24). A restriction cannot find the Liberty
+          Hill streets Google does not know, and a list with no way past it is a dead end at the
+          counter. Keeping what was typed is a first-class answer: it goes through the ③ check —
+          found, confirm, or cannot-place — and an unplaceable address is saved, surfaced and
+          never priced. It sits INSIDE the suggestion list so it is where the hand already is. */}
+      {open && suggestions.length > 0 && !townAsk && (
+        <button onClick={() => { setOpen(false); setSuggestions([]); }}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.7rem 0.8rem',
+                   background: '#EAF3DE', border: '1px solid #e5e7eb', borderTop: 'none',
+                   borderRadius: '0 0 10px 10px', cursor: 'pointer', fontSize: '0.92rem',
+                   minHeight: 48, color: '#27500A', fontWeight: 600 }}>
+          Use what I typed — <strong>{value.line1}</strong>
+        </button>
+      )}
+
+      {townAsk && (
+        <div style={{ border: '1.5px solid #A32D2D', borderRadius: 10, background: '#fffbeb',
+                      padding: '0.9rem', marginTop: 8 }}>
+          <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 8 }}>{townAsk.q.message}</div>
+          {/* Neither is pre-chosen. The person is the one who knows which town they meant. */}
+          <button onClick={() => { void pick(townAsk.s); }}
+            style={{ display: 'block', width: '100%', minHeight: 48, marginBottom: 8, textAlign: 'left',
+                     borderRadius: 8, border: '1.5px solid #d1d5db', background: '#fff', cursor: 'pointer' }}>
+            Use it — <strong>{townAsk.s.text}</strong>
+          </button>
+          <button onClick={() => { setTownAsk(null); setSuggestions([]); setOpen(false); }}
+            style={{ display: 'block', width: '100%', minHeight: 48, textAlign: 'left',
+                     borderRadius: 8, border: `1.5px solid ${'#27500A'}`, background: '#EAF3DE',
+                     color: '#27500A', cursor: 'pointer' }}>
+            Keep what I typed — <strong>{value.line1}</strong>
+          </button>
+        </div>
+      )}
+
       {degraded && (
         // Said out loud: a field that quietly stops suggesting looks like a field with nothing to
         // suggest, and the person types on believing they saw every option.

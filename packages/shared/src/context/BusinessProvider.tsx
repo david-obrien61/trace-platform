@@ -121,6 +121,20 @@ export interface Business {
   email: string | null;
   website: string | null;
   logo_url: string | null;
+  /**
+   * WHERE THE TRUCKS LEAVE FROM — the coordinate of `address` (20260924g, applied 2026-09-24).
+   * David, 2026-09-24: the depot IS the business-profile address, so this is its pin and NOT a
+   * separate depot field. Read by the autocomplete bias centre and the ring-map centre.
+   *
+   * ⚠️ Declared because the columns EXIST and the loader's `select('*')` therefore populates
+   * them — unlike the `tax_rate` phantom noted below, which was declared after its column was
+   * DROPPED and could never arrive. Null until geocoded, and null is honest: bias stays off
+   * rather than centring on somebody else's town.
+   */
+  latitude: number | null;
+  longitude: number | null;
+  geocoded_at: string | null;
+  geocode_status: string | null;
   // ⚠️ NO `tax_rate` HERE, AND THAT IS DELIBERATE (2026-08-21, ledger #190). The column was DROPPED
   // by 20260727e_drop_businesses_tax_rate.sql:45 (David's ruling: config wins) and the rate's home
   // is business_pricing_config.config->'taxRate', read through the narrow get_business_tax_rate RPC

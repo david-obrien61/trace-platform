@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
@@ -258,7 +258,24 @@ export function CustomerCapture() {
   // stored as located with no second check. BIAS, not restriction: LAWNS delivers across towns.
   // Until the tenant's address is itself geocoded this is null and Places simply ranks nationally,
   // which is worse but honest — it is never silently replaced with somebody else's coordinates.
-  const tenantBias = null as { latitude: number; longitude: number; radius?: number } | null;
+  // ✅ WIRED 2026-09-24, the moment the yard had a pin (20260924g applied; LAWNS geocoded ROOFTOP
+  // at 30.5719542, -97.9188683). It reads the BUSINESS-PROFILE address's coordinate — David's
+  // ruling: the depot IS that address, one fact in one place, never a second depot setting.
+  //
+  // 🔴 ONLY A `found` YARD BIASES ANYTHING. A `confirm` is a pin nobody agreed to and a
+  // `not_found` has none; centring every suggestion list in the business on either would quietly
+  // point the whole tenant at a place the owner never approved. Unbiased ranks nationally, which
+  // is worse and honest — it is never silently replaced with somebody else's coordinates.
+  // Memoised so the object identity is stable across renders. The shared field no longer depends
+  // on the object (it reads the numbers), but a fresh object every render is a hazard worth
+  // removing at the source too rather than relying on one component's care.
+  const tenantBias = useMemo(() => {
+    const located = business?.geocode_status === 'found'
+      && typeof business?.latitude === 'number' && typeof business?.longitude === 'number';
+    return located
+      ? { latitude: business.latitude as number, longitude: business.longitude as number, radius: 50000 }
+      : null;
+  }, [business?.geocode_status, business?.latitude, business?.longitude]);
   // `id` is carried so the ANSWER can be written back onto the row it is about (ruling 1). A
   // typed address has no row yet and therefore no id — it gets its coordinate when it is SAVED
   // as a site, not here.

@@ -20,7 +20,7 @@ the address exists.** The verdict is decided by `location_type`, and the check f
 **cannot be placed**, never addresses that are "correct": *415 Main* typed for *451 Main* comes back
 a confident ROOFTOP pin on the neighbour's house, and nothing here will ever catch that.
 
-**Board: 0 of 10 covered** (0 `covered` · 10 `owed`) — every card is written and none has been run.
+**Board: 0 of 14 covered** (0 `covered` · 14 `owed`) — every card is written and none has been run.
 🔴 **Thunder never sets `covered` (OP-14).** These flip only on David's live run.
 
 **The order matters.** CARD 1 is the regression Lauren would hate and must be run first: if a
@@ -224,5 +224,84 @@ schedule (or ask David to read the row).
 whether the delivery could be charged, kept only the yes/no, and threw the coordinate away.
 `deliveries.latitude` had been live since 20260923d with nothing writing to it. Every unit test
 passed, because each tested a function on its own and none asked whether its answer was used.*
+
+---
+
+### CARD 11 — 🔴 "Use what I typed" is always there
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: David 2026-09-24, guard 1
+
+Type **`101 Crupp`** into a delivery address. This is a REAL LAWNS stop — 101 Crupp Avenue,
+Liberty Hill.
+
+**PASS:** a suggestion list appears AND, at the bottom of it, **`Use what I typed — 101 Crupp`**.
+Tap that; the address is kept as you typed it and goes through the ③ check.
+**FAIL:** the only way forward is to pick one of Google's suggestions.
+
+🔴 **WHY THIS IS THE MOST IMPORTANT CARD ON THE BOARD.** Measured 2026-09-24: with the service
+area restricted, that query returns **exactly one** suggestion — *101 Crupp Ct, **Austin*** — and
+the real Liberty Hill street is **not in the list at all**. Restricting removes the wrong answers;
+it does not produce the right one. Without this escape the counter is a dead end for every new
+street in Lauren's own town, which is a third of it.
+
+---
+
+### CARD 12 — picking another town asks first
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: David 2026-09-24, guard 2
+
+Type the street **and the town**: `101 Crupp`, town **Liberty Hill**. Then tap the suggestion
+**`101 Crupp Ct, Austin, TX`**.
+
+**PASS:** one question — *"You typed Liberty Hill; this suggestion is in Austin."* — with **Use
+it** and **Keep what I typed**, neither pre-chosen. Nothing is saved until you choose.
+**FAIL:** it is taken silently. That address is real, confident, and **34 miles the wrong way**,
+and a picked suggestion is stored as located with no second check.
+
+---
+
+### CARD 13 — the same pick in the SAME town asks nothing
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: guard 2, the negative control
+
+Type `153 Twin Cr` with town **Georgetown**, and tap `153 Twin Creekview Ln, Georgetown, TX`.
+
+**PASS:** it is taken **silently** — no question.
+**FAIL:** a question. A guard that fires on the ordinary case gets switched off within a day, and
+then it is not watching CARD 12 either.
+
+⚠️ Also check: type a street with **no town at all** and pick a suggestion. **No question** —
+someone who has not said where they mean has not been contradicted.
+
+---
+
+### CARD 14 — a ship-to is fenced; a vendor is not
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: David 2026-09-24, guard 3
+
+**(a) DELIVERY address** — type `153 Twin Cr`.
+**PASS (a):** every suggestion is Central Texas. Measured restricted: Georgetown, Dripping
+Springs, Burnet, Georgetown, Dripping Springs. **No Pennsylvania.** (Unrestricted it offers
+*Jonestown, PA*.)
+
+**(b) VENDOR address** (Settings → Vendors) — type an out-of-state street you know, e.g.
+`100 Main St, Nashville`.
+**PASS (b):** it is offered. A vendor can be anywhere — a tenant buys out of state, and fencing
+that would make correct addresses impossible to enter rather than merely rank them low.
+
+⚠️ **UNTIL YOUR RINGS EXIST THERE IS NO FENCE, AND THE FIELD SAYS SO RATHER THAN PRETENDING.**
+The boundary is the outer ring plus a margin; with no rings it seeds from the farthest located
+past delivery. Measured 2026-09-24: **0 of 66 stops and 0 of 1,497 addresses carry a coordinate**,
+so neither source exists yet and a delivery field currently behaves like (b). It switches on when
+the rings land or the bulk geocode runs. **No radius is ever invented** — a made-up fence refuses
+real customers silently, which is worse than ranking badly.
 
 ---
