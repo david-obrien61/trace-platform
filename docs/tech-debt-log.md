@@ -5002,3 +5002,48 @@ is exactly the kind of change that must be David's, not a side effect of a build
 not, `installs` gates the mix/post/rope sums the way it already gates `waterMonitors`, and
 `installKitEquivalence.test.ts` §B flips from *"these two deliberately disagree"* to *"these two agree"* —
 the probe is already written and would go green on the fix without being edited.
+## #365 — 🔴 `build_runs` AND `build_run_components` HAVE **NO WRITER AT ALL**, SO "0 BUILD RUNS" WAS NEVER EVIDENCE THAT NO BATCH HAD BEEN MADE (NEW 2026-09-25, ledger #413 — RESOLVED FOR ONE PATH IN THE SAME BUILD, CLASS STILL OPEN)
+
+**`record_build_run` does not touch `build_runs`.** Verified against the **LIVE function body** —
+`pg_get_functiondef` does not contain the string `build_runs` **at all**. And nothing else writes it
+either:
+- **no migration** inserts into it (the only `INSERT INTO public.build_runs` in the corpus is inside a
+  commented V-block in `20260922d`),
+- **no line of app code** references it (`packages/` grepped, zero non-test hits),
+- the table carries an **INSERT policy gated on `inventory:update`**, so a CLIENT was meant to write it,
+  **and no client was ever built.**
+
+🔴 **THE COST IS NOT THE EMPTY TABLE — IT IS THAT THE EMPTINESS READ AS A MEASUREMENT.** Ledger #410
+reported, correctly and from a live read, *"0 `build_runs` rows, 0 `build` ledger rows, all tenants"* and
+drew the conclusion that **no build has ever been recorded**. That conclusion happens to be true, but
+**the first half of the evidence could never have shown otherwise**: `build_runs` would read 0 after a
+thousand batches. The `build` **ledger** rows are the half that carries the information, and they were
+0 for the different, real reason that `record_build_run` has no caller. **A count of a table nothing
+writes is not a measurement of anything** — [[R-33]]'s shape in a figure rather than in a check.
+
+✅ **ONE PATH IS FIXED IN THE BUILD THAT FOUND IT.** `work_order_apply` (`20260925d`) now INSERTs the
+`build_runs` row itself — business, recipe, batches, the yield that went on the books, `started_at`,
+`finished_at`, `built_by` — with `cost_incomplete = true` and a reason, because the cost engine is
+client-side (`recipeCost.ts`: landed cost, receipt matching) and a server function cannot compute it.
+**A 0 in `total_cost` would read as "this batch was free" (D-9), so the column stays NULL and says why.**
+
+⚠️ **FOUND BY A PROBE, NOT BY REVIEW, AND MY FIRST VERSION WAS WRONG IN THE SILENT DIRECTION.**
+`work_order_apply` originally did `UPDATE build_runs SET started_at = …, finished_at = … WHERE id =
+(v_res->>'run_id')`, assuming the RPC had created the row. **That UPDATE matched ZERO rows and reported
+nothing** — the work order would have completed, the stock would have moved, and the batch time would
+have been silently unrecordable for ever. Probe **D3** in `work-orders-413.pglite.mjs` caught it by
+reading the row back instead of trusting the update.
+
+🔴 **THE CLASS IS STILL OPEN, AND IT IS THE REASON THIS IS FILED RATHER THAN CLOSED.**
+① **`build_run_components` still has no writer** — `record_build_run` reports what it consumed in its
+return value and in the inventory ledger, but nothing lands a per-component row, so the frozen
+component costs `20260922d` created columns for are unreachable.
+② **A build recorded any way OTHER than through a work order still writes no `build_runs` row** — and
+that is the path `feat/recipe-surfaces`' MADE IT tap would take.
+③ **The cost columns are never filled by anything**, so `20260922d`'s whole purpose — *a run's cost is
+FROZEN and does not move when the recipe is corrected afterwards* — is proven by its harness and
+reachable by nobody.
+
+**EXIT CONDITION:** either the MADE IT tap writes `build_runs` (with its client-computed cost) the way
+the work order now does, or `record_build_run` is given that job server-side and the cost is passed in.
+**Until one of them happens, `build_runs` remains a table with one writer and three unused purposes.**
