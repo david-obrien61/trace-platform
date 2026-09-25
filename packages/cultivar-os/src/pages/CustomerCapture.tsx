@@ -8,6 +8,8 @@ import { CustomerSearch, type CustomerSearchHit } from '../components/customers/
 import { ShipToPicker } from '@trace/shared/components/customers/ShipToPicker';
 import { AddressInput } from '@trace/shared/components/AddressInput';
 import { planAddressStep, applyGeocodeToStep, resolveAddressCheck, addressLine, type StepQuestion } from '@trace/shared/business-logic/addressStep';
+import { googlePayloadOrThrow } from '@trace/shared/business-logic/geocodeRun';
+import { US_STATES, normalizeState, isValidStateCode } from '@trace/shared/business-logic/usStates';
 import type { GeocodeOutcome } from '@trace/shared/business-logic/geocodeResult';
 import { setAddressGeocode } from '@trace/shared/business-logic/contactWriter';
 import { customerOrderFill } from '../components/customers/customerFieldRegistry';
@@ -345,8 +347,18 @@ export function CustomerCapture() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'geocode', businessId, address: addressLine(chosen) }),
       });
-      const body = await res.json().catch(() => ({}));
-      const r = applyGeocodeToStep(body?.google ?? body, addressLine(chosen));
+      // 🔴 A NON-2xx FROM OUR OWN PROXY IS **OUR** FAILURE, NOT THE ADDRESS'S (§6 r24).
+      // MEASURED IN PRODUCTION 2026-09-25: this endpoint returns HTTP 503
+      // `{"error":"geocoding is not configured on this deployment"}` because the Google key is in
+      // .env.local and NOT in Vercel's environment. The old code read the body regardless, handed
+      // `{error: …}` to the classifier, which found no Google shape and returned `not_found` —
+      // so Lauren was told "We can't find this address" about 770 County Road 284, Liberty Hill,
+      // which Google finds instantly. Our misconfiguration, reported as her customer's bad
+      // address. Worse, ruling 1 then WROTE that verdict with a date, so it would have been
+      // reused for thirty days.
+      // Rule 24's whole point: a failed request and an empty answer must never look the same.
+      const body = await res.json().catch(() => null);
+      const r = applyGeocodeToStep(googlePayloadOrThrow(res, body), addressLine(chosen));
       setAddrOutcome(r.outcome);
       if (r.question.ask === 'none') {
         setAddrQuestion(null);
@@ -361,7 +373,12 @@ export function CustomerCapture() {
     } catch (e) {
       // Rule 24: a service failure degrades to plain typing — it never blocks entry, and it never
       // silently stores an unlocated address as located.
-      console.log('[TRACE:DELIVERY] geocode unreachable — continuing unlocated', { message: (e as Error).message });
+      // Rule 24: degrade to plain typing. 🔴 NOTHING IS STORED and NOTHING IS ASKED — an address
+      // we could not check is not an address we could not find, and the difference is the whole
+      // rule. It stays unverified, so it is never priced; it is never marked unplaceable, so it
+      // is re-checked next time instead of carrying our outage on its record for a month.
+      console.log('[TRACE:DELIVERY] geocode unavailable — continuing unchecked, nothing stored', { message: (e as Error).message });
+      setAddrQuestion(null); setAddrOutcome(null);
       return true;
     } finally { setAddrChecking(false); }
   }
@@ -606,7 +623,9 @@ export function CustomerCapture() {
             customerId={attachedCustomerId ?? pickerCustomerId}
             current={{ line1: address, city, state, zip }}
             onChoose={(a, _shipTo, site) => {
-              setAddress(a.line1); setCity(a.city); setState(a.state); setZip(a.zip);
+              // Whatever the saved row holds — "Texas", "tx", "TE" from the old bug — becomes a
+              // USPS code, or is left as-is so the field can say it does not recognise it.
+              setAddress(a.line1); setCity(a.city); setState(normalizeState(a.state) ?? a.state); setZip(a.zip);
               // 🔴 REMEMBERED SO THE CHECK CAN STAY SILENT. A saved site already carries its
               // coordinate and the date it was found; without this the step would geocode an
               // address we already located and could ask a question nobody needs to answer.
@@ -615,6 +634,12 @@ export function CustomerCapture() {
           />
         )}
 
+        {/* 🔴 ONE BLOCK, IN THE ORDER A PERSON WRITES AN ADDRESS — David, 2026-09-25: the street
+            line must sit WITH City/State/Zip, not apart from them. It was already above them in
+            the markup, but nothing tied the four together, so on his screen the street read as a
+            stray field belonging to whatever came after it. A visible container is what makes
+            "these four are one address" true on the SCREEN and not merely true in the source. */}
+        <div style={{ border: '1px solid #d8e3c8', borderRadius: 8, padding: '10px 12px', margin: '0 0 12px' }}>
         <Field label={deliveryRequired ? 'Delivery address' : 'Address (optional)'} required={deliveryRequired} error={addressError}>
           {/* 🔴 THE SHARED FIELD, NOT A PLAIN INPUT. Autocomplete comes through our own server
               (the key never reaches this bundle), and picking a suggestion stores the address
@@ -630,7 +655,8 @@ export function CustomerCapture() {
                      latitude: pickedSite?.latitude ?? null, longitude: pickedSite?.longitude ?? null,
                      geocoded_at: pickedSite?.geocoded_at ?? null }}
             onChange={(v) => {
-              setAddress(v.line1); if (v.city) setCity(v.city); if (v.state) setState(v.state);
+              setAddress(v.line1); if (v.city) setCity(v.city);
+              if (v.state) setState(normalizeState(v.state) ?? v.state);
               // A picked suggestion arrives located; anything else clears it, so the ③ check runs.
               setPickedSite(v.latitude != null && v.longitude != null
                 ? { latitude: v.latitude, longitude: v.longitude, geocoded_at: v.geocoded_at ?? null, geocode_status: 'found' }
@@ -651,13 +677,31 @@ export function CustomerCapture() {
             />
           </Field>
           <Field label="State">
-            <input
+            {/* 🔴 A LIST OF REAL STATES, NOT THE FIRST TWO LETTERS OF WHATEVER WAS TYPED.
+                This was `value.toUpperCase().slice(0, 2)`, so choosing "Texas" stored **TE**
+                (David, 2026-09-25). That is not cosmetic: TE is not a state, so the address
+                cannot be verified by construction — Google is asked about a place that cannot
+                exist, the check says it cannot be placed, and ruling 1 then stores that verdict
+                with a date and reuses it for thirty days. Two characters of truncation become a
+                customer nobody can deliver to for a month.
+                A SELECT also makes the bad value unreachable rather than merely corrected. */}
+            <select
               style={inputStyle}
-              value={state}
-              onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
-              placeholder="TX"
+              value={isValidStateCode(state) ? state : ''}
+              onChange={(e) => setState(e.target.value)}
               autoComplete="address-level1"
-            />
+            >
+              <option value="">State…</option>
+              {US_STATES.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+            </select>
+            {state !== '' && !isValidStateCode(state) && (
+              // Said out loud rather than silently corrected: an imported or pasted value we do
+              // not recognise is the person's data, and replacing it with a guess is how "TE"
+              // would have become "TX" without anyone learning the field was broken.
+              <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: 4 }}>
+                “{state}” isn’t a state we recognise — pick one from the list.
+              </div>
+            )}
           </Field>
           <Field label="Zip">
             <input
@@ -669,6 +713,7 @@ export function CustomerCapture() {
               autoComplete="postal-code"
             />
           </Field>
+        </div>
         </div>
 
         {/* FIX 4 — delivery date (owner/manager, delivery order only). Manual precursor to the

@@ -205,6 +205,10 @@ async function main() {
       const url = 'https://maps.googleapis.com/maps/api/geocode/json'
         + `?address=${encodeURIComponent(typed)}&components=country:US&key=${GOOGLE_KEY}`;
       const res = await fetch(url);
+      // §6 r24 — a non-2xx is a FAILED REQUEST, never an answer. Google returns 200 even for
+      // ZERO_RESULTS, so a non-2xx here means the key, the quota or the network — none of which
+      // is a fact about the customer's address. Treated as unreachable and retried, never written.
+      if (!res.ok) throw new Error(`google ${res.status}`);
       raw = await res.json();
     } catch (e) {
       // Rule 24 one layer out: a service failure leaves the row EXACTLY as it was, with no

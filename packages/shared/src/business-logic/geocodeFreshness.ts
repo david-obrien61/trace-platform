@@ -116,6 +116,24 @@ export function isUsable(row: StoredCoordinate, now: Date): boolean {
  * address, not about the coordinate's age — clearing it would make a known-bad address look
  * merely un-geocoded, and checkout would go back to pricing it.
  */
+/**
+ * 🔴 THE ADDRESS TEXT CHANGED, SO THE WHOLE VERDICT IS VOID — including `geocode_status`.
+ *
+ * ⚠️ THIS IS NOT `forgetCoordinatePatch`, AND THE DIFFERENCE IS THE POINT. That one is for a
+ * coordinate that has EXPIRED: same address, stale pin, and it deliberately KEEPS the status
+ * because whether that address was ever findable is still a fact about it. Here the address is a
+ * DIFFERENT ADDRESS. A verdict earned by "770 County Road 284, Liberty Hill TE" says nothing
+ * about "…TX", and keeping it means a corrected address stays condemned for thirty days by an
+ * answer about a place that never existed.
+ *
+ * Found by David at the counter, 2026-09-25: he corrected a state from the truncation bug and the
+ * address was still reported unfindable. A stored verdict applies ONLY to the exact text it was
+ * checked for.
+ */
+export function forgetVerdictPatch(): { latitude: null; longitude: null; geocoded_at: null; geocode_status: null } {
+  return { latitude: null, longitude: null, geocoded_at: null, geocode_status: null };
+}
+
 export function forgetCoordinatePatch(): { latitude: null; longitude: null; geocoded_at: null } {
   return { latitude: null, longitude: null, geocoded_at: null };
 }

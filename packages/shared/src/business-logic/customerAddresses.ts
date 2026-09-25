@@ -34,7 +34,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 // The field list is IMPORTED, never restated here — see `customerAddressFields.ts` for why that
 // distinction is load-bearing rather than stylistic (A4 · #179 · verify-field-lists).
-import { CUSTOMER_ADDRESS_COLUMNS } from './customerAddressFields';
+import { CUSTOMER_ADDRESS_COLUMNS, normalizeAddressPart } from './customerAddressFields';
 // 🔴 LEDGER #335: the two STATEMENTS live in `contactWriter`, the one home for every write to a
 // customer's contact lists. This module keeps the PLAN and the sentences.
 import { insertShipToSite, retireShipToSite } from './contactWriter';
@@ -141,10 +141,12 @@ export function siteLine(s: Partial<CustomerAddress>): string {
  * punctuation. It does NOT expand `Rd`→`Road` or `107`→`107`: an over-eager match would silently
  * refuse to save a genuinely different site, which is a worse failure than one duplicate row.
  */
-export function normalizeAddressPart(v: string | null): string {
-  if (!v) return '';
-  return v.toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
-}
+// Re-exported, not re-implemented: it now lives beside the field list so `contactWriter` can use
+// it too without a cycle. Every existing caller keeps importing it from here.
+// ⚠️ IMPORTED **AND** RE-EXPORTED — `export { x } from './y'` forwards the name without binding it
+// locally, and `sameAddress` below calls it. The first attempt did only the forward and tsc named
+// the two lines that broke.
+export { normalizeAddressPart };
 
 export function sameAddress(a: Partial<CustomerAddress>, b: Partial<CustomerAddress>): boolean {
   const x = addressOf(a), y = addressOf(b);

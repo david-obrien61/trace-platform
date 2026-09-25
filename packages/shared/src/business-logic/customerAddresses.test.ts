@@ -475,6 +475,32 @@ async function main(): Promise<void> {
       "🔴 R7 THE ADDRESS ROW POINTS AT NO STOP. A stop SNAPSHOTS its own address and coordinate (ledger #335, 20260923d), so correcting a customer's address tomorrow cannot move a truck that was already routed — the two records are deliberately not joined, and this asserts the absence");
   }
 
+  // ══ 🔴 A CHANGED ADDRESS LOSES ITS VERDICT (David, 2026-09-25, from the counter) ═══════════
+  // He corrected a state — the field had stored "TE" for Texas — and the address was STILL
+  // reported unfindable, because the not_found earned by the broken text had been dated, stored
+  // and reused. A stored verdict applies ONLY to the exact text it was checked for.
+  {
+    const { forgetVerdictPatch } = await import('./geocodeFreshness');
+    const p = forgetVerdictPatch();
+    ok(p.geocode_status === null,
+      '🔴 S1 THE STATUS IS CLEARED, NOT JUST THE COORDINATE. This is what makes it different from forgetCoordinatePatch — that one is for an EXPIRED pin on the SAME address and deliberately keeps the status, because whether that address was ever findable is still a fact about it. Here it is a DIFFERENT ADDRESS, and the old answer is about a place that is no longer on the record');
+    ok(p.latitude === null && p.longitude === null && p.geocoded_at === null,
+      'S2 …and the coordinate and its date go with it — all four, or the row half-remembers a place');
+  }
+  {
+    const { forgetCoordinatePatch } = await import('./geocodeFreshness');
+    const expiry = forgetCoordinatePatch() as Record<string, unknown>;
+    ok(!('geocode_status' in expiry),
+      '🔴 S3 NEGATIVE CONTROL — EXPIRY STILL KEEPS THE STATUS. If both patches did the same thing the distinction would be decorative; a coordinate going stale must NOT make a known-unfindable address look unchecked, because then it is re-asked of Google for ever');
+  }
+  {
+    const norm = (await import('./customerAddresses')).normalizeAddressPart;
+    ok(norm('770 County Road 284') === norm('770 county road 284.'),
+      'S4 case and punctuation are not a change — correcting nothing must not throw away a good coordinate');
+    ok(norm('Liberty Hill') !== norm('Austin'),
+      'S5 …but a different town is a different address');
+  }
+
   console.log(`\ncustomerAddresses: ${passed} passed, ${failed} failed`);
   if (failed) { for (const f of failures) console.log(`   ✗ ${f}`); process.exit(1); }
 }

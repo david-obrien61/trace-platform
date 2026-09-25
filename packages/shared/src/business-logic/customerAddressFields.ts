@@ -36,3 +36,18 @@ export const CUSTOMER_ADDRESS_COLUMNS =
  * what a customer address is made of (#179: the list is the source, the select is derived).
  */
 export const CUSTOMER_ADDRESS_GEOCODE_COLUMNS = 'id, line1, city, state, zip';
+
+
+/**
+ * Compare two address parts the way a person would: case and punctuation are not a difference.
+ *
+ * 🔴 IT LIVES HERE, NOT IN `customerAddresses`, BECAUSE `contactWriter` NEEDS IT TOO and
+ * `customerAddresses` already imports FROM `contactWriter` — putting it there and importing it
+ * back would be a cycle. This module holds the field list and imports nothing, so both can reach
+ * it. `customerAddresses` re-exports it, so every existing caller is unchanged and there is still
+ * exactly ONE implementation (§6 r8).
+ */
+export function normalizeAddressPart(v: string | null): string {
+  if (!v) return '';
+  return v.toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+}

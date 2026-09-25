@@ -4,7 +4,7 @@
 // DEPENDENCIES: geocodeRun (pure).
 // OUTPUTS: assertions only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { planGeocodeRun, applyOneResult, runSummary, EMPTY_RUN, BATCH } from './geocodeRun';
+import { planGeocodeRun, applyOneResult, runSummary, EMPTY_RUN, BATCH, googlePayloadOrThrow } from './geocodeRun';
 
 let passed = 0; const failures: string[] = [];
 const ok = (c: boolean, m: string) => { if (c) passed++; else failures.push(m); };
@@ -74,6 +74,35 @@ ok(!/could not be reached/.test(runSummary({ ...EMPTY_RUN, located: 10 })),
   const confirm = applyOneResult(goog('RANGE_INTERPOLATED'), NOW);
   ok(found.patch !== null && confirm.patch === null,
      '🔴 E1 NEGATIVE CONTROL: two responses identical but for location_type are written differently. An implementation keying on `status: OK` — which BOTH carry — would store them the same way, which is the single measurement this whole build rests on');
+}
+
+// ── §F · 🔴 A FAILED REQUEST IS NOT AN EMPTY ANSWER (§6 r24) — THE LIVE DEFECT ──────────────
+// David found this at the counter on 2026-09-25: "We can't find this address" for 770 County
+// Road 284, Liberty Hill — which Google finds instantly. The cause was not Google.
+{
+  let threw = false;
+  try { googlePayloadOrThrow({ ok: false, status: 503 }, { error: 'geocoding is not configured on this deployment' }); }
+  catch { threw = true; }
+  ok(threw,
+     '🔴 F1 THE EXACT PRODUCTION 503 THROWS. Measured live: the proxy returns HTTP 503 because the Google key is missing from Vercel. The old code read the body anyway and the classifier returned not_found — our misconfiguration, told to Lauren as her customer having a bad address');
+}
+{
+  // The proof that the old path was wrong, kept as a probe so it cannot come back.
+  const asVerdict = applyOneResult({ error: 'geocoding is not configured on this deployment' }, new Date());
+  ok(asVerdict.patch?.geocode_status === 'not_found',
+     "🔴 F2 …AND THIS IS WHY IT MATTERS: fed straight to the classifier, that same 503 body IS a 'not_found' verdict — dated, stored, and reused for thirty days. The throw is the only thing standing between a missing env var and 1,499 addresses marked unplaceable");
+}
+{
+  let threw = false;
+  try { googlePayloadOrThrow({ ok: true, status: 200 }, { nothing: true }); } catch { threw = true; }
+  ok(threw, 'F3 a 200 carrying no Google payload throws too — the same lie with a friendlier status code');
+}
+{
+  const payload = googlePayloadOrThrow({ ok: true, status: 200 }, { google: { status: 'ZERO_RESULTS' } });
+  ok((payload as any).status === 'ZERO_RESULTS',
+     '🔴 F4 NEGATIVE CONTROL — A REAL "WE LOOKED AND FOUND NOTHING" PASSES THROUGH UNTOUCHED. ZERO_RESULTS is Google answering, and it must still reach the classifier as a genuine cannot-place. A guard that threw on this would have swapped one lie for another');
+  ok(applyOneResult(payload, new Date()).patch?.geocode_status === 'not_found',
+     'F5 …and it still lands as not_found, which is correct: that address really cannot be placed');
 }
 
 console.log(`\ngeocodeRun — ${passed} passed, ${failures.length} failed`);

@@ -49,6 +49,8 @@
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { forgetVerdictPatch } from './geocodeFreshness';
+import { normalizeAddressPart } from './customerAddressFields';
 import type { ContactRecord } from './contactRecord';
 import { addressKey, normalizeEmailValue, normalizePhoneValue, phonesInText, splitEmails } from './contactRecord';
 import {
@@ -1117,6 +1119,19 @@ export async function editContactRow(
     if ('label' in patch && !patch.label) return refuse('an address needs a name, such as "Billing" or "Job site"');
     if (ADDRESS_FIELDS.every(f => blank(f in patch ? patch[f] : (row as unknown as Record<string, unknown>)[f])))
       return refuse('an address needs at least a street, a city or a ZIP — use Remove to take it off');
+    // 🔴 A CHANGED ADDRESS LOSES ITS VERDICT — David, 2026-09-25.
+    // A stored `geocode_status` applies ONLY to the exact text it was checked for. He corrected a
+    // state (the field had stored "TE" for Texas) and the address was STILL reported unfindable,
+    // because the not_found earned by the broken text was dated, stored and reused. Renaming the
+    // street, fixing the town or correcting the state makes this a different address, and the old
+    // answer is about a place that no longer appears on the record.
+    // ⚠️ ONLY WHEN THE TEXT ACTUALLY MOVES. Renaming the LABEL or flipping `kind` changes nothing
+    // about where the address is, and clearing a good coordinate for those would send the ③ check
+    // back to Google for no reason and cost a delivery its price until it returned.
+    const textMoved = ADDRESS_FIELDS.some(f =>
+      f in patch && normalizeAddressPart(String(patch[f] ?? '')) !==
+                    normalizeAddressPart(String((row as unknown as Record<string, unknown>)[f] ?? '')));
+    if (textMoved) Object.assign(patch, forgetVerdictPatch());
   } else {
     const p = x.patch as ContactValuePatch;
     if ('label' in p) patch.label = cleanOrNull(p.label) ?? 'other';

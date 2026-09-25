@@ -19,7 +19,7 @@
  *              customer relationship, and this component is as true for Kinna as for Cultivar.
  * OUTPUTS      <ShipToPicker> — renders nothing at all when there is nothing to offer.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   readCustomerAddresses, siteLine, sameAddress,
@@ -65,6 +65,34 @@ export function ShipToPicker({ db, businessId, customerId, current, onChoose }: 
     return () => { live = false; };
   }, [db, businessId, customerId]);
 
+  // 🔴 A PICKED CUSTOMER'S ADDRESS FILLS ITSELF IN — David, 2026-09-25, from the counter.
+  // Before this the picker waited to be CLICKED, so a customer with one saved address arrived at
+  // a blank delivery field and the cashier retyped an address we already held. Worse, retyping
+  // loses the STORED VERDICT: the ③ check then re-asks Google about an address we had already
+  // located, and on a bad day tells her it cannot be found.
+  //
+  // ⚠️ IT FILLS ONCE, AND ONLY INTO AN EMPTY FIELD. Overwriting something a person has typed
+  // would be the picker deciding it knows better, which is a worse defect than the one it fixes.
+  // 🔴 THE `once` REF IS WHAT LETS THE DEPENDENCIES BE HONEST. The first version listed only
+  // [loaded, sites] and carried an eslint-disable explaining why — but a suppressed rule and the
+  // code disagreeing, with a comment asserting the code is right, is the shape this branch has
+  // spent two days correcting. With the ref, the effect can depend on everything it reads and
+  // still fire exactly once.
+  const once = useRef(false);
+  useEffect(() => {
+    if (!loaded || sites.length === 0 || once.current) return;
+    if ((current.line1 ?? '').trim() !== '') return;          // she has typed something — leave it
+    const pick = sites.find(s => s.is_default) ?? (sites.length === 1 ? sites[0] : null);
+    if (!pick) return;                                        // several, none default ⇒ she chooses
+    once.current = true;
+    const address = { line1: pick.line1 ?? '', city: pick.city ?? '', state: pick.state ?? '', zip: pick.zip ?? '' };
+    if (TRACE_SITES) console.log('[TRACE:SITES] prefilled from the saved address', {
+      siteId: pick.id, kind: pick.kind, verdict: pick.geocode_status ?? null,
+    });
+    // The whole row travels, so the coordinate and the verdict come with it.
+    onChoose(address, { ...address, source: 'saved_site', siteId: pick.id }, pick);
+  }, [loaded, sites, current.line1, onChoose]);
+
   // Nothing saved ⇒ render NOTHING. The form below is exactly what was there before this build,
   // and a header promising saved sites above an empty row would be a claim that is not true
   // (§6 r18 — a header's assertion must hold for every row the section can contain).
@@ -87,7 +115,12 @@ export function ShipToPicker({ db, businessId, customerId, current, onChoose }: 
       padding: '10px 12px', margin: '0 0 12px',
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#27500A', marginBottom: 8 }}>
-        Saved delivery sites for this customer
+        {/* §6 r18 — the header must hold for every row beneath it. When the only thing saved is
+            the customer's billing address, "saved delivery sites" is a claim about rows that do
+            not exist; David's wording (2026-09-24) is what it should say instead. */}
+        {sites.every(s => s.kind === 'billing' || s.kind === 'both')
+          ? 'Where the trees go'
+          : 'Saved delivery sites for this customer'}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {sites.map(s => {
@@ -107,7 +140,12 @@ export function ShipToPicker({ db, businessId, customerId, current, onChoose }: 
               }}
             >
               <div style={{ fontWeight: 600, fontSize: 14, color: '#1f2937' }}>
-                {s.label}{s.is_default ? ' · default' : ''}
+                {/* David, 2026-09-24: a billing address offered as a delivery choice says so in
+                    those words. Its own label ("Home", "Billing") is not what the cashier needs
+                    at the counter — she needs to know it is the BILLING address being reused,
+                    because that is the thing she might want to correct. */}
+                {(s.kind === 'billing' || s.kind === 'both') ? 'Same as billing address' : s.label}
+                {s.is_default ? ' · default' : ''}
               </div>
               <div style={{ fontSize: 12, color: '#4b5563' }}>{siteLine(s)}</div>
             </button>

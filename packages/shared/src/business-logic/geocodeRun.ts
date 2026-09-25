@@ -30,6 +30,31 @@ export interface GeocodeRunState {
 
 export const EMPTY_RUN: GeocodeRunState = { remaining: 0, located: 0, needALook: 0, cannotPlace: 0, unreachable: 0 };
 
+/**
+ * 🔴 A REPLY IS ONLY A VERDICT IF IT IS ACTUALLY GOOGLE'S — §6 r24, made into one function.
+ *
+ * MEASURED IN PRODUCTION 2026-09-25: `POST /api/customers/create {action:'geocode'}` returned
+ * **HTTP 503 `{"error":"geocoding is not configured on this deployment"}`** — the Google key is
+ * in `.env.local` and not in Vercel's environment. Every caller read the body regardless and
+ * handed `{error: …}` to `classifyGeocodeResponse`, which finds no `status` and returns
+ * **`not_found`**. So a missing environment variable was reported to Lauren as
+ * *"We can't find this address"* about 770 County Road 284, Liberty Hill — an address Google
+ * returns instantly. Ruling 1 then WROTE that verdict with a date, so it would have been reused
+ * for thirty days, and one press of the bulk run would have written it across all 1,499.
+ *
+ * ⚠️ IT IS A FUNCTION, NOT THREE `if (!res.ok)` LINES, because there are three callers — the
+ * checkout, the Settings panel and the terminal script — and three hand-written copies of one
+ * rule is how two of them end up disagreeing (§6 r8). Throwing is what makes a failed request
+ * and an empty answer stop looking the same, which is r24 in one sentence.
+ */
+export function googlePayloadOrThrow(res: { ok: boolean; status: number }, body: unknown): unknown {
+  if (!res.ok) throw new Error(`geocode request failed — HTTP ${res.status}`);
+  const payload = (body as { google?: unknown } | null)?.google;
+  // A 200 carrying no Google payload is the same lie with a friendlier status code.
+  if (payload === undefined || payload === null) throw new Error('geocode reply carried no Google payload');
+  return payload;
+}
+
 /** 25 QPS is Google's documented ceiling. 40ms between calls stays under it with room. */
 export const GAP_MS = 40;
 /** Small batches so a person can stop it, and so a closed tab loses at most this much. */

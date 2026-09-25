@@ -25,7 +25,7 @@
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { planGeocodeRun, applyOneResult, runSummary, EMPTY_RUN, GAP_MS, type GeocodeRunState } from '../../business-logic/geocodeRun';
+import { planGeocodeRun, applyOneResult, runSummary, googlePayloadOrThrow, EMPTY_RUN, GAP_MS, type GeocodeRunState } from '../../business-logic/geocodeRun';
 import { setAddressGeocode } from '../../business-logic/contactWriter';
 import { CUSTOMER_ADDRESS_GEOCODE_COLUMNS } from '../../business-logic/customerAddressFields';
 
@@ -98,8 +98,14 @@ export function LocateAddressesPanel({ db, businessId, canWrite }: Props) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'geocode', businessId, address: typed }),
           });
-          const body = await res.json();
-          raw = body?.google ?? body;
+          // 🔴 §6 r24 — A NON-2xx IS NOT A VERDICT, AND HERE THE STAKES ARE THE WHOLE BOOK.
+          // Production returned 503 "geocoding is not configured on this deployment" on
+          // 2026-09-25. Reading the body regardless would have handed `{error: …}` to the
+          // classifier, which returns `not_found` — and this loop would then have written
+          // "cannot be placed", DATED, across all 1,499 addresses in one press. Every one of
+          // them unpriceable for thirty days, from one missing environment variable.
+          const body = await res.json().catch(() => null);
+          raw = googlePayloadOrThrow(res, body);
         } catch { reachable = false; }
 
         const r = applyOneResult(raw, new Date(), reachable);
