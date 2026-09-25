@@ -5125,3 +5125,42 @@ reachable by nobody.
 **EXIT CONDITION:** either the MADE IT tap writes `build_runs` (with its client-computed cost) the way
 the work order now does, or `record_build_run` is given that job server-side and the cost is passed in.
 **Until one of them happens, `build_runs` remains a table with one writer and three unused purposes.**
+
+---
+
+## #366 — 🔴 A MIGRATION'S HEADER CITED A HARNESS THAT WAS NEVER WRITTEN, SO ITS V-BLOCKS WERE EXECUTED BY NOTHING — AND THE ONE DEFECT IN THEM REACHED DAVID (NEW 2026-09-25, ledger #419)
+
+`20260925h_install_kit_components.sql` carried, in its own header:
+
+```
+-- HARNESS:      scripts/sql-harness/install-kit-411.pglite.mjs
+```
+
+🔴 **That file was never written.** Its three sibling migrations of the same set (`f`, `g`, `i`) each had a
+harness that executed their V-blocks verbatim; this one had a **citation instead of a harness**. So
+`20260925h`'s V1–V4 were run by nothing, and **David found the defect in V3 by pasting it against the live
+database**: `rung_ok=t rung_with_factor_refused=t mix_ok=t mix_without_factor_refused=`**`f`**.
+
+**THE DEFECT ITSELF** was SQL three-valued logic, fixed by `20260925m`: `CHECK ((rule='per_rung' AND factor
+IS NULL) OR (rule<>'per_rung' AND factor > 0))` evaluates to **NULL** for a NULL factor on any other rule —
+`null > 0` is NULL — **and a CHECK is satisfied by NULL; only FALSE rejects.** The constraint was
+structurally incapable of refusing a missing factor. `factor IS NOT NULL` is never NULL, so the branch can
+be FALSE, which is what makes a refusal possible.
+
+🔴 **THE CLASS IS WORSE THAN THE INSTANCE, AND IT IS WHY THIS IS FILED SEPARATELY FROM THE FIX.** A forgiving
+test double gives a false green (tech-debt #138, #357). **A harness that does not exist gives a false green
+AND a citation vouching for it** — the header reads as evidence to the next person, and nothing in
+`npm run verify` checks that a cited harness is a real file. ⚠️ **It is [[R-26]] inside our own artefacts:
+a written declaration nobody checked against reality, steering a decision.**
+
+✅ **GUARDED FOR THIS FILE ONLY, NOT FOR THE CLASS.** `install-kit-factor-419.pglite.mjs` probe **0b** asserts
+that `install-kit-411.pglite.mjs` **still does not exist**, so the record cannot quietly become true by
+someone creating an empty file with that name. **That protects one citation.**
+
+🔬 **THE CLASS CAP, PROPOSED AND NOT BUILT (David's scope):** every `-- HARNESS:` line in
+`supabase/migrations/*.sql` names a path that must EXIST. ~20 lines, derived from the corpus rather than a
+list (#73's lesson), and it must be **red-first against this very file's old text**. ⚠️ **It cannot assert
+that the harness RUNS the migration** — that is the deeper question and a path-existence check would give
+false comfort about it, so the cap should say what it does and does not prove.
+
+**HOW MANY OTHERS ARE LIKE THIS IS UNMEASURED** — that sweep is the first thing the cap would produce.

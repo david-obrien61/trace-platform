@@ -71,7 +71,18 @@
 -- DEPENDENCIES: businesses · is_active_member · has_permission (all live).
 -- OUTPUTS:      public.install_kit_components + 4 policies + the factor/rule CHECK.
 -- READER:       packages/shared/src/inventory/installKit.ts (PURE).
--- HARNESS:      scripts/sql-harness/install-kit-411.pglite.mjs
+-- HARNESS:      🔴 **THIS LINE WAS FALSE AND IT IS THE REASON THE DEFECT REACHED DAVID.** It named
+--               `scripts/sql-harness/install-kit-411.pglite.mjs`, **which was never written** — so this
+--               file's V-blocks were executed by NOTHING, and its V3 went out unexercised. David found it
+--               by pasting V3 live: `mix_without_factor_refused=f`.
+--               ✅ THE REAL HARNESS IS `scripts/sql-harness/install-kit-factor-419.pglite.mjs`, written
+--               2026-09-25. It runs THIS FILE's four V-blocks VERBATIM, red-first, and probe 0b asserts
+--               that `install-kit-411.pglite.mjs` still does not exist so the record cannot quietly
+--               become true by someone creating an empty file with that name.
+--               ⚠️ THE CHECK THIS FILE ADDS IS DEFECTIVE AND IS FIXED BY `20260925m` — a NULL factor made
+--               the constraint evaluate to NULL, and a CHECK passes on NULL. Do not read the CHECK below
+--               as the live rule; `20260925m` replaces it. (§6 r1: this file is applied and its SQL is
+--               untouched — only this comment is corrected.)
 -- STORY:        user_stories.md → *What goes on the trailer for one delivery day*
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 
