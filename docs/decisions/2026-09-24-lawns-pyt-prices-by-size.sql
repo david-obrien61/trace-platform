@@ -1,31 +1,37 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2026-09-24 — LAWNS DATA: Plant Your Tree prices by container size    · ledger #399
+-- 2026-09-24 — LAWNS DATA: Plant Your Tree prices from the INSTALL ladder   · ledger #404
 --
--- ⚠️ THIS IS A DATA FILE, NOT A MIGRATION. It is not in `supabase/migrations/` and it is
---   not idempotent-by-accident — it is guarded so a second run changes nothing. It touches
---   ONE tenant's ONE row, and CLAUDE.md §4 reserves LAWNS data writes to David.
+-- ✏️ THIS FILE REPLACES THE 2026-09-24 VERSION SHA `624db4da…`. **DO NOT RUN THAT ONE.**
+--   Its SQL was identical; what changed underneath it is what `price_source` MEANS. When it was
+--   written, a service named "Plant Your Tree" was routed to a SECOND price column (`pyt_price`),
+--   deliberately seeded on no rung — so running it would have made **every Plant Your Tree line
+--   unpriced**. Ledger #404 removed that routing. Now `price_source = 'container_ladder'` means
+--   one thing for every service: **read `install_price` off the rung.**
 --
--- 🔴 RUN IT ONLY AFTER `20260924d_container_ladder_pyt_price.sql` IS APPLIED and the branch
---   `feat/pyt-ladder-price` is merged and deployed. Before the code is live, flipping
---   `price_source` makes checkout read a scalar price it no longer displays.
+-- 🔴 DAVID, 2026-09-24: *"PLANT YOUR TREE uses the INSTALL LADDER'S PRICES per container size…
+--   15 gal → the install from ladder."*
 --
--- WHAT IT DOES AND WHY, IN ONE SENTENCE: it tells the platform that `Plant Your Tree` takes its
---   price from the container ladder, exactly as `Installation` already does — David, 2026-09-24:
---   *"PLANT YOUR TREE IS PRICED BY CONTAINER SIZE FROM A LADDER, like install."*
+-- ⚠️ THIS IS A DATA FILE, NOT A MIGRATION. It is not in `supabase/migrations/`, it touches ONE
+--   tenant's ONE row, and CLAUDE.md §4 reserves LAWNS data writes to David.
+--
+-- 🔴 RUN IT ONLY AFTER `feat/pyt-from-install-ladder` (#404) IS MERGED AND DEPLOYED. Before the
+--   code is live, the old routing is still in the bundle and the line would read `pyt_price`,
+--   which is NULL on every rung.
+--
+-- WHAT IT DOES: tells the platform that `Plant Your Tree` takes its price from the container
+--   ladder, exactly as `Installation` already does — and now from the SAME column.
 --
 -- ⚠️ THE $125 ON THAT ROW IS DAVID'S OWN DEMO FIGURE, NOT LAUREN'S PRICE — he said so on
---   2026-09-24. It is LEFT IN PLACE rather than zeroed, deliberately: once `price_source` is
---   `container_ladder` nothing reads it (checkout shows *"priced by container size"* where a
---   scalar price would go), and zeroing a column nobody reads would look like a price of $0 to
---   the next person who greps for it. 🔴 **It is still a second representation of one fact
---   (STD-011) and it is recorded as such** — the durable fix is a NOT NULL price that is only
---   NOT NULL when `price_source = 'fixed'`, which is a migration and David's call, not a default
---   taken inside this build.
+--   2026-09-24. It is LEFT IN PLACE rather than zeroed: once `price_source` is `container_ladder`
+--   nothing reads it (checkout shows *"priced by container size"* where a scalar price would go),
+--   and zeroing a column nobody reads would look like a price of $0 to the next person who greps
+--   for it. 🔴 It is still a second representation of one fact (STD-011) and is recorded as such.
 --
--- ⚠️ AND NO RUNG HAS A PRICE YET, SO THE FIRST ORDER AFTER THIS RUNS WILL SAY SO. That is the
---   designed behaviour, not a failure: the line reads *"Size to be confirmed on install day"*,
---   charges nothing today, and the order still sends. Lauren sets the figures in
---   Settings → Container sizes → Plant Your Tree price, one rung at a time, as she learns them.
+-- ✅ AND UNLIKE THE VERSION THIS REPLACES, THE PRICES ARE ALREADY THERE. LAWNS's install ladder is
+--   priced on 6 of its 9 rungs — 15 gal $204 · 30 $425 · 45 $450 · 65 $650 · 95/100 $800 ·
+--   200 gal $1,800 (measured live 2026-09-24). So the first Plant Your Tree line after this runs
+--   is PRICED, not owed. `slip`, `4 in` and `3/5 gal` carry no install price and will ask — and
+--   for Plant Your Tree they ask WITHOUT blocking the sale, by David's ruling of the same day.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -51,15 +57,19 @@ SELECT 'D1 Plant Your Tree prices from the ladder; no other row changed' AS chec
   FROM service_offerings
  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 
--- D2 — 🔴 WHAT THE COUNTER WILL SEE ON THE NEXT ORDER, BEFORE ANY RUNG IS PRICED.
--- Expect: PASS, and `rungs_priced` = 0 is the CORRECT answer today, not a failure. It is printed
--- without a verdict precisely so it can be read as it changes.
-SELECT 'D2 the ladder is ready to be priced — every rung says why it is not' AS check,
-       CASE WHEN count(*) FILTER (WHERE pyt_price_because = '') = 0
+-- D2 — 🔴 WHAT THE COUNTER WILL SEE ON THE NEXT ORDER. Expect: PASS.
+-- Every rung that carries an install price now also prices a Plant Your Tree line, because they
+-- are the same number. `rungs_unpriced` is the count that will ASK rather than charge — for Plant
+-- Your Tree that is a flag, not a refusal. Printed without a verdict so it can be read as it moves.
+SELECT 'D2 the install ladder is what Plant Your Tree will read, and it is priced' AS check,
+       CASE WHEN count(*) FILTER (WHERE install_price IS NOT NULL
+                                    AND coalesce(install_price_because, '') = '') = 0
             THEN 'PASS' ELSE 'FAIL' END AS verdict,
-       count(*) FILTER (WHERE pyt_price_because = '') AS silent_should_be_zero,
-       count(*) FILTER (WHERE pyt_price IS NOT NULL) AS rungs_priced_informational,
-       count(*) AS rungs_informational
+       count(*) FILTER (WHERE install_price IS NOT NULL
+                          AND coalesce(install_price_because, '') = '') AS priced_but_silent_should_be_zero,
+       count(*) FILTER (WHERE install_price IS NOT NULL) AS rungs_priced_informational,
+       count(*) FILTER (WHERE install_price IS NULL)     AS rungs_unpriced_informational,
+       string_agg(label || ' ' || coalesce('$' || install_price::text, 'not set'), ' · ' ORDER BY sort_order) AS ladder_informational
   FROM container_ladder
  WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 

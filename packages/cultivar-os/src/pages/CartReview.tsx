@@ -9,7 +9,7 @@ import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
   fetchAttachedCustomerTier,
   readTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
-  priceLinesFromLadder, usesLadderPricing, ladderPriceKindFor, LADDER_PRICE_KINDS,
+  priceLinesFromLadder, usesLadderPricing, ladderBlocksOrder,
   type PricingLineInput, type DiscountType, type OrderTaxExemption, type LadderPricing,
 } from '@trace/shared/business-logic';
 import type { Ladder } from '@trace/shared/inventory';
@@ -243,7 +243,7 @@ export function CartReview() {
         size: l.plant.current_container || null,
         quantity: l.quantity,
         name: l.plant.common_name ?? l.plant.species ?? null,
-      })), ladderPriceKindFor(s.offering)));
+      })), s.offering));
     }
   }
   /** The rule-computed baseline for ANY service — the ladder's sum when it prices by size. */
@@ -848,7 +848,7 @@ export function CartReview() {
           🔴 THIS IS THE OPPOSITE OF THE INSTALL NOTICE DIRECTLY ABOVE, AND IT IS A RULING, NOT A
           STYLE CHOICE. David, 2026-09-24: *"'I don't know' → the installer identifies it on the
           install day and LAWNS AMENDS the order to add the charge."* So the Send buttons stay
-          LIVE. `blocksOrder` is read from `LADDER_PRICE_KINDS` rather than written here, so this
+          LIVE. Whether it blocks is read from `ladderBlocksOrder` rather than written here, so this
           notice and submit.ts's server-side gate cannot come to disagree about which it is.
           ⚠️ WHAT MAKES A $0 CONTRIBUTION HONEST HERE IS THIS BOX. The unpriced trees add nothing
           to today's total — which is only acceptable because the screen NAMES them and says the
@@ -857,8 +857,7 @@ export function CartReview() {
         .filter(([, lp]) => !lp.allPriced)
         .map(([offeringId, lp]) => {
           const offering = otherAddons.find(s => s.offering.id === offeringId)?.offering;
-          const kind = offering ? ladderPriceKindFor(offering) : 'install';
-          const blocks = LADDER_PRICE_KINDS[kind].blocksOrder;
+          const blocks = ladderBlocksOrder(offering);
           const given = !!serviceOverride[offeringId];
           return (
             <div key={offeringId} style={{ margin: '0 16px 12px', padding: '10px 14px', background: given ? '#f0f7ea' : '#eff6ff', border: `1.5px solid ${given ? '#27500A' : '#1d4ed8'}`, borderRadius: 8 }}>
