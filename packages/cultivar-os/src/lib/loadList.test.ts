@@ -585,8 +585,17 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   const nine = res(line(1, 'Cedar Elm - 30 gallon Install & Warranty', 'CE30'));
   ok(nine.kind === 'unresolved',
     '🔴 N6: a tree line whose size we cannot reach is UNRESOLVED — dropping it with the fees is the failure this page exists to prevent');
-  ok(res(line(1, 'Blue Point Juniper (Replacement)', 'BPJ30REP')).kind === 'unresolved',
-    'N6b: a replacement tree with no size is unresolved too');
+  // ✏️ N6b IS INVERTED, AND THE OLD ASSERTION IS QUOTED SO THE REVERSAL IS VISIBLE. It read:
+  //    "a replacement tree with no size is unresolved too". David reversed it on 2026-09-25:
+  //    *"READ REPLACEMENTS: container size from the item code where the name lacks it
+  //    (BPJ30REP → 30 gal; AZBI45 → 45 gal — the digits are the size)."* A warranty replacement is
+  //    PLANTED, so it must be a full tree on the sheet with its mix and its posts — not a refusal.
+  const rep = res(line(1, 'Blue Point Juniper (Replacement)', 'BPJ30REP'));
+  ok(rep.kind === 'tree' && rep.gallons === 30,
+    `🔴 N6b: a replacement's size is READ OFF ITS CODE — BPJ30REP is a 30 gal tree (got ${rep.kind}, ${rep.gallons} gal)`);
+  // …and one whose code carries no digits is STILL unresolved: the fallback reads a size, never invents one.
+  ok(res(line(1, 'Mystery Tree (Replacement)', 'NOSIZEREP')).kind === 'unresolved',
+    '🔴 N6c: a replacement with no digits anywhere is still UNRESOLVED — an unreadable size is never defaulted');
 
   // N7 — deer fence as a LINE means the stop records it.
   const df = res(line(1, 'Deer Fencing', 'DF'));
