@@ -26,3 +26,13 @@
  */
 export const CUSTOMER_ADDRESS_COLUMNS =
   'id, business_id, customer_id, label, line1, line2, city, state, zip, notes, is_default, active, created_at, updated_at, kind, source, import_run_id, latitude, longitude, geocoded_at, geocode_status';
+
+/**
+ * The five fields the geocode run needs to BUILD AN ADDRESS LINE and write the answer back.
+ *
+ * 🔴 A PROJECTION, DELIBERATELY NOT THE RECORD SHAPE. The bulk run reads every unlocated address
+ * — ~1,500 of them — and `CUSTOMER_ADDRESS_COLUMNS` would pull 21 columns across the wire for
+ * each one to use five. It lives HERE, beside the full list, so it is still ONE place that knows
+ * what a customer address is made of (#179: the list is the source, the select is derived).
+ */
+export const CUSTOMER_ADDRESS_GEOCODE_COLUMNS = 'id, line1, city, state, zip';

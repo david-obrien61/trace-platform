@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
 import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
 import { DeliveryRingMap } from '@trace/shared/components/settings/DeliveryRingMap';
-import type { DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
+import { DELIVERY_RING_COLUMNS, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
 import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
@@ -309,7 +309,7 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
     let alive = true;
     void (async () => {
       const { data, error } = await supabase.from('business_delivery_rings')
-        .select('id, outer_radius_miles, charge, origin_note, active')
+        .select(DELIVERY_RING_COLUMNS)
         .eq('business_id', businessId).order('outer_radius_miles', { ascending: true });
       if (!alive) return;
       if (error) { setRingsMissing(true); return; }

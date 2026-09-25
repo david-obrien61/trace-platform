@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { planGeocodeRun, applyOneResult, runSummary, EMPTY_RUN, GAP_MS, type GeocodeRunState } from '../../business-logic/geocodeRun';
 import { setAddressGeocode } from '../../business-logic/contactWriter';
+import { CUSTOMER_ADDRESS_GEOCODE_COLUMNS } from '../../business-logic/customerAddressFields';
 
 interface Props { db: SupabaseClient; businessId: string | null; canWrite: boolean }
 
@@ -80,7 +81,7 @@ export function LocateAddressesPanel({ db, businessId, canWrite }: Props) {
       if (!plan.more) break;
 
       const { data, error } = await db.from('customer_addresses')
-        .select('id, line1, city, state, zip')
+        .select(CUSTOMER_ADDRESS_GEOCODE_COLUMNS)
         .eq('business_id', businessId).is('geocode_status', null)
         .not('line1', 'is', null).neq('line1', '')
         .order('id', { ascending: true }).limit(plan.take);

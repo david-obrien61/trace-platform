@@ -38,6 +38,14 @@ export interface DeliveryRing {
 
 export interface Point { latitude: number; longitude: number }
 
+/**
+ * 🔴 THE COLUMN LIST IS THE SOURCE AND THE SELECT IS DERIVED FROM IT (#179).
+ * A ring read that types its own column list is a list that can silently disagree with the table —
+ * which is exactly how `VENDORS_SELECT` came to name ten columns while its migration created
+ * fourteen, and the four it missed were the address. One list, imported everywhere.
+ */
+export const DELIVERY_RING_COLUMNS = 'id, business_id, outer_radius_miles, charge, origin_note, active';
+
 const EARTH_MILES = 3958.7613;
 const rad = (d: number) => (d * Math.PI) / 180;
 
