@@ -17,12 +17,17 @@
  *      node scripts/run-tests.mjs <substr>   (run only files whose path matches)
  */
 import { execFileSync, execSync } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const ESBUILD = join(ROOT, 'node_modules/.bin/esbuild');
-const filter = process.argv[2] || '';
+// ⚠️ FLAGS ARE NOT A PATH FILTER. The first draft took `process.argv[2]` whole, so
+// `--update-floor` was read as a substring to match, matched nothing, and the runner exited
+// "No test files found" BEFORE reaching the flag it was given. A flag silently becoming a filter
+// that matches nothing is a command that appears to run and does something else.
+const args = process.argv.slice(2);
+const filter = args.find(a => !a.startsWith('--')) || '';
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -43,10 +48,66 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-console.log(`\n── UNIT TESTS — ${files.length} file(s) ──────────────────────────────\n`);
+// ═════════════════════════════════════════════════════════════════════════════
+// 🔴 THE DISCOVERED-FILE FLOOR — tech-debt #186, and the defect it closes is our own
+// ═════════════════════════════════════════════════════════════════════════════
+// MEASURED 2026-09-04: two runs minutes apart on ONE tree reported `74/74 · 3838 assertions` and
+// then `72/72 · 3775`. Both said *All test files pass*. The two missing files existed and passed
+// when run alone — `readdirSync` was racing three other sessions writing into the same tree.
+//
+// **A SHORT RUN IS INDISTINGUISHABLE FROM A FULL ONE**, because `N/N files pass` compares the
+// discovered count to ITSELF. It cannot disagree, which is [[R-33]] in the runner that certifies
+// every other check — and it silently degrades the ratchet and every mutation harness that shells
+// out to this file.
+//
+// The floor is the fix: the number of test files we KNOW exist, stored outside this run. Fewer
+// than that is a failure even when every file that did run was green.
+//
+// ⚠️ IT ONLY EVER RISES, AND ONLY DELIBERATELY (`npm run test:floor`). A floor that lowered itself
+// on a short run would launder exactly the defect it exists to catch — the same reasoning as the
+// quality gate's "shrink them, never grow them", inverted because more tests is the good direction.
+// ⚠️ A FILTERED RUN IS EXEMPT, obviously: `node scripts/run-tests.mjs foo` is meant to run a subset.
+const BASELINE_PATH = join(ROOT, 'quality-baseline.json');
+let floor = null;
+try {
+  floor = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))?.tests?.files ?? null;
+} catch { floor = null; }
+
+if (args.includes('--update-floor')) {
+  const doc = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
+  const was = doc.tests?.files ?? 0;
+  if (files.length < was) {
+    console.error(`REFUSED — the floor is ${was} and only ${files.length} files were discovered. ` +
+      `A floor that lowers itself on a short run launders the very defect it exists to catch (#186). ` +
+      `If test files were genuinely DELETED, lower it by hand and say why in the commit.`);
+    process.exit(1);
+  }
+  doc.tests = { files: files.length, stamped: new Date().toISOString().slice(0, 10) };
+  writeFileSync(BASELINE_PATH, JSON.stringify(doc, null, 2) + '\n');
+  console.log(`test-file floor: ${was} → ${files.length}`);
+  process.exit(0);
+}
+
+console.log(`\n── UNIT TESTS — ${files.length} file(s) discovered${floor !== null && !filter ? `, floor ${floor}` : ''} ─────────────\n`);
+
+if (!filter && floor !== null && files.length < floor) {
+  console.error(`\n🔴 SHORT RUN — ${files.length} test files discovered, but ${floor} are known to exist.\n`);
+  console.error(`   ${floor - files.length} file(s) did not turn up. Nothing below this line is trustworthy:`);
+  console.error(`   every file that DID run may be green while the missing ones are red.`);
+  console.error(`   Cause, measured 2026-09-04: readdirSync racing another session writing into the`);
+  console.error(`   same tree. Re-run; if the count is genuinely lower because tests were deleted,`);
+  console.error(`   run \`npm run test:floor\` deliberately and say why in the commit. (tech-debt #186)\n`);
+  process.exit(1);
+}
 
 const failed = [];
 let totalAssertions = 0;
+// 🔴 COUNTED, NOT ASSUMED. Today every discovered file is executed by the loop below, so these
+// agree by construction — which is exactly why it is worth asserting: the day a `continue`, an
+// early `break` or a try/catch swallows one, the summary would still read `N/N` because both
+// halves of that fraction come from the same array. A count of what RAN cannot be faked by the
+// loop that runs it.
+let executed = 0;
 
 for (const file of files) {
   const rel = relative(ROOT, file);
@@ -93,6 +154,7 @@ for (const file of files) {
            'either crashed before the summary or contains no assertions. Either way it proves nothing.';
   }
 
+  executed++;
   if (ok) {
     console.log(`  ✅ ${rel}  (${counts})`);
   } else {
@@ -101,13 +163,31 @@ for (const file of files) {
   }
 }
 
-console.log(`\n── ${files.length - failed.length}/${files.length} files pass · ${totalAssertions} assertions ─────────────────\n`);
+console.log(`\n── ${files.length - failed.length}/${files.length} files pass · ${executed} executed · ${totalAssertions} assertions ─────────────────\n`);
+
+if (executed !== files.length) {
+  console.error(`🔴 ${files.length} files were discovered but only ${executed} ran — ${files.length - executed} ` +
+    `were skipped by the runner itself, which is a different failure from a red test and is not reported as one.`);
+  process.exit(1);
+}
 
 if (failed.length > 0) {
   console.error(`RED — ${failed.length} test file(s) failing:\n`);
   for (const f of failed) {
     console.error(`──────── ${f.rel} ────────`);
-    console.error(f.out.trim().split('\n').filter(l => l.includes('✗') || l.includes('FAIL') || l.includes('Error') || l.includes('error')).slice(0, 20).join('\n'));
+    // 🔴 THE FILTER MISSED esbuild'S OWN ERRORS, AND A PLANTED PROBE FOUND IT (2026-09-25).
+    // A top-level-await file under --format=cjs was correctly reported RED and BY NAME — and then
+    // printed NOTHING about why, because esbuild writes `✘ [ERROR] Top-level await is currently
+    // not supported with the "cjs" output format` and the filter matched only lowercase `error`
+    // and `Error`. A named failure with no reason sends the next person to read the file rather
+    // than the message. `✘` and `[ERROR]` are esbuild's; the rest are the suites'.
+    const lines = f.out.trim().split('\n')
+      .filter(l => l.includes('✗') || l.includes('✘') || l.includes('[ERROR]')
+                || /FAIL/i.test(l) || /error/i.test(l));
+    // Falling back to the raw tail matters more than tidiness: a failure whose output matches
+    // NOTHING in the list above would otherwise print an empty block, which reads as "no reason
+    // given" when the reason was right there.
+    console.error((lines.length ? lines : f.out.trim().split('\n').slice(-12)).slice(0, 20).join('\n'));
     console.error('');
   }
   process.exit(1);

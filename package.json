@@ -67,7 +67,8 @@
     "geocode:business": "node_modules/.bin/esbuild scripts/geocode-business-address.ts --bundle --platform=node --format=cjs --external:@supabase/supabase-js --outfile=node_modules/.cache/geocode-business.cjs && node node_modules/.cache/geocode-business.cjs",
     "verify:migration-header-truth": "node scripts/verify-migration-header-truth.mjs && node scripts/verify-migration-header-truth.mjs --self-test",
     "verify:exec-output": "node scripts/selftest/exec-output-regression.mjs",
-    "verify:browser-key": "node scripts/verify-browser-key-restricted.mjs && node scripts/verify-browser-key-restricted.mjs --self-test"
+    "verify:browser-key": "node scripts/verify-browser-key-restricted.mjs && node scripts/verify-browser-key-restricted.mjs --self-test",
+    "test:floor": "node scripts/run-tests.mjs --update-floor"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
