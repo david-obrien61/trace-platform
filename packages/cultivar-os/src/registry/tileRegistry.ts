@@ -768,6 +768,13 @@ export const NAV_IA: NavNode[] = [
   // URL-only orphan (ledger #315): a printable sheet nobody can find is a sheet nobody prints,
   // which is the whole defect this build exists to fix, one layer out.
   { key: 'nav_load_list',       section: 'dashboard', parent: 'nav_delivery',        label: 'Load list', route: '/load-list', matchRoute: '/load-list', required_permission: 'deliveries:read' },
+  // MAP — its own page (David, 2026-09-25: "the map should be its own page … the map is a base
+  // with overlays"), under Delivery beside Route and Load list, because that is where a person is
+  // standing when they want it. ⚠️ crew-link is reworking this menu tonight; if Delivery becomes a
+  // different group this node moves with it — the note is in ~/Desktop/trace-sessions.md.
+  // required_permission is EXPLICIT: omitting it drops navPermission() onto the retired
+  // `view_dashboard` and the node goes invisible to everyone INCLUDING the owner (tech-debt #87).
+  { key: 'nav_map',             section: 'dashboard', parent: 'nav_delivery',        label: 'Map', route: '/map', matchRoute: '/map', required_permission: 'deliveries:read' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
   { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
   // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.

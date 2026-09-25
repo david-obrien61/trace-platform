@@ -21,6 +21,7 @@ import { Orders }            from './pages/Orders';
 import { OrderDetail }       from './pages/OrderDetail';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
+import { CustomerMap }     from './pages/CustomerMap';
 import { LoadList }         from './pages/LoadList';
 import { OperationsCalendar } from './pages/OperationsCalendar';
 import { Settings }          from './pages/Settings';
@@ -169,6 +170,12 @@ export function AppRouter() {
           </Route>
           <Route element={<PermissionRoute permission="deliveries.route:read" />}>
             <Route path="/deliveries"        element={<DeliveryRoute />} />
+          </Route>
+          {/* MAP — its own page (David, 2026-09-25), a base with layers. Gated on the plain
+              `deliveries:read`, NOT `deliveries.route:read`: reading a saved route on a map is not
+              the Maps handoff that string guards, and the page writes nothing at all. */}
+          <Route element={<PermissionRoute permission="deliveries:read" />}>
+            <Route path="/map"               element={<CustomerMap />} />
           </Route>
 
           {/* Social + Campaigns — `campaigns:read`. Campaign Scheduler is the reported bug: STAFF
