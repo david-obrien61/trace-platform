@@ -107,6 +107,17 @@ export function AddressInput({ value, onChange, businessId, bias, purpose = 'any
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [degraded, setDegraded] = useState(false);
+  // 🔴 THE BIAS IS READ INTO PRIMITIVES HERE, AND THE EFFECT BELOW USES ONLY THESE.
+  // react-hooks/exhaustive-deps wanted `bias` itself in the dependency array — and adding it is
+  // precisely the defect removed earlier today: a caller that builds the bias inline hands a NEW
+  // OBJECT every render, so an effect depending on the object re-fires every render and fetches in
+  // a loop. Suppressing the rule would have left the code and the rule disagreeing, with a comment
+  // asserting the code was right. Hoisting makes them AGREE: the effect genuinely does not use the
+  // object, its dependencies are genuinely complete, and no caller has to memoise to be safe.
+  const biasLat = bias?.latitude ?? null;
+  const biasLng = bias?.longitude ?? null;
+  const biasRadius = bias?.radius ?? null;
+
   /** The town question, when taking a suggestion would move the customer to another town. */
   const [townAsk, setTownAsk] = useState<{ q: TownMismatch; s: Suggestion } | null>(null);
   const session = useRef<string>(newSessionToken());
@@ -127,7 +138,10 @@ export function AddressInput({ value, onChange, businessId, bias, purpose = 'any
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'autocomplete', businessId, address: q,
-            bias: bias ?? undefined, sessionToken: session.current,
+            bias: biasLat !== null && biasLng !== null
+              ? { latitude: biasLat, longitude: biasLng, radius: biasRadius ?? undefined }
+              : undefined,
+            sessionToken: session.current,
             // 🔴 A SHIP-TO IS RESTRICTED; EVERYTHING ELSE IS ONLY BIASED. Sent only when there is
             // a real boundary to send — an invented radius would refuse real customers silently.
             restrictMiles: purpose === 'delivery' && serviceAreaMiles ? serviceAreaMiles : undefined,
@@ -155,7 +169,7 @@ export function AddressInput({ value, onChange, businessId, bias, purpose = 'any
     // loop, and a suggestion list that flickers. Depending on the numbers makes the component
     // immune to how its caller happens to construct them, which is the shared control's job —
     // a caller should not have to memoise to avoid a loop it cannot see.
-  }, [value.line1, businessId, bias?.latitude, bias?.longitude, bias?.radius, purpose, serviceAreaMiles]);
+  }, [value.line1, businessId, biasLat, biasLng, biasRadius, purpose, serviceAreaMiles]);
 
   /**
    * A tap on a suggestion. 🔴 IT DOES NOT COMMIT — it asks first when the suggestion is in a

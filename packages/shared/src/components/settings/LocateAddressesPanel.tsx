@@ -174,6 +174,17 @@ export function LocateAddressesPanel({ db, businessId, canWrite }: Props) {
 
       {note && <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 8 }}>{note}</div>}
 
+      {/* 🔴 STOPPING IS SHOWN, NOT JUST RECORDED. eslint caught this as an unused variable and it
+          was a real hole, not a lint nit: the panel TRACKED that a person had pressed Stop and
+          then said nothing about it, so a half-finished run looked identical to a finished one.
+          Whether the work is complete or merely paused is the whole question at that moment. */}
+      {stopped && !running && (
+        <div style={{ fontSize: '0.85rem', color: '#92400e', marginTop: 8 }}>
+          Stopped — nothing is lost. Every address already looked at stays done; press Locate to
+          carry on from where it left off.
+        </div>
+      )}
+
       {review.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <strong>{review.length} need you to look</strong>
