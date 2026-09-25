@@ -100,9 +100,21 @@ const ALLOWED = new Map([
   // will land on this list. Rewriting the cap to assert the WRITE inside a planning build is the
   // scope creep the gate exists to catch. The entries below are declarations, not a widening —
   // each names a file whose relationship to the columns is stated and checkable by eye.
+  // ── A DIFFERENT TABLE'S COLUMN THAT HAPPENS TO SHARE THE NAME, added 2026-09-25 (ledger #413) ─
+  // 🔴 STRONGER THAN "PURE READER": this file does not touch the projection AT ALL. It reads
+  // `production_rung_dates.unit_value` — the size a lot was potted ON TO, on the append-only
+  // rung-dates table (`20260924a`) — which is a different column on a different table that merely
+  // shares a name with `business_inventory.unit_value`. Nothing here derives, writes or renders a
+  // unit of the projection, and the SELECT is a read-back assertion inside a PGlite harness.
+  // ⚠️ This is tech-debt #190 exactly as that entry predicted — *"the cap matches on the NAME, so it
+  // cannot tell a read from a write, and every future reader of the projection will land on this
+  // list"* — with the extra wrinkle that the cap cannot tell one TABLE from another either. Filed
+  // rather than fixed: rewriting the cap to qualify the table inside a work-order build is the scope
+  // creep the gate exists to catch.
   ['packages/cultivar-os/src/lib/uppotPlanFields.ts',      'READS: the plan surface field list — selects the projection, never computes it'],
   ['packages/cultivar-os/src/lib/uppotPlanRead.ts',        'READS: maps the selected projection onto LotInput; no unit is derived here'],
   ['packages/cultivar-os/src/lib/uppotPlanRead.test.ts',   'READS: asserts the field list matches the migration corpus (tech-debt #179 class)'],
+  ['scripts/sql-harness/work-orders-413.pglite.mjs', 'NOT THE PROJECTION: reads production_rung_dates.unit_value, a different table\'s column sharing the name — a read-back assertion, no derive, no write'],
   ['scripts/measure-production-plan-mutants.mjs',          'names them inside mutant strings only — mutates the PLANNER, never the derive'],
   ['scripts/seed-uppot-harness.mjs',                       'names them in its own console output to say the projection has NOT run on seeded rows'],
 

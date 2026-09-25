@@ -18,7 +18,7 @@
 (`STATUS: needs-input`). ⚠️ **THE STORY GATE IS PARTLY OPEN AND IS NOT CLOSED BY THIS BUILD** — see
 the note below CARD 21.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 36 covered** ✏️ **+3 on 2026-09-23 (ledger #391) — CARD 34 a production size reads "not sold at this size", CARD 35 the potting date and its history, CARD 36 the uppot window and its dated history. ⛔ They wait on `20260924a` · `20260924b` · `20260924c` respectively.** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
+**Board: 0 of 37 covered** ✏️ **+1 on 2026-09-25 (ledger #414) — the mix shortfall planner, `needs-test` WITH ITS REASON: it is computed but nothing calls it, and with the pile uncounted its refusal is the correct output.** ✏️ **+3 on 2026-09-23 (ledger #391) — CARD 34 a production size reads "not sold at this size", CARD 35 the potting date and its history, CARD 36 the uppot window and its dated history. ⛔ They wait on `20260924a` · `20260924b` · `20260924c` respectively.** ✏️ **+2 on 2026-09-23 (ledger #390) — CARD 32 GROW and HOLD on the ladder, CARD 33 the graduation date on the plan. ⛔ Both wait on `20260923h_container_ladder_grow_and_hold.sql` plus the step-0 SQL.** ✏️ **+1 on 2026-09-18 (ledger #356) — CARD 31, caliper on the ladder. ⛔ Its migration `20260918c_container_ladder_caliper.sql` is NOT APPLIED; CARD 31 and the Container sizes screen wait on it.** (28 `owed` · 2 `needs-test`). ✏️ **+6 on 2026-09-14 (ledger #326) — the container ladder.** ✏️ **+3 on 2026-09-16 (ledger #343) — the Container sizes screen, Planting materials, and the rung starting size; CARD 22 changed and stays owed.**
 **TENANT:** every card names its own. Most run at **Test Dave's Tree Nest**
 (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — see the seed gate. Three run at **LAWNS**
 (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) and say so.
@@ -790,3 +790,31 @@ COVERS: ledger #391 — David, 2026-09-23, ruling 1: LAWNS sets and adjusts its 
 5. Press **Save** again without changing anything. **PASS:** re-run the query — **no new rows.**
 
 **FAIL:** the window is not editable by a manager · a save writes a row per key rather than per change · a no-op save writes rows · step 4 returns nothing (the trigger did not fire).
+
+---
+
+## SURFACE: the mix shortfall planner (added 2026-09-25, ledger #414)
+
+### 🔴 The planner refuses rather than guessing while the mix has never been counted
+STATUS: needs-test
+DEVICE: desktop
+COVERS: #414
+LAST-PROVEN: —
+SIGNAL: none — there is no screen, and no draft work order is written yet.
+
+- **Why `needs-test` (OP-14 clause 2):** `mixSchedule.ts` computes the planned batches and their due
+  dates, but **nothing calls it.** The Operations calendar band and Lauren's schedule are not built, and
+  nothing turns a planned batch into a DRAFT work order. There is nothing to click.
+- **🔴 AND THE HONEST STATE OF IT IS THE POINT, NOT AN EXCUSE.** Every LAWNS mix row carries
+  `qty_basis = 'placeholder'` — a catalogue-import seed, never a count. With the pile uncounted the
+  planner **refuses and says so**: *"the mix has never been counted — planning from a seed value would
+  look exactly like a real plan."* The sentence a screen would show **is** the refusal, so a refused
+  plan cannot be rendered as a plan. **Today that refusal is the correct output.**
+- **What this card becomes, once the pile is counted once and the band exists:** put two install days on
+  the calendar whose demand exceeds what is on the ground, and read the band. **PASS:** it says
+  *"NEED MIX — stock low: N batches by <day>"*, the day is the **lead time** before the day the mix is
+  needed for, and a second shortfall later in the window gets its own batch. **FAIL** if it plans for
+  the first dip only, or if it shows a number while the on-hand figure is a placeholder.
+- **⚠️ WHAT IS PROVEN WITHOUT A SCREEN:** `mixSchedule.test.ts`, 29 probes both directions — the
+  refusals, the arithmetic, the carry-forward across days, an unreadable day breaking the chain rather
+  than counting as zero demand, and a due date in the past saying so.
