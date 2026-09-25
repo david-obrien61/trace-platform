@@ -131,22 +131,19 @@ export interface Rung {
   /** Where that price came from — the billed median, Lauren's sheet, or nobody has set it. */
   installPriceBecause: string;
   /**
-   * What it costs to PLANT ONE tree of this size THAT THE CUSTOMER ALREADY OWNS — David, 2026-09-24:
-   * *"PLANT YOUR TREE IS PRICED BY CONTAINER SIZE FROM A LADDER, like install."*
+   * 🔴 NOT READ BY ANYTHING — Plant Your Tree prices from `installPrice` (David, 2026-09-24:
+   * *"PLANT YOUR TREE uses the INSTALL LADDER'S PRICES per container size… 15 gal → the install
+   * from ladder."*). `20260924d` added the column when the design gave that service its own
+   * price; that lasted four hours, and seeding NONE of it would have made every Plant Your Tree
+   * line unpriced the moment its `price_source` was switched.
    *
-   * 🔴 IT IS A DIFFERENT SERVICE FROM INSTALL AND THE HISTORY SAYS SO, WHICH IS WHY IT IS A SECOND
-   * COLUMN RATHER THAN A MULTIPLIER ON `installPrice`. All five Plant-Your-Tree lines LAWNS has ever
-   * invoiced (measured live 2026-09-24) are an Olive, a Japanese Maple, yaupons moved within a
-   * garden — trees LAWNS did not sell. On each of those invoices the container size belongs to a
-   * DIFFERENT line, which is exactly why David's spec has the customer SAY the size and the
-   * installer confirm it on the day.
-   *
-   * 🔴 `null` IS THE ORDINARY ANSWER AND IT IS TODAY THE ONLY ONE: `20260924d` seeds NO rung,
-   * because the history supports none. Unlike install, an unpriced PYT line DOES NOT BLOCK the
-   * order — David ruled it is amended later. A 0 would read as a free planting, so it stays null.
+   * ⚠️ IT STAYS ON THE TYPE BECAUSE IT STAYS ON THE TABLE — a migration is never edited (§6 r1)
+   * and `20260924d` is applied. `20260924e` documents it as NOT USED in the database itself, so
+   * the next person to find it learns why rather than wiring to it. It is NULL on every rung on
+   * every tenant.
    */
   pytPrice: number | null;
-  /** Where that figure came from, or why there is none. NOT NULL for the same reason as above. */
+  /** NOT READ — see `pytPrice`. */
   pytPriceBecause: string;
   /**
    * Months from UPPOTTING INTO this rung until a tree on it is SELLABLE (David, 2026-09-01;

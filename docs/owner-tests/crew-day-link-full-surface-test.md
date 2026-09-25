@@ -16,7 +16,7 @@
 **Ruling:** [[R-161]] — one completion writer, two doors; the review ask is HELD, never spent
 **Build:** ledger **#347** · branch `feat/crew-day-link` · migration `20260917c_crew_day_link.sql`
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 7 of 11 covered** (0, 0b, A, B, B2, C, H). **D, E, F, G owed — David: not before Saturday.** (CARD 0b — David, 2026-09-17 · 10 `owed`). ✏️ **CARDS G and H added 2026-09-18 (ledger #351, [[R-163]])** — the saved route order; H is on LAWNS, Saturday 2026-09-19 only, by David's approval. ✏️ **CARDS 0b and F added 2026-09-17** — David asked for the office door to be proven FIRST, before the crew cards, because Mark done is an existing feature that this build changed. ✏️ **CARD F added the same day** — David ruled ([[R-161]]) that the office's own **Mark done** must behave like the crew's: it HOLDS the review ask and can be undone. One writer, two doors.
+**Board: 2 of 17 covered** (0b, H). ✏️ **2026-09-25 (ledger #406): the park is OPEN and this is MERGED but the SQL may not be APPLIED yet — CARD M is the card to run FIRST, before the migration, and CARD N is LAWNS on the real Saturday.** ✏️ **2026-09-21 (ledger #374): A CREW LINK NOW BELONGS TO A TEAM — CARDS I, J, K, L added, all `owed`.** 🔴 **CARDS 0, A, B, B2 and C are FLIPPED `covered` → `owed` and their LAST-PROVEN reset.** Migration `20260921d` REPLACES `crew_day_stops`, `crew_day_read`, `create_crew_day_link` and `crew_stop_act` and DROPS two superseded arities, and the crew-link panel is now one row per team — so the proofs David ran on 09-17/09-18 were performed against code that no longer exists. A green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). **CARD 0b is NOT flipped** — the office door (`stop_act`) is untouched by this migration. **CARD H is NOT flipped** — it is a dated read-only observation of LAWNS on 2026-09-19, not a claim about current code. **Nothing is merged or applied: David reviews on Test Dave's first.**
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **nine** paths and **eight** guards through the real entry points on the live schema; **22 of 22** deliberate breaks were caught (`scripts/sql-harness/crew-day-link-347.mutants.py`).
 
 > 🔴 **WHO CAN RUN WHAT, AND ON WHICH TENANT.**
@@ -39,7 +39,7 @@
 ---
 
 ## CARD 0 — the database update is in
-**STATUS:** covered · **DEVICE:** desktop · **LAST-PROVEN:** 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)
+**STATUS:** owed · **DEVICE:** desktop · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-17 (David — the `20260917c` V-block, whose V3 IS this check)) — 20260921d REPLACES four of 20260917c’s functions and DROPS two old arities, so this V-block now describes a superseded state
 ✅ David ran V3 on apply: create/revoke → anon f · authed t · service t; the five crew functions → anon f · authed f · service t. Re-read live by Thunder the same hour (all nine functions, incl. `stop_act` and `stop_progress_apply`). **No need to run it again.**
 In the Supabase **SQL editor**, paste and run:
 
@@ -96,7 +96,7 @@ SELECT p.proname,
 ---
 
 ## CARD A — make today's link, open it on your phone, enter a name
-**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-17 (David · Test Dave's · `05f3061 · prod`)
+**STATUS:** owed · **DEVICE:** phone · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-17 (David · Test Dave's · `05f3061 · prod`)) — the crew-link panel is now ONE ROW PER TEAM, and the crew page names its team
 ✅ **PASSED:** the link opened with no login, asked the name once and remembered it; both stops showed address, Maps, Call where there is a number and "No phone on file" where there is not, the office note, item lists with quantities and the honest empty messages, Start / Done / Note, and **no prices anywhere**. ✏️ One wrong prediction in this card, corrected: the john smith stop has NO linked order, so it reads *"No order is linked to this stop"*, not *"no items listed"*. **And it exposed the regression David then ruled on — the page said "scheduled order, not a planned route" → [[R-163]], ledger #351.**
 1. On your computer, sign in, open **Delivery → Schedule** on Test Dave's.
 2. On today's (or tomorrow's) day heading, tap **Crew link**. A panel opens: *Crew link for this day*.
@@ -110,7 +110,7 @@ SELECT p.proname,
 ---
 
 ## CARD B — Start and Done a stop; the schedule shows the times and the name
-**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David · Test Dave's · crew link on the phone)
+**STATUS:** owed · **DEVICE:** phone · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-18 (David · Test Dave's · crew link on the phone)) — `crew_stop_act` is REPLACED and gained a refusal branch
 ✅ **PASSED — THROUGH THE CREW LINK THIS TIME** (the tap log confirms: device `f18d48bd`, no `app-session`). Stop 3, David Smith, 770 County Road 284: **Started 11:12 → Done 11:15 → Note 11:16 "Some texts"**, all from the phone; Lauren's schedule showed all three with the name and times, **"review ask held, not sent"**, **3 min on site**. The LEANDER stop showed the amber *"order is still open"* line. ⚠️ The phone was still typed as **"Mauro"**, so the three taps read "Mauro" — the same device `20260918b` marked as David's test device, so they are attributable from the record; David is changing the typed name to "David test".
 ⚠️ **2026-09-18 10:50–10:51, reported as CARD B — BUT THE TAP LOG SHOWS BOTH TAPS CAME THROUGH THE OFFICE DOOR** (the schedule's Start this stop / Mark done: `device_id = app-session`, no crew link, recorded as the member name *David OBrian*). That re-proves the office path (CARD 0b's) — held ask, order not fulfilled — but **not this card, whose point is the PHONE → Lauren's schedule path the driver uses.** Stays `owed` until a tap made on the crew link appears on the schedule under the name typed on the phone.
 1. On the phone page from CARD A, on STOP 1, tap **Start**. Wait at least a minute.
@@ -123,7 +123,7 @@ SELECT p.proname,
 ---
 
 ## CARD B2 — an accidental Done is undone from the phone, and a note is kept
-**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David) + 2026-09-17 (Lauren)
+**STATUS:** owed · **DEVICE:** phone · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-18 (David) + 2026-09-17 (Lauren)) — `crew_stop_act` is REPLACED and gained a refusal branch
 ✅ **ASSEMBLED FROM TWO LIVE RUNS — said, so it can be challenged.** The **note** half: David, 2026-09-18 11:16, *"Some texts"* from the phone, shown on Lauren's schedule with name and time. The **undo** half: Lauren, 2026-09-17 15:55:23, **Undo from the crew link on LAWNS** reopened the Sappal stop (tap log: `undo_done`, crew link) — and the office Undo is CARD 0b. ⚠️ No single run did phone-Undo-then-Note on one stop; if David wants that exact sequence proven, it is 2 minutes on Test Dave's.
 1. On the phone, on the stop from CARD B, tap **Undo**.
 2. Tap **Note**, type *gate was locked*, tap **Save**.
@@ -135,7 +135,7 @@ SELECT p.proname,
 ---
 
 ## CARD C — the page shows no prices
-**STATUS:** covered · **DEVICE:** phone · **LAST-PROVEN:** 2026-09-18 (David · Test Dave's · `0bcb467 · prod`)
+**STATUS:** owed · **DEVICE:** phone · · **LAST-PROVEN:** reset 2026-09-21 (was 2026-09-18 (David · Test Dave's · `0bcb467 · prod`)) — `crew_day_stops` is REPLACED (same fields, new function)
 ✅ **PASSED:** no prices anywhere on the phone page.
 1. On the phone page, scroll through every stop.
 2. Compare with the same order on the computer (**Orders → the order**), which does show prices.
@@ -246,3 +246,94 @@ David's ruling [[R-161]]. On your computer, on **Test Dave's**, open **Delivery 
 - **The rate limit** (60 calls a minute per phone) — builder test `crew.rate-limit`.
 - **Spanish** — the page is English only, by David's call for the pilot; the crew wording was cut to a few words per control. Filed as the next step against [[R-151]]: tech-debt **#325**.
 - **A stop completed before this build** (an imported history stop, [[R-37]]) — neither door will reopen it, and it says why. Proven by `office.undo-done` and `crew.undo-done`, not by a card: making one would mean marking a real imported stop.
+
+---
+
+## CARD I — 🔴 EACH TEAM'S LINK SHOWS ONLY ITS OWN STOPS (ledger #374, teams piece 3)
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+COVERS: ledger #374 — a crew link belongs to a team
+SIGNAL: the crew page header reads the team's name beside the nursery's
+
+On **Test Dave's**, a day with stops split across **Team 1** and **Team 2** (assign them first).
+1. Schedule → **Crew link for this day**. There is now **one row per team**, plus *"The whole day"*.
+2. **Make link** on Team 1's row; open it on the phone.
+**PASS:** the phone shows **only Team 1's stops**, and the header reads **Team 1** under the nursery
+name.
+**🔴 FAIL if** Team 2's stops are on the page — that is Saturday 2026-09-19 happening again.
+**🔴 FAIL if** a stop with **no team** appears on a team's link. Nobody has said it is that team's
+work, so it belongs on the whole-day link or on nobody's.
+
+## CARD J — 🔴 A CREW CANNOT FINISH ANOTHER TEAM'S STOP, NOT EVEN BY ACCIDENT
+**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+COVERS: ledger #374 — `crew_stop_act` REFUSES a stop off the link's team
+SIGNAL: the refusal names the reason — *"That stop is not on this team's list."*
+
+This is the half that is not about display. **Hiding a stop does not stop anyone posting its id
+back**, so the database refuses the write as well.
+1. With Team 1's link open on the phone, tap **Done** on one of Team 1's stops — it works.
+2. Then (David, on a desktop, with the schedule open in another tab) confirm **Team 2's stops are
+   still untouched** — not started, not done.
+**PASS:** Team 1's own stop completes; nothing of Team 2's changed.
+**FAIL if** a Team 2 stop shows Started or Done after a Team 1 crew used their link.
+
+## CARD K — A DAY THAT IS NOT SPLIT WORKS EXACTLY AS IT DID
+**STATUS:** owed · **DEVICE:** desktop + phone · **LAST-PROVEN:** —
+COVERS: ledger #374 — the whole-day link is unchanged
+SIGNAL: the crew page header shows the nursery name and **no** team
+
+On a day where no stop carries a team, use the **"The whole day"** row.
+**PASS:** the link shows **every** stop, Start/Done/Note all work, and the header claims **no team**.
+**🔴 FAIL if** the whole-day link shows fewer stops than the day has, or names a team it is not for.
+
+## CARD L — REMAKING ONE TEAM'S LINK DOES NOT KILL ANOTHER'S
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #374 — one live link per team, per day
+SIGNAL: —
+
+With live links for Team 1 and Team 2, press **Make a new link** on Team 1's row.
+**PASS:** Team 1's old link stops working; **Team 2's link still opens and still works**.
+**🔴 FAIL if** Team 2's crew is locked out because Team 1's link was remade — on a Saturday morning
+that strands a crew in a yard.
+
+## CARD M — 🔴 RUN THIS FIRST, BEFORE YOU APPLY `20260921d`
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #406 — the per-crew client is safe to merge before its migration
+SIGNAL: the panel says *"not set up on this nursery yet — ask Lauren"* and no link is made
+
+🔴 **WHY THIS CARD EXISTS AND WHY IT IS FIRST.** This code merged overnight on 2026-09-24; the SQL
+was not applied, because you were asleep. So there is a window — possibly the window you are
+standing in right now — where the app can ask for a per-crew link and the database cannot make one.
+**The only unacceptable behaviour in that window is falling back to the whole day**, because that is
+Saturday 2026-09-19's defect arriving through the safety net built to prevent it. David's own words:
+*"It must NEVER fall back to showing a crew the whole day or another crew's stops."*
+
+1. **Before applying any SQL**, open the schedule on a day with stops and press **Crew link for this day**.
+2. Press **Make link** on a **crew's** row (not *"The whole day"*).
+3. Then press **Make link** on **"The whole day"**.
+
+**PASS:** step 2 shows **"Per-crew links are not set up on this nursery yet — ask Lauren. The
+whole-day link still works."** and **no link appears in the list**; step 3 makes a working whole-day
+link exactly as it always did, and opening it shows the day.
+**🔴 FAIL if** step 2 produces a link of any kind. Open it — if it shows the whole day, a crew would
+have been handed every job on it.
+**🔴 FAIL if** step 3 stopped working. The safety net must not break the thing that works today.
+
+*After this card passes, apply `20260921d` (SHA `acd12e87…`), read its NOTICE, then run CARDS I–L.*
+
+## CARD N — 🔴 LAWNS, SATURDAY 2026-09-26: CREW 1 AND CREW 2, FOR REAL
+**STATUS:** owed · **DEVICE:** desktop + two phones · **LAST-PROVEN:** —
+COVERS: ledger #406 on the live tenant, after CARDS I–L pass on Test Dave's
+SIGNAL: two crew pages open side by side, neither showing the other's stops
+
+⚠️ **Run CARDS I–L on Test Dave's first.** This is the live day Lauren works, and it is the reason
+the whole piece exists — six stops, two crews, named **CREW 1** and **CREW 2**.
+
+1. On **Saturday 2026-09-26**, assign each of the six stops to **CREW 1** or **CREW 2**.
+2. Make a link for **CREW 1**, and a link for **CREW 2**. Open both — ideally on two phones.
+3. Leave one stop assigned to **no crew** and reload both links.
+
+**PASS:** each page shows only its own crew's stops, in that crew's routed order, with that crew's
+load section, and the header names the crew. The unassigned stop appears on **neither** page.
+**🔴 FAIL if** either page shows a stop belonging to the other crew, or the whole day.
+**🔴 FAIL if** the unassigned stop appears on either page — it must be flagged to Lauren on the
+schedule instead, never quietly given to a crew.

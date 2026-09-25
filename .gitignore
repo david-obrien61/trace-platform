@@ -64,3 +64,11 @@ supabase/local-data/
 
 # writer-registry path-test bundles (ledger #345)
 .writer-registry-*.bundle.mjs
+
+# Heavy-job bundles and probes — build artefacts, never committed (§6 r28 work, 2026-09-25)
+.exitcheck.bundle.mjs
+.stream-single.bundle.mjs
+.stream-path-file.mjs
+.writer-registry-*.out
+.r26*.mjs
+.probe-fns.mjs

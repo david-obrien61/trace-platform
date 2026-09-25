@@ -292,9 +292,9 @@ export type {
 // (ledger #386). Pure; the CartReview preview and submit's authoritative recompute both call it.
 export {
   priceLinesFromLadder, usesLadderPricing, LADDER_PRICE_SOURCE,
-  // ledger #399 — `Plant Your Tree` prices by container size too, through THIS module. The
-  // service is a parameter; there is still one implementation of "price a line from its rung".
-  ladderPriceKindFor, LADDER_PRICE_KINDS, type LadderPriceKind,
+  // ledger #404 — every ladder-priced service reads `install_price` (David, 2026-09-24). What is
+  // still per-service is whether an unpriced line STOPS the sale, and the words it shows.
+  ladderBlocksOrder, ladderUnpricedWords,
   type LadderPriceableLine, type LadderPricedLine, type LadderPricing,
 } from './ladderPricing';
 

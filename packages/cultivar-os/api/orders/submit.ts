@@ -9,7 +9,7 @@ import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
 import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
-import { priceLinesFromLadder, usesLadderPricing, ladderPriceKindFor, LADDER_PRICE_KINDS }
+import { priceLinesFromLadder, usesLadderPricing, ladderBlocksOrder }
   from '../../../shared/src/business-logic/ladderPricing';
 import { LADDER_SELECT, rungFromRow, type Ladder } from '../../../shared/src/inventory/containerLadder';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
@@ -1114,22 +1114,23 @@ async function handleCreate(req: any, res: any) {
     // 🔴 AND IT DOES NOT REFUSE, WHICH IS THE OPPOSITE OF THE INSTALL TWENTY LINES ABOVE. David,
     // 2026-09-24: *"'I don't know' → the installer identifies it on the install day and LAWNS
     // AMENDS the order to add the charge."* So an unpriced planting line is CHARGED NOTHING TODAY
-    // and named on the order, rather than blocking the sale. `blocksOrder` on `LADDER_PRICE_KINDS`
-    // is where that difference is declared — one place, read by both this and CartReview, because
-    // two hardcoded copies of a rule this consequential are two rules waiting to disagree.
+    // and named on the order, rather than blocking the sale. `ladderBlocksOrder` is where that
+    // difference is decided — ONE function, read by both this and CartReview, because two hardcoded
+    // copies of a rule this consequential are two rules waiting to disagree. It keys on `category`:
+    // a TRANSPORT row is how the goods get there, so an order that cannot price it cannot be
+    // fulfilled; an ADDON is an extra, and an extra nobody has priced yet can be added later.
     const addonLadderPricing = new Map<string, ReturnType<typeof priceLinesFromLadder>>();
     if (ladder) {
       for (const s of otherAddons) {
         if (!usesLadderPricing(s.offering)) continue;
-        const kind = ladderPriceKindFor(s.offering);
         const priced = priceLinesFromLadder(ladder, resolvedLines.map(rl => ({
           size: rl.container,
           quantity: rl.quantity,
           name: rl.plant?.common_name ?? rl.plant?.species ?? null,
-        })), kind);
+        })), s.offering);
         addonLadderPricing.set(s.offering.id, priced);
         console.log('[TRACE:PRICE] addon priced per container size', {
-          offering: s.offering.name, kind, blocksOrder: LADDER_PRICE_KINDS[kind].blocksOrder,
+          offering: s.offering.name, category: s.offering.category, blocksOrder: ladderBlocksOrder(s.offering),
           pricedTotal: priced.pricedTotal,
           linesNeedingAmount: priced.linesNeedingAmount,
           unitsNeedingAmount: priced.quantityNeedingAmount,
@@ -1139,7 +1140,7 @@ async function handleCreate(req: any, res: any) {
         // DECORATIVE. Nothing sets `blocksOrder: true` on an addon today; if a tenant ever puts
         // install-shaped pricing on an addon, this is the gate behind the UI, exactly as the
         // install's own refusal above is (STD-013's pattern).
-        if (LADDER_PRICE_KINDS[kind].blocksOrder && !priced.allPriced && !honored[s.offering.id]) {
+        if (ladderBlocksOrder(s.offering) && !priced.allPriced && !honored[s.offering.id]) {
           const owed = priced.lines.filter(l => l.needsAmount);
           return res.status(422).json({
             error: `${s.offering.name} has no price for some of these sizes, so it cannot be totalled yet. `

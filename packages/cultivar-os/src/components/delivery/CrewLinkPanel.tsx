@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, Copy, Share2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { readTeams, type Team } from '../../lib/teams';
 import {
   createCrewDayLink, revokeCrewDayLink, readCrewDayLinks, crewLinkUrl, type CrewLinkRow,
 } from '../../lib/crewDayLink';
@@ -39,7 +40,9 @@ function deviceTimeZone(): string {
 }
 
 export function CrewLinkPanel({ businessId, date }: { businessId: string; date: string }) {
-  const [live, setLive] = useState<CrewLinkRow | null>(null);
+  // 🔴 MANY LINKS PER DAY NOW (ledger #374) — one per team, plus at most one whole-day link.
+  const [links, setLinks] = useState<CrewLinkRow[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,26 +59,30 @@ export function CrewLinkPanel({ businessId, date }: { businessId: string; date: 
       setError(r.message);
       return;
     }
-    setLive(r.value);
+    setLinks(r.value);
   }
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId, date]);
+  useEffect(() => {
+    void readTeams(supabase, businessId).then(r => { if (r.ok) setTeams(r.teams); });
+  }, [businessId]);
 
-  async function make() {
+  // 🔴 ONE LINK PER TEAM (ledger #374, teams piece 3). `teamId` null = the whole day, which is what
+  // every link was and what a nursery that does not split its days keeps getting.
+  async function make(teamId: string | null = null) {
     setBusy(true); setError(null); setCopied(false);
-    const r = await createCrewDayLink(supabase, businessId, date, deviceTimeZone());
+    const r = await createCrewDayLink(supabase, businessId, date, deviceTimeZone(), teamId);
     setBusy(false);
     if (!r.ok) { setError(r.message); return; }
     setFresh({ url: crewLinkUrl(window.location.origin, r.value.token), replaced: r.value.replaced });
     await load();
   }
 
-  async function turnOff() {
-    if (!live) return;
+  async function turnOff(linkId: string) {
     setBusy(true); setError(null);
-    const r = await revokeCrewDayLink(supabase, live.id);
+    const r = await revokeCrewDayLink(supabase, linkId);
     setBusy(false);
     if (!r.ok) { setError(r.message); return; }
     setFresh(null);
@@ -123,26 +130,47 @@ export function CrewLinkPanel({ businessId, date }: { businessId: string; date: 
         </div>
       )}
 
-      {!loading && live && (
-        <div style={{ fontSize: '0.8125rem', color: '#111827', marginBottom: 8 }}>
-          Link is on · made {when(live.created_at)} · works until {when(live.expires_at)}
-          {live.last_used_at ? ` · last opened ${when(live.last_used_at)}` : ' · not opened yet'}
-        </div>
-      )}
-      {!loading && !live && !fresh && (
-        <div style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 8 }}>No link for this day.</div>
-      )}
-
+      {/* 🔴 ONE ROW PER TEAM (ledger #374, teams piece 3 — David, 2026-09-21). Saturday 2026-09-19
+          one link showed ALL EIGHT stops to whoever opened it. Each team now gets its own link
+          showing only its own stops, and the DATABASE enforces that — `crew_day_stops` filters and
+          `crew_stop_act` REFUSES a stop off the team (20260921d), so hiding is not the whole of it.
+          ⚠️ A nursery with NO teams sees exactly one row, "The whole day", as it always did. */}
       {!loading && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => { void make(); }} disabled={busy} style={{ ...(live ? secondary : primary), opacity: busy ? 0.6 : 1 }}>
-            {busy ? 'Working…' : live ? 'Make a new link' : 'Make link'}
-          </button>
-          {live && (
-            <button onClick={() => { void turnOff(); }} disabled={busy} style={{ ...btn, background: '#fff', color: RED, border: `1.5px solid ${RED}`, opacity: busy ? 0.6 : 1 }}>
-              Turn off link
-            </button>
-          )}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {[{ id: null as string | null, name: 'The whole day' },
+            ...teams.filter(t => t.active).map(t => ({ id: t.id as string | null, name: t.name }))]
+            .map(row => {
+              const link = links.find(l => (l.team_id ?? null) === row.id) ?? null;
+              return (
+                <div key={row.id ?? 'whole-day'} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: GREEN }}>{row.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: link ? '#111827' : GRAY, margin: '2px 0 8px' }}>
+                    {link
+                      ? <>Link is on · made {when(link.created_at)} · works until {when(link.expires_at)}
+                          {link.last_used_at ? ` · last opened ${when(link.last_used_at)}` : ' · not opened yet'}</>
+                      : 'No link yet.'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={() => { void make(row.id); }} disabled={busy}
+                      style={{ ...(link ? secondary : primary), opacity: busy ? 0.6 : 1 }}>
+                      {busy ? 'Working…' : link ? 'Make a new link' : 'Make link'}
+                    </button>
+                    {link && (
+                      <button onClick={() => { void turnOff(link.id); }} disabled={busy}
+                        style={{ ...btn, background: '#fff', color: RED, border: `1.5px solid ${RED}`, opacity: busy ? 0.6 : 1 }}>
+                        Turn off
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          {/* A RETIRED team keeps any link it already holds ([[R-133]]) — it is simply not offered a new one. */}
+          {links.some(l => l.team_id && !teams.some(t => t.id === l.team_id && t.active)) ? (
+            <p style={{ margin: 0, fontSize: '0.75rem', color: GRAY }}>
+              A link above belongs to a team that is retired or no longer listed. It keeps working until it expires — turn it off if that crew is not going out.
+            </p>
+          ) : null}
         </div>
       )}
     </div>
