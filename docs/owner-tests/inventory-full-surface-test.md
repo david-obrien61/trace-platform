@@ -1768,3 +1768,33 @@ SIGNAL: none — this card has no trace line, and that is the hazard. See below.
   **says** the right thing. **Only this card proves a browser did it**, and only for `/inventory`;
   `/assets`, `/customers`, the reconcile and import grids took the same change and are not covered
   here. Clicking one editable cell on any of them is the whole test.
+
+---
+
+## SURFACE: alternate sale units of one base item (added 2026-09-25, ledger #409)
+
+### 🔴 The mix conversions exist, survive a reload, and refuse a chain — but nothing writes them yet
+STATUS: needs-test
+DEVICE: desktop
+COVERS: #409
+LAST-PROVEN: —
+SIGNAL: none — there is no screen, and that is exactly what this card records.
+
+- **Why this is `needs-test` and not `owed`, stated rather than left to be inferred (OP-14 clause 2):**
+  `20260925b` creates `item_sale_units` and `saleUnits.ts` reads it, but **no surface in the app writes
+  or shows a conversion**. There is nothing for you to click, so a card asking you to click something
+  would be asserting a surface that does not exist. Recording the hole is the part that is not optional.
+- **What CAN be proven today, and how:** paste the migration's own **V1–V4** into the SQL editor. Each
+  one builds its own fixture, RAISEs its verdict and rolls back, so the error message *is* the report:
+  V1 the table, its 9 columns, RLS and its 4 policies · V2 **0 rows on every tenant** (no migration
+  seeds tenant config) · V3 a base sold as itself is accepted while a chain `51 → 52 → 99` is refused
+  **by the trigger** · V4 a member of one business sees only its own row and cannot write into another.
+- **PASS:** all four raise a message beginning `V1 PASS` … `V4 PASS`.
+- **🔴 FAIL if** V2 reports any rows — that would mean a migration seeded conversions on your behalf,
+  which is the thing the 2026-09-22 ruling forbids — or if V3 reports the chain was accepted.
+- **⚠️ THE HONEST LIMIT:** these prove the DATABASE. The arithmetic a person will actually feel — a
+  45 gal bucket drawing 45 gallons off the pile rather than one — is proven only by
+  `saleUnits.test.ts` (35 probes) and `item-sale-units-409.pglite.mjs` (31), neither of which is a
+  browser. **This card becomes `owed` with real steps the moment an editor exists.**
+- **⚠️ AND IT CANNOT BE RUN AT ALL UNTIL YOU DECIDE WHICH ROW HOLDS THE PILE** — that choice is in
+  `~/Desktop/MORNING-2026-09-26.md` with a recommended default, and nothing in the code guesses it.
