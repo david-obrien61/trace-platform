@@ -1,4 +1,5 @@
 import { classifyGeocodeResponse } from '../../../shared/src/business-logic/geocodeResult';
+import { tripChargeFor } from '../../../shared/src/business-logic/deliveryRings';
 import { createClient } from '@supabase/supabase-js';
 import { customerDisplayName } from '../../../shared/src/utils/personName';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
@@ -984,9 +985,69 @@ async function handleCreate(req: any, res: any) {
         businessId, offeringId: selectedTransport.id, wouldHaveCharged: round2(lineSubtotal(selectedTransport, qtyFor(selectedTransport))),
       });
     }
-    const transportComputed = (selectedTransport && !shipToUnplaceable) ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
+    // ══ THE RING PRICE, DECIDED HERE AND NOT BY THE BROWSER ═══════════════════════════════════
+    // 🔴 EVERY INPUT IS RE-READ FROM THE DATABASE. `selectedTransport` arrives in the REQUEST BODY,
+    // so its `price` and its `pricing_basis` are whatever the caller sent. §1.6 item 10: money is
+    // recomputed server-authoritatively or it is not defended at all. So the basis, the rings and
+    // the yard all come from the database, and the only thing taken from the client is WHICH
+    // offering was chosen.
+    //
+    // ⚠️ IT DEGRADES TO TODAY'S BEHAVIOUR AT EVERY STEP. No `pricing_basis` column (a deployment
+    // without 20260925c), no rings configured, a read that fails — each falls through to the flat
+    // charge the row has always made. A tenant who has not set up rings must not notice this code
+    // exists, and a tenant who has must not lose their delivery charge to a failed read.
+    const ringPrice = await (async () => {
+      if (!selectedTransport?.id || shipToUnplaceable) return null;
+      try {
+        const { data: off, error: offErr } = await db.from('service_offerings')
+          .select('pricing_basis').eq('id', selectedTransport.id).eq('business_id', businessId).maybeSingle();
+        // A missing column errors here; that is a deployment without the migration, not a ring.
+        if (offErr || off?.pricing_basis !== 'ring') return null;
+
+        const { data: biz } = await db.from('businesses')
+          .select('latitude, longitude, geocode_status').eq('id', businessId).maybeSingle();
+        const depot = (biz?.geocode_status === 'found'
+          && typeof biz?.latitude === 'number' && typeof biz?.longitude === 'number')
+          ? { latitude: biz.latitude as number, longitude: biz.longitude as number } : null;
+
+        const { data: ringRows } = await db.from('business_delivery_rings')
+          .select('id, business_id, outer_radius_miles, charge, origin_note, active')
+          .eq('business_id', businessId).eq('active', true);
+
+        const flat = lineSubtotal(selectedTransport, qtyFor(selectedTransport));
+        const verdict = tripChargeFor({
+          depot,
+          address: (typeof shipToPlacement.latitude === 'number' && typeof shipToPlacement.longitude === 'number')
+            ? { latitude: shipToPlacement.latitude, longitude: shipToPlacement.longitude } : null,
+          rings: (ringRows ?? []) as any,
+          flatAmount: flat,
+          located: typeof shipToPlacement.latitude === 'number',
+        });
+        console.log('[TRACE:PRICE] trip charge from the ring', {
+          businessId, offeringId: selectedTransport.id, source: verdict.source,
+          amount: verdict.amount, why: verdict.why,
+        });
+        return verdict;
+      } catch (e) {
+        // Rule 24 again: a failed read is not a fact about the customer's address.
+        console.log('[TRACE:PRICE] ring lookup unavailable — flat charge stands', { message: (e as Error).message });
+        return null;
+      }
+    })();
+
+    // 🔴 `amount: null` MEANS DO NOT BILL, and it is not the same as 0. It is the "outside your
+    // rings" and "we cannot place it" cases — shown to the person, never silently charged as free
+    // and never guessed at (David, 2026-09-18 / 2026-09-23).
+    const ringSuppressed = ringPrice !== null && ringPrice.amount === null;
+    const transportComputed = (selectedTransport && !shipToUnplaceable && !ringSuppressed)
+      ? (ringPrice?.amount ?? lineSubtotal(selectedTransport, qtyFor(selectedTransport)))
+      : 0;
     // No override may reinstate a suppressed charge: an override states an AMOUNT, and the
     // question here is not "how much" but "to where" — which is still unanswered.
+    // ⚠️ AN OVERRIDE STILL STANDS — David: "a human override with a reason always stands". It is
+    // applied to whatever the ring decided, so somebody who states an amount and a reason gets
+    // that amount. What an override may NOT do is reinstate a charge for a place we could not
+    // find: there the question is not "how much" but "to where", and it is still unanswered.
     const transportRes      = (selectedTransport && !shipToUnplaceable) ? applyOverride(selectedTransport.id, transportComputed) : null;
     const transportAmount   = transportRes?.amount ?? 0;
 

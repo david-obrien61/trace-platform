@@ -15,6 +15,9 @@ import {
 import type { Ladder } from '@trace/shared/inventory';
 import { loadContainerLadder } from '../lib/containerLadderRead';
 import { supabase } from '../lib/supabase';
+import {
+  tripChargeFor, DELIVERY_RING_COLUMNS, type DeliveryRing, type TripCharge,
+} from '@trace/shared/business-logic/deliveryRings';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
   totalPlantCount, nettedQuantity, lineSubtotal, isNettingOffering,
@@ -48,6 +51,45 @@ export function CartReview() {
   // true ONLY when the rate could not be READ — never when the business simply has none set.
   const [taxReadFailed, setTaxReadFailed] = useState(false);
   const [taxLoaded, setTaxLoaded] = useState(false);
+
+  // ── THE DELIVERY RINGS, READ ONLY WHEN THIS ORDER'S TRANSPORT IS PRICED BY THEM ────────────
+  // 🔴 THE SERVER STILL DECIDES THE MONEY. `api/orders/submit` re-reads the basis, the yard and
+  // the rings from the database and re-geocodes the address; this read exists so the number on
+  // the screen is the number on the receipt. A preview that showed the flat price while the
+  // server charged the ring would be the price-changes-between-screen-and-receipt defect the
+  // block below already guards for an unplaceable address.
+  // ⚠️ NO QUERY ON A BUSINESS THAT DOES NOT USE RINGS. `pricing_basis` gates it, so a tenant
+  // whose transport is flat — which is every tenant until David says otherwise, and both of
+  // LAWNS's other two rows — pays nothing for this code existing.
+  const [depot, setDepot] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [rings, setRings] = useState<DeliveryRing[] | null>(null);
+  const ringBasis = selectedTransport?.pricing_basis === 'ring';
+  useEffect(() => {
+    if (!businessId || !ringBasis) { setRings(null); setDepot(null); return; }
+    let cancelled = false;
+    // `void` because the effect is the caller and there is nobody to await it — the catch below
+    // is the rejection handler, which is what the rule is actually asking for.
+    void (async () => {
+      try {
+        const [biz, ringRows] = await Promise.all([
+          supabase.from('businesses').select('latitude, longitude, geocode_status').eq('id', businessId).maybeSingle(),
+          supabase.from('business_delivery_rings').select(DELIVERY_RING_COLUMNS).eq('business_id', businessId).eq('active', true),
+        ]);
+        if (cancelled) return;
+        const b = biz.data as { latitude?: number | null; longitude?: number | null; geocode_status?: string | null } | null;
+        setDepot(b?.geocode_status === 'found' && typeof b.latitude === 'number' && typeof b.longitude === 'number'
+          ? { latitude: b.latitude, longitude: b.longitude } : null);
+        // 🔴 A FAILED READ IS NOT "NO RINGS". `[]` would make the preview say *no rings set up*
+        // and quietly show the flat price, which is a claim about the owner's settings that a
+        // network error is not entitled to make. `null` means "we don't know yet", and the
+        // preview below shows nothing extra until it does.
+        setRings(ringRows.error ? null : ((ringRows.data ?? []) as DeliveryRing[]));
+      } catch {
+        if (!cancelled) { setRings(null); setDepot(null); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [businessId, ringBasis]);
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // 🔴 THE TIER IS RESOLVED FROM THE CUSTOMER **ROW**, BY ID — THE SAME KEY `submit.ts` USES.
   // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -262,7 +304,25 @@ export function CartReview() {
   // that changes between the screen and the receipt. The server stays authoritative — this mirrors
   // it, it does not decide it (§1.6 item 10).
   const shipToUnplaceable = shipTo?.unplaceable === true;
-  const transportComputed = (selectedTransport && !shipToUnplaceable) ? computedAmt(selectedTransport) : 0;
+  // The same pure decision `api/orders/submit` runs, over the same inputs — one function, two
+  // callers, so Review === submit by construction rather than by convention (D-39 / STD-012).
+  // Null until the rings are known, or whenever this row is priced flat: there is nothing to say.
+  const ringCharge: TripCharge | null = (ringBasis && selectedTransport && rings !== null && !shipToUnplaceable)
+    ? tripChargeFor({
+        depot,
+        address: (typeof shipTo?.latitude === 'number' && typeof shipTo?.longitude === 'number')
+          ? { latitude: shipTo.latitude, longitude: shipTo.longitude } : null,
+        rings,
+        flatAmount: computedAmt(selectedTransport),
+        located: typeof shipTo?.latitude === 'number',
+      })
+    : null;
+  // 🔴 `amount: null` MEANS DO NOT BILL AND IS NOT 0 — the "outside your rings" and "we cannot
+  // place it" cases, shown with their reason and never guessed at. It suppresses the line here
+  // exactly as it does in submit, so the two agree on the SUPPRESSION as well as the price.
+  const ringSuppressed = ringCharge !== null && ringCharge.amount === null;
+  const transportFlat = (selectedTransport && !shipToUnplaceable && !ringSuppressed) ? computedAmt(selectedTransport) : 0;
+  const transportComputed = ringCharge?.amount ?? transportFlat;
   // A ladder-priced service has no unit price to multiply; its baseline is what the ladder summed.
   const plantingComputed  = plantingOn && plantingOffering
     ? (ladderPricing ? ladderPricing.pricedTotal : computedAmt(plantingOffering))
@@ -561,7 +621,16 @@ export function CartReview() {
         {selectedTransport && (
           <ServiceRow
             name={selectedTransport.name}
-            rule={selectedTransport.price_type === 'per_unit' ? `per plant · ×${effQty(selectedTransport)}` : 'per order · ×1'}
+            /* 🔴 `ring 4 — 30.4 mi` IS THE CHIP DAVID ASKED FOR, and it REPLACES the per-order rule
+               rather than sitting beside it: on a ring-priced row "per order · ×1" is no longer
+               what decides the money, and leaving it there would be two rules for one price. The
+               sentence under it carries the word "straight-line", which the chip has no room for
+               and which `deliveryRings.ts` requires every surface to say. */
+            rule={ringCharge?.label
+              ?? (selectedTransport.price_type === 'per_unit' ? `per plant · ×${effQty(selectedTransport)}` : 'per order · ×1')}
+            note={shipToUnplaceable
+              ? "We can't place this address, so the delivery isn't priced here. Saved and flagged."
+              : (ringCharge?.why ?? null)}
             amount={transportAmount}
             editable={selectedTransport.price_type === 'per_unit' || Number(selectedTransport.price) > 0}
             qty={effQty(selectedTransport)}
@@ -1017,10 +1086,13 @@ function Stepper({ value, onChange, min = 0 }: { value: number; onChange: (v: nu
 
 function ServiceRow({
   name, rule, amount, editable, qty, onQty, included, onToggle,
-  canOverride, baseline, override, onOverride, noDiscount,
+  canOverride, baseline, override, onOverride, noDiscount, note,
 }: {
   name: string; rule: string; amount: number; editable: boolean;
   qty: number; onQty?: (q: number) => void; included: boolean; onToggle?: () => void;
+  /** Why this line costs what it costs — shown under the rule, in the row's own words. A line
+   *  charging $0.00 must SAY why (D-9): a suppressed delivery is not a free one. */
+  note?: string | null;
   // D-39: service/labor lines are never tier-discounted — surface that plainly ("no discount").
   noDiscount?: boolean;
   // Owner/manager price override (attributed leakage). canOverride gates the affordance;
@@ -1072,6 +1144,9 @@ function ServiceRow({
           <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '2px 0 0' }}>
             {rule}{noDiscount ? ' · no discount' : ''}
           </p>
+          {note && (
+            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '2px 0 0', lineHeight: 1.4 }}>{note}</p>
+          )}
           {canOverride && onOverride && !editing && (
             <button onClick={openEditor} style={{ ...linkBtn, fontSize: '0.75rem', marginTop: 2 }}>
               {isOverridden ? 'Edit price' : 'Adjust price'}

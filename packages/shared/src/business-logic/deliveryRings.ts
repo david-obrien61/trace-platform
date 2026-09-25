@@ -72,6 +72,15 @@ export function orderedRings(rings: readonly DeliveryRing[]): DeliveryRing[] {
 export interface RingVerdict {
   /** The ring this address falls in, or null when it is beyond the last one. */
   ring: DeliveryRing | null;
+  /**
+   * WHICH ring, counting from the yard — 1 is the innermost ACTIVE ring. Null when `ring` is null.
+   *
+   * 🔴 IT IS A POSITION, NOT AN IDENTITY, AND IT IS DERIVED EVERY TIME. Nothing stores it. Retire
+   * the 10-mile ring and yesterday's "ring 4" becomes ring 3, because the owner's own list is what
+   * the number counts — the same reason the bands are derived from the order rather than stored as
+   * pairs. A stored ordinal would survive the edit that invalidated it.
+   */
+  ordinal: number | null;
   /** Straight-line miles from the depot, or null when the address has no coordinate. */
   miles: number | null;
   /** What the screen says. Never a number when `ring` is null. */
@@ -93,14 +102,16 @@ export function ringFor(
 ): RingVerdict {
   const miles = distanceMiles(depot, address);
   if (miles === null) {
-    return { ring: null, miles: null, message: "we don't know where this address is yet — check it" };
+    return { ring: null, ordinal: null, miles: null, message: "we don't know where this address is yet — check it" };
   }
-  for (const r of orderedRings(rings)) {
+  const active = orderedRings(rings);
+  for (let i = 0; i < active.length; i++) {
+    const r = active[i];
     if (miles <= r.outer_radius_miles) {
-      return { ring: r, miles, message: `${miles.toFixed(1)} straight-line miles — inside your ${r.outer_radius_miles}-mile ring` };
+      return { ring: r, ordinal: i + 1, miles, message: `${miles.toFixed(1)} straight-line miles — inside your ${r.outer_radius_miles}-mile ring` };
     }
   }
-  return { ring: null, miles, message: `${miles.toFixed(1)} straight-line miles — outside your delivery rings, set a charge` };
+  return { ring: null, ordinal: null, miles, message: `${miles.toFixed(1)} straight-line miles — outside your delivery rings, set a charge` };
 }
 
 /**
@@ -251,6 +262,20 @@ export interface TripCharge {
   source: TripChargeSource;
   /** What the screen says. Always present; a null amount is never silent. */
   why: string;
+  /**
+   * THE SHORT FORM FOR THE CHARGE LINE — `ring 4 — 30.4 mi`. Null for every source but `ring`.
+   *
+   * 🔴 IT IS A SECOND RENDERING OF `why`, NOT A SECOND FACT. Both are built from the one verdict
+   * in the one place below, so they cannot disagree (STD-011's actual concern is two AUTHORS, not
+   * two lengths). The line under a charge has room for six words; `why` is the sentence, this is
+   * the chip that fits beside the money.
+   *
+   * ⚠️ THE CHIP SAYS `mi` AND THE SENTENCE SAYS `straight-line miles`, DELIBERATELY. The file
+   * header requires every surface to say straight-line, and the chip is never shown alone — it
+   * sits above `why`, which carries the word. A chip that tried to carry it would not fit, and a
+   * chip that dropped the sentence would be the promise this file forbids.
+   */
+  label: string | null;
 }
 
 /**
@@ -271,21 +296,22 @@ export function tripChargeFor(x: {
   const active = orderedRings(x.rings);
 
   if (active.length === 0) {
-    return { amount: x.flatAmount, source: 'flat-no-rings',
+    return { amount: x.flatAmount, source: 'flat-no-rings', label: null,
       why: 'No delivery rings set up yet — your usual delivery charge applies.' };
   }
   // 🔴 UNPLACEABLE IS NEVER PRICED, and it is checked AFTER the no-rings case on purpose: a tenant
   // with no rings bills their flat rate as they always have, whether or not we could place the
   // pin. Ring pricing is what needs a location; a flat rate never did.
   if (!x.located) {
-    return { amount: null, source: 'unlocated',
+    return { amount: null, source: 'unlocated', label: null,
       why: "We can't place this address, so the delivery can't be priced by distance. Saved and flagged." };
   }
   const v = ringFor(x.depot, x.address, active);
   if (v.ring) {
     return { amount: v.ring.charge, source: 'ring',
+      label: `ring ${v.ordinal} — ${v.miles?.toFixed(1)} mi`,
       why: `${v.miles?.toFixed(1)} straight-line miles — inside your ${v.ring.outer_radius_miles}-mile ring.` };
   }
-  return { amount: null, source: 'outside-rings',
+  return { amount: null, source: 'outside-rings', label: null,
     why: 'Outside your delivery rings — set a charge.' };
 }

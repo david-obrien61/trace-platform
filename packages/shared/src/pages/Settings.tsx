@@ -180,6 +180,8 @@ interface ServiceOffering {
   timing: string;
   price_type: string;
   price_unit: string;
+  /** 'flat' (the row's own price) or 'ring' (read the charge from the delivery rings). */
+  pricing_basis?: string | null;
   price: number;
   transport_mode: string | null;
   trigger_transport_mode: string | null;
@@ -201,6 +203,15 @@ interface EditForm {
   price_unit: string;
   transport_mode: string;
   requires_address: boolean;
+  /**
+   * 'flat' | 'ring' — whether this transport row charges its own price or the delivery ring the
+   * destination lands in (`20260925c`). A STRING, not a union, for the same reason `price_unit`
+   * on the read type is: the database owns the vocabulary, and a form that narrows a value it
+   * does not control refuses to load a row the database was happy to store.
+   * ⚠️ Only meaningful for `category === 'transport'` — the save spreads it in for that category
+   * alone, so an add-on never writes a column that means nothing to it.
+   */
+  pricing_basis: string;
   trigger_transport_mode: string;
   compliance_title: string;
   compliance_body: string;
@@ -466,7 +477,7 @@ export function Settings({
   const [editingId, setEditingId]         = useState<string | null>(null);
   const [editForm, setEditForm]           = useState<EditForm>({
     name: '', description: '', price: '',
-    category: 'addon', price_type: 'per_unit', price_unit: 'plant',
+    category: 'addon', price_type: 'per_unit', price_unit: 'plant', pricing_basis: 'flat',
     transport_mode: '', requires_address: false, trigger_transport_mode: '',
     compliance_title: '', compliance_body: '', service_note: '',
   });
@@ -556,6 +567,7 @@ export function Settings({
       category:          o.category,
       price_type:        o.price_type,
       price_unit:        o.price_unit,
+      pricing_basis:     o.pricing_basis ?? 'flat',
       // A row with no mode opens with NO mode, so saving it demands one (R-120) — never '?? staff'.
       transport_mode:    o.transport_mode ?? '',
       requires_address:  o.requires_address,
@@ -612,6 +624,10 @@ export function Settings({
       category:         editForm.category,
       price_type:       editForm.price_type,
       price_unit:       editForm.price_unit,
+      // 🔴 TRANSPORT ONLY. An addon has no distance to price by, so writing a basis onto one
+      // would be a column that means nothing on that row — and a meaningless value is what the
+      // next reader mistakes for a decision.
+      ...(editForm.category === 'transport' ? { pricing_basis: editForm.pricing_basis || 'flat' } : {}),
       transport_mode,
       requires_address,
       trigger_transport_mode,
@@ -1365,6 +1381,33 @@ function OfferingGroup({
                       <input type="checkbox" checked={editForm.requires_address} onChange={e => setEditForm({ ...editForm, requires_address: e.target.checked })} />
                       Requires a destination address (delivery / install)
                     </label>
+
+                    {/* ── HOW THIS ONE ROW IS PRICED (R-29 / David 2026-09-25) ────────────────────
+                        🔴 PER ROW, NOT PER BUSINESS. Trip charge goes on the ring; Tailgate and
+                        Backyard stay flat until David rules otherwise — so the choice has to live
+                        on the row, where the difference between those services actually is. A
+                        single business-wide switch would have priced all three the same way, and
+                        that is the thing he asked not to happen.
+                        🔴 AND IT IS HERE SO LAUREN CAN CHANGE IT. The held SQL file sets Trip
+                        Charge to 'ring' once; this control is what stops the next change needing
+                        a migration and a person who can write one. */}
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                      <FieldLabel text="How this one is priced">
+                        <select
+                          value={editForm.pricing_basis || 'flat'}
+                          onChange={e => setEditForm({ ...editForm, pricing_basis: e.target.value })}
+                          style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}
+                        >
+                          <option value="flat">Flat — the price above, on every order</option>
+                          <option value="ring">By distance — the delivery ring the address lands in</option>
+                        </select>
+                      </FieldLabel>
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '6px 0 0', lineHeight: 1.45 }}>
+                        {(editForm.pricing_basis || 'flat') === 'ring'
+                          ? 'The charge comes from your rings in Settings \u2192 Delivery, measured straight-line from your yard. No rings set up yet \u2192 the price above is charged as it always has been. An address we cannot place, or one beyond your last ring, is not priced at all \u2014 the order says so instead of guessing.'
+                          : 'The price above is charged on every order, whatever the distance.'}
+                      </p>
+                    </div>
                   </div>
                 )}
 
