@@ -349,6 +349,60 @@ async function main(): Promise<void> {
     ok(!keys.some(k => k.startsWith('shipping')), 'J15 and no shipping_* key');
   }
 
+  // ══ K. THE STOP KEEPS THE COORDINATE IT HAD ON THE DAY (David's stops ruling · 20260923d) ═════
+  // 🔴 WHY THIS SECTION EXISTS: submit already geocoded this address to decide whether the
+  // delivery could be charged, and the first version of that code kept only the BOOLEAN and threw
+  // the coordinate away. `deliveries.latitude` had been live since 20260923d and was written by
+  // NOTHING. Every unit test passed, because each tested a function in isolation and none asserted
+  // that its answer was USED — the seam, not the logic (#242's shape).
+  {
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '153 Twin Creekview Ln', city: 'Georgetown', state: 'TX', zip: '78628' },
+      coordinate: { latitude: 30.6551, longitude: -97.7267 },
+    } as any);
+    const row = db.rows.deliveries[0] ?? {};
+    ok(row.latitude === 30.6551 && row.longitude === -97.7267,
+      `🔴 K1 A LOCATED STOP IS WRITTEN WITH ITS COORDINATE — got ${row.latitude}, ${row.longitude}. Without this the ring map has no stop to place and the applied migration has no writer`);
+    ok(typeof row.coordinate_set_at === 'string' && row.coordinate_set_at.length > 0,
+      'K2 …and it is stamped, so the pair cannot disagree about whether this stop was ever located');
+  }
+  {
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, {
+      ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: 'qqqq zzz', city: 'Leander', state: 'TX', zip: '78641' },
+      coordinate: { latitude: null, longitude: null },
+    } as any);
+    const row = db.rows.deliveries[0] ?? {};
+    ok(row.latitude === null && row.longitude === null,
+      '🔴 K3 AN UNPLACEABLE STOP IS STILL WRITTEN, WITH NO COORDINATE — the stop must exist (Liberty Hill is 35% new streets); it simply has no pin');
+    ok(row.coordinate_set_at === null,
+      "🔴 K4 …AND IS NOT STAMPED. A timestamp beside a null coordinate would say 'we located this' about a place we never found");
+    ok(db.rows.deliveries.length === 1, 'K5 the stop is written all the same — an unplaceable address never costs the customer their delivery');
+  }
+  {
+    // The ordinary caller sends nothing at all — every existing call site, unchanged.
+    const db = fakeDb();
+    await scheduleCheckoutDelivery(db, { ...BASE, transportMethod: 'delivery' } as any);
+    const row = db.rows.deliveries[0] ?? {};
+    ok(row.latitude === null && row.coordinate_set_at === null,
+      'K6 a caller that passes no coordinate writes NULLs, not undefined and not 0 — "at the equator" and "we do not know" must never be the same value');
+  }
+  {
+    // NEGATIVE CONTROL — the verdict must depend on what was PASSED, not on the address text.
+    const a = fakeDb(); const b = fakeDb();
+    await scheduleCheckoutDelivery(a, { ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '1 Same St', city: 'Leander', state: 'TX', zip: '78641' },
+      coordinate: { latitude: 30.5, longitude: -97.9 } } as any);
+    await scheduleCheckoutDelivery(b, { ...BASE, transportMethod: 'delivery',
+      shipTo: { line1: '1 Same St', city: 'Leander', state: 'TX', zip: '78641' },
+      coordinate: { latitude: null, longitude: null } } as any);
+    ok(a.rows.deliveries[0].latitude === 30.5 && b.rows.deliveries[0].latitude === null,
+      '🔴 K7 NEGATIVE CONTROL: the SAME address with and without a placement gets opposite rows. An implementation that derived the coordinate from the address text, or hardcoded one, would pass K1 by accident');
+  }
+
   // ── SUMMARY ──────────────────────────────────────────────────────────────────────────────────
   console.log(`\ncheckoutDelivery: ${passed} passed, ${failed} failed`);
   if (failed) { for (const f of failures) console.log(`   ✗ ${f}`); process.exit(1); }

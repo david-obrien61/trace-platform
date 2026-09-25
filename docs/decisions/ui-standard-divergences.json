@@ -217,6 +217,65 @@
           "reason": "No record list and no rows, so there is no row for a control to sit on. The clause's subject does not arise."
         }
       }
+    },
+    {
+      "file": "packages/cultivar-os/src/pages/CustomerCapture.tsx",
+      "declared": "2026-09-24",
+      "declared_by": "ledger #386, the address check ③ — the build that made this surface visible to the cap. 🔴 THE SURFACE DID NOT BECOME A GRID; THE DETECTOR STARTED SEEING IT. Measured both ways: on origin/main `isRecordList` returns FALSE for this file and on this branch it returns TRUE, because the build added a `.map(` (rendering the customer's saved addresses to choose from) beside a `.from().select()` that was already there. The heuristic is `(reads rows AND maps) OR <table>`, so one `.map(` moved it into the population. Declared at the merge rather than left to trip the ratchet.",
+      "sections": [
+        "1"
+      ],
+      "shape_taken": "A SHORT CHOICE LIST — the customer's saved addresses as tappable rows, bill-to first and unlabelled, plus the typed-address field. Rendered from divs and buttons, no <table>, no columns.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "⚠️ MEASURED, and the measurement is what makes this a decision rather than a rubber stamp: the population is 1–3 rows. David, 2026-09-09: only TEN LAWNS customers have a genuinely different delivery street, so for almost every customer this list holds ONE address. The surface is a phone-held checkout with a customer standing at the counter (capture=mobile), and <DataSheet> is the desktop reconcile grid — a bounded scroll box with a sticky header, a frozen identifier column and a horizontal scrollbar. Putting three of those chrome elements around a single address would add a scroll region, a column header and a freeze line to a question that reads 'where do the trees go?'. 🔴 WHAT IS NOT ESTABLISHED, and it is recorded rather than implied: nobody has asked David whether a choice list is the right shape here. This declaration answers the grid clauses against a choice list; it does not settle that a choice list is right.",
+      "recorded_where": "this declaration · CLOSE-OUT-LEDGER #386 · docs/owner-tests/checkout-address-check-full-surface-test.md CARD 1",
+      "note": "OWNER-PROOF OWED. The verdicts below are a read of the code, not a run. CARD 1 on the address-check board is the live test, and it is the one that matters: a homeowner with a good saved address must be asked NOTHING.",
+      "clauses": {
+        "G1": {
+          "verdict": "dropped",
+          "reason": "A sticky header row needs a header. There are no columns — each row is one address as a person says it, on one line."
+        },
+        "G2": {
+          "verdict": "dropped",
+          "reason": "Nothing scrolls horizontally: the rows are a single wrapped line at phone width, so there is no scrollbar to make reachable."
+        },
+        "G3": {
+          "verdict": "dropped",
+          "reason": "A frozen identifier column exists so you do not lose which row you are on while scrolling sideways. With one line per row and no sideways scroll there is nothing to lose."
+        },
+        "G4": {
+          "verdict": "dropped",
+          "reason": "Sorting is NOT free here and is deliberately fixed: David's 2026-09-09 model puts the bill-to first and unlabelled, because for most homeowners the billing address IS where the trees go. A sortable list would let that order be changed, which is the one thing the ordering rule exists to prevent."
+        },
+        "G5": {
+          "verdict": "dropped",
+          "reason": "No columns to show or hide."
+        },
+        "G6": {
+          "verdict": "dropped",
+          "reason": "Search over one to three rows is longer to use than reading them. G7's own threshold is 100+ rows; this is two orders of magnitude below it."
+        },
+        "G7": {
+          "verdict": "dropped",
+          "reason": "The clause names 100+ rows. Measured population is 1–3."
+        },
+        "G8": {
+          "verdict": "owed",
+          "reason": "🔴 AN HONEST GAP, NOT A DROP. A saved address cannot be CORRECTED from this list — picking it is the only action, and a typo in a stored address must be fixed on the customer record instead. That is E1-consistent (one record, one edit surface) but it is a real limitation at the counter, where the typo is discovered. Recorded rather than hidden; it is not closed by this build."
+        },
+        "G9": {
+          "verdict": "dropped",
+          "reason": "🔴 DROPPED DELIBERATELY AND THIS IS THE ONE WORTH READING. G9 sorts most-recent-record-date first. These rows are not events and carry no record date — an address is not dated, it is WHERE SOMEONE LIVES. Sorting them by when they were captured would put the most recently typed address at the top, which is precisely the order David's 2026-09-09 model forbids: the BILL-TO comes first and unlabelled, because for most homeowners the billing address IS where the trees go. Newest-first would promote a one-off delivery site above the customer's own home."
+        },
+        "G10": {
+          "verdict": "dropped",
+          "reason": "There is no per-row expansion: a row is one address on one line, and tapping it IS the action — the whole row is the click target, which is the half of G10 the shared grid itself does not yet meet. Nothing is disclosed, so there is no toggle to lead with."
+        },
+        "G11": {
+          "verdict": "dropped",
+          "reason": "Column order cannot apply where there are no columns. The row is a single line of text; the only action is choosing it, and the row itself carries that action rather than a separate track."
+        }
+      }
     }
   ],
   "converged": [

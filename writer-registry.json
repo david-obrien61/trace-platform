@@ -4,7 +4,7 @@
     "One entry per DOMAIN: its writer, the tables it owns, and EVERY place a person (or an import, OCR, script or endpoint) can enter or change that domain's data, each with the id of its end-to-end test.",
     "`npm run verify:writer-registry` (scripts/verify-writer-registry.mjs) fails the build when: a file in packages/, api/ or scripts/ looks like a capture path for a registered domain and is neither a path's file nor declared; a path's test is missing or failing; code writes a registered table outside the writer's files; a declaration or anchor has gone stale.",
     "`at` is `file#anchor`: the verifier resolves the anchor to a line number on every run and prints file:line, so the number cannot drift from the code.",
-    "Read this file before touching any form, capture, import or endpoint (CLAUDE.md \u00a710 step 12)."
+    "Read this file before touching any form, capture, import or endpoint (CLAUDE.md §10 step 12)."
   ],
   "domains": [
     {
@@ -33,7 +33,7 @@
           "billing_state",
           "billing_zip"
         ],
-        "databaseGuard": "trg_customers_derived_contact_guard (20260915_contact_record \u00a75e) refuses a direct write to these columns; the derivation `sync_customer_flat_contact` is the only thing that sets them."
+        "databaseGuard": "trg_customers_derived_contact_guard (20260915_contact_record §5e) refuses a direct write to these columns; the derivation `sync_customer_flat_contact` is the only thing that sets them."
       },
       "databaseGuardForTables": "NOT PRACTICAL TODAY, said rather than implied: the writer runs in the app and in API handlers through PostgREST, so the database cannot tell the writer's INSERT from any other. A table guard needs the writer moved into a database function first. Until then the code-level check (`table-write`) and RLS (`customer_*_member_*`) are the guard.",
       "entryFunctions": [
@@ -62,7 +62,7 @@
       "paths": [
         {
           "id": "checkout.new-customer",
-          "what": "Checkout, a new customer \u2014 the customer step's form (search \u2192 Add new) or ScanOrder's New customer",
+          "what": "Checkout, a new customer — the customer step's form (search → Add new) or ScanOrder's New customer",
           "at": "packages/cultivar-os/src/pages/CustomerCapture.tsx#async function handleSubmit",
           "files": [
             "packages/cultivar-os/src/pages/CustomerCapture.tsx",
@@ -72,8 +72,8 @@
             "packages/cultivar-os/api/orders/submit.ts",
             "packages/shared/src/business-logic/customerUpsert.ts"
           ],
-          "chain": "CustomerCapture.handleSubmit \u2192 CartReview \u2192 useSubmitOrder \u2192 POST /api/orders/submit \u2192 findOrCreateCustomer \u2192 saveTypedContact \u2192 writeContactEdit",
-          "shown": "Confirmation \u2192 Customer contact details; customer page \u2192 Phones / Emails / Addresses"
+          "chain": "CustomerCapture.handleSubmit → CartReview → useSubmitOrder → POST /api/orders/submit → findOrCreateCustomer → saveTypedContact → writeContactEdit",
+          "shown": "Confirmation → Customer contact details; customer page → Phones / Emails / Addresses"
         },
         {
           "id": "checkout.attached-customer",
@@ -83,96 +83,96 @@
             "packages/cultivar-os/src/pages/ScanOrder.tsx",
             "packages/cultivar-os/api/orders/submit.ts"
           ],
-          "chain": "ScanOrder.attachExisting \u2192 CustomerCapture \u2192 POST /api/orders/submit (customerId) \u2192 saveTypedContact \u2192 writeContactEdit",
-          "shown": "Confirmation \u2192 Customer contact details; customer page \u2192 Phones"
+          "chain": "ScanOrder.attachExisting → CustomerCapture → POST /api/orders/submit (customerId) → saveTypedContact → writeContactEdit",
+          "shown": "Confirmation → Customer contact details; customer page → Phones"
         },
         {
           "id": "checkout.picked-customer",
-          "what": "Checkout with a customer picked in the customer step's own search (now attaches \u2014 no duplicate)",
+          "what": "Checkout with a customer picked in the customer step's own search (now attaches — no duplicate)",
           "at": "packages/cultivar-os/src/pages/CustomerCapture.tsx#function onSelectExisting",
           "files": [
             "packages/cultivar-os/src/pages/CustomerCapture.tsx",
             "packages/cultivar-os/src/components/customers/CustomerSearch.tsx"
           ],
-          "chain": "CustomerSearch \u2192 CustomerCapture.onSelectExisting \u2192 attachCustomer \u2192 POST /api/orders/submit (customerId) \u2192 saveTypedContact",
-          "shown": "Confirmation; customer page \u2192 Phones"
+          "chain": "CustomerSearch → CustomerCapture.onSelectExisting → attachCustomer → POST /api/orders/submit (customerId) → saveTypedContact",
+          "shown": "Confirmation; customer page → Phones"
         },
         {
           "id": "checkout.attached-no-permission",
-          "what": "Checkout by a member who may not edit customers, with a customer attached \u2014 values reported NOT SAVED, order still goes through",
+          "what": "Checkout by a member who may not edit customers, with a customer attached — values reported NOT SAVED, order still goes through",
           "at": "packages/cultivar-os/api/orders/submit.ts#const mayChange",
           "files": [
             "packages/cultivar-os/api/orders/submit.ts",
             "packages/cultivar-os/src/pages/Confirmation.tsx"
           ],
-          "chain": "POST /api/orders/submit \u2192 callerCanManageOrders(customers:update) false \u2192 contactResults not_saved",
-          "shown": "Confirmation \u2192 red NOT SAVED lines"
+          "chain": "POST /api/orders/submit → callerCanManageOrders(customers:update) false → contactResults not_saved",
+          "shown": "Confirmation → red NOT SAVED lines"
         },
         {
           "id": "checkout.attached-new-address",
-          "what": "Checkout with a customer attached and a different billing address typed \u2014 kept as an additional address",
+          "what": "Checkout with a customer attached and a different billing address typed — kept as an additional address",
           "at": "packages/shared/src/business-logic/contactWriter.ts#const conflicts = policy.billing === 'fill'",
           "files": [
             "packages/cultivar-os/api/orders/submit.ts",
             "packages/shared/src/business-logic/contactWriter.ts"
           ],
-          "chain": "POST /api/orders/submit \u2192 saveTypedContact \u2192 writeContactEdit (billing 'fill', conflict \u2192 additional)",
-          "shown": "customer page \u2192 Addresses"
+          "chain": "POST /api/orders/submit → saveTypedContact → writeContactEdit (billing 'fill', conflict → additional)",
+          "shown": "customer page → Addresses"
         },
         {
           "id": "ocr.new-customer",
-          "what": "Invoice capture (Receipts) creating a new customer \u2014 phone, email, both address lines",
+          "what": "Invoice capture (Receipts) creating a new customer — phone, email, both address lines",
           "at": "packages/cultivar-os/src/pages/ReceiptKeeper.tsx#const needCustomer = addCustomer || scheduleDelivery",
           "files": [
             "packages/cultivar-os/src/pages/ReceiptKeeper.tsx",
             "packages/cultivar-os/api/customers/create.ts"
           ],
-          "chain": "ReceiptKeeper \u2192 POST /api/customers/create \u2192 findOrCreateCustomer \u2192 writeContactEdit",
-          "shown": "capture Saved screen \u2192 Customer contact details; customer page"
+          "chain": "ReceiptKeeper → POST /api/customers/create → findOrCreateCustomer → writeContactEdit",
+          "shown": "capture Saved screen → Customer contact details; customer page"
         },
         {
           "id": "ocr.retired-field-names",
-          "what": "A capture body using the retired address field names \u2014 reported NOT SAVED",
+          "what": "A capture body using the retired address field names — reported NOT SAVED",
           "at": "packages/cultivar-os/api/customers/create.ts#const retired =",
           "files": [
             "packages/cultivar-os/api/customers/create.ts"
           ],
-          "chain": "POST /api/customers/create \u2192 contactResults not_saved",
-          "shown": "capture Saved screen \u2192 red NOT SAVED line"
+          "chain": "POST /api/customers/create → contactResults not_saved",
+          "shown": "capture Saved screen → red NOT SAVED line"
         },
         {
           "id": "ocr.existing-customer",
-          "what": "Invoice capture for a customer already on file, different phone \u2014 kept as additional",
+          "what": "Invoice capture for a customer already on file, different phone — kept as additional",
           "at": "packages/cultivar-os/api/customers/create.ts#findOrCreateCustomer(",
           "files": [
             "packages/cultivar-os/api/customers/create.ts"
           ],
-          "chain": "POST /api/customers/create \u2192 findOrCreateCustomer (match) \u2192 writeContactEdit ('add')",
-          "shown": "customer page \u2192 Phones"
+          "chain": "POST /api/customers/create → findOrCreateCustomer (match) → writeContactEdit ('add')",
+          "shown": "customer page → Phones"
         },
         {
           "id": "editor.update",
-          "what": "Customer editor (roster, customer page, stop/route/order screens) \u2014 Save changes",
+          "what": "Customer editor (roster, customer page, stop/route/order screens) — Save changes",
           "at": "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx#async function save",
           "files": [
             "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx",
             "packages/cultivar-os/src/components/customers/customerEdit.ts",
             "packages/shared/src/business-logic/customerFieldWrite.ts"
           ],
-          "chain": "CustomerPartyEditor.save \u2192 persistCustomerPatch \u2192 updateCustomerFields \u2192 writeContactEdit ('replace')",
-          "shown": "editor \u2192 Contact details; customer page"
+          "chain": "CustomerPartyEditor.save → persistCustomerPatch → updateCustomerFields → writeContactEdit ('replace')",
+          "shown": "editor → Contact details; customer page"
         },
         {
           "id": "editor.create",
-          "what": "Customer editor \u2014 Add Customer",
+          "what": "Customer editor — Add Customer",
           "at": "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx#insertCustomer({ businessId, values })",
           "files": [
             "packages/cultivar-os/src/components/customers/CustomerPartyEditor.tsx",
             "packages/cultivar-os/src/components/customers/customerEdit.ts",
             "packages/shared/src/business-logic/customerFieldWrite.ts"
           ],
-          "chain": "CustomerPartyEditor.save (create) \u2192 insertCustomer \u2192 insertCustomerFields \u2192 writeContactEdit",
-          "shown": "editor \u2192 Contact details; customer page"
+          "chain": "CustomerPartyEditor.save (create) → insertCustomer → insertCustomerFields → writeContactEdit",
+          "shown": "editor → Contact details; customer page"
         },
         {
           "id": "editor.no-permission",
@@ -181,176 +181,176 @@
           "files": [
             "packages/cultivar-os/src/components/customers/customerEdit.ts"
           ],
-          "chain": "persistCustomerPatch \u2192 updateCustomerFields \u2192 writeContactEdit (RLS refuses) \u2192 not_saved",
-          "shown": "editor \u2192 red NOT SAVED line"
+          "chain": "persistCustomerPatch → updateCustomerFields → writeContactEdit (RLS refuses) → not_saved",
+          "shown": "editor → red NOT SAVED line"
         },
         {
           "id": "customer-page.add",
-          "what": "Customer page \u2192 Phones / Emails / Addresses \u2192 Add (a number, an email or an address typed there)",
+          "what": "Customer page → Phones / Emails / Addresses → Add (a number, an email or an address typed there)",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
           "files": [
             "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
           ],
-          "chain": "ContactListsPanel.save (kind 'add') \u2192 addContactRow",
-          "shown": "customer page \u2192 the new row in its list (main when it is the first, additional otherwise)"
+          "chain": "ContactListsPanel.save (kind 'add') → addContactRow",
+          "shown": "customer page → the new row in its list (main when it is the first, additional otherwise)"
         },
         {
           "id": "customer-page.edit",
-          "what": "Customer page \u2192 Edit on a row (a phone's or email's value and label; every field of an address)",
+          "what": "Customer page → Edit on a row (a phone's or email's value and label; every field of an address)",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const save = () =>",
           "files": [
             "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
           ],
-          "chain": "ContactListsPanel.save (kind 'edit') \u2192 editContactRow",
-          "shown": "customer page \u2192 the corrected row, still in the same place in its list"
+          "chain": "ContactListsPanel.save (kind 'edit') → editContactRow",
+          "shown": "customer page → the corrected row, still in the same place in its list"
         },
         {
           "id": "customer-page.make-main",
-          "what": "Customer page \u2192 Phones / Emails / Addresses \u2192 Make main",
+          "what": "Customer page → Phones / Emails / Addresses → Make main",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#async function act",
           "files": [
             "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx",
             "packages/cultivar-os/src/pages/CustomerDetail.tsx"
           ],
-          "chain": "ContactListsPanel.act('main') \u2192 makeContactMain",
-          "shown": "customer page \u2192 the row marked Main"
+          "chain": "ContactListsPanel.act('main') → makeContactMain",
+          "shown": "customer page → the row marked Main"
         },
         {
           "id": "customer-page.remove",
-          "what": "Customer page \u2192 Phones / Emails / Addresses \u2192 Remove (retire, never delete)",
+          "what": "Customer page → Phones / Emails / Addresses → Remove (retire, never delete)",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#async function act",
           "files": [
             "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
           ],
-          "chain": "ContactListsPanel.act('remove') \u2192 retireContact",
-          "shown": "customer page \u2192 the row is gone from the list"
+          "chain": "ContactListsPanel.act('remove') → retireContact",
+          "shown": "customer page → the row is gone from the list"
         },
         {
           "id": "customer-page.no-permission",
-          "what": "Customer page read by a member who may only read customers \u2014 lists visible, changes refused",
+          "what": "Customer page read by a member who may only read customers — lists visible, changes refused",
           "at": "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx#const mayChange",
           "files": [
             "packages/cultivar-os/src/components/customers/ContactListsPanel.tsx"
           ],
-          "chain": "readContactLists (customers:read) \u00b7 makeContactMain (RLS refuses) \u2192 not_saved",
-          "shown": "customer page \u2192 lists without buttons"
+          "chain": "readContactLists (customers:read) · makeContactMain (RLS refuses) → not_saved",
+          "shown": "customer page → lists without buttons"
         },
         {
           "id": "stop.save-site",
-          "what": "Delivery stop \u2192 Save as a site (and the ship-to picker's add)",
+          "what": "Delivery stop → Save as a site (and the ship-to picker's add)",
           "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#saveCustomerAddress(supabase",
           "files": [
             "packages/cultivar-os/src/components/delivery/SaveSiteDialog.tsx",
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/shared/src/business-logic/customerAddresses.ts"
           ],
-          "chain": "SaveSiteDialog \u2192 useStopActions \u2192 saveCustomerAddress \u2192 insertShipToSite",
-          "shown": "customer page \u2192 Addresses (delivery site)"
+          "chain": "SaveSiteDialog → useStopActions → saveCustomerAddress → insertShipToSite",
+          "shown": "customer page → Addresses (delivery site)"
         },
         {
           "id": "qbo.customer-import",
-          "what": "QuickBooks customer import (owner) \u2014 POST /api/qbo/customers/ingest and the books import",
+          "what": "QuickBooks customer import (owner) — POST /api/qbo/customers/ingest and the books import",
           "at": "packages/cultivar-os/api/qbo/router.ts#async function handleCustomersIngest",
           "files": [
             "packages/cultivar-os/api/qbo/router.ts",
             "packages/shared/src/quickbooks/customerImportWriter.ts"
           ],
-          "chain": "router customers-ingest / books-ingest \u2192 commitCustomerImport \u2192 writeContactRecords (tagged with the run)",
-          "shown": "customer page \u2192 Phones / Emails / Addresses"
+          "chain": "router customers-ingest / books-ingest → commitCustomerImport → writeContactRecords (tagged with the run)",
+          "shown": "customer page → Phones / Emails / Addresses"
         },
         {
           "id": "qbo.import-undo",
-          "what": "QuickBooks import undo (owner) \u2014 removes the run's contact rows with its customers; in test mode it also removes rows a person typed onto them",
+          "what": "QuickBooks import undo (owner) — removes the run's contact rows with its customers; in test mode it also removes rows a person typed onto them",
           "at": "packages/cultivar-os/api/qbo/router.ts#async function handleBooksUndo",
           "files": [
             "packages/cultivar-os/api/qbo/router.ts",
             "packages/shared/src/quickbooks/customerImportWriter.ts"
           ],
-          "chain": "router books-undo \u2192 undo_import_run (20260916d; 20260917b: in test mode it takes every contact row on a run customer, tagged or not \u2014 ledger #348) \u00b7 library: removeRunContactRows",
+          "chain": "router books-undo → undo_import_run (20260916d; 20260917b: in test mode it takes every contact row on a run customer, tagged or not — ledger #348) · library: removeRunContactRows",
           "shown": "the import panel's undo report"
         },
         {
           "id": "qbo.delivery-ingest",
-          "what": "QuickBooks delivery (ShipDate) ingest \u2014 the ship-to phone",
+          "what": "QuickBooks delivery (ShipDate) ingest — the ship-to phone",
           "at": "packages/shared/src/quickbooks/deliveryIngestWriter.ts#export async function commitDeliveryIngest",
           "files": [
             "packages/shared/src/quickbooks/deliveryIngestWriter.ts",
             "packages/cultivar-os/api/qbo/router.ts"
           ],
-          "chain": "router deliveries-ingest \u2192 commitDeliveryIngest \u2192 findOrCreateCustomer \u2192 writeContactEdit ('add')",
-          "shown": "customer page \u2192 Phones; a refused phone on the run report (red)"
+          "chain": "router deliveries-ingest → commitDeliveryIngest → findOrCreateCustomer → writeContactEdit ('add')",
+          "shown": "customer page → Phones; a refused phone on the run report (red)"
         },
         {
           "id": "script.seed-sandbox",
-          "what": "scripts/seed-sandbox.mjs \u2014 sample customers' phone and email",
+          "what": "scripts/seed-sandbox.mjs — sample customers' phone and email",
           "at": "scripts/seed-sandbox.mjs#export function sandboxSeeder",
           "files": [
             "scripts/seed-sandbox.mjs"
           ],
-          "chain": "sandboxSeeder.seed \u2192 writeContactEdit",
+          "chain": "sandboxSeeder.seed → writeContactEdit",
           "shown": "customer page (sandbox business)"
         }
       ],
       "declared": [
         {
           "file": "packages/shared/src/business-logic/customerUpsert.ts",
-          "reason": "the shared writer layer between the endpoints and contactWriter (typedContactPolicy, saveTypedContact) \u2014 exercised by every checkout and capture path above"
+          "reason": "the shared writer layer between the endpoints and contactWriter (typedContactPolicy, saveTypedContact) — exercised by every checkout and capture path above"
         },
         {
           "file": "packages/shared/src/business-logic/customerFieldWrite.ts",
-          "reason": "the editor's write layer \u2014 exercised by editor.update / editor.create / editor.no-permission"
+          "reason": "the editor's write layer — exercised by editor.update / editor.create / editor.no-permission"
         },
         {
           "file": "packages/shared/src/business-logic/customerAddresses.ts",
-          "reason": "the ship-to site planner \u2014 exercised by stop.save-site. `retireCustomerAddress` has NO screen caller (reported to David); the customer page's Remove covers a site through retireContact"
+          "reason": "the ship-to site planner — exercised by stop.save-site. `retireCustomerAddress` has NO screen caller (reported to David); the customer page's Remove covers a site through retireContact"
         },
         {
           "file": "packages/shared/src/quickbooks/customerImportWriter.ts",
-          "reason": "the import writer \u2014 exercised by qbo.customer-import / qbo.import-undo. `undoCustomerImport` has no entry point (customerImport.test.ts \u00a7K)"
+          "reason": "the import writer — exercised by qbo.customer-import / qbo.import-undo. `undoCustomerImport` has no entry point (customerImport.test.ts §K)"
         },
         {
           "file": "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
-          "reason": "the route planner's stop-address box feeds a map link and is never saved \u2014 not a customer's address. Reported to David: it is a typed value that is not kept, by design"
+          "reason": "the route planner's stop-address box feeds a map link and is never saved — not a customer's address. Reported to David: it is a typed value that is not kept, by design"
         },
         {
           "file": "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
-          "reason": "a team-member INVITE email and the business profile \u2014 not a customer's contact details"
+          "reason": "a team-member INVITE email and the business profile — not a customer's contact details"
         },
         {
           "file": "packages/cultivar-os/src/pages/Settings.tsx",
-          "reason": "service settings (a 'requires an address' switch) \u2014 not a customer's contact details"
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
         },
         {
           "file": "packages/shared/src/pages/Settings.tsx",
-          "reason": "service settings (a 'requires an address' switch) \u2014 not a customer's contact details"
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
         },
         {
           "file": "packages/shared/src/components/services/ServicesReview.tsx",
-          "reason": "service settings (a 'requires an address' switch) \u2014 not a customer's contact details"
+          "reason": "service settings (a 'requires an address' switch) — not a customer's contact details"
         },
         {
           "file": "packages/ignition-os/CoreApp.jsx",
-          "reason": "Ignition OS \u2014 off limits (CLAUDE.md \u00a77) and on its own database; not this platform's customers"
+          "reason": "Ignition OS — off limits (CLAUDE.md §7) and on its own database; not this platform's customers"
         },
         {
           "file": "packages/ignition-os/OnboardingWizard.jsx",
-          "reason": "Ignition OS \u2014 off limits (CLAUDE.md \u00a77); not this platform's customers"
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
         },
         {
           "file": "packages/ignition-os/modules/IgnitionAdmin.jsx",
-          "reason": "Ignition OS \u2014 off limits (CLAUDE.md \u00a77); not this platform's customers"
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
         },
         {
           "file": "packages/ignition-os/modules/IgnitionCRM.jsx",
-          "reason": "Ignition OS \u2014 off limits (CLAUDE.md \u00a77); not this platform's customers"
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
         },
         {
           "file": "packages/ignition-os/modules/IgnitionOmni.jsx",
-          "reason": "Ignition OS \u2014 off limits (CLAUDE.md \u00a77); not this platform's customers"
+          "reason": "Ignition OS — off limits (CLAUDE.md §7); not this platform's customers"
         },
         {
           "file": "packages/ignition-os/modules/IgnitionIntake.jsx",
-          "reason": "Ignition OS writes phone/email straight onto a `customers` table \u2014 REPORTED to David as a (b) path. It is off limits (CLAUDE.md \u00a77) and it targets `shop_id`, a column this database's `customers` does not have (measured live 2026-09-17), so it cannot reach these customers"
+          "reason": "Ignition OS writes phone/email straight onto a `customers` table — REPORTED to David as a (b) path. It is off limits (CLAUDE.md §7) and it targets `shop_id`, a column this database's `customers` does not have (measured live 2026-09-17), so it cannot reach these customers"
         },
         {
           "file": "scripts/measure-customer-addresses-mutants.mjs",
@@ -358,11 +358,15 @@
         },
         {
           "file": "scripts/verify-customer-upsert.mjs",
-          "reason": "RETIRED 2026-09-17 (refuseRetired) \u2014 exits before any write; kept as the record of what ran"
+          "reason": "RETIRED 2026-09-17 (refuseRetired) — exits before any write; kept as the record of what ran"
         },
         {
           "file": "scripts/verify-writer-registry.mjs",
           "reason": "this check itself: its --self-test plants violations as strings (a phone input, a table write) to prove each check goes red"
+        },
+        {
+          "file": "packages/shared/src/components/AddressInput.tsx",
+          "reason": "NOT A CAPTURE PATH — the shared address FIELD that the registered paths render. MEASURED, not assumed: this file contains zero database access (no supabase client, no .from(), no insert/update/upsert, no contactWriter, no saveCustomerAddress). It collects keystrokes, asks the server proxy for suggestions, and hands a value back through onChange; the write still happens in the surface that rendered it, through contactWriter, on the path already listed above — checkout.new-customer (CustomerCapture), customer-page.add / customer-page.edit (ContactListsPanel), stop.save-site (useStopActions), ocr.new-customer (ReceiptKeeper). It is flagged because it carries an <input>, which is exactly the signal the check looks for, and that signal is right to fire: a shared field is where a new address form would hide. ⚠️ WHAT THIS DECLARATION DOES NOT CLAIM: that the paths' tests cover the new behaviour. They do not. Picking a suggestion stores a coordinate and typing over a picked address clears it, and NO end-to-end path test enters a value through this field and reads the coordinate back. That is an OWED test, recorded here rather than implied by a green check, and CARD 8 on the address-check board is its live counterpart."
         }
       ],
       "dataFixes": [
@@ -376,14 +380,14 @@
       "testModeRunTag": {
         "what": "while a business is in test mode, a phone/email/address added to a customer that carries an import_run_id is stamped with that run id (contactWriter.testModeRunTag), so the import's undo takes it back",
         "why": "David, 2026-09-16 (restated 2026-09-17): the wipe must work regardless of what users entered during testing; only live captures are never removed",
-        "tests": "contacts.paths.mts \u2014 checkout.attached-customer, editor.update, stop.save-site each assert the tag; scripts/sql-harness/undo-test-mode-edits-348.pglite.mjs proves the undo side (npm run verify:undo-test-edits)"
+        "tests": "contacts.paths.mts — checkout.attached-customer, editor.update, stop.save-site each assert the tag; scripts/sql-harness/undo-test-mode-edits-348.pglite.mjs proves the undo side (npm run verify:undo-test-edits)"
       }
     },
     {
       "id": "stop-progress",
-      "title": "What happened at a stop \u2014 Start, Done, Undo, Note \u2014 through ONE completion writer, from either door (ledger #347)",
+      "title": "What happened at a stop — Start, Done, Undo, Note — through ONE completion writer, from either door (ledger #347)",
       "writer": {
-        "name": "stop_progress_apply (database) \u2014 reached by crew_stop_act (token) and stop_act (session)",
+        "name": "stop_progress_apply (database) — reached by crew_stop_act (token) and stop_act (session)",
         "at": "packages/cultivar-os/api/members/crewDay.ts#export async function handleCrewDay"
       },
       "writerFiles": [
@@ -406,9 +410,9 @@
           "routed_at",
           "routed_by"
         ],
-        "databaseGuard": "Set only inside stop_progress_apply (20260917c \u00a74b) \u2014 the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation. The route columns (route_position / routed_at / routed_by) are written only by save_route_order (20260917e) \u2014 the one writer for the day's plan, ledger #351. \u270f\ufe0f PIECE 2 (20260923b, [[R-169]]): the route columns are still save_route_order's alone, but the re-route CLEAR is now scoped to the team being routed \u2014 `team_id IS NOT DISTINCT FROM p_team_id`. The day-scoped clear is what wiped Team 2's order on Saturday 2026-09-19 (tech-debt #345). `delivery_route_plans` holds one row per team per day with the optimiser's OWN miles and minutes, kept as a snapshot and never recomputed."
+        "databaseGuard": "Set only inside stop_progress_apply (20260917c §4b) — the ONE completion writer. Both doors call it: crew_stop_act (token, the link's own day) and stop_act (a logged-in member with deliveries:update). David's ruling 2026-09-17: both doors HOLD the review ask and both are undoable. NOT a trigger: stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation. The route columns (route_position / routed_at / routed_by) are written only by save_route_order (20260917e) — the one writer for the day's plan, ledger #351. ✏️ PIECE 2 (20260923b, [[R-169]]): the route columns are still save_route_order's alone, but the re-route CLEAR is now scoped to the team being routed — `team_id IS NOT DISTINCT FROM p_team_id`. The day-scoped clear is what wiped Team 2's order on Saturday 2026-09-19 (tech-debt #345). `delivery_route_plans` holds one row per team per day with the optimiser's OWN miles and minutes, kept as a snapshot and never recomputed."
       },
-      "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role \u2014 the endpoint.",
+      "databaseGuardForTables": "BUILT: neither table has an INSERT, UPDATE or DELETE policy, and the migration revokes those privileges from anon and authenticated. Every write is inside a SECURITY DEFINER function (create_crew_day_link, revoke_crew_day_link, crew_stop_act). crew_stop_act and crew_day_read can be called only by service_role — the endpoint.",
       "inputSignal": {
         "fileMentions": "crewStopAction|createCrewDayLink|revokeCrewDayLink",
         "props": "note|name|token|link"
@@ -425,31 +429,31 @@
       "paths": [
         {
           "id": "crew.link-create",
-          "what": "Schedule \u2192 a day's Crew link \u2192 Make link / Make a new link",
+          "what": "Schedule → a day's Crew link → Make link / Make a new link",
           "at": "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx#async function make",
           "files": [
             "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx",
             "packages/cultivar-os/src/pages/DeliverySchedule.tsx",
             "packages/cultivar-os/src/lib/crewDayLink.ts"
           ],
-          "chain": "CrewLinkPanel.make \u2192 createCrewDayLink \u2192 rpc create_crew_day_link (deliveries:update checked inside)",
-          "shown": "Schedule \u2192 Crew link panel: the new link with Copy / Share, then 'Link is on \u00b7 made \u2026 \u00b7 works until 6:00 AM'"
+          "chain": "CrewLinkPanel.make → createCrewDayLink → rpc create_crew_day_link (deliveries:update checked inside)",
+          "shown": "Schedule → Crew link panel: the new link with Copy / Share, then 'Link is on · made … · works until 6:00 AM'"
         },
         {
           "id": "crew.link-revoke",
-          "what": "Schedule \u2192 a day's Crew link \u2192 Turn off link",
+          "what": "Schedule → a day's Crew link → Turn off link",
           "at": "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx#async function turnOff",
           "files": [
             "packages/cultivar-os/src/components/delivery/CrewLinkPanel.tsx",
             "packages/cultivar-os/src/pages/DeliverySchedule.tsx",
             "packages/cultivar-os/src/lib/crewDayLink.ts"
           ],
-          "chain": "CrewLinkPanel.turnOff \u2192 revokeCrewDayLink \u2192 rpc revoke_crew_day_link",
-          "shown": "Schedule \u2192 Crew link panel: 'No link for this day'; the crew page: 'This link has been turned off. Ask Lauren for today's link.'"
+          "chain": "CrewLinkPanel.turnOff → revokeCrewDayLink → rpc revoke_crew_day_link",
+          "shown": "Schedule → Crew link panel: 'No link for this day'; the crew page: 'This link has been turned off. Ask Lauren for today's link.'"
         },
         {
           "id": "crew.start",
-          "what": "Crew page \u2192 a stop \u2192 Start",
+          "what": "Crew page → a stop → Start",
           "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
           "files": [
             "packages/cultivar-os/src/pages/CrewDay.tsx",
@@ -458,12 +462,12 @@
             "packages/cultivar-os/api/members/crewDay.ts",
             "api/members/invite.ts"
           ],
-          "chain": "CrewDay.tap('start') \u2192 crewStopAction \u2192 POST /api/crew/day \u2192 members/invite \u2192 handleCrewDay \u2192 crew_stop_act",
-          "shown": "Crew page \u2192 the stop's status line (STARTED / DONE time \u00b7 name) and CREW NOTES; schedule \u2192 the stop card's 'From the crew link' block"
+          "chain": "CrewDay.tap('start') → crewStopAction → POST /api/crew/day → members/invite → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
         },
         {
           "id": "crew.done",
-          "what": "Crew page \u2192 a stop \u2192 Done (holds a review ask; the order and stock are untouched)",
+          "what": "Crew page → a stop → Done (holds a review ask; the order and stock are untouched)",
           "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
           "files": [
             "packages/cultivar-os/src/pages/CrewDay.tsx",
@@ -472,12 +476,12 @@
             "packages/cultivar-os/api/members/crewDay.ts",
             "api/members/invite.ts"
           ],
-          "chain": "CrewDay.tap('done') \u2192 crewStopAction \u2192 POST /api/crew/day \u2192 handleCrewDay \u2192 crew_stop_act",
-          "shown": "Crew page \u2192 the stop's status line (STARTED / DONE time \u00b7 name) and CREW NOTES; schedule \u2192 the stop card's 'From the crew link' block; the schedule's status badge reads Done"
+          "chain": "CrewDay.tap('done') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block; the schedule's status badge reads Done"
         },
         {
           "id": "crew.undo-done",
-          "what": "Crew page \u2192 a stop the crew marked done \u2192 Undo Done",
+          "what": "Crew page → a stop the crew marked done → Undo Done",
           "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
           "files": [
             "packages/cultivar-os/src/pages/CrewDay.tsx",
@@ -486,12 +490,12 @@
             "packages/cultivar-os/api/members/crewDay.ts",
             "api/members/invite.ts"
           ],
-          "chain": "CrewDay.tap('undo_done') \u2192 crewStopAction \u2192 POST /api/crew/day \u2192 handleCrewDay \u2192 crew_stop_act",
-          "shown": "Crew page \u2192 the stop's status line (STARTED / DONE time \u00b7 name) and CREW NOTES; schedule \u2192 the stop card's 'From the crew link' block"
+          "chain": "CrewDay.tap('undo_done') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
         },
         {
           "id": "crew.note",
-          "what": "Crew page \u2192 a stop \u2192 Add a note \u2192 Save note",
+          "what": "Crew page → a stop → Add a note → Save note",
           "at": "packages/cultivar-os/src/pages/CrewDay.tsx#async function tap",
           "files": [
             "packages/cultivar-os/src/pages/CrewDay.tsx",
@@ -500,48 +504,48 @@
             "packages/cultivar-os/api/members/crewDay.ts",
             "api/members/invite.ts"
           ],
-          "chain": "CrewDay.tap('note') \u2192 crewStopAction \u2192 POST /api/crew/day \u2192 handleCrewDay \u2192 crew_stop_act",
-          "shown": "Crew page \u2192 the stop's status line (STARTED / DONE time \u00b7 name) and CREW NOTES; schedule \u2192 the stop card's 'From the crew link' block"
+          "chain": "CrewDay.tap('note') → crewStopAction → POST /api/crew/day → handleCrewDay → crew_stop_act",
+          "shown": "Crew page → the stop's status line (STARTED / DONE time · name) and CREW NOTES; schedule → the stop card's 'From the crew link' block"
         },
         {
           "id": "office.start",
-          "what": "Schedule (or route / order screen) \u2192 a stop \u2192 Start this stop",
+          "what": "Schedule (or route / order screen) → a stop → Start this stop",
           "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
           "files": [
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/cultivar-os/src/components/delivery/StopCard.tsx",
             "packages/cultivar-os/src/lib/stopProgress.ts"
           ],
-          "chain": "StopCard \u2192 useStopActions.markStop('start') \u2192 stopAct \u2192 rpc stop_act \u2192 stop_progress_apply",
-          "shown": "Schedule \u2192 the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done \u00b7 name \u00b7 review ask held, not sent)"
+          "chain": "StopCard → useStopActions.markStop('start') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
         },
         {
           "id": "office.done",
-          "what": "Schedule \u2192 a stop \u2192 Mark done (holds the review ask; no order or stock change)",
+          "what": "Schedule → a stop → Mark done (holds the review ask; no order or stock change)",
           "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
           "files": [
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/cultivar-os/src/components/delivery/StopCard.tsx",
             "packages/cultivar-os/src/lib/stopProgress.ts"
           ],
-          "chain": "StopCard \u2192 useStopActions.markStop('finish') \u2192 stopAct \u2192 rpc stop_act \u2192 stop_progress_apply",
-          "shown": "Schedule \u2192 the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done \u00b7 name \u00b7 review ask held, not sent)"
+          "chain": "StopCard → useStopActions.markStop('finish') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
         },
         {
           "id": "office.undo-done",
-          "what": "Schedule \u2192 a stop already done \u2192 Undo done",
+          "what": "Schedule → a stop already done → Undo done",
           "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function markStop",
           "files": [
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/cultivar-os/src/components/delivery/StopCard.tsx",
             "packages/cultivar-os/src/lib/stopProgress.ts"
           ],
-          "chain": "StopCard \u2192 useStopActions.markStop('undo') \u2192 stopAct \u2192 rpc stop_act \u2192 stop_progress_apply",
-          "shown": "Schedule \u2192 the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done \u00b7 name \u00b7 review ask held, not sent)"
+          "chain": "StopCard → useStopActions.markStop('undo') → stopAct → rpc stop_act → stop_progress_apply",
+          "shown": "Schedule → the stop card: the status chip (Scheduled / Done), the 'Undo done' control, and the 'From the crew link' block (Started / Done · name · review ask held, not sent)"
         },
         {
           "id": "route.save",
-          "what": "Route this day \u2192 the optimiser resolves \u2192 the day's sequence is saved (ledger #351)",
+          "what": "Route this day → the optimiser resolves → the day's sequence is saved (ledger #351)",
           "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids, teamParam,",
           "files": [
             "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
@@ -549,20 +553,20 @@
             "packages/cultivar-os/src/lib/stopRead.ts",
             "packages/cultivar-os/src/pages/CrewDay.tsx"
           ],
-          "chain": "DeliveryRoute (?date=) \u2192 RouteMap reports the optimised order \u2192 saveRouteOrder \u2192 rpc save_route_order \u2192 deliveries.route_position/routed_at/routed_by",
-          "shown": "Route page: 'Saved \u2014 N stops in this order \u00b7 route order \u00b7 planned <time>'; crew page header: 'route order \u00b7 planned <time>'; the schedule, the route list and the printed day sheet all list the stops in that order (one readStops)"
+          "chain": "DeliveryRoute (?date=) → RouteMap reports the optimised order → saveRouteOrder → rpc save_route_order → deliveries.route_position/routed_at/routed_by",
+          "shown": "Route page: 'Saved — N stops in this order · route order · planned <time>'; crew page header: 'route order · planned <time>'; the schedule, the route list and the printed day sheet all list the stops in that order (one readStops)"
         },
         {
           "id": "route.save-per-team",
-          "what": "Route page opened for ONE team (/deliveries?date=\u2026&team=\u2026) \u2192 Route N stops",
+          "what": "Route page opened for ONE team (/deliveries?date=…&team=…) → Route N stops",
           "at": "packages/cultivar-os/src/pages/DeliveryRoute.tsx#const out = await saveRouteOrder(supabase, businessId, dateParam, ids, teamParam,",
           "files": [
             "packages/cultivar-os/src/pages/DeliveryRoute.tsx",
             "packages/cultivar-os/src/lib/routeOrder.ts",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "DeliveryRoute save effect \u2192 saveRouteOrder(teamId, {miles, minutes}) \u2192 rpc save_route_order(6) (deliveries:update checked inside)",
-          "shown": "Route page: 'Routing Team 1 \u2014 one team at a time', then 'Saved \u2014 N stops in this order \u00b7 route order \u00b7 planned H:MM'; the crew page, the schedule and the day sheet all follow that order"
+          "chain": "DeliveryRoute save effect → saveRouteOrder(teamId, {miles, minutes}) → rpc save_route_order(6) (deliveries:update checked inside)",
+          "shown": "Route page: 'Routing Team 1 — one team at a time', then 'Saved — N stops in this order · route order · planned H:MM'; the crew page, the schedule and the day sheet all follow that order"
         }
       ],
       "guards": [
@@ -584,11 +588,11 @@
         },
         {
           "id": "crew.no-prices",
-          "what": "no response carries a price, total, discount or cost \u2014 as a key or as a value"
+          "what": "no response carries a price, total, discount or cost — as a key or as a value"
         },
         {
           "id": "crew.rate-limit",
-          "what": "over 60 calls a minute from one client \u2192 429, guesses counted; another client unaffected"
+          "what": "over 60 calls a minute from one client → 429, guesses counted; another client unaffected"
         },
         {
           "id": "crew.no-stock-or-order",
@@ -600,44 +604,68 @@
         },
         {
           "id": "route.only-this-day-and-business",
-          "what": "a route naming another day's or another business's stop, a duplicate, or nothing at all is refused WHOLE \u2014 no partial plan is written"
+          "what": "a route naming another day's or another business's stop, a duplicate, or nothing at all is refused WHOLE — no partial plan is written"
         },
         {
           "id": "route.no-unplanned-claim",
-          "what": "a day nobody routed never claims a plan: routed_at null, no positions, and the page says 'Not routed yet \u2014 follow the order in Lauren's text.'"
+          "what": "a day nobody routed never claims a plan: routed_at null, no positions, and the page says 'Not routed yet — follow the order in Lauren's text.'"
         },
         {
           "id": "crew.box-follows-stop",
-          "what": "the schedule never shows a Started or Done the stop no longer has \u2014 the tap stays in the append-only log, the box follows the stop (David, 2026-09-18)"
+          "what": "the schedule never shows a Started or Done the stop no longer has — the tap stays in the append-only log, the box follows the stop (David, 2026-09-18)"
         },
         {
           "id": "route.keeps-another-teams-order",
-          "what": "\ud83d\udd34 THE SATURDAY REGRESSION (tech-debt #345) \u2014 routing one team leaves another team's saved order and stamp untouched; a stop dropped from its OWN team's route still loses its place"
+          "what": "🔴 THE SATURDAY REGRESSION (tech-debt #345) — routing one team leaves another team's saved order and stamp untouched; a stop dropped from its OWN team's route still loses its place"
         },
         {
           "id": "route.refuses-teamless-stop",
-          "what": "[[R-169]] \u2460 a set containing a stop with no team is refused and the refusal NAMES the stop; nothing is written"
+          "what": "[[R-169]] ① a set containing a stop with no team is refused and the refusal NAMES the stop; nothing is written"
         },
         {
           "id": "route.refuses-mixed-teams",
-          "what": "[[R-169]] \u2461 a set spanning two teams is refused BY NAME"
+          "what": "[[R-169]] ② a set spanning two teams is refused BY NAME"
         },
         {
           "id": "route.wrapper-refuses-partly-teamed",
-          "what": "the DEPLOYED page's three-argument call still refuses a partly team-less or mixed set by name, and a split day cannot be routed with no team named (\u24ea)"
+          "what": "the DEPLOYED page's three-argument call still refuses a partly team-less or mixed set by name, and a split day cannot be routed with no team named (⓪)"
         },
         {
           "id": "route.unsplit-day-still-works",
-          "what": "a business that has never split a day routes exactly as before \u2014 teams change nothing for it"
+          "what": "a business that has never split a day routes exactly as before — teams change nothing for it"
+        },
+        {
+          "id": "crew.link-shows-only-its-team",
+          "what": "a team's link shows that team's stops and no others; a stop with no team is not swept into it"
+        },
+        {
+          "id": "crew.link-cannot-act-on-another-teams-stop",
+          "what": "🔴 a team's token is REFUSED on another team's stop — the stop id travels in the request, so hiding it from the read is not enough"
+        },
+        {
+          "id": "crew.whole-day-link-unchanged",
+          "what": "a nursery that never splits a day keeps the link it always had, and it claims no team"
+        },
+        {
+          "id": "crew.one-live-link-per-team",
+          "what": "reissuing one team's link replaces only its own; another team does not lose its day"
+        },
+        {
+          "id": "crew.link-refuses-another-businesss-team",
+          "what": "a link cannot be minted against a team this business does not own (AC-3) — otherwise the read hands back an empty day that reads as 'nothing to do'"
+        },
+        {
+          "id": "crew.link-safe-before-the-migration",
+          "what": "🔴 with 20260921d NOT applied, a per-crew link says 'not set up yet' and NEVER falls back to the whole day; the whole-day link Lauren uses today is untouched"
         }
       ],
       "declared": []
     },
     {
       "id": "teams",
-      "title": "Who goes out \u2014 the team list, and which team takes a stop (ledger #362, pieces 1-2; tech-debt #345)",
+      "title": "Who goes out — the team list, and which team takes a stop (ledger #362, pieces 1-2; tech-debt #345)",
       "writer": {
-        "name": "save_team and assign_stops_team (database) \u2014 reached only through lib/teams.ts",
+        "name": "save_team and assign_stops_team (database) — reached only through lib/teams.ts",
         "at": "packages/cultivar-os/src/lib/teams.ts#export async function saveTeam"
       },
       "writerFiles": [
@@ -652,9 +680,9 @@
         "columns": [
           "team_id"
         ],
-        "databaseGuard": "Set only inside assign_stops_team (20260921a \u00a74) \u2014 all-or-nothing over a set of stops, refusing a retired or foreign team and any stop that is not this business's. stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation on different columns."
+        "databaseGuard": "Set only inside assign_stops_team (20260921a §4) — all-or-nothing over a set of stops, refusing a retired or foreign team and any stop that is not this business's. stopWrites.ts still writes delivery_date and the ship-to on the same row through RLS, which is a different operation on different columns."
       },
-      "databaseGuardForTables": "BUILT: `delivery_teams` and `delivery_team_members` (renamed from `teams`/`team_members` by 20260923a, [[R-168]]) have a SELECT policy only (`deliveries:read`), and 20260921a revokes INSERT/UPDATE/DELETE from anon and authenticated. Every write is inside a SECURITY DEFINER function checking `deliveries:update`. EXECUTE on both functions is granted to `authenticated` only \u2014 never anon, because a team list is not a public fact.",
+      "databaseGuardForTables": "BUILT: `delivery_teams` and `delivery_team_members` (renamed from `teams`/`team_members` by 20260923a, [[R-168]]) have a SELECT policy only (`deliveries:read`), and 20260921a revokes INSERT/UPDATE/DELETE from anon and authenticated. Every write is inside a SECURITY DEFINER function checking `deliveries:update`. EXECUTE on both functions is granted to `authenticated` only — never anon, because a team list is not a public fact.",
       "inputSignal": {
         "fileMentions": "saveTeam|assignStopsTeam|retireTeam",
         "props": "team|member"
@@ -668,61 +696,61 @@
       "paths": [
         {
           "id": "team.create",
-          "what": "Settings \u2192 Teams \u2192 Add a team \u2192 Save team",
+          "what": "Settings → Teams → Add a team → Save team",
           "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function commit",
           "files": [
             "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
             "packages/cultivar-os/src/pages/Settings.tsx",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "TeamsSettings.commit \u2192 saveTeam \u2192 rpc save_team (deliveries:update checked inside)",
-          "shown": "Settings \u2192 Teams: the team by name with its people listed under it, and 'Team 1 saved \u2014 3 people.'"
+          "chain": "TeamsSettings.commit → saveTeam → rpc save_team (deliveries:update checked inside)",
+          "shown": "Settings → Teams: the team by name with its people listed under it, and 'Team 1 saved — 3 people.'"
         },
         {
           "id": "team.edit",
-          "what": "Settings \u2192 Teams \u2192 Edit \u2192 Save team (the member list is replaced)",
+          "what": "Settings → Teams → Edit → Save team (the member list is replaced)",
           "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function commit",
           "files": [
             "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "TeamsSettings.commit with a team id \u2192 saveTeam \u2192 rpc save_team",
-          "shown": "Settings \u2192 Teams: the new name and exactly the people now on it \u2014 anyone removed is gone from the line"
+          "chain": "TeamsSettings.commit with a team id → saveTeam → rpc save_team",
+          "shown": "Settings → Teams: the new name and exactly the people now on it — anyone removed is gone from the line"
         },
         {
           "id": "team.retire",
-          "what": "Settings \u2192 Teams \u2192 Retire (and Bring back)",
+          "what": "Settings → Teams → Retire (and Bring back)",
           "at": "packages/cultivar-os/src/components/settings/TeamsSettings.tsx#async function setActive",
           "files": [
             "packages/cultivar-os/src/components/settings/TeamsSettings.tsx",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "TeamsSettings.setActive \u2192 retireTeam/saveTeam \u2192 rpc save_team with active false/true",
-          "shown": "Settings \u2192 Teams: it moves under 'Retired' with a Bring back button; the stop that already has it still reads its name"
+          "chain": "TeamsSettings.setActive → retireTeam/saveTeam → rpc save_team with active false/true",
+          "shown": "Settings → Teams: it moves under 'Retired' with a Bring back button; the stop that already has it still reads its name"
         },
         {
           "id": "stop.assign-team",
-          "what": "Schedule / route / order screen \u2192 a stop \u2192 the team picker",
+          "what": "Schedule / route / order screen → a stop → the team picker",
           "at": "packages/cultivar-os/src/components/delivery/StopCard.tsx#function StopTeamRow",
           "files": [
             "packages/cultivar-os/src/components/delivery/StopCard.tsx",
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "StopTeamRow select \u2192 setStopTeam \u2192 assignStopsTeam \u2192 rpc assign_stops_team",
+          "chain": "StopTeamRow select → setStopTeam → assignStopsTeam → rpc assign_stops_team",
           "shown": "The stop card's team line shows the team; the schedule, the route and the order screen all read it through the same readStops"
         },
         {
           "id": "stop.unassign-team",
-          "what": "Schedule / route / order screen \u2192 a stop \u2192 the team picker \u2192 No team",
+          "what": "Schedule / route / order screen → a stop → the team picker → No team",
           "at": "packages/cultivar-os/src/components/delivery/useStopActions.tsx#async function setStopTeam",
           "files": [
             "packages/cultivar-os/src/components/delivery/StopCard.tsx",
             "packages/cultivar-os/src/components/delivery/useStopActions.tsx",
             "packages/cultivar-os/src/lib/teams.ts"
           ],
-          "chain": "StopTeamRow select '' \u2192 setStopTeam(null) \u2192 assignStopsTeam \u2192 rpc assign_stops_team with a NULL team",
-          "shown": "The stop card's team line reads 'No team' \u2014 an unassigned stop says so rather than showing a blank"
+          "chain": "StopTeamRow select '' → setStopTeam(null) → assignStopsTeam → rpc assign_stops_team with a NULL team",
+          "shown": "The stop card's team line reads 'No team' — an unassigned stop says so rather than showing a blank"
         }
       ],
       "guards": [
@@ -732,7 +760,7 @@
         },
         {
           "id": "team.duplicate-member",
-          "what": "one person cannot be on a team twice \u2014 refused, never silently merged"
+          "what": "one person cannot be on a team twice — refused, never silently merged"
         },
         {
           "id": "team.no-name",
@@ -744,7 +772,7 @@
         },
         {
           "id": "team.other-business",
-          "what": "AC-3 \u2014 a team cannot be read, edited or put on another business's stop"
+          "what": "AC-3 — a team cannot be read, edited or put on another business's stop"
         },
         {
           "id": "stop.assign-all-or-nothing",
@@ -778,7 +806,7 @@
       "tables": [
         "production_rung_dates"
       ],
-      "databaseGuardForTables": "APPEND-ONLY, AND ENFORCED TWICE. `trg_rung_dates_immutable` (20260924a) raises on any UPDATE or DELETE, and the table carries NO update and NO delete policy for anyone, owner included. So unlike `contacts`, the database itself refuses a correction-by-edit \u2014 a correction is a NEW ROW. What the database cannot tell is the writer's INSERT from any other; RLS (`inventory:update`) is that guard.",
+      "databaseGuardForTables": "APPEND-ONLY, AND ENFORCED TWICE. `trg_rung_dates_immutable` (20260924a) raises on any UPDATE or DELETE, and the table carries NO update and NO delete policy for anyone, owner included. So unlike `contacts`, the database itself refuses a correction-by-edit — a correction is a NEW ROW. What the database cannot tell is the writer's INSERT from any other; RLS (`inventory:update`) is that guard.",
       "entryFunctions": [
         "recordRungDate"
       ],
@@ -790,15 +818,15 @@
       "paths": [
         {
           "id": "potting.record",
-          "what": "/inventory/uppot \u2192 Potted on \u2192 Add this entry",
+          "what": "/inventory/uppot → Potted on → Add this entry",
           "at": "packages/cultivar-os/src/components/RungDateSheet.tsx#const save = useCallback",
           "files": [
             "packages/cultivar-os/src/components/RungDateSheet.tsx",
             "packages/cultivar-os/src/pages/UppotPlan.tsx",
             "packages/cultivar-os/src/lib/rungDatesRead.ts"
           ],
-          "chain": "RungDateSheet.save \u2192 recordRungDate \u2192 INSERT production_rung_dates (inventory:update checked by RLS)",
-          "shown": "/inventory/uppot \u2192 the Potted on column, and the sheet's current entry + history",
+          "chain": "RungDateSheet.save → recordRungDate → INSERT production_rung_dates (inventory:update checked by RLS)",
+          "shown": "/inventory/uppot → the Potted on column, and the sheet's current entry + history",
           "test": "potting.record"
         }
       ],
@@ -837,7 +865,7 @@
     {
       "domain": "delivery-stops",
       "order": 2,
-      "why": "get it on a truck: three independent `deliveries` insert copies, and an order's date change never reaches its stop \u26a0\ufe0f The crew link's Start / Done / Note on a stop is registered separately as `stop-progress` (ledger #347); this entry is the stop INSERTS and date changes, still unregistered."
+      "why": "get it on a truck: three independent `deliveries` insert copies, and an order's date change never reaches its stop ⚠️ The crew link's Start / Done / Note on a stop is registered separately as `stop-progress` (ledger #347); this entry is the stop INSERTS and date changes, still unregistered."
     },
     {
       "domain": "stock-movements",
@@ -845,7 +873,7 @@
       "why": "mostly behind RPCs already; grid status/cost edits and the imports still write around the ledger"
     },
     {
-      "domain": "cost-objects \u00b7 service-offerings \u00b7 team",
+      "domain": "cost-objects · service-offerings · team",
       "order": 4,
       "why": "off the go-live path; several unmanaged writers each"
     }

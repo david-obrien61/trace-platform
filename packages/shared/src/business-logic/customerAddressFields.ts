@@ -17,11 +17,12 @@
 // ============================================================
 
 /**
- * Every column `20260911b_customer_addresses.sql` creates, in order.
+ * Every column this table is built from — `20260911b` CREATES the first fourteen and `20260923c`
+ * ADDS the four coordinate columns. A table is built by every migration that touches it.
  *
  * 🔴 `customerAddresses.test.ts` §G PARSES THE MIGRATION and fails in BOTH directions — a column
  * the migration creates that this string omits, and a name here the migration does not create.
  * The migration is the source; this is the derivation.
  */
 export const CUSTOMER_ADDRESS_COLUMNS =
-  'id, business_id, customer_id, label, line1, line2, city, state, zip, notes, is_default, active, created_at, updated_at';
+  'id, business_id, customer_id, label, line1, line2, city, state, zip, notes, is_default, active, created_at, updated_at, kind, source, import_run_id, latitude, longitude, geocoded_at, geocode_status';

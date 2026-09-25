@@ -1,4 +1,29 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 NOT APPLIED — RETIRED IN PLACE 2026-09-24. DO NOT APPLY.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- ✏️ CORRECTED 2026-09-24: my first wording said this file "contradicts the ruling", which
+-- OVERSTATED it. Only ONE HALF was superseded, and the other half is sound:
+--
+--   · SUPERSEDED — `lot_qb_item_id` on `order_items` and `inventory_counts`. David's 2026-09-21
+--     ONE-COLUMN ruling: `order_items.qbo_item_id` is the column, meaning "the QuickBooks item
+--     this line is for", written from the invoice on captured lines and from the lot on live
+--     ones. `lot_qb_item_id` must NOT be created as well.
+--   · SOUND AND PENDING — `customer_qb_id` on `orders`, `deliveries` and `customer_addresses`
+--     IMPLEMENTS David's 2026-09-16 rule that settings are keyed on the QuickBooks id so records
+--     survive a wipe-and-reload. It is neither approved for apply nor abandoned; it waits on him.
+--
+-- So the file is held because it cannot be applied as a WHOLE, not because it is wrong.
+--
+-- MEASURED LIVE 2026-09-24: none of the five columns this file adds exists on any of those tables.
+-- The file is in the corpus, on `main`, and not in the database — which is why every guard that
+-- derives a column list from the corpus disagreed with production until this marker existed.
+--
+-- Retired in place following tech-debt #248's precedent (David, 2026-09-11): a migration that will
+-- not run is MARKED, not deleted, so apply-state checks stop reporting it beside migrations that
+-- genuinely wait. **COMMENT ONLY — no SQL below this header is touched** (§6 r1).
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+
+-- ════════════════════════════════════════════════════════════════════════════════════════════
 -- DRAFT — NOT FOR APPLY
 -- 20260916b — RECORDS THAT MUST SURVIVE A WIPE-AND-RELOAD, KEYED ON THE QUICKBOOKS ID · ledger #342
 -- ════════════════════════════════════════════════════════════════════════════════════════════

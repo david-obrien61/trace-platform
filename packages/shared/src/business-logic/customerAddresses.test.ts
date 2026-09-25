@@ -294,23 +294,74 @@ async function main(): Promise<void> {
     ok(historySourceViolation(fromCustomers) === null, 'F7 a seed read FROM customers alone is legal — the rule refuses history, not seeding');
   }
 
-  // ══ G. THE COLUMN LIST IS THE MIGRATION\'S, NOT A HAND-MAINTAINED COPY (#179) ════════════════
+  // ══ G. THE COLUMN LIST IS THE MIGRATIONS', NOT A HAND-MAINTAINED COPY (#179) ════════════════
+  // ✏️ REWRITTEN 2026-09-24 (ledger #386). This section read ONE migration and asserted the select
+  // matched it exactly. `20260923c` then ADDED four columns to the same table — latitude,
+  // longitude, geocoded_at, geocode_status — and the old shape could not express that: naming them
+  // failed G3 (the select names something 20260911b does not create) and omitting them left the
+  // coordinate invisible to every reader. 🔴 A TABLE IS BUILT BY EVERY MIGRATION THAT TOUCHES IT,
+  // not by the one that created it, and the derivation now says so.
   {
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20260911b_customer_addresses.sql'), 'utf8');
-    const body = sql.slice(sql.indexOf('CREATE TABLE IF NOT EXISTS public.customer_addresses'));
+    const dir = join(process.cwd(), 'supabase/migrations');
+    const creating = readFileSync(join(dir, '20260911b_customer_addresses.sql'), 'utf8');
+    const body = creating.slice(creating.indexOf('CREATE TABLE IF NOT EXISTS public.customer_addresses'));
     const block = body.slice(body.indexOf('(') + 1, body.indexOf('\n);'));
-    const declared = block.split('\n')
+    const created = block.split('\n')
       .map(l => l.replace(/--.*$/, '').trim())
       .filter(l => l && !/^(PRIMARY|UNIQUE|CHECK|CONSTRAINT|FOREIGN)/i.test(l))
       .map(l => l.split(/\s+/)[0]).filter(Boolean);
-    ok(declared.length > 10, `G1 the CREATE TABLE was parsed (${declared.length} columns) — the probe reached its target`);
+    ok(created.length > 10, `G1 the CREATE TABLE was parsed (${created.length} columns) — the probe reached its target`);
+
+    // Every later migration that ADDS a column to this table, found by reading the corpus rather
+    // than by naming files — a list of filenames here would be the hand-maintained copy again.
+    const added: string[] = [];
+    let alterFiles = 0;
+    for (const f of readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
+      const sql = readFileSync(join(dir, f), 'utf8');
+      // 🔴 A MIGRATION MARKED NOT-FOR-APPLY IS NOT PART OF THE TABLE. `20260916b` sits on main and
+      // adds five columns that exist on NO table live (measured 2026-09-24) — it was retired in
+      // place because it contradicts David's 2026-09-21 one-column ruling. Reading it would make
+      // this guard demand a select naming a column PostgREST would refuse, blanking the customer
+      // address book everywhere. The marker was already in that file ("DRAFT — NOT FOR APPLY")
+      // and nothing read it; both spellings are honoured now.
+      if (/NOT APPLIED — RETIRED IN PLACE|DRAFT — NOT FOR APPLY/.test(sql)) continue;
+      const stmts = sql.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+      const alters = [...stmts.matchAll(/ALTER TABLE\s+public\.customer_addresses([\s\S]*?);/gi)];
+      let hit = false;
+      for (const a of alters) {
+        for (const m of a[1].matchAll(/ADD COLUMN(?:\s+IF NOT EXISTS)?\s+([a-z_]+)/gi)) { added.push(m[1]); hit = true; }
+      }
+      if (hit) alterFiles++;
+    }
+    ok(alterFiles >= 1, `G1b at least one LATER migration adds columns to this table, and it was found (${alterFiles} file(s), ${added.length} column(s))`);
+
+    const declared = [...new Set([...created, ...added])];
     const selected = CUSTOMER_ADDRESS_COLUMNS.split(',').map(s => s.trim());
     const missing = declared.filter(c => !selected.includes(c));
-    ok(missing.length === 0, `G2 🔴 every column the migration CREATES is in the select (missing: ${missing.join(', ') || 'none'})`);
+    ok(missing.length === 0, `G2 🔴 every column the migrations CREATE OR ADD is in the select (missing: ${missing.join(', ') || 'none'})`);
     const extra = selected.filter(c => !declared.includes(c));
-    ok(extra.length === 0, `G3 and the select names nothing the migration does not create (extra: ${extra.join(', ') || 'none'})`);
+    ok(extra.length === 0, `G3 and the select names nothing the migrations do not create (extra: ${extra.join(', ') || 'none'})`);
     ok(/line2/.test(block), 'G4 `line2` IS created — present from day one for tech-debt #254');
     ok(!selected.includes('shipping_line1'), 'G5 no shipping_* column exists to select');
+    ok(['latitude', 'longitude', 'geocoded_at', 'geocode_status'].every(c => declared.includes(c) && selected.includes(c)),
+      '🔴 G6 THE FOUR COORDINATE COLUMNS ARE BOTH ADDED AND SELECTED — without this the columns exist in the database, the migration is applied, and every reader is blind to them, which is how a feature ships against a field nothing returns');
+
+    // 🔴 NEGATIVE CONTROLS — both directions, or this section cannot disagree (§6 r19 / R-33).
+    const fakeAlter = 'ALTER TABLE public.customer_addresses ADD COLUMN IF NOT EXISTS zzz_probe text;';
+    const probeAdded = [...[...fakeAlter.matchAll(/ALTER TABLE\s+public\.customer_addresses([\s\S]*?);/gi)]
+      .flatMap(a => [...a[1].matchAll(/ADD COLUMN(?:\s+IF NOT EXISTS)?\s+([a-z_]+)/gi)].map(m => m[1]))];
+    ok(probeAdded.length === 1 && probeAdded[0] === 'zzz_probe',
+      'G7 the ADD COLUMN parser finds a planted column — so G2 can actually fail when a migration adds one and the select does not follow');
+    ok(/NOT APPLIED — RETIRED IN PLACE|DRAFT — NOT FOR APPLY/.test(
+         readFileSync(join(dir, '20260916b_settings_keyed_on_qbo_id.sql'), 'utf8')),
+      '🔴 G9 THE RETIRED MIGRATION STILL CARRIES ITS MARKER — if someone removes it, this guard starts demanding `customer_qb_id` in the select, and selecting a column that does not exist makes PostgREST refuse the WHOLE read: the address book goes blank everywhere at once');
+    ok(!selected.includes('customer_qb_id'),
+      'G10 …and `customer_qb_id` is NOT selected — it exists in the corpus and on no table in the database');
+
+    const commentedAlter = '-- ALTER TABLE public.customer_addresses ADD COLUMN IF NOT EXISTS zzz_commented text;';
+    const commentedStmts = commentedAlter.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+    ok([...commentedStmts.matchAll(/ALTER TABLE\s+public\.customer_addresses/gi)].length === 0,
+      'G8 …and it does NOT fire on a commented-out one');
   }
 
   // ══ H. THE POLICIES REUSE `customers:*` AND MINT NOTHING ════════════════════════════════════
@@ -375,6 +426,54 @@ async function main(): Promise<void> {
   }
   ok(!sameAddress(site(), { line1: null, city: null, state: null, zip: null }),
     'K3 an EMPTY address does not match a real one — otherwise every blank would read as already-saved');
+
+  // ══ RULING 1 — A SITE SAVED AFTER THE CHECK KEEPS WHAT THE CHECK FOUND ═══════════════════════
+  // Before this, the address was geocoded at the counter and then saved with NO coordinate, so
+  // the next visit geocoded the identical text again: the 30-day cache could never hit, and a
+  // not_found was re-asked of the person every single time.
+  {
+    const found = { latitude: 30.5719542, longitude: -97.9188683, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' as const };
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [], geocode: found });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.latitude === 30.5719542 && row.longitude === -97.9188683,
+      '🔴 R1 A LOCATED SITE IS SAVED WITH ITS COORDINATE — without this the check runs, costs a request, and the answer is thrown away at the moment it would have been useful');
+    ok(row.geocode_status === 'found' && row.geocoded_at === found.geocoded_at,
+      'R2 …with the verdict and the date that starts the 30-day clock');
+  }
+  {
+    const kept = { latitude: null, longitude: null, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'confirm' as const };
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [], geocode: kept });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.geocode_status === 'confirm' && row.latitude === null,
+      "🔴 R3 A KEPT-MINE CONFIRM IS SAVED WITH NO COORDINATE. The row records that the question was asked and answered — so it is never asked again — while refusing to attach Google's pin to the street the person kept. That pairing IS the ruling");
+    ok(row.geocoded_at === kept.geocoded_at,
+      'R4 …and it is dated, or the answer could not expire and an unfindable street would stay unfindable after it was built');
+  }
+  {
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [] });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(row.latitude === null && row.geocode_status === null,
+      'R5 a site saved with NO check has no verdict — null, not 0 and not a guessed status. Every existing caller is unchanged');
+  }
+  {
+    // NEGATIVE CONTROL — the row must depend on what the CHECK found, not on the address text.
+    const a = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: 30.5, longitude: -97.9, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' } });
+    const b = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: null, longitude: null, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'not_found' } });
+    const ra = a.kind === 'insert' ? (a.row as Record<string, unknown>) : {};
+    const rb = b.kind === 'insert' ? (b.row as Record<string, unknown>) : {};
+    ok(ra.latitude === 30.5 && rb.latitude === null && ra.geocode_status !== rb.geocode_status,
+      '🔴 R6 NEGATIVE CONTROL: the SAME address with two different verdicts produces two different rows. An implementation that derived the coordinate from the text, or ignored the argument, would pass R1 by accident');
+  }
+  {
+    // 🔴 DAVID'S SECOND PROOF: editing an address must not move a stop.
+    const p = planSaveSite({ businessId: BIZ, customerId: CUST, label: 'Yard', address: site(), existing: [],
+      geocode: { latitude: 30.5, longitude: -97.9, geocoded_at: '2026-09-24T12:00:00.000Z', geocode_status: 'found' } });
+    const row = p.kind === 'insert' ? (p.row as Record<string, unknown>) : {};
+    ok(!('delivery_id' in row) && !('stop_id' in row) && !('order_id' in row),
+      "🔴 R7 THE ADDRESS ROW POINTS AT NO STOP. A stop SNAPSHOTS its own address and coordinate (ledger #335, 20260923d), so correcting a customer's address tomorrow cannot move a truck that was already routed — the two records are deliberately not joined, and this asserts the absence");
+  }
 
   console.log(`\ncustomerAddresses: ${passed} passed, ${failed} failed`);
   if (failed) { for (const f of failures) console.log(`   ✗ ${f}`); process.exit(1); }

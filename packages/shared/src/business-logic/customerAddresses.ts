@@ -74,6 +74,11 @@ export type ShipToInput = {
   source: 'billing' | 'saved_site' | 'typed';
   /** Provenance only. NEVER resolved at read time. */
   siteId?: string | null;
+  /** 🔴 DISPLAY ONLY — the server decides the money. Set when the address check could not place
+   *  this address and the person chose to save it anyway. The checkout previews read it so they
+   *  show the same suppressed delivery charge `api/orders/submit` will apply; a preview promising
+   *  a charge the submit then drops is a price that changes between the screen and the receipt. */
+  unplaceable?: boolean;
 };
 
 export type CustomerAddress = {
@@ -91,6 +96,20 @@ export type CustomerAddress = {
   active: boolean;
   created_at?: string;
   updated_at?: string;
+  // ── Added by `20260923c` (the address check) and selected since 2026-09-24. Before that the
+  //    columns existed in the database and NO reader could see them.
+  /** Where this address is, when Google could place it. NULL when never geocoded. */
+  latitude?: number | null;
+  longitude?: number | null;
+  /** When the coordinate was fetched — the 30-day clock (Google ToS §6.3.1), not a cache hint. */
+  geocoded_at?: string | null;
+  /** found · not_found · null (never attempted). `not_found` means SAVED and UNVERIFIED, and a
+   *  delivery to it must never be priced (David 2026-09-18). */
+  geocode_status?: string | null;
+  /** billing · shipping · both — David's 2026-09-09 model: one bill-to, many delivery addresses. */
+  kind?: string | null;
+  source?: string | null;
+  import_run_id?: string | null;
 };
 
 
@@ -169,6 +188,16 @@ export function planSaveSite(x: {
   existing: CustomerAddress[];
   isDefault?: boolean;
   notes?: string | null;
+  /**
+   * 🔴 WHAT THE ③ CHECK FOUND, carried onto the row it is about (ruling 1, David 2026-09-24).
+   * Optional: a site saved without a check simply has no verdict yet. A `confirm` arrives with a
+   * NULL coordinate and that is correct — the person kept their own wording, and Google's pin
+   * belongs to Google's wording.
+   */
+  geocode?: {
+    latitude: number | null; longitude: number | null;
+    geocoded_at: string; geocode_status: 'found' | 'confirm' | 'not_found';
+  } | null;
 }): SavePlan {
   const label = clean(x.label);
   if (!label) return { kind: 'refused', reason: 'Give this place a name so it can be picked later — "Job site A", "The yard".' };
@@ -208,6 +237,16 @@ export function planSaveSite(x: {
       // and a book whose only entry is not the default reads as broken. After that, explicit only.
       is_default: x.isDefault ?? x.existing.filter(s => s.active).length === 0,
       active: true,
+      // 🔴 RULING 1 (David, 2026-09-24): A SITE SAVED AFTER THE CHECK KEEPS WHAT THE CHECK FOUND.
+      // Before this, the address was geocoded at the counter and then saved with no coordinate,
+      // so the very next visit geocoded the identical text again — the 30-day cache could never
+      // hit, and a `not_found` was re-asked of the person every time.
+      // ⚠️ A `confirm` arrives here with a NULL coordinate and that is correct, not a gap: the
+      // person kept their own wording, and Google's pin belongs to Google's wording.
+      latitude:       x.geocode?.latitude ?? null,
+      longitude:      x.geocode?.longitude ?? null,
+      geocoded_at:    x.geocode?.geocoded_at ?? null,
+      geocode_status: x.geocode?.geocode_status ?? null,
     },
   };
 }

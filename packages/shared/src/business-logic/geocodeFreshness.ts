@@ -70,6 +70,33 @@ export function coordinateState(row: StoredCoordinate, now: Date): CoordinateSta
   return ageDays < CACHE_DAYS ? 'fresh' : 'expired';
 }
 
+/**
+ * 🔴 HOW OLD IS THE **ANSWER**, regardless of whether it left a coordinate.
+ *
+ * `coordinateState` dates a COORDINATE, so a row with none is `absent` and can never be `fresh`.
+ * But two of the three verdicts deliberately store no coordinate — `not_found` has none to store,
+ * and `confirm` must not borrow Google's pin for the text the person kept. Dating those by
+ * `coordinateState` would say "we have never checked this", which is false and has a cost in both
+ * directions:
+ *   · the person is asked about the same bad address on EVERY visit, which is the second question
+ *     the whole step exists to prevent;
+ *   · or, if the caller short-circuits without a clock, an address marked unplaceable in January
+ *     is still unplaceable in December — 🔴 AND IN LIBERTY HILL THAT IS WRONG BY CONSTRUCTION,
+ *     because 35% of its streets are new enough that the maps have not caught up yet. They do get
+ *     built, and we must look again.
+ *
+ * So the 30-day clock (Google ToS §6.3.1) runs on WHEN WE LAST ASKED, which is what `geocoded_at`
+ * has always recorded. An UNDATED answer is stale, for the same reason an undated coordinate is:
+ * if we cannot say when we learned it, we cannot claim to be inside the window.
+ */
+export function answerIsFresh(row: StoredCoordinate, now: Date): boolean {
+  const at = asDate(row.geocoded_at);
+  if (!at) return false;
+  const ageDays = (now.getTime() - at.getTime()) / MS_PER_DAY;
+  if (ageDays < 0) return false;          // a clock disagreed; do not hold it past 30 real days
+  return ageDays < CACHE_DAYS;
+}
+
 /** True when using this address requires fetching the coordinate again first. */
 export function needsRefresh(row: StoredCoordinate, now: Date): boolean {
   return coordinateState(row, now) !== 'fresh';

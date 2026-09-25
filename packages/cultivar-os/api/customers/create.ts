@@ -46,7 +46,71 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { businessId, customer, source, delivery, receiptId } = req.body ?? {};
+  const { businessId, customer, source, delivery, receiptId, action } = req.body ?? {};
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE GOOGLE PROXY — WHY IT LIVES IN AN ENDPOINT CALLED `customers/create`
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // The Google key has **Application restrictions = NONE** — that is what lets it answer from a
+  // server, and it is exactly why it must NEVER reach a browser, a client bundle or a response
+  // body. So every Places and Geocoding call goes through us.
+  //
+  // It rides THIS endpoint rather than a new one because `api/` is **12 of 12** on Vercel Hobby
+  // and a 13th function does not error — it makes the whole deploy fail SILENTLY while Vercel
+  // keeps serving the last-good bundle (§6 r11; it cost a day on 2026-06-20). This endpoint
+  // already carries an optional `delivery` block, so doing more than its name is its precedent,
+  // and it is the endpoint that already owns customer and address writes.
+  //
+  // ⚠️ THE BRANCH RETURNS BEFORE THE CUSTOMER VALIDATION BELOW. A geocode has no `customer`, and
+  // falling through would refuse it for a missing first name.
+  if (action === 'geocode' || action === 'autocomplete') {
+    const key = process.env.GOOGLE_GEOCODING_API_KEY;
+    if (!key) {
+      // Rule 24: say what is missing. A caller that gets a 200 with no result cannot tell an
+      // unconfigured server from an address that could not be found.
+      return res.status(503).json({ error: 'geocoding is not configured on this deployment' });
+    }
+    if (!businessId) return res.status(400).json({ error: 'businessId is required' });
+    const text = typeof req.body?.address === 'string' ? req.body.address.trim() : '';
+    if (!text) return res.status(400).json({ error: 'address is required' });
+    try {
+      if (action === 'geocode') {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(text)}&key=${encodeURIComponent(key)}`;
+        const r = await fetch(url);
+        const google = await r.json();
+        // 🔴 THE RESPONSE IS PASSED THROUGH AND THE KEY IS NOT. The caller needs `status`,
+        // `location_type` and `partial_match` to reach its verdict (R-180) — it needs nothing else.
+        return res.status(200).json({ google });
+      }
+      // Autocomplete. `locationBias` is a CORRECTNESS requirement, not a refinement: unbiased,
+      // "153 Twin Cr" returns Apex NC and Washington WV — measured 2026-09-24 — and a picked
+      // suggestion is stored as located with no second check. Biased on the tenant's own address
+      // the first result is "153 Twin Creekview Ln". BIAS, never restriction: LAWNS delivers
+      // across several towns and Twin Creekview is in Georgetown, not Leander.
+      const bias = req.body?.bias;
+      const body: Record<string, unknown> = { input: text, includedRegionCodes: ['us'] };
+      if (bias && typeof bias.latitude === 'number' && typeof bias.longitude === 'number') {
+        body.locationBias = { circle: { center: { latitude: bias.latitude, longitude: bias.longitude },
+                                        radius: typeof bias.radius === 'number' ? bias.radius : 50000 } };
+      }
+      if (typeof req.body?.sessionToken === 'string') body.sessionToken = req.body.sessionToken;
+      const r = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': key,
+          'X-Goog-FieldMask': 'suggestions.placePrediction.text,suggestions.placePrediction.placeId',
+        },
+        body: JSON.stringify(body),
+      });
+      const google = await r.json();
+      return res.status(200).json({ google });
+    } catch (e: any) {
+      // Rule 24 again: the caller degrades to plain typing plus the check. It must be able to
+      // tell "Google is unreachable" from "this address does not exist".
+      return res.status(502).json({ error: `geocoding service unreachable: ${e?.message ?? 'unknown'}` });
+    }
+  }
 
   if (!businessId || !customer || !customer.first_name) {
     return res.status(400).json({ error: 'businessId and customer.first_name are required' });

@@ -20,6 +20,7 @@
 import { useState, type ReactNode } from 'react';
 import { MapPin, Phone, Calendar, Pencil, Users } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
+import { AddressInput } from '@trace/shared/components/AddressInput';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { NotPermitted, WithheldData } from '@trace/shared/components/SurfaceState';
 import { OrderLineList } from '@trace/shared/components/OrderLineList';
@@ -156,7 +157,7 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
   /** The route dims the edge of a stop that is not in the route; everywhere else it is always in. */
   selected?: boolean;
 }) {
-  const { can } = useBusinessContext();
+  const { can, businessId } = useBusinessContext();
   const [editingAddress, setEditingAddress] = useState(false);
   const [form, setForm] = useState<ShipToForm>(() => shipToFormOf(d));
   // §8 V2 — SELF-ANCHORED. This note is rendered INSIDE the editor, directly above the Save control
@@ -266,7 +267,22 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
               <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: GRAY, lineHeight: 1.45 }}>
                 Where this stop goes. The customer’s billing address is not changed.
               </p>
-              {SHIP_TO_FIELDS.map(f => (
+              {/* 🔴 THE STREET TYPES THROUGH THE SHARED FIELD — autocomplete here too (David,
+                  2026-09-24: everywhere an address is entered). The remaining parts stay plain
+                  inputs: they are filled BY a picked suggestion, and a person correcting a ZIP is
+                  not looking for a list of ZIPs.
+                  ⚠️ RULING 4 IS UNAFFECTED AND THAT IS THE POINT — this writes the ADDRESS and
+                  nothing else. Locating a stop's address better must never re-price an order the
+                  customer has already been billed for. */}
+              <AddressInput
+                businessId={businessId ?? null}
+                bias={null}
+                label={FIELD_LABEL['address_line1']}
+                disabled={busy}
+                value={{ line1: form.address_line1, city: form.city, state: form.state, zip: form.zip }}
+                onChange={(v) => setForm(s => ({ ...s, address_line1: v.line1, city: v.city || s.city, state: v.state || s.state }))}
+              />
+              {SHIP_TO_FIELDS.filter(f => f !== 'address_line1').map(f => (
                 <label key={f} style={{ display: 'block', marginBottom: 8 }}>
                   <span style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: GRAY, marginBottom: 2 }}>{FIELD_LABEL[f]}</span>
                   <input

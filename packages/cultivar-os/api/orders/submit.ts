@@ -1,3 +1,4 @@
+import { classifyGeocodeResponse } from '../../../shared/src/business-logic/geocodeResult';
 import { createClient } from '@supabase/supabase-js';
 import { customerDisplayName } from '../../../shared/src/utils/personName';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
@@ -361,6 +362,15 @@ export async function scheduleCheckoutDelivery(
      * the picker existed — so the anon QR path and every caller that sends none are unchanged.
      */
     shipTo?: { line1?: unknown; city?: unknown; state?: unknown; zip?: unknown } | null;
+    /**
+     * 🔴 WHERE THE STOP IS, decided by the SERVER moments ago and passed in rather than re-fetched.
+     * David's ruling: *a stop keeps the coordinate it had on the day* — so this is written ONCE,
+     * onto the stop, and never refreshed. Any "where is this customer NOW" question reads
+     * `customer_addresses`, never an old stop.
+     * Null, or null members, whenever the address could not be placed or was only a `confirm` —
+     * a pin nobody agreed to must not be recorded as the place the truck goes.
+     */
+    coordinate?: { latitude: number | null; longitude: number | null } | null;
   },
 ): Promise<CheckoutDeliveryOutcome> {
   const serviceType = deliveryServiceType(args.transportMethod);
@@ -444,6 +454,13 @@ export async function scheduleCheckoutDelivery(
     // is linked to this stop" for an order that was taken minutes ago. LAWNS had no checkout stops, so
     // nothing showed it — until the first real order at the counter. The column is live (20260827).
     order_id:      args.orderId,
+    // 🔴 THE COORDINATE THE SERVER ALREADY PAID FOR (20260923d, live). Written only when the
+    // address was FOUND; `coordinate_set_at` is stamped with it so the pair can never disagree
+    // about whether this stop was ever located. Absent stays NULL rather than 0 — "at the
+    // equator" and "we don't know" must not be the same value.
+    latitude:          args.coordinate?.latitude ?? null,
+    longitude:         args.coordinate?.longitude ?? null,
+    coordinate_set_at: typeof args.coordinate?.latitude === 'number' ? new Date().toISOString() : null,
   };
 
   console.log('[TRACE:DELIVERY] checkout — scheduling a stop', {
@@ -498,6 +515,7 @@ export async function scheduleCheckoutDelivery(
 // One endpoint, multiple actions (12-fn ceiling — CLAUDE.md §6 rule 11). action absent/'create'
 // = the ORIGINAL checkout write (unchanged, anon-createable). 'update'/'delete'/'status' = the
 // roster CRUD (owner/manager only, token-gated, server-recompute). No new api/ file (12/12 held).
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -904,8 +922,72 @@ async function handleCreate(req: any, res: any) {
       return baseline;
     };
 
-    const transportComputed = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
-    const transportRes      = selectedTransport ? applyOverride(selectedTransport.id, transportComputed) : null;
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 AN ADDRESS THAT CANNOT BE PLACED IS NEVER PRICED (David, 2026-09-18 and 2026-09-23)
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // *"Surfaced, never priced, never guessed, no silent fallback."* A delivery charge is a claim
+    // about getting a truck to a place; if nobody can say where the place is, there is no honest
+    // number to charge. So the transport line is suppressed — NOT defaulted, NOT estimated, and
+    // NOT refused: the ORDER still saves, because the customer is standing at the counter and
+    // their trees are real even when their street name is not.
+    //
+    // ⚠️ THIS IS SERVER-AUTHORITATIVE AND THAT IS THE POINT. `CartReview` and `AddOns` show the
+    // same suppression, but a display mirror can be stale, bypassed or simply wrong; §1.6 item 10
+    // requires the money to be decided here. The two mirrors agree with this line — they do not
+    // replace it.
+    //
+    // It differs deliberately from the ladder-install refusal a few lines below (the 422): THERE,
+    // a line is owed an amount nobody has stated and charging the priced subset would be a silent
+    // $0. HERE, no amount is owed at all — the service cannot be delivered to an unknown place, so
+    // charging nothing IS the correct number, and the reason travels back so the screen can say it.
+    // 🔴 THE SERVER DECIDES WHETHER THE PLACE EXISTS. IT DOES NOT TAKE THE CLIENT'S WORD.
+    // My first version read `shipTo.geocode_status` — a field the ship-to does not carry, so the
+    // suppression would never have fired; and had I made the client send it, the money would have
+    // depended on a flag a caller can set (§1.6 item 10 requires this recomputed server-side,
+    // tamper-defended). So the address is placed HERE, once, before it is priced.
+    // One Geocoding call per delivery order — inside the 10,000/month free cap at LAWNS's volume.
+    // 🔴 THE VERDICT IS KEPT, NOT JUST ITS BOOLEAN — and that is a repair, not a refinement.
+    // The first version of this block returned `verdict === 'not_found'` and dropped the
+    // COORDINATE Google had just handed back. So the one place in the product that reliably
+    // geocodes a delivery address threw the answer away, `deliveries.latitude/longitude` (live
+    // since 20260923d) was written by nothing, and David's stops ruling — *a stop keeps the
+    // coordinate it had on the day* — had an applied migration and no writer. Paying for a call
+    // and discarding its answer is the waste; having the answer and not storing it is the defect.
+    const shipToPlacement = await (async () => {
+      const none = { unplaceable: false, latitude: null as number | null, longitude: null as number | null };
+      if (!selectedTransport || !shipTo?.address_line1) return none;
+      const key = process.env.GOOGLE_GEOCODING_API_KEY;
+      // Rule 24: no key configured is NOT an unplaceable address. Degrade to charging as before
+      // rather than silently stripping every delivery charge on a misconfigured deployment.
+      if (!key) return none;
+      const text = [shipTo.address_line1, shipTo.city, shipTo.state, shipTo.zip].filter(Boolean).join(', ');
+      try {
+        const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(text)}&key=${encodeURIComponent(key)}`);
+        const verdict = classifyGeocodeResponse(await r.json());
+        // `confirm` is NOT unplaceable — it is placed, and the person was asked at the counter.
+        // 🔴 ONLY A `found` COORDINATE IS KEPT. A `confirm` is a pin the person was asked about
+        // and a `not_found` has none, so storing either would record a place nobody agreed to —
+        // the one lie the whole address check exists to prevent.
+        return {
+          unplaceable: verdict.verdict === 'not_found',
+          latitude: verdict.verdict === 'found' ? verdict.latitude : null,
+          longitude: verdict.verdict === 'found' ? verdict.longitude : null,
+        };
+      } catch {
+        // Unreachable Google must not strip a legitimate charge either.
+        return none;
+      }
+    })();
+    const shipToUnplaceable = shipToPlacement.unplaceable;
+    if (shipToUnplaceable && selectedTransport) {
+      console.log('[TRACE:PRICE] transport SUPPRESSED — ship-to cannot be placed', {
+        businessId, offeringId: selectedTransport.id, wouldHaveCharged: round2(lineSubtotal(selectedTransport, qtyFor(selectedTransport))),
+      });
+    }
+    const transportComputed = (selectedTransport && !shipToUnplaceable) ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
+    // No override may reinstate a suppressed charge: an override states an AMOUNT, and the
+    // question here is not "how much" but "to where" — which is still unanswered.
+    const transportRes      = (selectedTransport && !shipToUnplaceable) ? applyOverride(selectedTransport.id, transportComputed) : null;
     const transportAmount   = transportRes?.amount ?? 0;
 
     // Planting — the SEPARATE per-plant service the "Delivery + planting" branch attaches
@@ -1622,6 +1704,9 @@ async function handleCreate(req: any, res: any) {
       orderId,
       customerRow: (custRow as Record<string, any> | null) ?? null,
       shipTo: shipTo ?? null,
+      // The placement decided above, reused — NOT a second Google call. One geocode per delivery
+      // order answers both questions: may this be charged, and where is it.
+      coordinate: { latitude: shipToPlacement.latitude, longitude: shipToPlacement.longitude },
     });
     console.log('[TRACE:DELIVERY] checkout scheduling outcome', { orderId, invoiceNumber, ...deliveryOutcome });
 

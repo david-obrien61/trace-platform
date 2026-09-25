@@ -45,6 +45,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { sheetStyles as SS } from '@trace/shared/components/datasheet/DataSheet';
+import { AddressInput } from '@trace/shared/components/AddressInput';
 import { VENDOR_EDITABLE_FIELDS, type VendorRow } from '@trace/shared/business-logic';
 import {
   buildVendorPatch, draftFromVendor, emptyVendorDraft, patchIsEmpty, vendorWriteFailure,
@@ -228,7 +229,25 @@ export default function VendorEditor(props: {
               return (
                 <div key={f} style={SS.field}>
                   <label style={SS.label} htmlFor={`vendor-${f}`}>{meta.label}</label>
-                  {f === 'notes' ? (
+                  {f === 'address_line1' ? (
+                    /* 🔴 THE SAME FIELD THE CUSTOMER AND THE STOP USE. David, 2026-09-24: a
+                       vendor's address is typed like any other, so it autocompletes like any
+                       other — and reusing the field is why that is true without a second
+                       implementation to keep in step (§6 r8). Picking a suggestion fills the
+                       city and state beside it. */
+                    <AddressInput
+                      businessId={businessId ?? null}
+                      bias={null}
+                      label=""
+                      value={{ line1: draft[f] ?? '', city: draft.address_city ?? '',
+                               state: draft.address_state ?? '', zip: draft.address_zip ?? '' }}
+                      onChange={(v) => {
+                        set(f, v.line1);
+                        if (v.city) set('address_city' as typeof f, v.city);
+                        if (v.state) set('address_state' as typeof f, v.state);
+                      }}
+                    />
+                  ) : f === 'notes' ? (
                     <textarea id={`vendor-${f}`} style={SS.textarea} value={draft[f] ?? ''}
                       placeholder={meta.placeholder} onChange={e => set(f, e.target.value)} />
                   ) : (

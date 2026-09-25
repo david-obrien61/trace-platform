@@ -124,7 +124,13 @@ export function CrewDay() {
     <Shell>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div>
-          <div style={{ fontSize: '0.8125rem', color: GRAY }}>{day?.business_name ?? ''}</div>
+          {/* 🔴 WHOSE DAY IS THIS? (ledger #374, teams piece 3). A crew link now shows ONE team's
+              stops, so the phone says which team — a driver handed the wrong link sees it here
+              rather than inferring it from a short list. A whole-day link says nothing extra. */}
+          <div style={{ fontSize: '0.8125rem', color: GRAY }}>
+            {day?.business_name ?? ''}
+            {day?.team_name ? <> · <strong style={{ color: DARK }}>{day.team_name}</strong></> : null}
+          </div>
           <h1 style={{ margin: '2px 0 0', fontSize: '1.375rem', color: DARK }}>{day ? dayLabel(day.service_date) : 'Today’s stops'}</h1>
           <div style={{ fontSize: '0.875rem', color: GRAY, marginTop: 2 }}>
             {name} · <button onClick={() => { setDraftName(name); setAskName(true); }} style={{ background: 'none', border: 'none', color: GREEN, fontWeight: 700, padding: '10px 2px', margin: '-10px 0', cursor: 'pointer', fontSize: '0.875rem' }}>not you?</button>

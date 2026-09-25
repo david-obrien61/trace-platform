@@ -1253,6 +1253,46 @@ export async function insertShipToSite(
   return { rows: (data ?? []) as unknown as CustomerAddress[], error: error as { code?: string; message: string } | null };
 }
 
+/**
+ * 🔴 THE GEOCODE ANSWER, WRITTEN BACK ONTO THE ADDRESS ROW — ruling 1 (David, 2026-09-24).
+ *
+ * WHY IT IS HERE AND NOT AT THE SCREEN: every write to a customer's contact lists goes through
+ * this module (ledger #335), and this is a write to one. A screen reaching past it would be the
+ * second writer the registry exists to forbid.
+ *
+ * WHAT IT MAY TOUCH — FOUR COLUMNS, AND DELIBERATELY NOT A FIFTH:
+ * `latitude`, `longitude`, `geocoded_at`, `geocode_status`. 🔴 IT NEVER TOUCHES THE ADDRESS TEXT.
+ * Ruling 2 (2026-09-23): Google suggests, the person confirms, and what is stored is THEIR choice.
+ * Where the person took Google's wording the CALLER changes the text through the ordinary edit
+ * path, where it is logged as an edit a person made — not silently, inside a geocode write.
+ *
+ * ⚠️ IT RETURNS THE ROW COUNT AND THE CALLER CHECKS IT. R-12: a PostgREST update matching ZERO
+ * rows returns success with no error, so `!error` proves nothing — a write scoped to the wrong
+ * business would look exactly like a write that worked.
+ */
+export async function setAddressGeocode(
+  db: SupabaseClient,
+  x: {
+    businessId: string;
+    addressId: string;
+    patch: {
+      latitude: number | null; longitude: number | null;
+      geocoded_at: string; geocode_status: 'found' | 'confirm' | 'not_found';
+    };
+  },
+): Promise<{ count: number; error: { message: string } | null }> {
+  const { data, error } = await db.from('customer_addresses')
+    .update({
+      latitude: x.patch.latitude, longitude: x.patch.longitude,
+      geocoded_at: x.patch.geocoded_at, geocode_status: x.patch.geocode_status,
+    })
+    // AC-3: scoped to the business as well as the row. An id alone is a cross-tenant write
+    // waiting to happen, and RLS is the floor, not the only guard.
+    .eq('id', x.addressId).eq('business_id', x.businessId)
+    .select('id');
+  return { count: (data ?? []).length, error: error as { message: string } | null };
+}
+
 export async function retireShipToSite(
   db: SupabaseClient, businessId: string, siteId: string,
 ): Promise<{ count: number; error: { message: string } | null }> {
