@@ -2013,6 +2013,35 @@ Harmless today: nothing reads the column. Filed because **a change to live schem
 
 ---
 
+## #251 — ✅ **RESOLVED IN CODE, AND THIS ROW DESCRIBED A DEFECT THAT NO LONGER EXISTED** (corrected 2026-09-25)
+
+🔴 **THE HEADLINE BELOW IS FALSE AS OF TODAY, AND IT WAS FALSE WHEN I CITED IT THIS MORNING.**
+MEASURED 2026-09-25, `packages/cultivar-os/src/lib/transport.ts`:
+
+```
+:95  const self  = transportOfferings.find(o => o.transport_mode === 'self') ?? null;
+:96  const staff = transportOfferings.filter(o => o.transport_mode === 'staff');
+:99  // #251: filter, not find. The array order is the caller's (useServices sorts by sort_order).
+:100 const deliveries = staff.filter(o => o.price_type === 'flat');     // per-order
+```
+
+`find` is used for **self** — correctly, there is one — and `filter` for **staff**. `deliveries` is
+an ARRAY. **Checkout offers several staff options; Test Dave's renders two** (David, measured
+2026-09-10). The repair even cites this item by number on line 99, so the fix knew about the row
+and the row never learned about the fix.
+
+⚠️ **AND I REPEATED IT.** On 2026-09-25 I told David that rings "would hide one" of his three $50
+transport rows, citing #251 — from this entry, without reading the code it describes. That is
+[[R-26]] exactly: a written declaration nobody re-derived, steering a decision. David caught it.
+**Cite the code, not the row; and when a row and the code disagree, the code wins and the row gets
+corrected** — which is what this edit is.
+
+✏️ The original text is kept below so the history is legible, not deleted. Read it as *"what was
+true on 2026-09-11"*, not as a live defect.
+
+---
+
+### ORIGINAL (2026-09-11) — NO LONGER TRUE, kept for the record
 ## #251 — 🔴 CHECKOUT OFFERS ONE STAFF DELIVERY PER SHAPE, AND A SECOND IS NEVER OFFERED — WHICH BLOCKS LAWNS'S OWN SERVICE LIST (NEW 2026-09-11)
 
 `resolveTransportRoles` (`packages/cultivar-os/src/lib/transport.ts`) takes

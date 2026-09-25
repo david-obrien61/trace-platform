@@ -11,7 +11,7 @@ import { readReviewAskConfig, reviewCopyProblems, DEFAULT_REVIEW_GUIDANCE } from
 import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
 import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
-import { DeliveryRingMap } from '@trace/shared/components/settings/DeliveryRingMap';
+import { RingMap, type LocatedDot } from '@trace/shared/components/settings/RingMap';
 import { DELIVERY_RING_COLUMNS, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
 import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
@@ -293,7 +293,7 @@ function ReviewAskSection({ businessId }: { businessId: string }) {
 // ── Delivery section — the rings and the address locator (ledger #386) ─────────────────────
 // PURPOSE:      Settings → Delivery. Where the owner sets what a delivery costs by distance, and
 //               where the customer book gets located.
-// DEPENDENCIES: shared LocateAddressesPanel · shared DeliveryRingMap · business_delivery_rings.
+// DEPENDENCIES: shared LocateAddressesPanel · shared RingMap · business_delivery_rings.
 // OUTPUTS:      <DeliverySection>
 //
 // 🔴 IT IS SAFE TO SHIP BEFORE THE MIGRATION. `business_delivery_rings` does not exist until
@@ -304,20 +304,47 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
   const { business } = useBusinessContext();
   const [rings, setRings] = useState<DeliveryRing[]>([]);
   const [ringsMissing, setRingsMissing] = useState(false);
+  const [dots, setDots] = useState<LocatedDot[]>([]);
+  const [unlocated, setUnlocated] = useState(0);
+  const [reloadAt, setReloadAt] = useState(0);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       const { data, error } = await supabase.from('business_delivery_rings')
         .select(DELIVERY_RING_COLUMNS)
-        .eq('business_id', businessId).order('outer_radius_miles', { ascending: true });
+        .eq('business_id', businessId).eq('active', true)
+        .order('outer_radius_miles', { ascending: true });
       if (!alive) return;
+      // 🔴 AN ERROR IS "NOT SET UP YET"; AN EMPTY ARRAY IS "NO RINGS YET". They look identical on
+      // screen and mean opposite things, so they are never collapsed.
       if (error) { setRingsMissing(true); return; }
       setRingsMissing(false);
-      setRings((data ?? []) as DeliveryRing[]);
+      setRings((data ?? []) as unknown as DeliveryRing[]);
     })();
     return () => { alive = false; };
-  }, [businessId]);
+  }, [businessId, reloadAt]);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      // The located customers, as dots. ⚠️ Capped: a map with 1,500 markers on it is not a map.
+      const { data } = await supabase.from('customer_addresses')
+        .select('id, line1, latitude, longitude')
+        .eq('business_id', businessId).eq('geocode_status', 'found')
+        .not('latitude', 'is', null).limit(500);
+      if (!alive) return;
+      setDots((data ?? []).map(r => ({
+        id: r.id as string, name: (r.line1 as string) ?? '', 
+        latitude: Number(r.latitude), longitude: Number(r.longitude),
+      })));
+      const { count } = await supabase.from('customer_addresses')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId).is('geocode_status', null);
+      if (alive) setUnlocated(count ?? 0);
+    })();
+    return () => { alive = false; };
+  }, [businessId, reloadAt]);
 
   const depot = (business?.geocode_status === 'found'
     && typeof business?.latitude === 'number' && typeof business?.longitude === 'number')
@@ -336,7 +363,13 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
             </div>
           </div>
         ) : (
-          <DeliveryRingMap depot={depot} rings={rings} customers={[]} canEdit={canWrite} />
+          <RingMap
+            db={supabase} businessId={businessId} depot={depot} rings={rings}
+            dots={dots} unlocatedCount={unlocated}
+            mapsKey={(import.meta.env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? null}
+            canEdit={canWrite}
+            onSaved={() => setReloadAt(Date.now())}
+          />
         )}
       </div>
       <LocateAddressesPanel db={supabase} businessId={businessId} canWrite={canWrite} />

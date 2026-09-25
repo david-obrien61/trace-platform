@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { loadGoogleMaps } from '@trace/shared/maps/loadGoogleMaps';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
@@ -76,60 +77,8 @@ const TRACE_DELIVERY = true;
 // "Open in Google Maps" URL-handoff card below remains the working fallback.
 const MAPS_KEY = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
-// Client-side loader for the Maps JS API — no new Vercel function (api/ stays 12/12).
-// Uses Google's OFFICIAL "Dynamic Library Import" bootstrap loader. This is the ONLY
-// load method that GUARANTEES `google.maps.importLibrary` exists — the legacy
-// `maps/api/js?...&loading=async` script tag does NOT reliably attach it (that was the
-// "importLibrary missing" bug). The bootstrap installs importLibrary synchronously; each
-// caller then awaits the specific library it needs (geocoding, maps, marker).
-let mapsBootstrapped = false;
-function installMapsBootstrap(apiKey: string): void {
-  if (mapsBootstrapped) return;
-  mapsBootstrapped = true;
-  // Google's documented inline bootstrap, TS-typed and de-async'd (the original's
-  // `new Promise(async …)` is an anti-pattern that trips no-async-promise-executor —
-  // the awaited createElement was a no-op, so removing async is behaviour-identical).
-  ((g: any) => {
-    let h: any, a: any, k: any;
-    const p = 'The Google Maps JavaScript API', c = 'google', l = 'importLibrary',
-      q = '__ib__', m = document;
-    let b: any = window;
-    b = b[c] || (b[c] = {});
-    const d = b.maps || (b.maps = {});
-    const r = new Set<string>();
-    const e = new URLSearchParams();
-    const u = () => h || (h = new Promise((f: any, n: any) => {
-      a = m.createElement('script');
-      e.set('libraries', [...r] + '');
-      for (k in g) e.set(k.replace(/[A-Z]/g, (t: string) => '_' + t[0].toLowerCase()), g[k]);
-      e.set('callback', c + '.maps.' + q);
-      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
-      d[q] = f;
-      a.onerror = () => (h = n(Error(p + ' could not load.')));
-      a.nonce = (m.querySelector('script[nonce]') as any)?.nonce || '';
-      m.head.append(a);
-    }));
-    // If importLibrary already exists (real API loaded), leave it; else install the stub
-    // that lazily boots the script on first use. Google overwrites d[l] with the real
-    // implementation once the script loads, so the .then re-dispatch hits the real one.
-    if (d[l]) {
-      console.warn(p + ' only loads once. Ignoring:', g);
-    } else {
-      d[l] = (f: any, ...n: any[]) => r.add(f) && u().then(() => d[l](f, ...n));
-    }
-  })({ key: apiKey, v: 'weekly' });
-}
-
-function loadGoogleMaps(apiKey: string): Promise<any> {
-  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
-  const w = window as any;
-  installMapsBootstrap(apiKey);
-  if (!w.google?.maps?.importLibrary) {
-    return Promise.reject(new Error('maps bootstrap did not install importLibrary'));
-  }
-  if (TRACE_DELIVERY) console.log('[TRACE:MAP] bootstrap loader ready — importLibrary present');
-  return Promise.resolve(w.google.maps);
-}
+// The Maps JS loader lives in shared now — Settings → Delivery's ring map needs the same one,
+// and this loader's `importLibrary` behaviour was learned the hard way (§6 r8).
 
 // The stop shape is `HandoffStop` — the SAME type the driver-facing derivation consumes, so a stop
 // cannot be shaped one way for the screen and another way for the link (§6 r8).
