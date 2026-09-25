@@ -1,3 +1,12 @@
+-- ═══════════════════════════════════════
+-- 🔴 SUPERSEDED 2026-09-25 — DO NOT RUN THIS FILE.
+-- Terry answered, and both of this file's decisions changed: the window is 15 Nov – 15 Feb (not
+-- 2026-11-04 → 11-12), and GROW is 6 months on EVERY rung (not the 15 gal alone with eight left
+-- NULL pending him). Its premise — that the other eight rungs are unknown — is no longer true.
+-- 👉 RUN INSTEAD: docs/decisions/2026-09-25-lawns-grow-ladder-terry-schedule.sql
+--    SHA fe3326f119ae0f4957f4fb8713d1c58de6e5ad51668c4eb72f39ea836a4bb4d8
+-- Kept, not deleted: it records what was believed on 2026-09-23 and why.
+-- ═══════════════════════════════════════
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- LAWNS — STEP 0 FOR THE GROW LADDER.  Ledger #390.  David pastes this. SQL editor, as postgres.
 -- Run it AFTER `supabase/migrations/20260923h_container_ladder_grow_and_hold.sql`.
