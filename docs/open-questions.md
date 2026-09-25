@@ -97,6 +97,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#409 — one item, held in one unit, sold in several (yard production P1)**
+- 🔴 **OPEN — THE ONE DECISION BLOCKING THE REST OF YARD PRODUCTION: WHICH ROW HOLDS THE PILE, AND WHAT IS IN IT.** Recommended default in `~/Desktop/MORNING-2026-09-26.md`. **Nothing in the code guesses it** — `mixPlanning.ts` already says *"`chosenItemId` IS TENANT CONFIG AND IT IS NULL UNTIL LAUREN NAMES ONE… A default here would be a choice made by whoever wrote this line, wearing the appearance of a fact she confirmed."* That is honoured rather than worked around.
+- ⛔ **OPEN — APPLY `supabase/migrations/20260925b_item_sale_units.sql`.** SQL editor, never the table editor. **Safe to merge and to leave unapplied** — nothing in the app reads the table yet, so no screen can show a wrong figure. Its V1–V4 are the proof, and V2's pass condition is **0 rows**.
+- ⚠️ **OPEN — THE FIVE (TEN) PLACEHOLDER COUNTS ARE NOT MERGED, AND THAT IS DELIBERATE.** LAWNS's mix rows hold 1 · 10 · 10 · 10 · 10, every one `qty_basis = 'placeholder'` from the catalogue import. Summing them through the conversions would invent a total nobody counted, so the reader LISTS them as stranded and a person decides. **Your call what happens to them.**
+- ✅ **ANSWERED, AND TAKEN OFF THIS LIST: the mix lead time.** `mixLeadTimeDays` already defaults to **2** with `because: 'LAWNS, David 2026-09-23 — two days before an install day'`. It was never open; it is recorded on the key.
+
 **#404 — Plant Your Tree prices from the INSTALL ladder; the CHECK install_price never had**
 - 🔴 **OPEN — DO NOT RUN `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql` AT SHA `624db4da…`.** Identical SQL, written when `price_source` routed Plant Your Tree to a SECOND, empty column — it would have priced NOTHING. **The one to run is SHA `1b7fce4a…`, and only AFTER `feat/pyt-from-install-ladder` is merged and deployed.**
 - ⛔ **OPEN — APPLY `supabase/migrations/20260924e_container_ladder_install_price_check.sql` FIRST.** SQL editor, never the table editor. **V3 is live SQL that must ERROR `23514` — that error IS the pass.** Measured live before it was written: 9 rungs, **0 at zero, 0 negative**, 3 not set, 6 priced ($204–$1,800), so it cannot reject a row.

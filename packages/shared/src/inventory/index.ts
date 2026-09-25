@@ -31,3 +31,11 @@ export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retire
 export type { LiveFilterable } from './retiredFilter';
 export { shapeCollisionKey, findShapeCollisions, collisionReason, moneyAtStake } from './shapeCollision';
 export type { ShapeCandidate, ShapeCollision } from './shapeCollision';
+
+// One item, held in one unit, sold in several — the item-master / unit-of-measure standard.
+// A missing conversion REFUSES; it never falls back to 1:1 (ledger #409).
+export {
+  drawForSale, chainProblem, onHandInBase, inDisplayUnit, proposeSaleUnits,
+  SALE_UNIT_COLUMNS, SALE_UNIT_SELECT,
+} from './saleUnits';
+export type { SaleUnit, SaleUnitResolution, OnHandInBase, SaleUnitProposal } from './saleUnits';
