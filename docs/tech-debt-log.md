@@ -2194,7 +2194,7 @@ Nothing suggests it has been abused. It is still a billable endpoint on the publ
 
 ---
 
-## #262 — 🔴 THE PMI SCREEN IS INERT FOR ANYONE HOLDING `pmi:*` WITHOUT `costs:read` — AND LAWNS'S MANAGER IS THAT PERSON TODAY (NEW 2026-09-11)
+## #262 — ✅ **PERMISSION BLOCKER RESOLVED-IN-FACT 2026-09-26 (Joel holds `costs:read`); THE SCREEN ITSELF IS UNPROVEN** — WAS: 🔴 THE PMI SCREEN IS INERT FOR ANYONE HOLDING `pmi:*` WITHOUT `costs:read` — AND LAWNS'S MANAGER IS THAT PERSON TODAY (NEW 2026-09-11)
 
 🔴 **RULED 2026-09-22 (David, ledger #381) — LEAVE IT. JOEL DOES NOT GET `costs:read`, AND THAT IS A DECISION, NOT AN OVERSIGHT.**
 Re-measured live that day while checking whether anyone at LAWNS was wrongly blocked: **Lauren and David hold 59
@@ -2226,6 +2226,30 @@ Two things on that screen are false today:
 **Why the answer is not a new table:** the equipment IS recorded, in `cost_objects`. The obstacle is that one table holds both what a machine is and what it cost. `20260727b` already names the shape of the answer as the condition for `assets:*` to return — *"when 3b's projection makes an operational/financial split inside cost_objects real"* — and the choice is David's (RULINGS.md OWED: *who may see the equipment list without seeing what it cost?*). ⚠️ **The proposed yard-worker permission set inherits this exactly.**
 
 ---
+
+✅ **RESOLVED-IN-FACT, MEASURED 2026-09-26 (YARD-PRODUCTION, ledger #416) — JOEL HOLDS `costs:read` NOW.**
+Read live from `business_members` on the LAWNS tenant:
+
+| member | role | `pmi:read` | `pmi:update` | `costs:read` | perms |
+|---|---|---|---|---|---|
+| joel joiner | MANAGER | ✅ | ✅ | **✅** | 27 |
+| David OBrien | OWNER | ✅ | ✅ | ✅ | 59 |
+| Lauren Bishop | OWNER | ✅ | ✅ | ✅ | 59 |
+
+**So the premise of this entry — *"LAWNS's manager is that person today"* — is no longer true.**
+`20260922e_manager_holds_costs_read.sql` was applied, and the screen is no longer inert for him.
+
+⚠️ **WHAT IS NOT PROVEN BY THIS, stated so the closure is not read as wider than it is: nobody has driven
+`/pmi` as Joel since.** This is an RLS/permission measurement, not an owner-prove — the screen could still be
+empty for a different reason. **The permission blocker named in this entry is gone; the screen itself is
+unproven.**
+
+🔴 **AND A SEPARATE FINDING FROM THE SAME MEASUREMENT, NOT FIXED: `business_pmi_schedule` carries a
+MEMBERSHIP-ONLY `ALL` policy beside its `pmi:update` one** — so **any active member has full write to the PMI
+schedule regardless of permission**, which is wider than intended. Tech-debt #73's family (a membership-only
+policy where a permission was meant). **Left alone deliberately: narrowing it takes access away from
+somebody, and that is David's call, not a side effect of a measurement.** It is decision D in
+`~/Desktop/MORNING-2026-09-26/YARD-PRODUCTION.md`.
 
 ## #263 — 🟡 THE GENERATOR SUGGESTS INTERVALS ITS OWN CONVERTER CANNOT READ (NEW 2026-09-11)
 
