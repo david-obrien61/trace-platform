@@ -323,8 +323,21 @@ const ALLOWED_DIVERGENCE = {
           + 'FOURTH + FIFTH (2026-09-17, ledger #347, RATIFIED BY DAVID the same day): the crew day link. '
           + 'Both write the row INSIDE the audited action — create_crew_day_link / revoke_crew_day_link '
           + '(crewDayLink.ts, Lauren\'s session) and crew_stop_act (crewDay.ts, service key) — so the '
-          + 'manifest\'s own rule holds: no separate client insert, nothing to half-land.',
+          + 'manifest\'s own rule holds: no separate client insert, nothing to half-land. '
+          + 'SIXTH (2026-09-25, ledger #386): ringWriter.saveRings records every delivery-ring '
+          + 'change — create / update / retire — AFTER the ring write lands, carrying BOTH SIDES '
+          + '("7.1 -> 9 miles, $50 -> $60"), because "ring 3 changed" is not a fact anyone can act '
+          + 'on. Rings are MONEY with no invoice to look back at: moving a ring re-prices every '
+          + 'customer between two distances, for ever. It follows contactWriter\'s shape exactly — '
+          + 'no .select() (that needs audit_log:read, which an owner editing rings need not hold, '
+          + 'and with it every log write was refused under RLS), a failed log reported as '
+          + 'logged:false, and never undoing the change it describes. '
+          + '⚠️ RULE-OF-THREE WATCH: this is the THIRD module hand-rolling an audit_log insert '
+          + '(stopWrites, contactWriter, ringWriter). A fourth should extract one shared '
+          + 'recordChange() rather than add a line here — flagged now so the trigger is not missed '
+          + 'the way #251 sat corrected-in-code and uncorrected-in-writing for two weeks.',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx',
+            'packages/shared/src/business-logic/ringWriter.ts',
             'packages/cultivar-os/src/lib/stopWrites.ts',
             'packages/shared/src/business-logic/contactWriter.ts',
             'packages/cultivar-os/src/lib/crewDayLink.ts',
