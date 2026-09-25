@@ -101,7 +101,6 @@ async function main() {
      '🔴 C7 …BUT IT IS NOT SILENT EITHER. A save reported complete while its history vanished is the quiet half of the same defect, so the screen is told');
 }
 }
-await main();
 
 // ── §D · 🔴 A REFUSED WRITE MUST NOT REPORT "SAVED" (A8 / R-12) ─────────────────────────────
 // verify:zero-row-writes caught this in code that CITED R-12 in a comment while not honouring it:
@@ -138,7 +137,15 @@ async function refusals() {
     ok(out.saved === 0, 'D4 …and nothing is claimed as saved');
   }
 }
-await refusals();
 
-console.log(`\nringWriter — ${passed} passed, ${failures.length} failed`);
-if (failures.length > 0) { console.error('FAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }
+// 🔴 NO TOP-LEVEL AWAIT. The repo's runner bundles every test with `--format=cjs`
+// (run-tests.mjs:70), where a top-level await is a syntax error — so this file PASSED under my
+// own esbuild ESM invocation and FAILED in `npm test`, reported only as "169/170 files pass".
+// ⚠️ That is tech-debt #186's shape: the short run and the full one look alike. Run tests the way
+// the runner runs them, or a green proves something about a build nobody ships.
+void (async () => {
+  await main();
+  await refusals();
+  console.log(`\nringWriter — ${passed} passed, ${failures.length} failed`);
+  if (failures.length > 0) { console.error('FAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }
+})();
