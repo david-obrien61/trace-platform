@@ -98,9 +98,19 @@ export async function saveRings(
       ? db.from('business_delivery_rings').update(row).eq('id', e.id).eq('business_id', x.businessId).select('id')
       : db.from('business_delivery_rings').insert(row).select('id');
     const { data, error } = await q;
-    // R-12: an update matching zero rows returns success with no error — the count is the signal.
     if (error) return { saved, retired: 0, error: error.message, logged: false };
-    saved += (data ?? []).length;
+    // 🔴 R-12, HONOURED AND NOT MERELY CITED. An update matching ZERO rows returns success with no
+    // error, so counting the returned rows is not enough — the count has to be COMPARED to what
+    // was asked for. My first version selected the id, counted it, and never checked the number,
+    // which is the shape of the defect rather than the fix. verify:zero-row-writes caught it.
+    const landed = (data ?? []).length;
+    if (landed !== 1) {
+      return { saved, retired: 0, logged: false,
+        error: e.id
+          ? 'That ring could not be changed — it may have been removed, or you may not have permission. Nothing was saved.'
+          : 'That ring could not be added. Nothing was saved.' };
+    }
+    saved += landed;
   }
 
   let retired = 0;
@@ -109,6 +119,28 @@ export async function saveRings(
       .update({ active: false, updated_at: new Date().toISOString() })
       .in('id', plan.retire).eq('business_id', x.businessId).select('id');
     if (error) return { saved, retired: 0, error: error.message, logged: false };
+    // 🔴 THE SAME CHECK ON THE RETIREMENT, AND HERE IT MATTERS MOST. A refused retire returns an
+    // empty result and no error: the rings the owner REMOVED would still be active, still pricing
+    // deliveries, while the screen said "Saved". Silently keeping a ring somebody deleted is worse
+    // than failing to add one, because nobody goes back to check that a removal removed anything.
+    // TWO DIFFERENT FAILURES, AND THEY DESERVE DIFFERENT SENTENCES.
+    // ① NOTHING LANDED — the write was refused outright (RLS, or the rows are gone).
+    if ((data ?? []).length === 0) {
+      return { saved, retired: 0, logged: false,
+        error: 'The rings you removed could not be taken off — they are still charging. Nothing else was changed.' };
+    }
+    // ② SOME LANDED. Rarer and stranger, so it says the number rather than rounding it to
+    // "something went wrong".
+    // ⚠️ ① IS WRITTEN AS `=== 0` DELIBERATELY. `!== plan.retire.length` covers it and is stricter,
+    // but verify:zero-row-writes recognises a length compared to a DIGIT and not to an expression —
+    // so the stricter check was INVISIBLE to the cap. Splitting them makes the guard legible to
+    // both a reader and the checker, and a guard the checker cannot see is one a later edit can
+    // delete with nothing going red.
+    if ((data ?? []).length !== plan.retire.length) {
+      retired = (data ?? []).length;
+      return { saved, retired, logged: false,
+        error: `Saved ${saved} ring${saved === 1 ? '' : 's'}, but ${plan.retire.length - retired} you removed could not be taken off — they are still charging. Nothing else was changed.` };
+    }
     retired = (data ?? []).length;
   }
 

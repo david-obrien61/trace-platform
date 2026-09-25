@@ -103,5 +103,42 @@ async function main() {
 }
 await main();
 
+// ── §D · 🔴 A REFUSED WRITE MUST NOT REPORT "SAVED" (A8 / R-12) ─────────────────────────────
+// verify:zero-row-writes caught this in code that CITED R-12 in a comment while not honouring it:
+// the write selected the id, counted the rows, and never compared the count to what it asked for.
+async function refusals() {
+  {
+    // RLS refuses the retire: empty result, NO error — exactly what PostgREST returns.
+    const db: any = fakeDb();
+    const orig = db.from;
+    db.from = (tb: string) => tb !== 'business_delivery_rings' ? orig(tb) : {
+      ...orig(tb),
+      update: () => ({ in: () => ({ eq: () => ({ select: () => ({ data: [], error: null }) }) }),
+                       eq: () => ({ eq: () => ({ select: () => ({ data: [{ id: 'r1' }], error: null }) }),
+                                    select: () => ({ data: [{ id: 'r1' }], error: null }) }) }),
+    };
+    const out: any = await saveRings(db, { businessId: B, edits: [{ id: 'r1', outer_radius_miles: 9, charge: 60 }], existing });
+    ok(out.error !== null && /still charging/.test(out.error),
+       '🔴 D1 A REFUSED RETIRE IS REPORTED, NOT SWALLOWED. An empty result with no error is what RLS returns; the old code called that success, so rings the owner DELETED would still be pricing deliveries while the screen said "Saved". Nobody goes back to check that a removal removed anything');
+    ok(out.retired === 0, 'D2 …and it does not claim to have retired anything');
+  }
+  {
+    // The update itself matches nothing — the ring was removed by someone else mid-edit.
+    const db: any = fakeDb();
+    const orig = db.from;
+    db.from = (tb: string) => tb !== 'business_delivery_rings' ? orig(tb) : {
+      ...orig(tb),
+      update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ data: [], error: null }) }),
+                                    select: () => ({ data: [], error: null }) }),
+                       in: () => ({ eq: () => ({ select: () => ({ data: [], error: null }) }) }) }),
+    };
+    const out: any = await saveRings(db, { businessId: B, edits: [{ id: 'r1', outer_radius_miles: 9, charge: 60 }], existing: [existing[0]] });
+    ok(out.error !== null && /could not be changed/.test(out.error),
+       '🔴 D3 AN UPDATE THAT MATCHED NO ROW IS A FAILURE, IN WORDS — not a silent zero. It happens when the ring was removed by someone else mid-edit, or permission is missing, and both are things a person can act on once told');
+    ok(out.saved === 0, 'D4 …and nothing is claimed as saved');
+  }
+}
+await refusals();
+
 console.log(`\nringWriter — ${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) { console.error('FAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }
