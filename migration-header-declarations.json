@@ -1,0 +1,18 @@
+{
+  "_about": [
+    "Migration headers that say NOT APPLIED about something the live-schema snapshot ALREADY HAS. Read by `npm run verify:migration-header-truth`.",
+    "🔴 WHY THESE EXIST RATHER THAN BEING FIXED: the durable repair is a one-line comment correction in each migration, and §6 r1 says NEVER EDIT EXISTING MIGRATIONS — APPEND ONLY. That rule is about not changing what a migration DOES, and a header comment changes nothing that runs — but the call is David's, not a script's. Declared so the cap is green on arrival and watching for the NEXT one (#73: a cap that is red on arrival gets switched off, and then it is not protecting anything).",
+    "🔴 THE LIST PRUNES ITSELF IN BOTH DIRECTIONS. A declaration for a header that has since been corrected, or for a migration that no longer exists, is STALE and FAILS THE BUILD. Each line comes off by fixing the header it names.",
+    "MEASURED 2026-09-25 against scripts/sql-harness/fixtures/live-schema-public.sql, not against anybody's memory."
+  ],
+  "staleHeaders": {
+    "20260911b_customer_addresses.sql": "Header says WRITTEN, NOT APPLIED. `customer_addresses` is live — David applied it 2026-09-12 and the owner-test board records his words, 'Migration applied clean'. The header was never updated because applying happens in the SQL editor and never touches the repo.",
+    "20260915_contact_record.sql": "Header says WRITTEN, NOT APPLIED. `customer_phones`, `customer_emails` and `customer_addresses.kind`/`.source` are all live.",
+    "20260916c_practice_orders_and_one_unit_undo.sql": "Header discusses a cleanup that was not applied; `orders.import_run_id` IS live. The header is about a DIFFERENT migration's state, which is why it reads as a not-applied claim about this one.",
+    "20260916d_contact_rows_leave_with_their_run.sql": "Header says WRITTEN, NOT APPLIED. The three `import_run_id` columns are live.",
+    "20260920b_qb_item_identity_columns.sql": "Header says WRITTEN, NOT APPLIED. All four `qb_item_*` columns are live — the 2026-09-22 seed work depended on them and measured them.",
+    "20260923b_route_order_per_team.sql": "Header says NOT APPLIED and to apply 20260923a first. Both are applied — `delivery_route_plans` is live and crew-link has been routing per team since 2026-09-24.",
+    "20260923c_address_coordinates.sql": "Header says WRITTEN, NOT APPLIED. The four coordinate columns on `customer_addresses` are live; tonight's whole address build reads and writes them.",
+    "20260923d_stop_keeps_its_coordinate.sql": "Header says WRITTEN, NOT APPLIED. `deliveries.latitude/longitude/coordinate_set_at` are live — I checked before writing to them and the checkout now does."
+  }
+}
