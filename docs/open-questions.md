@@ -97,6 +97,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#413 — yard work orders, and a build that times itself (yard production P5 + P6)**
+- ⛔ **OPEN — APPLY `supabase/migrations/20260925d_production_work_orders.sql`.** SQL editor, never the table editor. Safe unapplied and safe merged: nothing in the app reads the tables or calls `work_order_apply`.
+- 🔴 **OPEN AND WORTH A MINUTE — tech-debt #365: `build_runs` HAD NO WRITER AT ALL.** Not `record_build_run` (verified against the LIVE function body — it does not contain the string), not any migration, not a line of app code. **So "0 build_runs rows on every tenant" was never evidence that no batch had been made** — it would read 0 after a thousand. One path is fixed (the work order is now its first writer); `build_run_components` and the cost columns still have none, so `20260922d`'s frozen-cost purpose is reachable by nobody.
+- ⚠️ **OPEN — A WORK ORDER CAN BE SCHEDULED WITH NO CREW** (`team_id` nullable), and a retired crew leaves its jobs standing ([[R-133]]). Say if you would rather it refuse.
+- ⚠️ **OPEN — NO SURFACE.** Nothing calls `work_order_apply`; the crew-link phone view and the Operations calendar band are P6's and P7's screens, neither built. The board's one card is `needs-test` for exactly that reason.
+
 **#404 — Plant Your Tree prices from the INSTALL ladder; the CHECK install_price never had**
 - 🔴 **OPEN — DO NOT RUN `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql` AT SHA `624db4da…`.** Identical SQL, written when `price_source` routed Plant Your Tree to a SECOND, empty column — it would have priced NOTHING. **The one to run is SHA `1b7fce4a…`, and only AFTER `feat/pyt-from-install-ladder` is merged and deployed.**
 - ⛔ **OPEN — APPLY `supabase/migrations/20260924e_container_ladder_install_price_check.sql` FIRST.** SQL editor, never the table editor. **V3 is live SQL that must ERROR `23514` — that error IS the pass.** Measured live before it was written: 9 rungs, **0 at zero, 0 negative**, 3 not set, 6 priced ($204–$1,800), so it cannot reject a row.
