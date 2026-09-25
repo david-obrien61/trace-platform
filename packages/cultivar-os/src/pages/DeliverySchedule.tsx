@@ -32,6 +32,7 @@ import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
 import { parseYmd } from '../lib/operationsCalendar';
 import { readStops, type StopRead, type StopRow } from '../lib/stopRead';
+import { readLatestEstimates, type DayEstimateRow } from '../lib/dayEstimate';
 import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
@@ -78,6 +79,9 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   const [error, setError]     = useState<string | null>(null);
   // The crew link's record per stop. `null` = could not be read; `undefined` = not applied yet.
   const [crewEvents, setCrewEvents] = useState<Map<string, StopEvent[]> | null | undefined>(undefined);
+  // The latest per-crew estimate for the day on screen. `undefined` = the table is not there
+  // (20260922c not applied); `null` = the read failed; an empty map = nothing routed yet (A9).
+  const [estimates, setEstimates] = useState<Map<string | null, DayEstimateRow> | null | undefined>(undefined);
   const [crewPanelDay, setCrewPanelDay] = useState<string | null>(null);
   // 🔴 NAMES ONLY (ledger #376). A stop carries `team_id`; the NAME lives in the team list. A failed
   // team read never hides a stop — the sections are built from the stops themselves, so an unnamed
@@ -114,6 +118,13 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
     const ev = await readStopEvents(supabase, businessId!, res.value.stops.map(x => x.id));
     setCrewEvents(ev.ok ? ev.byStop : ev.absent ? undefined : null);
     if (TRACE_DELIVERY && !ev.ok) console.log('[TRACE:DELIVERY] crew link events', ev.absent ? 'table absent (20260917c not applied)' : `read FAILED — ${ev.message}`);
+    // Capacity per crew, READ from the snapshot rather than recomputed here — see
+    // `readLatestEstimates`. A day view only; a window has no single day to estimate.
+    if (bounds.kind === 'day') {
+      const est = await readLatestEstimates(supabase, businessId!, bounds.date);
+      setEstimates(est.ok ? est.byTeam : est.absent ? undefined : null);
+      if (TRACE_DELIVERY && !est.ok) console.log('[TRACE:DELIVERY] estimates', est.absent ? 'table absent (20260922c not applied)' : `read FAILED — ${est.message}`);
+    } else { setEstimates(undefined); }
     setRead(res.value);
     setLoading(false);
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', res.value.stops.length, 'stops · fulfilment columns', res.value.fulfilmentColumns ? 'present' : 'ABSENT (20260831d not applied)');
@@ -287,6 +298,33 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                                 actually route. A teamless section gets NO button — routing it is
                                 exactly what R-169 refuses, and offering a control that must fail is
                                 a dead affordance (§1.6 item 5). */}
+                            {/* ── CAPACITY PER CREW (David, 2026-09-25) ────────────────────────
+                                Drive + planting against the day limit X, for THIS crew, with its
+                                working. 🔴 READ FROM THE SNAPSHOT, so it says "as at" and never
+                                pretends to be current; a crew nobody has routed reads "not
+                                estimated yet", never 0 h — a zero would read as "an easy day". */}
+                            {sec.teamId && estimates && (() => {
+                              const e = estimates.get(sec.teamId);
+                              if (!e) return (
+                                <span style={{ fontSize: '0.75rem', color: GRAY }}>
+                                  not estimated yet — press Route this team
+                                </span>
+                              );
+                              const over = e.suggested_teams > 1;
+                              const floor = !e.drive_known ? ' at least' : '';
+                              const planting = e.working?.find(w => w.label === 'Planting time');
+                              const notCounted = e.working?.find(w => w.label === 'Trees not counted');
+                              return (
+                                <span title={[planting?.because, notCounted?.because].filter(Boolean).join(' · ')}
+                                      style={{ fontSize: '0.75rem', fontWeight: 700, color: over ? '#8a6d1f' : GREEN }}>
+                                  {e.total_hours} h{floor} of {e.threshold_hours} h
+                                  {/* The working, in David's own form: "45 gal × 1 min = 45 min". */}
+                                  {planting ? <span style={{ fontWeight: 400, color: GRAY }}> · {planting.because.split(' — ')[0]}</span> : null}
+                                  {notCounted ? <span style={{ fontWeight: 400, color: '#8a6d1f' }}> · {notCounted.value}</span> : null}
+                                  <span style={{ fontWeight: 400, color: GRAY }}> · as at {new Date(e.created_at).toLocaleTimeString()}</span>
+                                </span>
+                              );
+                            })()}
                             {sec.teamId && group.date && (
                               <button
                                 onClick={() => {

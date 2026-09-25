@@ -49,6 +49,7 @@ import { supabase } from '@trace/shared/supabase/client';
 import { customerDisplayName } from '@trace/shared/utils/personName';
 import { readStops, type StopRow, type StopRead } from '../lib/stopRead';
 import { parseStopsParam, pickStops, stopsParamFor, groupStopsByTeam, sheetIsSectioned, type TeamSection } from '../lib/loadListSubset';
+import { stopChecks, CHECKS_COPY, type LoadCheck } from '../lib/loadListChecks';
 import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
 import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
@@ -160,21 +161,83 @@ function loadInputFor(s: StopRow, dayRead: StopRead): LoadStopInput {
     canReadLines: dayRead.canReadLines,
     linesRead: dayRead.linesRead,
     items: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
-    // 🔴 EVERY TREE LAWNS INSTALLS GETS A WATER MONITOR KIT (David, 2026-09-18). The order's own
-    // `transport_method` is what says so; an absent value is never read as "install".
-    installs: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
+    // 🔴 INSTALL MATERIALS FOLLOW THE SERVICE, NOT THE TREE (David, 2026-09-25) — so this is no
+    // longer just `transport_method === 'install'`. THREE things can say a stop is planted: its own
+    // mark, a TRIP CHARGE on its order (TC pairs with install), or a WARRANTY REPLACEMENT tree.
+    // ⚠️ Before this, a TC-only install loaded NO mix, NO posts and NO monitors — Stallings on
+    // Saturday 2026-09-26 — because only the first of the three was read.
+    // The judgement is `stopChecks`, so it is probed rather than inlined here (§6 r19).
+    installs: stopChecks({
+      stopId: s.id,
+      customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
+      serviceType: s.service_type,
+      markedInstall: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
+      lines: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
+    }).basis !== null,
     // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
     deerFence: null,
   };
+}
+
+/**
+ * PAGE 4 — CHECK BEFORE YOU LOAD (David, 2026-09-25).
+ *
+ * 🔴 TWO SECTIONS, AND THE SECOND ONE IS THE POINT. (a) anything unreadable, each as
+ *    `<stop> — <line as written> — why`; (b) INCONSISTENCIES, each naming the stop and what
+ *    disagrees. David: *"these are good for identification of broken/inconsistent processes."*
+ *    The sheet is not only telling a crew what to load — it is telling the office which orders were
+ *    written wrong, on the morning somebody can still fix them.
+ *
+ * ⚠️ AN EMPTY PAGE 4 SAYS SO IN ONE LINE. A page that renders nothing is indistinguishable from a
+ *    page that failed to render, and "nothing to check" is a real answer worth reading.
+ */
+function CheckPage({ checks }: { checks: LoadCheck[] }) {
+  const unreadable = checks.filter(c => c.kind === 'unreadable');
+  const inconsistent = checks.filter(c => c.kind === 'inconsistency');
+  return (
+    <div className="ll-block ll-figures">
+      <h2 style={S.h2}>Check before you load</h2>
+      {checks.length === 0 ? (
+        <div style={S.note}>{CHECKS_COPY.nothingToCheck}</div>
+      ) : (
+        <>
+          <div style={{ marginTop: 8 }}>
+            <strong>Could not be read ({unreadable.length})</strong>
+            {unreadable.length === 0
+              ? <div style={S.note}>Nothing — every line read cleanly.</div>
+              : unreadable.map((c, n) => (
+                  <div key={`u${n}`} style={S.note}>
+                    <strong>{c.customerName}</strong>{c.asWritten ? <> — “{c.asWritten}”</> : null} — {c.why}
+                  </div>
+                ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <strong>Does not agree with itself ({inconsistent.length})</strong>
+            <div style={S.note}>
+              These are not problems with this sheet. They are orders written two ways, and this is
+              where they are easiest to fix.
+            </div>
+            {inconsistent.length === 0
+              ? <div style={S.note}>Nothing — no stop disagrees with its own order.</div>
+              : inconsistent.map((c, n) => (
+                  <div key={`i${n}`} style={S.note}>
+                    <strong>{c.customerName}</strong>{c.asWritten ? <> — “{c.asWritten}”</> : null} — {c.why}
+                  </div>
+                ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function SheetBody({ model, planNo, isSubset, settingsRead }: {
   model: LoadListModel;
   planNo: Map<string, number | null>;
   isSubset: boolean;
+  settingsRead: LoadListSettingsRead | null;
   // Where the per-tree figures came from — the same sentence on every section, because it is a fact
   // about the NURSERY's settings, not about a team.
-  settingsRead: LoadListSettingsRead | null;
 }) {
   const pick = { isSubset };
   return (
@@ -246,6 +309,26 @@ function SheetBody({ model, planNo, isSubset, settingsRead }: {
                   it is the step before them, and it sits directly under the bulk because both are
                   "go and fetch this". ✏️ This REVERSES ledger #355's one-line version (2026-09-18), which
                   cut it on the belief that nothing is loaded by variety. Lauren: they pull by variety. */}
+              {/* 🔴 RESTORED TO PAGE 1 AFTER I BROKE IT — and the way I broke it is the lesson.
+                  Removing the "Figures used for this list" page took this warning with it, and the
+                  comment I left in its place CLAIMED the warning "still prints on page 1". It did
+                  not. `loadListPage.test.ts` S6 caught it; I had asserted it in prose instead of
+                  checking, which is [[R-26]] in my own diff.
+                  ⚠️ IT BELONGS AT THE TOP, NOT WHERE IT WAS. On the deleted page it sat behind the
+                  whole load; a person who is using the WRONG FIGURES needs to know before they pick
+                  anything, not after. D-9: a sheet built on standard figures must never read as one
+                  built on the nursery's own. */}
+              {settingsRead && settingsRead.figures !== 'stored' ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>
+                    {settingsRead.figures === 'defaults_withheld'
+                      ? 'These are the standard figures — the nursery’s own settings were refused for this login. Ask the owner to check your access.'
+                      : settingsRead.figures === 'defaults_read_failed'
+                        ? 'Could not read the nursery’s settings — these are the standard figures. Reload before you load.'
+                        : 'No figures have been saved for this nursery — these are the standard ones.'}
+                  </strong>
+                </div>
+              ) : null}
               <h2 style={S.h2}>{LOAD_LIST_COPY.pullHeading(model.treeCount, model.stopCount)}</h2>
               <p style={S.note}>{LOAD_LIST_COPY.pullWhy}</p>
               {model.trees.map(t => (
@@ -271,20 +354,13 @@ function SheetBody({ model, planNo, isSubset, settingsRead }: {
                 </div>
               ) : null}
 
-              {model.totalsAreFloors ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>Every total above is a FLOOR, not a total.</strong>
-                  <div style={S.note}>{LOAD_LIST_COPY.floorsNote}</div>
-                  <div style={S.note}>
-                    {model.unresolved.length > 0
-                      ? `${model.unresolved.length} line${model.unresolved.length === 1 ? '' : 's'} could not be read.`
-                      : ''}
-                    {model.unreadStops > 0
-                      ? ` ${model.unreadStops} stop${model.unreadStops === 1 ? '' : 's'} could not be read.`
-                      : ''}
-                  </div>
-                </div>
-              ) : null}
+              {/* 🔴 THE "EVERY TOTAL ABOVE IS A FLOOR" BANNER IS GONE — David, 2026-09-25.
+                  It sat above every total on every sheet and said the same thing whatever the day
+                  held, so it stopped being read — a warning that is always on is wallpaper.
+                  ⚠️ WHAT IT WARNED ABOUT IS NOT DROPPED, IT IS MOVED AND MADE SPECIFIC: every
+                  unreadable line now appears on PAGE 4 as "<stop> — <line as written> — why", which
+                  names the stop a person has to go and look at. Nothing unreadable may vanish
+                  (David, 2026-09-12) — page 4 is the guarantee, not this banner. */}
 
               {model.unresolved.length > 0 ? (
                 <div style={S.flag} className="ll-flag">
@@ -380,31 +456,12 @@ function SheetBody({ model, planNo, isSubset, settingsRead }: {
               </div>
             ) : null}
 
-            <div className="ll-block ll-figures">
-              <h2 style={S.h2}>{LOAD_LIST_COPY.valuesHeading}</h2>
-              {settingsRead && settingsRead.figures !== 'stored' ? (
-                <div style={S.flag} className="ll-flag">
-                  <strong>
-                    {settingsRead.figures === 'defaults_withheld'
-                      ? 'These are the standard figures — the nursery’s own settings were refused for this login. Ask the owner to check your access.'
-                      : settingsRead.figures === 'defaults_read_failed'
-                        ? 'Could not read the nursery’s settings — these are the standard figures. Reload before you load.'
-                        : 'No figures have been saved for this nursery — these are the standard ones.'}
-                  </strong>
-                </div>
-              ) : null}
-              <div style={S.row} className="ll-row"><span>Special mix per gallon of container</span><strong>{model.valuesUsed.installMixContainerVolumesPerTree} gal</strong></div>
-              <div style={S.row} className="ll-row"><span>Rope per T-post</span><strong>{model.valuesUsed.ropeFeetPerTPost} ft</strong></div>
-              <div style={S.row} className="ll-row"><span>Bubblers per tree</span><strong>{model.valuesUsed.bubblersPerTree}</strong></div>
-              <div style={S.row} className="ll-row"><span>T-posts on a deer-fenced tree, in total</span><strong>{model.valuesUsed.deerFenceTPostsPerTree}</strong></div>
-              <div style={S.row} className="ll-row"><span>Gallons in a cubic yard</span><strong>{model.valuesUsed.gallonsPerCubicYard.toFixed(3)}</strong></div>
-              {model.valuesUsed.rungs.map(r => (
-                <div key={`rung|${r.label}`} style={S.row} className="ll-row">
-                  <span>{r.label} — {r.volumeGallons == null ? 'no volume set' : `${r.volumeGallons} gal container`}</span>
-                  <span style={{ whiteSpace: 'nowrap' }}><strong>{r.tPosts} T-post{r.tPosts === 1 ? '' : 's'}</strong> <span style={S.note}>({r.tPostsBecause})</span></span>
-                </div>
-              ))}
-            </div>
+            {/* 🔴 "FIGURES USED FOR THIS LIST" IS GONE — David, 2026-09-25. It was a whole
+                printed page of settings on a sheet a crew carries into a yard. What a figure
+                came from now travels WITH the figure (each line says its own basis), so the
+                page was a second representation of one fact (STD-011) and the one nobody read.
+                ⚠️ Nothing it reported has been lost: the per-rung T-post note still prints
+                beside its rung, and a withheld-settings warning still prints on page 1. */}
 
     </>
   );
@@ -460,6 +517,20 @@ export function LoadList() {
     if (!dayRead || !pick || !settingsRead) return null;
     return buildLoadList(date, pick.kept.map(s => loadInputFor(s, dayRead)), settingsRead.settings);
   }, [dayRead, pick, settingsRead, date]);
+
+  // PAGE 4's content — every stop's checks, for the WHOLE day, in the order the stops print.
+  // ⚠️ Computed from the same `stopChecks` the install decision uses, so the sheet cannot load a kit
+  //    on a basis page 4 does not mention, or mention one it did not load for (STD-011).
+  const dayChecks = useMemo<LoadCheck[]>(() => {
+    if (!dayRead || !pick) return [];
+    return pick.kept.flatMap(s => stopChecks({
+      stopId: s.id,
+      customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
+      serviceType: s.service_type,
+      markedInstall: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
+      lines: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
+    }).checks);
+  }, [dayRead, pick]);
 
   // 🔴 ONE SECTION PER TEAM (ledger #373, teams piece 4 — David, 2026-09-21). The stops this sheet
   // CARRIES are grouped by the team that takes them, and each section's totals are `buildLoadList`
@@ -675,6 +746,10 @@ export function LoadList() {
             <SheetBody model={model} planNo={planNo} isSubset={!!pick?.isSubset} settingsRead={settingsRead} />
           )
         ) : null}
+        {/* PAGE 4 · ONCE for the whole day, after every stops page — a split day gets ONE check
+            page, not one per crew: an order written two ways is the office's problem, not a crew's,
+            and printing it twice would have each crew think the other had dealt with it. */}
+        {model ? <CheckPage checks={dayChecks} /> : null}
       </div>
     </div>
   );

@@ -15,7 +15,7 @@
 **Tech debt this closes the first piece of:** **#345** — Saturday 2026-09-19, when routing Team 1's
 four stops wiped Team 2's order, because the day had one route and the platform had no teams.
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 1 of 14 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–13 owed.** ✏️ **2026-09-22 (ledger #375): THE DAY'S CAPACITY ESTIMATE — CARDS 6–9.** The day suggests one team or two, shows its working, and Lauren overrides it; the estimate is SNAPSHOT append-only with the settings it used. ✅ **`20260922c` IS APPLIED, and its append-only guarantee is PROVEN ON LIVE** — David ran the probe: rewrite refused, choice recorded once, second choice refused, delete refused. ✏️ **2026-09-22 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13.** Each team's stops under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is what [[R-169]] refuses. 🔴 **CARD 13 and CARD 9 are the two that protect everyone else:** an unsplit day must look exactly as it always did, and an unrouted day must read as a FLOOR rather than as zero drive time.
+**Board: 1 of 18 covered** (CARD 0 — David's own `20260921a` V-block, 2026-09-21). **CARDS 1–17 owed.** ✏️ **2026-09-25 (ledger #406): PLANTING TIME IS NOW GALLONS × MINUTES-PER-GALLON — CARDS 14–17 added, and CARDS 6, 7 and 9 are FLIPPED `owed` with `LAST-PROVEN` reset even though they were never covered, because the arithmetic beneath them changed (OP-14 clause 3).** ✏️ **2026-09-22 (ledger #375): THE DAY'S CAPACITY ESTIMATE — CARDS 6–9.** The day suggests one team or two, shows its working, and Lauren overrides it; the estimate is SNAPSHOT append-only with the settings it used. ✅ **`20260922c` IS APPLIED, and its append-only guarantee is PROVEN ON LIVE** — David ran the probe: rewrite refused, choice recorded once, second choice refused, delete refused. ✏️ **2026-09-22 (ledger #376): THE SCHEDULE SPLIT BY TEAM — CARDS 10–13.** Each team's stops under their own heading with a **Route this team** button; a teamless section is SHOWN but gets no button, because routing it is what [[R-169]] refuses. 🔴 **CARD 13 and CARD 9 are the two that protect everyone else:** an unsplit day must look exactly as it always did, and an unrouted day must read as a FLOOR rather than as zero drive time.
 **Proof behind the cards (builder, not owner):** `npm run verify:writer-registry` drives all **five**
 paths and **nine** guards through the real entry points on the live schema, RLS on; deliberate breaks
 are caught by `scripts/sql-harness/teams-362.mutants.py`.
@@ -242,3 +242,75 @@ Open a day that has **not been routed yet**.
 note says the real day is longer.
 **🔴 FAIL if** an unrouted day shows `0 h` drive and therefore looks SHORTER than a routed one —
 that would suppress the two-team suggestion on exactly the days that most need it.
+
+---
+
+## CARD 14 — 🔴 PLANTING TIME IS GALLONS × MINUTES-PER-GALLON, AND IT SHOWS ITS WORKING
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #406 — David's ruling, 2026-09-25
+SIGNAL: the Planting time line reads like `45 gal × 1 min = 45 min`
+
+David, 2026-09-25: *"trees × container gallons × MINUTES PER GALLON (LAWNS: 1 min/gal) … Every
+figure shows its working ('3 × 15 gal × 1 min = 45 min')."*
+
+⚠️ **This REVERSES ledger #375**, which wrote gallons down as *"REPORTED, not multiplied into
+time"* because nothing had measured that a bigger container plants slower. David has now measured it
+on his own crews, so the coefficient is his figure rather than our guess — and it is a per-business
+**setting**, not a constant.
+
+1. Open a day with trees on it and press **Route this team** for a crew.
+2. Read the **Planting time** line in the estimate, and the **Container gallons** line above it.
+
+**PASS:** the planting line shows the arithmetic — gallons × the rate = minutes — and the total
+changes when you change **Settings → Operations → minutes a gallon**.
+**🔴 FAIL if** the figure is trees × 30, or if it shows only an answer with no working.
+
+## CARD 15 — 🔴 A TREE WITH NO READABLE SIZE READS "SIZE UNKNOWN — NOT COUNTED", NEVER 0
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #406 — D-9 / A9, absent is not zero
+SIGNAL: a **Trees not counted** line appears, reading `N — size unknown`
+
+David's words: *"A tree with no readable size shows 'size unknown — not counted', never 0."*
+🔴 **A zero would read as "no work", which is the one thing it is not** — and it would make the day
+look shorter than it is on exactly the day Lauren is deciding whether to send one crew or two.
+
+1. Find (or make) a day where at least one tree's container size cannot be read, with others that can.
+2. Open the estimate for that crew.
+
+**PASS:** the sized trees ARE counted; a **Trees not counted** line reads `N — size unknown`; the
+**Estimated day** reads *"N h at least"*; and the headline says *"at least"* too.
+**🔴 FAIL if** the unreadable tree is counted as 0 gallons and folded silently into the total.
+**🔴 FAIL if** the whole gallons figure reads "not known" because ONE tree could not be read —
+discarding the trees you can measure is throwing the answer away, not caution.
+
+## CARD 16 — THE RATE AND THE DAY LIMIT ARE THIS NURSERY'S, EDITABLE, NEVER IN THE CODE
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #406 — both figures are per-business settings (no migration; they live in the
+operations config that already exists)
+SIGNAL: the estimate's lines say *"this nursery's setting"* rather than *"the standard figure"*
+
+1. **Settings → Operations**: set **minutes a gallon** to `1` and the **day limit** to `7` for LAWNS.
+2. Re-open a crew's estimate.
+3. Change the rate to `2` and re-open it.
+
+**PASS:** the lines read *"this nursery's setting"*, the total doubles at `2`, and the day-limit
+comparison uses **7**, not the platform's 8.
+**🔴 FAIL if** either figure is unchangeable, or the estimate still says *"the standard figure — not
+set for this nursery"* after you have set it.
+⚠️ **A rate of 0 is refused and falls back to the default**, deliberately: at 0 min/gal every day
+estimates no planting time and no day would ever suggest a second crew — the suggestion would go
+quiet exactly when it matters.
+
+## CARD 17 — EACH CREW'S HOURS SHOW ON THE SCHEDULE, AND SAY WHEN THEY WERE MEASURED
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+COVERS: ledger #406 — capacity per crew where Lauren routes AND on the schedule
+SIGNAL: each crew's heading carries `N h of 7 h · … · as at <time>`
+
+1. On a two-crew day, route **CREW 1** (which writes its snapshot), and leave **CREW 2** unrouted.
+2. Go back to the schedule and read both crew headings.
+
+**PASS:** CREW 1's heading shows its hours against the 7-hour limit with its working, and **"as at
+<time>"**; CREW 2's reads **"not estimated yet — press Route this team"**.
+**🔴 FAIL if** CREW 2 shows **0 h** — an unrouted crew has no estimate, and 0 h reads as an easy day.
+**🔴 FAIL if** the figure claims to be current with no "as at" — it is a snapshot, and a day whose
+stops changed since the save has a stale one.

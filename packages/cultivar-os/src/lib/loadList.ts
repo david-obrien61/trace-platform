@@ -42,6 +42,7 @@ import { readProductFromDescription } from '@trace/shared/quickbooks/qboItemAdap
 import { resolveRung, type Ladder, type Rung } from '@trace/shared/inventory';
 import type { OperationsConfig } from '@trace/shared/production';
 import type { StopOrderItem } from './stopLoad';
+import { isNoteLine, isReplacementLine, replacementGallons } from './loadListChecks';
 
 /**
  * 🔴 THE FIGURES THIS PAGE MULTIPLIES BY, AND WHERE EACH ONE LIVES.
@@ -171,6 +172,10 @@ export type LoadItemKind =
   /** A MONEY line, or a service with nothing to load — a charge, a discount, a delivery option, a
    *  removal, or a billed bubbler (computed per tree above). It prints NOWHERE. */
   | 'not_loaded'
+  /** 🔴 A MESSAGE, NOT A THING (David, 2026-09-25). *"Bring Birthday Cake for Vera!!!"* — no item
+   *  code, no lot, no size. It prints as a NOTE on its stop and on the crew link, and it does NOT
+   *  go on page 4: page 4 is for what could not be READ, and a note read perfectly. */
+  | 'note'
   /** It might be loadable and we could not read it — including a container size this nursery's ladder
    *  does not have (`offLadder`), and a tree whose size we cannot reach. The ONE printed refusal. */
   | 'unresolved';
@@ -421,6 +426,35 @@ export function resolveLoadItem(item: StopOrderItem, ladder: Ladder): ResolvedLo
     }
     const known = NON_LOAD_LINES.find(n => matches(n.re, label, sku));
     if (known) return { ...flat, kind: 'not_loaded', reason: `Not loaded — ${known.why}.` };
+  }
+
+  // ── 0b. A NOTE IS NOT A TREE (David, 2026-09-25) ──────────────────────────
+  // 🔴 AFTER the allow-list and BEFORE any size reading. A note has no code and no lot, so nothing
+  // above can claim it; and if the size reader saw it first it would hunt for digits in
+  // "Bring Birthday Cake for Vera!!!", fail, and file the note as an UNREADABLE LINE — putting a
+  // birthday cake on page 4 beside a tree nobody can size.
+  if (isNoteLine(item)) {
+    return { quantity, name: item.description?.trim() || 'Note', sizeText: null, sku: null,
+             rung: null, gallons: null, offLadder: false, unreadText: null,
+             kind: 'note', reason: 'A note for the crew — nothing to load.' };
+  }
+
+  // ── 0c. A WARRANTY REPLACEMENT WHOSE SIZE IS ONLY IN ITS CODE ─────────────
+  // David, 2026-09-25: *"BPJ30REP → 30 gal; AZBI45 → 45 gal — the digits are the size."*
+  // 🔴 ONLY when nothing else carries a size. A replacement that names its size in words keeps the
+  //    words (D-23 — never normalise what the source wrote); this is the FALLBACK, not the rule.
+  if (isReplacementLine(item)) {
+    const named = (item.business_inventory?.size ?? '').trim() || null;
+    if (!named) {
+      const gal = replacementGallons(item);
+      if (gal !== null) {
+        // Hand `classify` a size it can place, so the tree lands on its real rung and earns its mix
+        // and posts — a replacement is planted, so it must be a full tree on the sheet.
+        const r = classify(quantity, item.business_inventory?.name?.trim() || item.description?.trim() || (item.sku ?? 'Replacement'),
+                           `${gal} gal`, item.sku?.trim() || null, ladder);
+        return { ...r, sizeText: `${gal} gal`, reason: r.reason };
+      }
+    }
   }
 
   // ── 1. the anchored lot ───────────────────────────────────────────────────
