@@ -39,3 +39,8 @@ export {
   SALE_UNIT_COLUMNS, SALE_UNIT_SELECT,
 } from './saleUnits';
 export type { SaleUnit, SaleUnitResolution, OnHandInBase, SaleUnitProposal } from './saleUnits';
+// What one install consumes, as configuration rather than code (ledger #411).
+// 🔴 It DECLARES and EVALUATES a mapping; `loadList.ts` remains the one place the install
+// arithmetic lives. An unlinked component is REPORTED, never skipped.
+export { evaluateKit, kitProblem, KIT_RULES, KIT_COLUMNS, KIT_SELECT } from './installKit';
+export type { KitRule, KitComponent, StopKitFacts, KitLine, KitEvaluation } from './installKit';
