@@ -52,9 +52,9 @@ import { parseStopsParam, pickStops, stopsParamFor, groupStopsByTeam, sheetIsSec
 import { stopChecks, CHECKS_COPY, type LoadCheck } from '../lib/loadListChecks';
 import { readTeams, teamLabel, type Team } from '../lib/teams';
 import { routeOrderLine, dayRoutedAt } from '../lib/routeOrder';
-import { shipToLine, billingAsShipTo } from '../lib/stopWrites';
-import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem, type LoadStopInput } from '../lib/loadList';
+import { buildLoadList, LOAD_LIST_COPY, type LoadListModel, type ResolvedLoadItem } from '../lib/loadList';
 import { readLoadListSettings, type LoadListSettingsRead } from '../lib/loadListSettingsRead';
+import { loadInputFor } from '../lib/loadStopInput';
 
 const TRACE_LOADLIST = true; // [TRACE:LOADLIST] STD-003 — ON until David owner-proves
 
@@ -143,41 +143,6 @@ function ItemRow({ item }: { item: ResolvedLoadItem }) {
  *    section's totals correct by construction: the caller hands it `buildLoadList` over THAT team's
  *    stops, so the allow-list and every roll-up rule are inherited rather than re-applied.
  */
-/**
- * One stop, as the load builder wants it.
- *
- * 🔴 ONE MAPPING, TWO CALLERS (§6 r8). The whole-day sheet and every per-team section build their
- *    models from THIS function, so a team's section cannot describe a stop differently from the way
- *    the day's sheet describes it. Two copies of this mapping is precisely how a per-crew sheet would
- *    start quietly disagreeing with the day it came from.
- */
-function loadInputFor(s: StopRow, dayRead: StopRead): LoadStopInput {
-  return {
-    stopId: s.id,
-    customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
-    address: shipToLine(s) || shipToLine(billingAsShipTo(s.customers)),
-    serviceType: s.service_type,
-    orderId: s.order_id,
-    canReadLines: dayRead.canReadLines,
-    linesRead: dayRead.linesRead,
-    items: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
-    // 🔴 INSTALL MATERIALS FOLLOW THE SERVICE, NOT THE TREE (David, 2026-09-25) — so this is no
-    // longer just `transport_method === 'install'`. THREE things can say a stop is planted: its own
-    // mark, a TRIP CHARGE on its order (TC pairs with install), or a WARRANTY REPLACEMENT tree.
-    // ⚠️ Before this, a TC-only install loaded NO mix, NO posts and NO monitors — Stallings on
-    // Saturday 2026-09-26 — because only the first of the three was read.
-    // The judgement is `stopChecks`, so it is probed rather than inlined here (§6 r19).
-    installs: stopChecks({
-      stopId: s.id,
-      customerName: customerDisplayName(s.customers ?? {}, 'Customer'),
-      serviceType: s.service_type,
-      markedInstall: s.order_id ? dayRead.transportByOrderId.get(s.order_id) === 'install' : false,
-      lines: (s.order_id ? dayRead.linesByOrderId.get(s.order_id) : undefined) ?? [],
-    }).basis !== null,
-    // Nothing stored marks a stop as fenced (measured 2026-09-12) — so the data cannot tell.
-    deerFence: null,
-  };
-}
 
 /**
  * PAGE 4 — CHECK BEFORE YOU LOAD (David, 2026-09-25).

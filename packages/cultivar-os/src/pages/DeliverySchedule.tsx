@@ -37,6 +37,7 @@ import { shipToLine } from '../lib/stopWrites';
 import { StopCard } from '../components/delivery/StopCard';
 import { useStopActions } from '../components/delivery/useStopActions';
 import { CrewLinkPanel } from '../components/delivery/CrewLinkPanel';
+import { PlanTheDayPanel } from '../components/delivery/PlanTheDayPanel';
 // ── THE SCHEDULE SPLIT BY TEAM (ledger #376, teams piece 5 — David, 2026-09-21) ────────────
 // 🔴 THE SAME PARTITION THE LOAD SHEET USES (ledger #373). One operation, one place (§6 r8): if
 //    the schedule grouped stops its own way, the office and the paper could disagree about who is
@@ -83,6 +84,8 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   // (20260922c not applied); `null` = the read failed; an empty map = nothing routed yet (A9).
   const [estimates, setEstimates] = useState<Map<string | null, DayEstimateRow> | null | undefined>(undefined);
   const [crewPanelDay, setCrewPanelDay] = useState<string | null>(null);
+  // Which day's crew-split proposal is open. One at a time, like the crew-link panel above.
+  const [planDay, setPlanDay] = useState<string | null>(null);
   // 🔴 NAMES ONLY (ledger #376). A stop carries `team_id`; the NAME lives in the team list. A failed
   // team read never hides a stop — the sections are built from the stops themselves, so an unnamed
   // team still shows its work.
@@ -265,10 +268,33 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                     <Navigation size={14} /> Route this day
                   </button>
                 )}
+                {/* PLAN THE DAY — beside Crew link and Route this day, on the same gate and the
+                    same date, because this is where a person stands when they ask "who goes out".
+                    It opens a PANEL under the header rather than navigating: the proposal needs
+                    two columns, a stop list and an accept, which is more room than a header has,
+                    and CrewLinkPanel already established that pattern directly below. */}
+                {group.date && dayAddrs.length > 0 && can('deliveries:update') && (
+                  <button
+                    onClick={() => setPlanDay(prev => (prev === group.date ? null : group.date))}
+                    style={{
+                      padding: '7px 12px', minHeight: 40, background: '#fff', color: GREEN, border: `1.5px solid ${GREEN}`,
+                      borderRadius: 8, fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                    }}
+                  >
+                    {planDay === group.date ? 'Hide the plan' : 'Plan the day'}
+                  </button>
+                )}
                 </div>
               </div>
               {group.date && crewPanelDay === group.date && businessId && (
                 <CrewLinkPanel businessId={businessId} date={group.date} />
+              )}
+              {group.date && planDay === group.date && businessId && (
+                <PlanTheDayPanel
+                  businessId={businessId} date={group.date} teams={teams}
+                  canWrite={can('deliveries:update')}
+                  onAccepted={() => { setPlanDay(null); void load(); }}
+                />
               )}
 
               {/* 🔴 ONE SECTION PER TEAM (ledger #376, teams piece 5). A day nobody has split shows
