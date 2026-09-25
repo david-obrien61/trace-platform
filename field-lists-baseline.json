@@ -8,7 +8,7 @@
     "packages/cultivar-os/api/discovery/ingest.ts::db#businesses.select",
     "packages/cultivar-os/api/orders/submit.ts::availableQty#business_inventory.select",
     "packages/cultivar-os/api/orders/submit.ts::db#order_items.select",
-    "packages/cultivar-os/api/orders/submit.ts::db#order_items.select@2",
+    "packages/cultivar-os/api/orders/submit.ts::isCapturedKind#order_items.select",
     "packages/cultivar-os/api/orders/submit.ts::itemCount#order_service_selections.select",
     "packages/cultivar-os/api/orders/submit.ts::offerings#service_offerings.select",
     "packages/cultivar-os/api/orders/submit.ts::resolveItemForServer#business_inventory.select",
@@ -37,5 +37,6 @@
     "packages/shared/src/components/CostToProduceSettings.tsx::cancelled#cost_objects.select",
     "packages/shared/src/components/CostToProduceSettings.tsx::reload#cost_objects.select"
   ],
-  "_rekeyed_2026_09_02": "api/dashboard.ts's two entries were re-keyed, NOT added. The identity is `file::binding#table.verb` (tech-debt #78) and the binding was `todayStr`, a dead local this build removed when the endpoint stopped keying today's sales on created_at. Same two reads, same file, new nearest-binding. COUNT PROVEN IDENTICAL BEFORE AND AFTER (34 -> 34, no duplicates) rather than regenerated: `npm run field-lists:baseline` would have written 39, sweeping in five enumerations that are exempt by PATH declaration and were never in this file \u2014 growing the baseline with entries whose exemption would then be invisible if the declaration were later removed. Blind --update is how a ratchet stops ratcheting."
+  "_rekeyed_2026_09_02": "api/dashboard.ts's two entries were re-keyed, NOT added. The identity is `file::binding#table.verb` (tech-debt #78) and the binding was `todayStr`, a dead local this build removed when the endpoint stopped keying today's sales on created_at. Same two reads, same file, new nearest-binding. COUNT PROVEN IDENTICAL BEFORE AND AFTER (34 -> 34, no duplicates) rather than regenerated: `npm run field-lists:baseline` would have written 39, sweeping in five enumerations that are exempt by PATH declaration and were never in this file \u2014 growing the baseline with entries whose exemption would then be invisible if the declaration were later removed. Blind --update is how a ratchet stops ratcheting.",
+  "_rekeyed_2026_09_25": "submit.ts::db#order_items.select@2 -> ::isCapturedKind#order_items.select (ledger #418). SAME select('id, quantity, business_inventory_id'), byte-identical to origin/main \u2014 PROVEN by diffing every order_items select against main. Inserting the delete-refusal above it changed the nearest enclosing binding the key is built from, so the cap reported a pre-existing list as new. ONLY this key was touched: `npm run field-lists:baseline` would have re-stamped the whole file and silently absorbed 15 OTHER entries from other sessions' builds that were never re-baselined (customers/create, crewDayLink, dayEstimate, stopRead, Dashboard, the quickbooks writers...). A ratchet that quietly swallows other people's debt is worse than one that fires."
 }
