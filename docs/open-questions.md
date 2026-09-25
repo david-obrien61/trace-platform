@@ -117,6 +117,12 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 - ⚠️ **OPEN — A WORK ORDER CAN BE SCHEDULED WITH NO CREW** (`team_id` nullable), and a retired crew leaves its jobs standing ([[R-133]]). Say if you would rather it refuse.
 - ⚠️ **OPEN — NO SURFACE.** Nothing calls `work_order_apply`; the crew-link phone view and the Operations calendar band are P6's and P7's screens, neither built. The board's one card is `needs-test` for exactly that reason.
 
+**#414 — need it before you need it: the planned batches (yard production P7)**
+- 🔴 **OPEN — IT CANNOT SHOW A REAL NUMBER UNTIL THE PILE IS COUNTED ONCE** (and #409's D1 is answered). **This is not a limitation to work around:** with every mix row at `qty_basis = 'placeholder'`, the refusal *"the mix has never been counted"* IS the correct output, and the alternative is a confident plan built on a catalogue seed value.
+- ⚠️ **OPEN — THE MINIMUM ON HAND NEEDS A VALUE FROM YOU.** It has a home already — `business_inventory.reorder_point`, set on 0 of 632 rows — so this is a number, not a build. **5 yd = 1010 gal on a gallon base.**
+- ⚠️ **OPEN — NO SURFACE AND NO WRITER.** The Operations calendar band and Lauren's schedule are not built, and nothing turns a planned batch into a DRAFT work order yet. The tables exist (#413).
+- ✅ **ANSWERED ALREADY: the lead time (`mixLeadTimeDays` = 2, your own reason on the key) and the batch size (`yield_quantity` = 2.5 on the recipe).**
+
 **#404 — Plant Your Tree prices from the INSTALL ladder; the CHECK install_price never had**
 - 🔴 **OPEN — DO NOT RUN `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql` AT SHA `624db4da…`.** Identical SQL, written when `price_source` routed Plant Your Tree to a SECOND, empty column — it would have priced NOTHING. **The one to run is SHA `1b7fce4a…`, and only AFTER `feat/pyt-from-install-ladder` is merged and deployed.**
 - ⛔ **OPEN — APPLY `supabase/migrations/20260924e_container_ladder_install_price_check.sql` FIRST.** SQL editor, never the table editor. **V3 is live SQL that must ERROR `23514` — that error IS the pass.** Measured live before it was written: 9 rungs, **0 at zero, 0 negative**, 3 not set, 6 priced ($204–$1,800), so it cannot reject a row.
