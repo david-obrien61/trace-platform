@@ -9,14 +9,14 @@
 > data of its own).
 >
 > **This file is the ONLY source of truth for the work-order owner-tests.** It is STANDING — run it
-> after any change to `20260925d`'s tables, `work_order_apply`, or `buildTiming.ts`.
+> after any change to `20260925i`'s tables, `work_order_apply`, or `buildTiming.ts`.
 
 **Purpose:** prove that a dated job with a crew can be planned, and that finishing it **does the work** —
 a mix batch adds what it made and draws what it used, an uppot records the potting date — **once, and
 only once**.
 
 **Board: 0 of 1.** ⚠️ **THE ONE CARD IS `needs-test`, AND THE REASON IS THE WHOLE STATE OF THIS
-CAPABILITY: THERE IS NO SCREEN.** `20260925d` creates the tables and the Done function, and nothing in
+CAPABILITY: THERE IS NO SCREEN.** `20260925i` creates the tables and the Done function, and nothing in
 the app calls them. The crew-link phone pattern and the Operations calendar are P6's and P7's surfaces
 and neither is built. **Recording that hole is not optional (OP-14 clause 2); inventing a card that asks
 you to click something that does not exist would be worse than none.**
@@ -29,7 +29,7 @@ way to say *"Joel, make 2 batches on Thursday"* — the only work-order shaped t
 
 # DAVID CAN RUN THIS NOW
 
-### CARD 1 — 🔴 THE JOB'S RULES HOLD IN THE DATABASE, AND DONE BUILDS EXACTLY ONCE (needs `20260925d` applied)
+### CARD 1 — 🔴 THE JOB'S RULES HOLD IN THE DATABASE, AND DONE BUILDS EXACTLY ONCE (needs `20260925i` applied)
 STATUS: needs-test
 DEVICE: desktop
 COVERS: #413
@@ -37,7 +37,7 @@ LAST-PROVEN: —
 SIGNAL: `V3 PASS — Done built once (qty 0→2, 1 run), and a second tap applied 0 and skipped 1`
 
 ⚠️ **RUN IN THE SQL EDITOR, ON TEST DAVE'S.** Paste the migration's **V1–V4** from the foot of
-`supabase/migrations/20260925d_production_work_orders.sql`, one at a time. Each builds its own fixture,
+`supabase/migrations/20260925i_production_work_orders.sql`, one at a time. Each builds its own fixture,
 RAISEs its verdict and **rolls back**, so the error message *is* the report and nothing is left behind.
 
 - **V1** — the two tables, RLS on both, 8 policies, and `build_runs` gaining `started_at`/`finished_at`.

@@ -1781,7 +1781,7 @@ LAST-PROVEN: —
 SIGNAL: none — there is no screen, and that is exactly what this card records.
 
 - **Why this is `needs-test` and not `owed`, stated rather than left to be inferred (OP-14 clause 2):**
-  `20260925b` creates `item_sale_units` and `saleUnits.ts` reads it, but **no surface in the app writes
+  `20260925g` creates `item_sale_units` and `saleUnits.ts` reads it, but **no surface in the app writes
   or shows a conversion**. There is nothing for you to click, so a card asking you to click something
   would be asserting a surface that does not exist. Recording the hole is the part that is not optional.
 - **What CAN be proven today, and how:** paste the migration's own **V1–V4** into the SQL editor. Each
@@ -1807,7 +1807,7 @@ COVERS: #411
 LAST-PROVEN: —
 SIGNAL: none — `loadList.ts` is untouched, so no screen behaves differently.
 
-- **Why `needs-test` and not `owed` (OP-14 clause 2):** `20260925c` creates `install_kit_components` and
+- **Why `needs-test` and not `owed` (OP-14 clause 2):** `20260925h` creates `install_kit_components` and
   `installKit.ts` evaluates it, but **the kit is deliberately NOT WIRED** — the load list still uses its
   own hard-coded component set. Nothing on any screen changes, so there is nothing for you to click.
 - **What CAN be proven, and how:** paste the migration's **V1–V4**. Each builds its own fixture, RAISEs

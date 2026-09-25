@@ -106,10 +106,27 @@ const line = (quantity: number, description: string | null, sku: string | null =
   business_inventory: lot ? { name: lot.name, size: lot.size } : null,
 });
 
+/**
+ * 🔴 `installs` DEFAULTS TO **true** HERE, AND IT IS A DELIBERATE CHANGE (2026-09-26, ledger #416).
+ *
+ * David ruled on 2026-09-25/26 that install materials — mix, T-posts, rope, water monitors — go ONLY
+ * on install stops, and that a delivery-only stop carries **trees only**. `buildLoadList` now gates
+ * them on `s.installs`.
+ *
+ * Every fixture below omitted `installs`, so all of them were delivery stops by accident, and 27
+ * assertions about mix, posts and rope went red the moment the gate landed. **Their subject is the
+ * ARITHMETIC — "a 30 gallon tree takes 60 gallons of mix" — which is still exactly true, on an install
+ * stop.** Defaulting to `true` keeps every one of those assertions meaning what its author meant,
+ * rather than rewriting 27 expectations to zero and losing the arithmetic coverage entirely.
+ *
+ * ⚠️ **A TEST THAT IS ABOUT A DELIVERY-ONLY STOP MUST NOW SAY `installs: false` EXPLICITLY**, and §DO
+ * below does. Before this change no fixture stated it either way; now the distinction is visible.
+ */
 const stop = (stopId: string, customerName: string, items: StopOrderItem[],
               over: Partial<LoadStopInput> = {}): LoadStopInput => ({
   stopId, customerName, address: '1 Somewhere', serviceType: 'planting',
-  orderId: 'o1', canReadLines: true, linesRead: true, items, deerFence: null, ...over,
+  orderId: 'o1', canReadLines: true, linesRead: true, items, deerFence: null,
+  installs: true, ...over,
 });
 
 // ══ §A THE RATIOS ARE CONFIGURATION, AND ONE OF THEM WAS WRONG ═════════════════════
@@ -670,7 +687,7 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   // Q4 — WATER MONITORS: one per tree LAWNS installs.
   const installed = build('2026-09-01', [
     stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X')], { installs: true }),
-    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y')]),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y')], { installs: false }),
   ]);
   ok(installed.waterMonitors === 8 && installed.installTreeCount === 8,
     `🔴 Q4: eight installed trees → eight kits; the five delivered trees get none (got ${installed.waterMonitors})`);
@@ -682,7 +699,7 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   // Q5 — a BILLED kit ADDS on top, including on a stop we do not install.
   const bought = build('2026-09-01', [
     stop('s1', 'Installs', [line(8, 'Oak - 30 gallon', 'X'), line(2, 'Augur Holes, and install water monitor pipe', null)], { installs: true }),
-    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y'), line(3, 'Augur Holes, and install water monitor pipe', null)]),
+    stop('s2', 'Delivers', [line(5, 'Oak - 15 gallon', 'Y'), line(3, 'Augur Holes, and install water monitor pipe', null)], { installs: false }),
   ]);
   ok(bought.waterMonitors === 13,
     `🔴 Q5: 8 installed + 2 billed + 3 billed on a delivery stop = 13 (got ${bought.waterMonitors})`);
@@ -773,6 +790,43 @@ const stop = (stopId: string, customerName: string, items: StopOrderItem[],
   ok(/tagged with the customer/i.test(LOAD_LIST_COPY.stopsWhy),
     '🔴 L2b: the stops say WHY they are there — the tag carries the customer\'s name, checked at staging');
   ok(LOAD_LIST_COPY.bulkHeading.startsWith('Bulk materials'), 'L3: page 1 is headed as the bulk');
+}
+
+// ══ §DO INSTALL MATERIALS GO ONLY ON AN INSTALL STOP (David, 2026-09-25/26 · ledger #416) ═══════
+// 🔴 The ruling: *"install materials (mix, T-posts, rope, water monitors) go ONLY on install stops
+// (marked install, a trip-charge line, or warranty replacements); delivery-only carries trees only."*
+// ledger #415 built the PREDICATE (`stopChecks(...).basis`) and wired it only to `waterMonitors`;
+// this is the consequence half. Measured 2026-09-25: 26 of LAWNS's 63 stops are `delivery`.
+{
+  const items = [line(2, 'Oak - 45 gallon', 'X')];
+  const inst = build('2026-10-03', [stop('s1', 'A', items, { installs: true })]);
+  const del  = build('2026-10-03', [stop('s1', 'A', items, { installs: false })]);
+
+  ok(inst.mixGallons === 180 && inst.tPosts === 4,
+    `🔴 DO1: an INSTALL stop still carries its materials — 180 gal, 4 posts (got ${inst.mixGallons}, ${inst.tPosts})`);
+  ok(del.mixGallons === 0 && del.tPosts === 0 && del.ropeFeet === 0,
+    `🔴 DO2: a DELIVERY-ONLY stop carries NO mix, NO posts and NO rope (got ${del.mixGallons}, ${del.tPosts}, ${del.ropeFeet})`);
+  ok(del.mixYards === 0, 'DO3: and no half-yard rounding of a zero into something');
+  ok(del.treeCount === 2 && del.trees.length === 1,
+    `🔴 DO4: but the TREES are untouched — a delivery stop still lists and counts them (got ${del.treeCount})`);
+  ok(del.stops[0].mixGallons === 0 && del.stops[0].tPosts === 0,
+    'DO5: the per-STOP figures are gated too, not just the day headline');
+  ok(inst.stops[0].mixGallons === 180, 'DO5b (negative control): the install stop keeps its per-stop figures');
+
+  // 🔴 THE HALF THAT NEEDED ITS OWN TALLY: the day total is recomputed over EVERY item, so gating the
+  // per-stop figures alone would have left a delivery stop's mix in the headline the yard loads from.
+  const mixed = build('2026-10-03', [
+    stop('s1', 'Installed', [line(2, 'Oak - 45 gallon', 'X')], { installs: true }),
+    stop('s2', 'Delivered', [line(3, 'Elm - 30 gallon', 'Y')], { installs: false }),
+  ]);
+  ok(mixed.mixGallons === 180,
+    `🔴 DO6: on a MIXED day the headline counts the install stop ONLY — 180 gal, not 180+180 (got ${mixed.mixGallons})`);
+  ok(mixed.tPosts === 4, `DO7: and its posts only — 4, not 10 (got ${mixed.tPosts})`);
+  ok(mixed.treeCount === 5,
+    `🔴 DO8: while the TREE count is the whole day — 5 trees go on the trailer (got ${mixed.treeCount})`);
+  ok(mixed.trees.length === 2, 'DO9: and both rungs are listed for the yard to pick');
+  ok(mixed.waterMonitors === 2,
+    `DO10: water monitors follow the same rule and already did (#415) — 2, the install stop's trees (got ${mixed.waterMonitors})`);
 }
 
 console.log(`\nloadList: ${passed} passed, ${failed} failed`);

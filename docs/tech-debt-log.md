@@ -4988,7 +4988,7 @@ that board is already amber with 14 cards owed.
 
 ---
 
-## #364 — 🟡 THE LOAD LIST COMPUTES PLANTING MIX, T-POSTS AND ROPE FOR **DELIVERY-ONLY** STOPS, AND 26 OF LAWNS'S 63 STOPS ARE DELIVERIES (NEW 2026-09-25, ledger #411 — FOUND BY AN EQUIVALENCE PROBE, FILED NOT FIXED)
+## #364 — ✅ **RESOLVED 2026-09-26 (ledger #416), AND DAVID RULED IT FIRST** — THE LOAD LIST COMPUTED PLANTING MIX, T-POSTS AND ROPE FOR **DELIVERY-ONLY** STOPS, AND 26 OF LAWNS'S 63 STOPS ARE DELIVERIES (NEW 2026-09-25, ledger #411 — FOUND BY AN EQUIVALENCE PROBE, FILED NOT FIXED)
 
 **`installs` gates exactly ONE quantity in `loadList.ts` — `waterMonitors` (`:605`).** Special mix,
 T-posts, rope, ring circumference and deer-fence posts are computed for **every** stop on the day,
@@ -5031,6 +5031,31 @@ is exactly the kind of change that must be David's, not a side effect of a build
 not, `installs` gates the mix/post/rope sums the way it already gates `waterMonitors`, and
 `installKitEquivalence.test.ts` §B flips from *"these two deliberately disagree"* to *"these two agree"* —
 the probe is already written and would go green on the fix without being edited.
+
+✅ **RESOLVED 2026-09-26 — ledger #416.** David ruled (2026-09-25/26): *"install materials (mix, T-posts,
+rope, water monitors) go ONLY on install stops (marked install, a trip-charge line, or warranty
+replacements); delivery-only carries trees only."* `buildLoadList` now gates the per-stop figures **and a
+separate day tally** on `s.installs`.
+
+✏️ **HALF THE RULING WAS ALREADY MERGED AND HALF WAS NOT — recorded because the instruction to fix this said
+it was all merged.** Ledger **#415** built the PREDICATE (`stopChecks(...).basis`, reading the mark, a trip
+charge and a warranty replacement — exactly the ruling) and wired it to **`waterMonitors` alone**. The
+equivalence probe re-run on CURRENT `main` still showed mix, posts and rope summed for every stop, so this
+was not a stale measurement against a pre-merge sheet.
+
+🔴 **AND IT WAS NOT THE "four-character change" ANYONE EXPECTED, MYSELF INCLUDED: the day total is
+RECOMPUTED OVER EVERY ITEM, not summed from the stops**, so gating the per-stop figures alone would have
+left a delivery stop's mix in the headline the yard loads from. It needed its own tally over install stops
+only (`installMaterials`).
+
+🔴 **27 EXISTING ASSERTIONS WENT RED, AND THAT IS THE REAL FINDING: every fixture in `loadList.test.ts`
+omitted `installs`, so the suite had been proving the mix/post/rope arithmetic ON ACCIDENTAL DELIVERY
+STOPS.** The helper now defaults to an install (documented in place), keeping all 27 meaning what their
+authors meant, and **§DO adds 10 probes for the rule itself** including the mixed-day headline.
+⚠️ Two sibling suites were edited honestly rather than silenced: `installKitEquivalence` §B3 **asserted the
+disagreement that found this entry and now asserts agreement**, and `loadListSubset` U2/U3 asserted
+`day > crew` on the strength of a delivery stop's materials (U7 still proves the subset property whole).
+
 ## #365 — 🔴 `build_runs` AND `build_run_components` HAVE **NO WRITER AT ALL**, SO "0 BUILD RUNS" WAS NEVER EVIDENCE THAT NO BATCH HAD BEEN MADE (NEW 2026-09-25, ledger #413 — RESOLVED FOR ONE PATH IN THE SAME BUILD, CLASS STILL OPEN)
 
 **`record_build_run` does not touch `build_runs`.** Verified against the **LIVE function body** —
@@ -5050,7 +5075,7 @@ thousand batches. The `build` **ledger** rows are the half that carries the info
 0 for the different, real reason that `record_build_run` has no caller. **A count of a table nothing
 writes is not a measurement of anything** — [[R-33]]'s shape in a figure rather than in a check.
 
-✅ **ONE PATH IS FIXED IN THE BUILD THAT FOUND IT.** `work_order_apply` (`20260925d`) now INSERTs the
+✅ **ONE PATH IS FIXED IN THE BUILD THAT FOUND IT.** `work_order_apply` (`20260925i`) now INSERTs the
 `build_runs` row itself — business, recipe, batches, the yield that went on the books, `started_at`,
 `finished_at`, `built_by` — with `cost_incomplete = true` and a reason, because the cost engine is
 client-side (`recipeCost.ts`: landed cost, receipt matching) and a server function cannot compute it.

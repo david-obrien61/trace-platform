@@ -1,5 +1,5 @@
 /**
- * -- build-run-rounding-410.pglite -- 20260925a EXECUTED, AND THE DEFECT PROVEN FIRST ------------
+ * -- build-run-rounding-410.pglite -- 20260925f EXECUTED, AND THE DEFECT PROVEN FIRST ------------
  *
  * PURPOSE:      §6 r26. The migration is EXECUTED end to end against the live schema snapshot, its
  *               own V-blocks are extracted from the file and run VERBATIM, and the file is executed
@@ -27,7 +27,7 @@ import { readFileSync } from 'node:fs';
 if (!process.env.PGLITE_DIR) { console.error('Set PGLITE_DIR to a node_modules folder with @electric-sql/pglite.'); process.exit(2); }
 const { openLiveDb, closeLiveDbs } = await import(process.cwd() + '/scripts/path-tests/lib/liveDb.mjs');
 
-const FILE = process.cwd() + '/supabase/migrations/20260925a_build_run_records_what_it_moved.sql';
+const FILE = process.cwd() + '/supabase/migrations/20260925f_build_run_records_what_it_moved.sql';
 const RAW = readFileSync(FILE, 'utf8');
 /** The executable half — the BEGIN…COMMIT body, with the commented V-blocks left out. */
 const BODY = RAW.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n');

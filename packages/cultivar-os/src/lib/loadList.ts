@@ -626,7 +626,7 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
     const fence: DeerFenceState = s.deerFence === true || fenceLine ? 'yes' : s.deerFence === false ? 'no' : 'unknown';
     const sums = sumTrees(trees, items, fence, settings);
     if (fence === 'unknown' && sums.treeCount > 0) deerFenceUnknownStops++;
-    deerFencePosts += sums.deerFencePosts;
+    if (s.installs) deerFencePosts += sums.deerFencePosts;   // materials only on an install stop (#416)
 
     stops.push({
       stopId: s.stopId, customerName: s.customerName, address: s.address,
@@ -641,10 +641,22 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
       installs: !!s.installs,
       plantOnSite: items.filter(i => i.kind === 'plant_on_site'),
       treeCount: sums.treeCount,
-      mixGallons: sums.mixGallons,
-      mixYards: toHalfYards(sums.mixGallons, settings),
-      tPosts: sums.tPosts,
-      deerFencePosts: sums.deerFencePosts,
+      // 🔴 INSTALL MATERIALS GO ONLY ON AN INSTALL STOP — David's ruling, 2026-09-25/26 (ledger #416):
+      // *"install materials (mix, T-posts, rope, water monitors) go ONLY on install stops (marked
+      // install, a trip-charge line, or warranty replacements); delivery-only carries trees only."*
+      // 🔴 `s.installs` ALREADY CARRIES THE WHOLE OF THAT DEFINITION and is not re-derived here: the
+      // LoadList page sets it from `stopChecks(...).basis !== null`, which reads the mark, a TRIP
+      // CHARGE and a WARRANTY REPLACEMENT (ledger #415). This clause is the CONSEQUENCE half — #415
+      // built the predicate and wired it only to `waterMonitors`, so mix, posts and rope were still
+      // being loaded for stops LAWNS does not plant. Measured 2026-09-25: 26 of LAWNS's 63 stops are
+      // `delivery` (tech-debt #364).
+      // ⚠️ THE TREES ARE UNTOUCHED. A delivery stop still lists and counts every tree — it is the
+      // MATERIALS that stay behind. `trees[]` keeps each rung's own per-tree figures, because those
+      // describe the SIZE and are what the "values used" block prints.
+      mixGallons: s.installs ? sums.mixGallons : 0,
+      mixYards: s.installs ? toHalfYards(sums.mixGallons, settings) : 0,
+      tPosts: s.installs ? sums.tPosts : 0,
+      deerFencePosts: s.installs ? sums.deerFencePosts : 0,
       deerFence: fence,
       offLadderTreeCount: sums.offLadderTreeCount,
       unresolvedCount: items.filter(i => i.kind === 'unresolved').length,
@@ -654,6 +666,13 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
   const allItems = stops.flatMap(s => s.items);
   const trees = tallyTrees(allItems, settings);
   const day = sumTrees(trees, allItems, 'no', settings);
+  // 🔴 THE DAY'S MATERIALS ARE THE INSTALL STOPS' ONLY, AND THAT NEEDED ITS OWN TALLY RATHER THAN A
+  // SUM OF THE STOPS. `day` above is recomputed over EVERY item, so gating the per-stop figures does
+  // not change it — a delivery stop's mix would still have reached the headline the yard loads from.
+  // ⚠️ `trees` and `day.treeCount` stay whole ON PURPOSE: a delivery stop's trees DO go on the
+  // trailer. Only the materials stay behind.
+  const installItems = stops.filter(st => st.installs).flatMap(st => st.items);
+  const installMaterials = sumTrees(tallyTrees(installItems, settings), installItems, 'no', settings);
   const unresolved = allItems.filter(i => i.kind === 'unresolved');
   const plantOnSite = allItems.filter(i => i.kind === 'plant_on_site');
   const noVolumeTrees = trees.filter(t => t.gallons == null);
@@ -669,13 +688,13 @@ export function buildLoadList(date: string, input: LoadStopInput[], settings: Lo
     date,
     stopCount: stops.length,
     stops,
-    mixYards: toHalfYards(day.mixGallons, settings),
-    mixGallons: day.mixGallons,
+    mixYards: toHalfYards(installMaterials.mixGallons, settings),
+    mixGallons: installMaterials.mixGallons,
     trees,
     treeCount: day.treeCount,
-    tPosts: day.tPosts,
+    tPosts: installMaterials.tPosts,
     deerFencePosts,
-    ropeFeet: day.tPosts * settings.ops.ropeFeetPerTPost,
+    ropeFeet: installMaterials.tPosts * settings.ops.ropeFeetPerTPost,
     bubblers: stops.reduce((n, st) => n + st.bubblers, 0),
     waterMonitors: stops.reduce((n, st) => n + st.waterMonitors, 0),
     installTreeCount: stops.filter(st => st.installs).reduce((n, st) => n + st.treeCount, 0),

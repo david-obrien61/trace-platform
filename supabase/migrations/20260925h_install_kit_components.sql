@@ -1,6 +1,17 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════
--- 20260925c — THE INSTALL KIT IS CONFIGURABLE · ledger #411 · yard production P3
+-- 20260925h — THE INSTALL KIT IS CONFIGURABLE · ledger #411 · yard production P3
 -- ════════════════════════════════════════════════════════════════════════════════════════════
+-- ✏️ **RENUMBERED 2026-09-26 (ledger #416): THIS FILE WAS `20260925c_…`, AND THAT SLOT WAS TAKEN TWICE OVER.**
+-- `npm run migration:slot` on 2026-09-26 showed slot **c with THREE claimants** and **d with TWO**, across
+-- `origin/main` and David's uncommitted folder. A person told to *"apply 20260925c"* would have had two
+-- different files to choose from — Rule 11b's exact defect, *"and a collision here is NOT a merge conflict"*.
+-- 🔴 **MINE MOVED RATHER THAN THEIRS, AND THE REASON IS MEASURED: all four of mine were UNAPPLIED** (verified
+-- live 2026-09-26 — `install_kit_components`, `production_work_orders`, `item_sale_units` and
+-- `build_runs.started_at` all absent), so renaming them is legitimate; renaming an applied migration is not
+-- (§6 r1). **The old name `20260925c_…` is SUPERSEDED and must not be used.** Ledger #411 is unchanged.
+-- ⚠️ The SHA in any note written before 2026-09-26 refers to the old filename and is stale; the current one
+-- is in `~/Desktop/MORNING-2026-09-26.md`.
+--
 -- 🔴 WRITTEN, NOT APPLIED. David applies it in the SQL EDITOR — never the table editor (§6 r17).
 --
 -- ── WHY (David, 2026-09-25) ─────────────────────────────────────────────────────────────────
@@ -45,7 +56,7 @@
 --
 -- ── WIPE CLASS: CONFIG — SURVIVES (STD-019) ──────────────────────────────────────────────────
 -- Keyed on `qb_item_id`, which the QuickBooks reload preserves; **no FK to `business_inventory`**,
--- whose ids the reload changes. Same reasoning as `20260925b`.
+-- whose ids the reload changes. Same reasoning as `20260925g`.
 --
 -- ── 🔴 THE TABLE SHIPS EMPTY. IT DOES NOT SEED LAWNS'S KIT. ───────────────────────────────────
 -- The brief says *"Seed LAWNS's kit from the rulings above."* **It is not seeded here, and the reason

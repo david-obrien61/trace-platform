@@ -1,5 +1,5 @@
 /**
- * -- item-sale-units-409.pglite -- 20260925b EXECUTED against the live schema -------------------
+ * -- item-sale-units-409.pglite -- 20260925g EXECUTED against the live schema -------------------
  *
  * PURPOSE:      §6 r26. The migration is EXECUTED end to end against the live schema snapshot, its
  *               own V-blocks are extracted from the file and run VERBATIM, and the file is executed
@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 if (!process.env.PGLITE_DIR) { console.error('Set PGLITE_DIR to a node_modules folder with @electric-sql/pglite.'); process.exit(2); }
 const { openLiveDb, closeLiveDbs } = await import(process.cwd() + '/scripts/path-tests/lib/liveDb.mjs');
 
-const FILE = process.cwd() + '/supabase/migrations/20260925b_item_sale_units.sql';
+const FILE = process.cwd() + '/supabase/migrations/20260925g_item_sale_units.sql';
 const RAW = readFileSync(FILE, 'utf8');
 const BODY = RAW.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n');
 const uncomment = (t) => t.split('\n').filter((l) => /^--\s{2,}/.test(l)).map((l) => l.replace(/^--\s{2}/, '')).join('\n');

@@ -18,7 +18,7 @@
 to a real purchase on a real receipt, and get a cost that **either is right or says why it is not**.
 David, 2026-09-21: *"show the working, suggest, Lauren decides."*
 
-**Board: 0 of 22.** ✏️ **2026-09-25 (ledger #410): CARDS 19 and 20 are NEW** — a part-yard batch must say what went on the books, and a component that was not there must not be recorded as used. Both need `20260925a` applied and both are `owed`. ✏️ **2026-09-22 (David's seven recipe rulings): CARDS 4, 5, 6, 10 and 11 are REWRITTEN and CARDS 15–18 are new.** The batch size is no longer typed — it is derived from what goes in — so every card that asked you to type a yield has changed. `20260922d_build_runs_freeze_cost.sql` is a SECOND migration, **written and HELD**, and GATE 0 ② now names both. Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
+**Board: 0 of 22.** ✏️ **2026-09-25 (ledger #410): CARDS 19 and 20 are NEW** — a part-yard batch must say what went on the books, and a component that was not there must not be recorded as used. Both need `20260925f` applied and both are `owed`. ✏️ **2026-09-22 (David's seven recipe rulings): CARDS 4, 5, 6, 10 and 11 are REWRITTEN and CARDS 15–18 are new.** The batch size is no longer typed — it is derived from what goes in — so every card that asked you to type a yield has changed. `20260922d_build_runs_freeze_cost.sql` is a SECOND migration, **written and HELD**, and GATE 0 ② now names both. Every card is `STATUS: owed`. ⚠️ **THE SCREENS ARE HELD, NOT MERGED**
 (David, 2026-09-22: *"Build the surfaces tonight but HOLD them — David reviews on Test Dave's after
 Lauren's 08:00 start. They touch the inventory item, which she uses."*). Until the branch merges,
 **GATE 0 ③ will fail by design** and cards 1–12 run only on a preview deploy of
@@ -356,7 +356,7 @@ about that day. Re-valuing units already made is how the books stop reconciling.
 ⚠️ **There is no screen for a build run yet** — this card is `needs-test` until one exists; the
 database side is proven by `build-runs-freeze-370.pglite.mjs` V1.
 
-### CARD 19 — 🔴 A 2.5 YARD BATCH SAYS WHAT WENT ON THE BOOKS (needs `20260925a` applied)
+### CARD 19 — 🔴 A 2.5 YARD BATCH SAYS WHAT WENT ON THE BOOKS (needs `20260925f` applied)
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
@@ -371,11 +371,11 @@ yard is a rounding — *"stock is counted in whole yd"* — and it points at hol
 gallons. The ledger row for that build reads **+3**, the same as the row moved.
 **🔴 FAIL if** it says only "made 2.5" and leaves on-hand up by 3 with nothing to explain it. That
 is the defect: half a yard of mix that does not exist, on the figure the shortage calculation reads.
-⚠️ **Before `20260925a` is applied this card CANNOT pass** — the old function has no field to say it
+⚠️ **Before `20260925f` is applied this card CANNOT pass** — the old function has no field to say it
 in. The database side is proven by `build-run-rounding-410.pglite.mjs` (R1 red-first, V1–V4 run
 verbatim, M3/M4 caught).
 
-### CARD 20 — 🔴 A COMPONENT YOU DID NOT HAVE IS NOT RECORDED AS USED (needs `20260925a` applied)
+### CARD 20 — 🔴 A COMPONENT YOU DID NOT HAVE IS NOT RECORDED AS USED (needs `20260925f` applied)
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop

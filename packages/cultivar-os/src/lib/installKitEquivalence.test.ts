@@ -138,8 +138,17 @@ const qty = (e: ReturnType<typeof evaluateKit>, k: string) => e.lines.find(l => 
   ok(m.stops[0].treeCount === 2, 'B1 the load list still counts the trees on a delivery-only stop');
   ok(e.lines.length === 0 && e.issuable,
     'B2 and the kit consumes NOTHING there, which is a complete answer (David, 2026-09-25)');
-  ok(m.stops[0].mixGallons > 0 && qty(e, 'special_mix') === null,
-    `B3 🔴 AND THE TWO DELIBERATELY DISAGREE HERE: the load list still PRINTS ${m.stops[0].mixGallons} gal of mix for the stop, because the sheet lists what the trees would need — but nothing is ISSUED from stock for a delivery. Printing and consuming are different questions.`);
+  // ✏️ **B3 ASSERTED A DISAGREEMENT AND NOW ASSERTS AGREEMENT — REWRITTEN 2026-09-26 (ledger #416).**
+  // It used to read: *"the load list still PRINTS N gal of mix for the stop… but nothing is ISSUED from
+  // stock for a delivery. Printing and consuming are different questions."* That was an honest record of
+  // a real divergence, and **it is what found tech-debt #364.** David then ruled (2026-09-25/26) that
+  // install materials go ONLY on install stops, so the sheet no longer prints them either — and the two
+  // sides now agree. **The probe is edited rather than deleted, because what changed is the platform's
+  // behaviour, not the question the probe was asking.**
+  ok(m.stops[0].mixGallons === 0 && qty(e, 'special_mix') === null,
+    'B3 🔴 THE TWO NOW AGREE ON A DELIVERY-ONLY STOP: the sheet prints NO mix (it used to print it — tech-debt #364, ruled and fixed) and the kit issues none');
+  ok(m.stops[0].treeCount === 2,
+    'B4 and both still carry the TREES — it is the materials that stay behind, not the trees');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

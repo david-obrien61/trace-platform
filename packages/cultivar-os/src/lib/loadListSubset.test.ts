@@ -91,6 +91,12 @@ function ok(cond: boolean, msg: string): void {
   });
   const DAY = [
     stop('a', [line('o-a', 2, 'Live Oak - 15 gallon')], true),
+    // 🔴 STOP 'b' IS A DELIVERY, AND IT STAYS ONE — U5 depends on it (it proves a delivery stop adds no
+    // water monitor kits). ✏️ A first attempt on 2026-09-26 flipped it to an install so that U2's
+    // "the day has 2 more posts than the crew" would still hold once materials were gated — and that
+    // broke U5, which needs exactly the opposite. One stop cannot be both. **U2 and U3 were adjusted
+    // to the ruling instead (see there); the subset property they were reaching for is proven whole by
+    // U7, which asserts the crew sheet is byte-identical to the sheet those stops make alone.**
     stop('b', [line('o-b', 1, 'Cedar Elm - 45 gallon'), line('o-b', 1, 'Flat fee - Applied on Aug 9, 2026')], false),
     stop('c', [line('o-c', 1, 'Natchez Crape Myrtle - 95 gallon')], true),
   ];
@@ -101,10 +107,20 @@ function ok(cond: boolean, msg: string): void {
 
   ok(day.stopCount === 3 && day.treeCount === 4, 'U0: the day, for reference — 3 stops, 4 trees');
   ok(crew.stopCount === 2 && crew.treeCount === 3, '🔴 U1: the crew sheet counts ITS stops and trees only (2 stops, 3 trees)');
-  ok(crew.tPosts === 2 * 2 + 4 && day.tPosts === crew.tPosts + 2,
-    '🔴 U2: T-posts are the crew\'s — 2×15 gal at 2 plus a 95 at 4 = 8, not the day\'s 10');
-  ok(crew.mixGallons === (2 * 15 + 95) * OPERATIONS_DEFAULTS.installMixContainerVolumesPerTree && crew.mixGallons < day.mixGallons,
-    '🔴 U3: the special mix is for the crew\'s trees only');
+  // ✏️ **U2 AND U3 CHANGED ON 2026-09-26 (ledger #416), AND THE CHANGE IS THE RULING, NOT A LOOSENING.**
+  // They used to read `day.tPosts === crew.tPosts + 2` and `crew.mixGallons < day.mixGallons` — the extra
+  // posts and mix being stop 'b''s, a DELIVERY. David ruled that install materials go only on install
+  // stops, so a delivery stop contributes NO posts and NO mix to the day: the day and the crew now agree
+  // on materials, and asserting a difference would assert the defect. The crew's OWN arithmetic — which
+  // is what these probes are named for — is unchanged and still checked exactly.
+  ok(crew.tPosts === 2 * 2 + 4,
+    '🔴 U2: T-posts are the crew\'s own — 2×15 gal at 2 plus a 95 at 4 = 8');
+  ok(day.tPosts === crew.tPosts,
+    '🔴 U2b: and the DAY agrees, because its only other stop is a DELIVERY and those carry no posts (ledger #416)');
+  ok(crew.mixGallons === (2 * 15 + 95) * OPERATIONS_DEFAULTS.installMixContainerVolumesPerTree,
+    '🔴 U3: the special mix is the crew\'s trees, exactly');
+  ok(day.mixGallons === crew.mixGallons,
+    'U3b: and the delivery stop adds none of it either');
   ok(crew.ropeFeet === crew.tPosts * OPERATIONS_DEFAULTS.ropeFeetPerTPost, 'U4: rope follows the crew\'s posts');
   ok(crew.waterMonitors === 3 && day.waterMonitors === 3,
     'U5: water monitor kits are the crew\'s installed trees (the day\'s delivery stop adds none)');
