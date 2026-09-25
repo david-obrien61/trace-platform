@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
 import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
 import { RingMap, type LocatedDot } from '@trace/shared/components/settings/RingMap';
+import { RingsVsHistory } from '@trace/shared/components/settings/RingsVsHistory';
 import { DELIVERY_RING_COLUMNS, normalizeRingRows, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
 import { readLocatedAddresses } from '@trace/shared/business-logic/locatedCustomers';
 import TeamsSettings from '../components/settings/TeamsSettings';
@@ -370,6 +371,13 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
             onSaved={() => setReloadAt(Date.now())}
           />
         )}
+      </div>
+      {/* 🔴 DO THE RINGS MATCH WHAT YOU ACTUALLY CHARGED? It runs opposite to the seed that made
+          them: the seed DERIVED a radius from a charge assuming $3.50/loaded mile held; this
+          measures how far deliveries really went and is allowed to disagree. */}
+      <div className="section">
+        <h3 style={{ margin: '0 0 6px' }}>Your rings against your invoices</h3>
+        <RingsVsHistory db={supabase} businessId={businessId} depot={depot} rings={rings} />
       </div>
       <LocateAddressesPanel db={supabase} businessId={businessId} canWrite={canWrite} />
     </>

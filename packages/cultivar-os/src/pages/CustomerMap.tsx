@@ -39,8 +39,10 @@ import { readCustomerMapData, type LocatedAddress } from '@trace/shared/business
 import { resolveStopPoints } from '@trace/shared/business-logic/stopPoints';
 import { orderedRings, type DeliveryRing, type Point } from '@trace/shared/business-logic/deliveryRings';
 import { readRingInputs } from '../lib/deliveryRingsRead';
+import { RingsVsHistory } from '@trace/shared/components/settings/RingsVsHistory';
 import { readStops, type StopRow } from '../lib/stopRead';
 import { readTeams, type Team } from '../lib/teams';
+import { CUSTOMER_DOT_COLS } from '../components/customers/customerFieldRegistry';
 
 const TRACE_MAP = true;   // STD-003: on by default until owner-proven.
 const GREEN = '#27500A';
@@ -132,12 +134,18 @@ export function CustomerMap() {
     let alive = true;
     void (async () => {
       const { data } = await supabase.from('customers')
-        .select('id, first_name, last_name, phone').eq('business_id', businessId).limit(2000);
+        .select(CUSTOMER_DOT_COLS).eq('business_id', businessId).limit(2000);
       if (!alive || !data) return;
+      // ⚠️ A DERIVED SELECT STRING LOSES PostgREST's LITERAL-TYPE INFERENCE — it can only shape the
+      // row type from a string it can read at compile time, and `CUSTOMER_DOT_COLS` is computed
+      // (from the registry, on purpose). So the row is narrowed here, once, at the boundary.
+      // The alternative — re-typing the four columns inline to keep the inference — is exactly the
+      // hand-written list `verify:field-lists` refused, and it would be the fifth copy of it.
+      const rows = data as unknown as { id: string; first_name: string | null; last_name: string | null; phone: string | null }[];
       const m = new Map<string, { name: string; phone: string | null }>();
-      for (const c of data) {
+      for (const c of rows) {
         const n = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
-        m.set(String(c.id), { name: n || '(no name)', phone: (c.phone as string) ?? null });
+        m.set(String(c.id), { name: n || '(no name)', phone: c.phone ?? null });
       }
       setNames(m);
     })();
@@ -392,6 +400,7 @@ export function CustomerMap() {
 
           <Layer on={showRings} set={setShowRings} label={`Delivery rings (${orderedRings(rings).length})`}>
             <p style={hint}>Read-only here. Edit them in Settings → Delivery.</p>
+            {businessId && <RingsVsHistory db={supabase} businessId={businessId} depot={depot} rings={rings} compact />}
           </Layer>
 
           <Layer on={showRoute} set={setShowRoute} label="A saved route">

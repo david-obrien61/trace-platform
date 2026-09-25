@@ -135,6 +135,29 @@ export const CUSTOMER_SENSITIVE_FIELDS = by(f => !!f.sensitive);
 // which is the point of one commit model. The flag stays on the registry because it still describes
 // the field; an unused EXPORT would be a claim that something consumes it.
 
+/**
+ * WHAT A MAP DOT IS CALLED AND WHAT NUMBER TO RING — the four the Map page's list needs.
+ *
+ * 🔴 DERIVED FROM THE REGISTRY, NOT TYPED (2026-09-25). `verify:field-lists` refused the inline
+ * `'id, first_name, last_name, phone'` on CustomerMap, and it was right to: that is the fifth
+ * hand-written projection of this table, and #179's lesson is that a list nobody derives is a
+ * list that silently stops matching its migration. The field KEYS come from CUSTOMER_FIELDS, so a
+ * renamed column breaks the build here instead of returning nulls on a screen.
+ *
+ * ⚠️ DELIBERATELY NOT THE RECORD SHAPE and deliberately not `CUSTOMER_SELECT_CORE`: a dot needs a
+ * name and a phone, and this read covers EVERY customer in the business. Pulling the core select
+ * for 1,500 rows to use four fields is a slower page for nothing.
+ */
+export const CUSTOMER_DOT_COLS = (() => {
+  const want = ['first_name', 'last_name', 'phone'];
+  const known = new Set(CUSTOMER_FIELDS.map(f => f.key as string));
+  const missing = want.filter(k => !known.has(k));
+  // A key that leaves the registry must not silently vanish from the select — it would render as
+  // a blank name on every dot, which reads as a customer with no name rather than as a defect.
+  if (missing.length) throw new Error(`CUSTOMER_DOT_COLS names fields that are not in CUSTOMER_FIELDS: ${missing.join(', ')}`);
+  return ['id', ...want].join(',');
+})();
+
 /** Guaranteed-live columns (everything pre-2026-07-13). Was the `CORE` select string. */
 export const CUSTOMER_SELECT_CORE = by(f => !f.gated).join(',');
 
