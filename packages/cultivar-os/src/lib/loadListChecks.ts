@@ -122,7 +122,23 @@ export function isNoteLine(l: CheckLine): boolean {
   //    one, while *"Live Oak - 200 Gallon"* is a tree. The test is a number ATTACHED to a container
   //    or measure word, which is what a size looks like and a phone number does not.
   if (hasSizeInWords(text)) return false;
+  // 🔴 AND A MONEY LINE IS NOT A NOTE EITHER. `"Flat fee - Applied on Aug 9, 2026"` carries no code,
+  //    no lot and no size — my rule's exact signature — so it came back as a note and would have
+  //    printed as a message to the crew INSTEAD OF appearing where a person looks at it. Caught by
+  //    `loadListSubset.test.ts` U6, which asserts the day still has one unresolved line.
+  // ⚠️ THIS IS A KEYWORD LIST, WHICH I ARGUED AGAINST ABOVE, AND THE DIRECTION IS WHY IT IS SAFE
+  //    HERE: it EXCLUDES. A word this list misses leaves the line exactly where it was — unresolved,
+  //    and therefore printed on page 4 where somebody reads it. A note rule that over-reaches HIDES
+  //    a line. One direction fails loudly, the other fails silently, so the list only ever narrows
+  //    what may become a note.
+  if (looksLikeMoney(text)) return false;
   return !hasCode && !hasLot && !hasSize && text.length > 0;
+}
+
+/** Does this text read as a CHARGE rather than a message? Used only to keep money out of notes. */
+function looksLikeMoney(text: string): boolean {
+  return /\b(fee|charge|discount|tax|deposit|credit|refund|adjust|invoice|balance|surcharge|applied on|per hour|hourly|labou?r|delivery charge|minimum)\b/i
+    .test(text) || /[$£€]\s*\d/.test(text);
 }
 
 /** Does this text state a SIZE — a number attached to a container or measure word? */

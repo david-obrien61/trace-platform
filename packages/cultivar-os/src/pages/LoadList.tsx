@@ -231,10 +231,11 @@ function CheckPage({ checks }: { checks: LoadCheck[] }) {
   );
 }
 
-function SheetBody({ model, planNo, isSubset }: {
+function SheetBody({ model, planNo, isSubset, settingsRead }: {
   model: LoadListModel;
   planNo: Map<string, number | null>;
   isSubset: boolean;
+  settingsRead: LoadListSettingsRead | null;
   // Where the per-tree figures came from — the same sentence on every section, because it is a fact
   // about the NURSERY's settings, not about a team.
 }) {
@@ -308,6 +309,26 @@ function SheetBody({ model, planNo, isSubset }: {
                   it is the step before them, and it sits directly under the bulk because both are
                   "go and fetch this". ✏️ This REVERSES ledger #355's one-line version (2026-09-18), which
                   cut it on the belief that nothing is loaded by variety. Lauren: they pull by variety. */}
+              {/* 🔴 RESTORED TO PAGE 1 AFTER I BROKE IT — and the way I broke it is the lesson.
+                  Removing the "Figures used for this list" page took this warning with it, and the
+                  comment I left in its place CLAIMED the warning "still prints on page 1". It did
+                  not. `loadListPage.test.ts` S6 caught it; I had asserted it in prose instead of
+                  checking, which is [[R-26]] in my own diff.
+                  ⚠️ IT BELONGS AT THE TOP, NOT WHERE IT WAS. On the deleted page it sat behind the
+                  whole load; a person who is using the WRONG FIGURES needs to know before they pick
+                  anything, not after. D-9: a sheet built on standard figures must never read as one
+                  built on the nursery's own. */}
+              {settingsRead && settingsRead.figures !== 'stored' ? (
+                <div style={S.flag} className="ll-flag">
+                  <strong>
+                    {settingsRead.figures === 'defaults_withheld'
+                      ? 'These are the standard figures — the nursery’s own settings were refused for this login. Ask the owner to check your access.'
+                      : settingsRead.figures === 'defaults_read_failed'
+                        ? 'Could not read the nursery’s settings — these are the standard figures. Reload before you load.'
+                        : 'No figures have been saved for this nursery — these are the standard ones.'}
+                  </strong>
+                </div>
+              ) : null}
               <h2 style={S.h2}>{LOAD_LIST_COPY.pullHeading(model.treeCount, model.stopCount)}</h2>
               <p style={S.note}>{LOAD_LIST_COPY.pullWhy}</p>
               {model.trees.map(t => (
@@ -717,12 +738,12 @@ export function LoadList() {
                       <div style={S.note}>{LOAD_LIST_COPY.teamNoneNote}</div>
                     </div>
                   ) : null}
-                  <SheetBody model={sec.model} planNo={planNo} isSubset={!!pick?.isSubset} />
+                  <SheetBody model={sec.model} planNo={planNo} isSubset={!!pick?.isSubset} settingsRead={settingsRead} />
                 </div>
               ))}
             </>
           ) : (
-            <SheetBody model={model} planNo={planNo} isSubset={!!pick?.isSubset} />
+            <SheetBody model={model} planNo={planNo} isSubset={!!pick?.isSubset} settingsRead={settingsRead} />
           )
         ) : null}
         {/* PAGE 4 · ONCE for the whole day, after every stops page — a split day gets ONE check

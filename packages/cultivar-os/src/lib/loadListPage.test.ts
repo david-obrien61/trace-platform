@@ -66,8 +66,19 @@ function ok(cond: boolean, msg: string): void {
     'A6: the unresolved block is rendered when there is anything in it (P1 mutates exactly this)');
   ok(/model\.unreadStops > 0 \?/.test(src),
     '🔴 A7: a day containing a withheld or unreadable stop warns at the TOP that the list may be short');
-  ok(/model\.totalsAreFloors \?/.test(src),
-    '🔴 A8: the FLOOR warning is rendered — otherwise a partial T-post total prints as a complete one');
+  // ✏️ A8 IS INVERTED (David, 2026-09-25) AND ITS OLD TEXT IS QUOTED SO THE REVERSAL IS VISIBLE:
+  //    "the FLOOR warning is rendered — otherwise a partial T-post total prints as a complete one".
+  //    David removed the banner: it sat above every total on every sheet and said the same thing
+  //    whatever the day held, so it stopped being read. A warning that is always on is wallpaper.
+  // 🔴 WHAT IT WARNED ABOUT IS STILL GUARANTEED, AND BY SOMETHING STRONGER. Nothing unreadable may
+  //    vanish (David, 2026-09-12) — so this now asserts the CHECK PAGE exists and names the stop,
+  //    which the banner never did. A general warning is replaced by a specific one, not by silence.
+  ok(!/model\.totalsAreFloors \?/.test(src),
+    '🔴 A8: the always-on FLOOR banner is GONE — it was on every sheet regardless of the day, so nobody read it');
+  ok(/<CheckPage checks=\{dayChecks\}/.test(src) && /function CheckPage/.test(src),
+    '🔴 A8b: …and PAGE 4 replaced it — the guarantee that nothing unreadable vanishes is a page that NAMES the stop');
+  ok(/kind === 'unreadable'/.test(src) && /kind === 'inconsistency'/.test(src),
+    '🔴 A8c: page 4 carries BOTH sections — what could not be read, and what disagrees with itself');
   // ✏️ A9 CHANGED 2026-09-16 (ledger #343). It asserted the page printed `deerFence95Open` — the
   // "does a 95 gallon need 4 more?" question. The in-total wording of David's rule settles it (a
   // tree already carrying 4 takes none), so that sentence is gone and the page prints the in-total
@@ -83,10 +94,16 @@ function ok(cond: boolean, msg: string): void {
     '🔴 A10a: …the gate comes FIRST — the rule cannot print on a day nobody marked');
   ok(!/model\.deerFenceUnknownStops > 0/.test(code) && !/deer fence not recorded/.test(code),
     '🔴 A10b (negative): no per-stop fence line and no fence entry in the unresolved block');
-  // ✏️ A10c REVERSED 2026-09-17 (David): the figures are REFERENCE, not load instructions — their own
-  // page, at the back, not the top of the sheet.
-  ok(code.indexOf('LOAD_LIST_COPY.bulkHeading') !== -1 && code.indexOf('LOAD_LIST_COPY.valuesHeading') > code.indexOf('LOAD_LIST_COPY.bulkHeading'),
-    '🔴 A10c: the figures used come AFTER the load itself');
+  // ✏️ A10c HAS NOW BEEN REVERSED TWICE, AND BOTH ITS OLD FORMS ARE RECORDED HERE BECAUSE THE PAIR
+  //    IS THE HISTORY OF ONE DECISION. 2026-09-17 (David): the figures are REFERENCE, so they moved
+  //    to their own page at the BACK — "the figures used come AFTER the load itself". 2026-09-25
+  //    (David): the page is REMOVED altogether. It was a printed page of settings on a sheet a crew
+  //    carries into a yard, and every figure now states its own basis beside itself, so the page was
+  //    a second representation of one fact (STD-011) — and the copy nobody read.
+  ok(code.indexOf('LOAD_LIST_COPY.bulkHeading') !== -1,
+    'A10c: the bulk materials heading is still on the sheet');
+  ok(code.indexOf('LOAD_LIST_COPY.valuesHeading') === -1,
+    '🔴 A10c2: the "Figures used for this list" page is GONE — no settings page on a crew document');
   ok(/ll-figures \{ page-break-before: always; \}/.test(src) && /className="ll-block ll-figures"/.test(code),
     '🔴 A10d: …and on their OWN PAGE — a print page-break, so they never crowd the load');
   ok(/model\.offLadderTreeCount > 0 \?/.test(src) && /model\.noVolumeTrees\.length > 0 \?/.test(src),
@@ -100,11 +117,29 @@ function ok(cond: boolean, msg: string): void {
     '🔴 S2: "could not read sizes" is its own state on the page');
   ok(/settingsRead\?\.sizes === 'none'/.test(src) && /LOAD_LIST_COPY\.sizesNone/.test(src),
     '🔴 S3: "no sizes set up" is a DIFFERENT state with a different sentence');
-  ok(/model\.valuesUsed\.rungs\.map\(/.test(src) && /LOAD_LIST_COPY\.valuesHeading/.test(src),
-    '🔴 S4: the page PRINTS the figures it used — the ratios and every rung on the day');
-  for (const k of ['installMixContainerVolumesPerTree', 'ropeFeetPerTPost', 'bubblersPerTree', 'deerFenceTPostsPerTree', 'gallonsPerCubicYard']) {
-    ok(src.includes(`model.valuesUsed.${k}`), `S5: the printed figures include ${k}`);
-  }
+  // ✏️ S4/S5 INVERTED (David, 2026-09-25). They read: "the page PRINTS the figures it used — the
+  //    ratios and every rung on the day", and required all five values by name. The page is removed.
+  // 🔴 THE HONESTY IT PROTECTED IS KEPT AND IS ASSERTED BELOW AT S6: a sheet built on STANDARD
+  //    figures must still say so, at the TOP, before anything is picked. That is the part that
+  //    mattered — a person using the wrong figures needs telling; a table of ratios they never read
+  //    was not what told them.
+  ok(!/LOAD_LIST_COPY\.valuesHeading/.test(src),
+    '🔴 S4: the figures page is GONE from the sheet');
+  // 🔴 AND HERE IS WHY REMOVING THE PAGE WAS SAFE — MEASURED, NOT ASSUMED. My first draft of this
+  //    probe asserted the ratios were GONE from the sheet. They are not, and that is the point: each
+  //    one prints INLINE, beside the total it explains, through its own `*Rule` sentence. The page
+  //    was the SECOND copy (STD-011); the figure beside its own total is the first.
+  //    ⚠️ I had also claimed the per-rung `tPostsBecause` note prints on the sheet. It does not —
+  //    grepped, zero occurrences — so that claim is dropped rather than asserted. Checking beat
+  //    believing my own comment, twice in one probe.
+  ok(/LOAD_LIST_COPY\.mixRule\(model\.valuesUsed\.installMixContainerVolumesPerTree\)/.test(src),
+    '🔴 S5: the mix ratio still prints WITH the mix total — the figure carries its own basis');
+  ok(/LOAD_LIST_COPY\.ropeRule\(model\.valuesUsed\.ropeFeetPerTPost\)/.test(src),
+    'S5b: the rope-per-post figure prints with the rope total');
+  ok(/LOAD_LIST_COPY\.bubblerRule\(model\.valuesUsed\.bubblersPerTree\)/.test(src),
+    'S5c: the bubblers-per-tree figure prints with the bubbler line');
+  ok(/LOAD_LIST_COPY\.deerFenceTotal\(model\.valuesUsed\.deerFenceTPostsPerTree\)/.test(src),
+    'S5d: the deer-fence post figure prints with the fence line');
   ok(/defaults_withheld/.test(src),
     '🔴 S6: a login the figures were REFUSED to is told the figures are the standard ones');
   // ✏️ S7 CHANGED 2026-09-17 (ledger #343, tech-debt #309 resolved): the page no longer asks

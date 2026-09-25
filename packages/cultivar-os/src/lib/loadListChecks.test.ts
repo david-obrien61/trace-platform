@@ -88,6 +88,16 @@ const lot = (name: string, size: string | null = null, sku: string | null = null
   // …and a number that is NOT a size leaves a note a note.
   ok(isNoteLine(line({ description: 'Call Vera at 512-456-3632 before you arrive' })),
     '🔴 C8: a phone number is not a size — this is still a note');
+  // 🔴 C9-C12 ADDED AFTER loadListSubset.test.ts U6 WENT RED. A money line has no code, no lot and
+  //    no size — my rule's exact signature — so a fee came back as a NOTE and would have printed as
+  //    a message to the crew instead of staying where somebody looks at it.
+  ok(!isNoteLine(line({ description: 'Flat fee - Applied on Aug 9, 2026' })),
+    '🔴 C9: a FLAT FEE is not a note — it is money, and it belongs where money lines go');
+  ok(!isNoteLine(line({ description: 'Military Discount 5%' })), 'C10: a discount is not a note');
+  ok(!isNoteLine(line({ description: 'Sales Tax' })), 'C11: tax is not a note');
+  // …and the exclusion must not swallow a real note that happens to mention a person or a place.
+  ok(isNoteLine(line({ description: 'Gate code is round the back, ring first' })),
+    '🔴 C12: a genuine instruction is still a note — the money list must only ever NARROW what qualifies');
 }
 
 // ══ §D STALLINGS — TC ON AN UNMARKED STOP (Saturday 2026-09-26) ══════════════════
