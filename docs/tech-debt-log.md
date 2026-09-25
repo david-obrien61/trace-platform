@@ -5163,4 +5163,31 @@ list (#73's lesson), and it must be **red-first against this very file's old tex
 that the harness RUNS the migration** — that is the deeper question and a path-existence check would give
 false comfort about it, so the cap should say what it does and does not prove.
 
-**HOW MANY OTHERS ARE LIKE THIS IS UNMEASURED** — that sweep is the first thing the cap would produce.
+✅ **NO LONGER UNMEASURED — SWEPT 2026-09-25, AND IT FOUND A SECOND INSTANCE THAT IS NOT MINE.**
+Every `scripts/…` path cited anywhere in `supabase/migrations/*.sql`:
+
+| | |
+|---|---|
+| migrations citing a `scripts/` path | **27** |
+| distinct citations | **31** |
+| 🔴 citations to a file that does not exist | **3 — of which ONE is real** |
+
+🔴 **THE REAL ONE: `20260830_inventory_unit_of_measure.sql` cites `scripts/backfill-inventory-units.mjs`
+TWICE — at `:58` and at `:219` — and the file is `scripts/backfill-inventory-units.ts`.** Line 219 is an
+instruction: *"after `node scripts/backfill-inventory-units.mjs` has been run…"*. **Anybody following it
+gets `Cannot find module` and has no way to tell whether the backfill exists at all.** Smaller than the
+`install-kit-411` case (the script is real, the extension is wrong) but the same class: **a migration
+telling a person to run a path that is not there.** ⚠️ **NOT FIXED HERE — it is another session's applied
+migration, and a one-word comment correction to someone else's file is a deliberate act, not a side effect
+of a sweep. David's call; it is one character.**
+
+⚠️ **THE OTHER TWO "MISSING" HITS ARE FALSE POSITIVES, AND THEY ARE A DESIGN LESSON FOR THE PROPOSED CAP:**
+they are `20260925h` and `20260925m` mentioning `install-kit-411.pglite.mjs` **in prose that explains the
+phantom**. A naive path-existence grep flags a file's own explanation — **exactly tech-debt #146's class**
+(*probes matching their own file's PROSE; one would have passed on a DELETED guard*). **So the cap must read
+only the `-- HARNESS:` line, not the whole file** — measured that way, the corpus is **4 citations across 4
+migrations, 0 missing**, and `20260830`'s two are ordinary prose rather than a HARNESS line, so a
+HARNESS-only cap would MISS the real instance. 🔴 **Both populations are wrong in opposite directions, and
+that is the finding: the cap needs to read HARNESS lines AND run-me instructions, and exclude a file's own
+account of a known absence.** Written down because it is the difference between a cap that works and one
+that gets disabled on its first run (#73).
