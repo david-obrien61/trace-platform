@@ -37,6 +37,20 @@ export const CUSTOMER_ADDRESS_COLUMNS =
  */
 export const CUSTOMER_ADDRESS_GEOCODE_COLUMNS = 'id, line1, city, state, zip';
 
+/**
+ * The four fields a MAP DOT needs: where to draw it, and what to call it.
+ *
+ * 🔴 A THIRD NAMED PROJECTION, NOT A THIRD HAND-TYPED LIST, and the difference is the whole point
+ * of this file. `verify:field-lists` caught the map query typing `'id, line1, latitude, longitude'`
+ * inline — which is how `VENDORS_SELECT` came to name ten columns while its migration created
+ * fourteen, and the four it missed were the address (#179). Every projection of this table lives
+ * here, beside the full list, so one file still knows what a customer address is made of.
+ *
+ * ⚠️ DELIBERATELY NOT THE RECORD SHAPE. The ring map draws up to 500 dots; pulling 21 columns for
+ * each to use four is a slower screen for no reason.
+ */
+export const CUSTOMER_ADDRESS_MAP_COLUMNS = 'id, line1, latitude, longitude';
+
 
 /**
  * Compare two address parts the way a person would: case and punctuation are not a difference.

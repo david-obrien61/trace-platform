@@ -13,6 +13,7 @@ import OperationsSettings from '../components/settings/OperationsSettings';
 import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
 import { RingMap, type LocatedDot } from '@trace/shared/components/settings/RingMap';
 import { DELIVERY_RING_COLUMNS, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
+import { CUSTOMER_ADDRESS_MAP_COLUMNS } from '@trace/shared/business-logic/customerAddressFields';
 import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
@@ -330,7 +331,7 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
     void (async () => {
       // The located customers, as dots. ⚠️ Capped: a map with 1,500 markers on it is not a map.
       const { data } = await supabase.from('customer_addresses')
-        .select('id, line1, latitude, longitude')
+        .select(CUSTOMER_ADDRESS_MAP_COLUMNS)
         .eq('business_id', businessId).eq('geocode_status', 'found')
         .not('latitude', 'is', null).limit(500);
       if (!alive) return;
