@@ -621,6 +621,32 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
     `origin/fix/rung-dates-verify` and is unmerged** — it closes when that branch lands. Do not
     renumber to close it; renumbering to satisfy a reading order breaks live citations.
 
+28. **EVERY HEAVY JOB HAS A TIME LIMIT, AND HITTING IT IS A FAILURE — AN UNBOUNDED WAIT IS A CHECK THAT CANNOT FAIL (binding — David, 2026-09-25; ledger #406).** A job that runs a child process gives it a **timeout**, and a timeout is reported as a **RED FAILURE**, never as a slow pass, a partial result, or silence.
+
+    🔴 **WHY, AND THE COST IS MEASURED NOT HYPOTHETICAL: on the night of 2026-09-24 `verify-writer-registry`'s `execSync` ran for TWELVE AND A HALF HOURS.** It had no `timeout` option, so a child that never exits was indistinguishable from one that was merely slow. The overnight build queued behind it; **nothing was broken and nothing finished.** The session waited, reported "still running" repeatedly, and an entire night's work — the capacity build, the cards, the merge — did not happen. **The run produced no verdict at all, which is the one outcome a gate must never produce.**
+
+    ⚠️ **THIS IS [[R-33]]'s SHAPE IN THE TOOLING, AND THAT IS WHY IT IS A RULE RATHER THAN A PATCH.** §6 r19 asks *"could this have failed?"* An unbounded wait answers **no** — it cannot pass, cannot fail, and cannot say so. A green that is impossible is as useless as a green that is guaranteed. **Silence read as work-in-progress is the false green of a long-running job.**
+
+    **HOW.** `execSync`/`spawnSync` carry `timeout` and `killSignal: 'SIGKILL'`; the catch distinguishes `ETIMEDOUT`/`SIGKILL` from an ordinary non-zero exit and **collects it as its own hard failure that refuses the build on its own**, even when every other check is clean. The message names the file, the limit, and how many result lines had been printed before the kill. Built and **proven red** in `scripts/verify-writer-registry.mjs`: `PATH_FILE_TIMEOUT_MS=1000` exits 1 naming all four path files.
+
+    ⚠️ **THE LIMIT IS GENEROUS ON PURPOSE, AND RAISING IT IS NOT THE FIX.** 15 minutes per path file is far above any honest run (`crew-day` legitimately takes ~100s and builds two PGlite databases) and far below a night. The refusal says so in its own words: *"A hung path file is not a slow one. Find what never returns; do not raise the limit to hide it."* A limit tuned until the hang fits under it is the gap list of tech-debt #73 wearing a stopwatch.
+
+    ⚠️ **SCOPE IS CHILD PROCESSES WE LAUNCH, not the session's own patience.** A human or an agent waiting on a job is not covered by this rule; the JOB is. The nearest sibling is the heavy-lock stale rule (30 minutes on `started:`), which answers *"is the owner gone?"* — this one answers *"is the work itself stuck?"*, and the two are different questions about the same job.
+
+    ---
+
+    **THE KILL RULES (added 2026-09-25, same day, same rule — a session runs as DAVID'S OWN USER and can therefore stop ANY of his processes, so the power needs limits written down).**
+
+    **(a) A SESSION STOPS ONLY WHAT IT STARTED.** Ownership is proven, not assumed — by the lock owner file, by the process living in the session's own process group, or by its executable path lying inside the session's own worktree. **Never another session's process. Never an application of David's.** A stray process is *evidence*, not authority.
+
+    **(b) STOP THE WHOLE PROCESS GROUP, THEN CONFIRM NOTHING SURVIVED.** `kill -- -$PGID`, never `kill $PARENT_PID`. 🔴 **The proof is pid 6295: killing the overnight verify's parent left its PGlite child alive for TWELVE HOURS AND FORTY-EIGHT MINUTES**, at 0.0% CPU, invisible to every check we own, contending for the machine all night — and four more of the same shape were found beside it. **Killing a parent does not kill the job.** ⚠️ macOS ships no `setsid`; `set -m` (job control) puts a background job in its own group whose id is the job's pid. The first version of `heavy-job.sh` exited **127** on exactly that.
+
+    **(c) EVERY KILL IS LOGGED — pid, what it was, why, and who owned it** — in `~/Desktop/trace-sessions.md` and in the morning file. An unlogged kill is indistinguishable from a crash, and the next session debugging the gap has nothing to read.
+
+    **(d) THE LOCK TOOLING CARRIES A CLEANUP *CHECK*, AND IT ONLY REPORTS.** `heavy-job.sh --check` lists leftover test processes started from a TRACE worktree — pid, age, RSS — and **stops nothing**. Only the owner may stop its own, or `heavy-job.sh` itself for a job **it** launched, past the limit. ✏️ Its first run reported **its own shell**, because a bare pattern match also catches a command line mentioning the pattern; it now matches the `node` process itself. A checker that reports itself teaches the reader to skim it.
+
+    ⚠️ **Numbered 28 by APPENDING**, per the notes on r18–r20: other documents cite these rules by number, and renumbering to satisfy a reading order breaks references to fix a preference.
+
 ---
 
 ## 7. OFF LIMITS THIS SESSION
@@ -714,6 +740,29 @@ Then: **every build spec CITES the story it satisfies AND the flow-spec section*
 11. **Quality gate (binding):** `npm run verify` (tsc + eslint + knip + verify-universals, ratcheted against `quality-baseline.json`) must pass with **zero NET-NEW** violations before a build is BUILDER-COMPLETE. Fail-on-new only — pre-existing baseline debt does not block. If you fixed violations and a metric dropped, run `npm run quality:baseline` and commit the lower numbers (lock the win; never let the baseline grow casually). Out of scope this gate (separate value-review): jscpd, Prettier, npm-audit, a test suite. (Tooling installed 2026-06-24; doctrine: §6 rules 8–9.)
 
 12. **Owner-test coverage gate (binding — see the STANDING INSTRUCTION above):** every surface this build added/changed/polished has a card in `docs/owner-tests/<capability>-full-surface-test.md` — added, updated, or marked `STATUS: needs-test` **with a reason**; any surface that MOVED has its card flipped `covered` → `owed` with `LAST-PROVEN` reset. **State in the write-back which cards were added/updated/flipped and what the board's proven count now reads.** Thunder never sets `covered`. (Numbered 12 by APPENDING — steps 1–11 keep their numbers because §1.6 item 9 cites "§9 gate 9" and steps 10/11 cite "item 8"/"item 9"; renumbering would silently break four live cross-references to fix a formatting preference. Same call as OP-13's step 0.)---
+
+---
+
+## 9b. OVERNIGHT PROTOCOL — a queued work list, run unattended (binding · David, 2026-09-25)
+
+David's way of working, in his own words: **queue work in the evening, run it all night, review it in the morning.** A session handed an overnight list is not a session with a longer deadline — it is one nobody can answer for hours, and every clause below exists because the cost of stopping is a whole night.
+
+🔴 **NUMBERED 9b DELIBERATELY.** It belongs beside §9's close-out gates, because that is what it is — a close-out protocol for a session that closes while David sleeps — and it is **9b** rather than 10 because §10 is the SESSION STARTER other documents cite by number (the reasoning r18–r20 record for appending rather than renumbering).
+
+**1 · NEVER PAUSE TO ASK.** Where an option is already ruled, take it. A question that is genuinely David's — **a price, a business rule, a customer-facing wording** — goes to `~/Desktop/MORNING-<date>.md` with **a recommended default and one line saying why**, and the session **continues with other work**. ⚠️ *Recommending is not deciding:* the default is written down so he can overrule it in one word, and nothing irreversible is built on it overnight.
+
+**2 · MERGE WHATEVER IS SAFE, AND MAKE MORE OF IT SAFE.** Code depending on an unapplied migration still merges, in a plain **"not set up yet"** state that **never shows wrong, guessed, or another crew's data**. 🔴 **The refusal must never degrade into a fallback** — a per-crew link that quietly becomes a whole-day link is the original defect arriving through the safety net built to prevent it. The migration goes to David's folder **with its SHA and self-contained V-blocks that run as pasted (§6 r26)**, listed in the morning file **in apply order**. What cannot be made safe is left **merge-ready**, and the morning file says so and why.
+
+**3 · EVERY HEAVY JOB RUNS UNDER §6 r28's TIME LIMIT *AND* WRITES A HEARTBEAT.** No output for **10 minutes** = **stuck, not slow** → cleared by the guarded script (`~/Desktop/trace-lock-tools/heavy-job.sh`), and **logged in the morning file**. ⚠️ **Neither replaces the other:** the limit asks *"has this run too long?"*, the heartbeat asks *"is it still doing anything?"* A job that legitimately takes forty minutes while printing progress is killed by **neither** — that is the point, and it is proven by a negative control rather than asserted.
+
+**4 · BLOCKED IS NOT IDLE.** Waiting on the heavy lock or another session's dependency → **switch to the next item in your own queue** and come back. **Never sit idle; never bypass the lock.** A night spent waiting is the same loss as a night spent hung.
+
+**5 · AFTER EVERY MERGE: append state to `~/Desktop/trace-sessions.md`, then read the live stamp TWICE, 60 seconds apart.** The roster append is what survives a context compaction — write it as though the next reader has none of your context, because they may not. If the stamp has not moved in **15 minutes**, push **one** empty nudge commit, then carry on and **note it in the morning file** rather than waiting on it.
+
+**6 · BEFORE STOPPING, WRITE YOUR SECTION OF THE MORNING FILE.** Four parts, in order: **(a)** the SQL to run, in order, each with its **SHA** and **what its V-block should print**; **(b)** what is **live**; **(c)** the **cards** to run, in order, each with its one-line expected result; **(d)** the **decisions** waiting on him, each with a **recommended default**. ⚠️ **Your own section, never a rewrite of anyone else's** — several sessions write into one file on the same night.
+
+⚠️ **WHY THIS IS A SECTION AND NOT A PROMPT:** the same list has now been dictated three nights running, and a rule living only in a prompt is one the next prompt can forget — the failure §9's standing instructions and [[R-26]] both record. **Its cost is measured: on the night of 2026-09-24 a single unbounded `execSync` consumed twelve and a half hours, and the capacity build, the cards and the merge queued behind it did not happen.** Nothing was broken; nothing finished either.
+
 
 ## 10. SESSION STARTER
 
