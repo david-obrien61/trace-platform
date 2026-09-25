@@ -4,7 +4,7 @@
 // DEPENDENCIES: deliveryRings (pure).
 // OUTPUTS: assertions only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { distanceMiles, ringFor, orderedRings, impliedMiles, proposeRingsFromCharges, resolveServiceArea, tripChargeFor } from './deliveryRings';
+import { distanceMiles, ringFor, orderedRings, impliedMiles, proposeRingsFromCharges, resolveServiceArea, tripChargeFor, compareRingsToHistory, normalizeRingRows } from './deliveryRings';
 
 let passed = 0; const failures: string[] = [];
 const ok = (c: boolean, m: string) => { if (c) passed++; else failures.push(m); };
@@ -249,6 +249,121 @@ const HUTTO = { latitude: 30.5427, longitude: -97.5464 };
   const norings = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: [], flatAmount: 50, located: true });
   ok(outside.label === null && nolocate.label === null && norings.label === null,
      '🔴 J8 NEGATIVE CONTROL: outside-rings, unlocated and flat-no-rings carry NO chip — only a real ring names one');
+}
+
+// ── §K · THE RINGS AGAINST WHAT WAS ACTUALLY CHARGED ────────────────────────────────────────
+// NEAR is inside ring 1 (7.1 mi); HUTTO is 22.3 mi, inside ring 4.
+const obs = (charge: number, at: { latitude: number; longitude: number } | null, ref?: string) =>
+  ({ charge, latitude: at?.latitude ?? null, longitude: at?.longitude ?? null, reference: ref ?? null });
+{
+  const c = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [
+    obs(50, NEAR, 'A'), obs(50, NEAR, 'B'), obs(50, NEAR, 'C'),
+  ]});
+  ok(c.rings[0].verdict === 'agrees' && c.rings[0].agreed === 3,
+     'K1 three deliveries inside ring 1, all billed $50 — the ring agrees with the invoices');
+  ok(c.rings[1].verdict === 'too-few' && c.rings[1].observed === 0,
+     '🔴 K2 A RING WITH NO HISTORY HAS NOT AGREED WITH ANYTHING — "too-few", never "agrees". A verdict drawn from nothing is the confident-wrong-answer this comparison exists to avoid');
+}
+{
+  const c = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [
+    obs(50, NEAR, 'A'), obs(75, NEAR, 'B'), obs(75, NEAR, 'C'), obs(75, NEAR, 'D'),
+  ]});
+  ok(c.rings[0].verdict === 'disagrees' && c.rings[0].agreed === 1,
+     'K3 one of four matched — the ring disagrees with the invoices');
+  ok(c.rings[0].medianCharged === 75 && c.rings[0].spread?.min === 50 && c.rings[0].spread?.max === 75,
+     `K4 …and it reports what WAS charged — median ${c.rings[0].medianCharged}, spread ${c.rings[0].spread?.min}–${c.rings[0].spread?.max}`);
+  ok(c.rings[0].examples.length === 3 && !c.rings[0].examples.includes('A'),
+     '🔴 K5 THE EXAMPLES ARE THE DISAGREEING INVOICES, so a number can be LOOKED AT rather than only counted — and the one that matched is not among them');
+  ok(/charge something your invoices do not/.test(c.message), 'K6 the message names the disagreement');
+}
+{
+  // 🔴 THE ONE THAT MATTERS TODAY: the bulk geocode has not been run, so almost everything is
+  // unlocated. A comparison that dropped those would report a verdict from a handful of rows.
+  const c = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [
+    obs(50, NEAR, 'A'), obs(50, NEAR, 'B'), obs(50, NEAR, 'C'),
+    ...Array.from({ length: 1400 }, (_, i) => obs(90, null, `U${i}`)),
+  ]});
+  ok(c.unlocated === 1400,
+     '🔴 K7 EVERY UNPLACEABLE DELIVERY IS COUNTED, NOT SKIPPED (tech-debt #186: a short run must not look like a full one)');
+  ok(/1400 deliveries have no location yet/.test(c.message),
+     '🔴 K8 …AND THE COUNT IS IN THE SENTENCE, NOT A FOOTNOTE. "Your rings match what you charged" printed above 1,400 deliveries nobody has placed would be the most confident lie this file could tell');
+  ok(c.rings[0].observed === 3,
+     'K9 …while the three that ARE located still produce their own honest verdict');
+}
+{
+  const c = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [
+    obs(300, { latitude: 31.9, longitude: -97.9 }, 'W1'),
+  ]});
+  ok(c.beyondRings === 1 && c.rings.every(r => r.observed === 0),
+     '🔴 K10 BEYOND THE LAST RING IS NOT A DISAGREEMENT — it is a distance the owner has not priced, and folding it into the outer ring would invent a disagreement out of an uncovered area');
+}
+{
+  const c = compareRingsToHistory({ depot: null, rings: FOUR, observations: [obs(50, NEAR, 'A')] });
+  ok(c.unlocated === 1,
+     'K11 no yard, nothing to measure from — and it reports that as uncompared, not as agreement');
+}
+{
+  // NEGATIVE CONTROL — the verdict must depend on the CHARGES, not on the row count.
+  const same = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [obs(50, NEAR), obs(50, NEAR), obs(50, NEAR)] });
+  const diff = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [obs(50, NEAR), obs(50, NEAR), obs(99, NEAR)] });
+  ok(same.rings[0].verdict === 'agrees' && diff.rings[0].verdict === 'disagrees',
+     '🔴 K12 NEGATIVE CONTROL: three rows either way, differing only in WHAT WAS CHARGED, reach opposite verdicts. An implementation that answered from the count would pass K1 by accident');
+}
+{
+  // The floor is an ARGUMENT, not a constant — two rows is a verdict only if the caller says so.
+  const strict = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [obs(99, NEAR), obs(99, NEAR)] });
+  const loose  = compareRingsToHistory({ depot: DEPOT, rings: FOUR, observations: [obs(99, NEAR), obs(99, NEAR)], minObservations: 2 });
+  ok(strict.rings[0].verdict === 'too-few' && loose.rings[0].verdict === 'disagrees',
+     'K13 the floor below which no verdict is given is the caller\'s judgement, not a number buried here');
+}
+
+// ── §L · numeric COMES BACK AS A STRING, AND THAT IS A MONEY BUG ────────────────────────────
+// MEASURED on the live schema 2026-09-25: business_delivery_rings.outer_radius_miles and .charge
+// are `numeric`, which PostgREST serialises as a STRING. businesses.latitude is `double
+// precision` and arrives as a number — which is why the depot looked fine and the rings did not.
+const RAW_ROWS = [
+  { id: 'r1', business_id: 'b', outer_radius_miles: '7.10',  charge: '50.00',  origin_note: null, active: true },
+  { id: 'r4', business_id: 'b', outer_radius_miles: '35.70', charge: '250.00', origin_note: null, active: true },
+];
+{
+  const n = normalizeRingRows(RAW_ROWS);
+  ok(n.length === 2 && typeof n[0].outer_radius_miles === 'number' && typeof n[0].charge === 'number',
+     'L1 the strings PostgREST returns become numbers');
+  ok(n[1].charge === 250 && n[1].outer_radius_miles === 35.7, 'L2 …with their values intact');
+}
+{
+  // 🔴 THE ONE THAT MATTERS. Not "is it a number" but "does the MONEY come out wrong" — and the
+  // tell is `+`, because every comparison and every multiplication coerces and looks correct.
+  const raw = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: RAW_ROWS as never, flatAmount: 50, located: true });
+  const fixed = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: normalizeRingRows(RAW_ROWS), flatAmount: 50, located: true });
+  ok((raw.amount as unknown) === '250.00' && fixed.amount === 250,
+     `🔴 L3 UNCONVERTED, THE CHARGE IS THE STRING "250.00" — and it picked the RIGHT RING while doing it, because 22.3 <= "35.70" is true. The comparison lied by working (got ${JSON.stringify(raw.amount)})`);
+  ok(((raw.amount as unknown as number) + 10) as unknown === '250.0010' && (fixed.amount as number) + 10 === 260,
+     '🔴 L4 …AND THIS IS THE DAMAGE: adding $10 of tax to the string gives "250.0010", not 260. Every other operator coerces; `+` concatenates, and the order total uses `+`');
+}
+{
+  // A row that cannot be read as a number is DROPPED, never passed on as NaN — NaN is a number,
+  // and it would price a delivery at NaN rather than refusing to price it at all.
+  const n = normalizeRingRows([
+    { outer_radius_miles: '7.10', charge: 'fifty' },
+    { outer_radius_miles: null, charge: '50.00' },
+    { outer_radius_miles: '7.10', charge: '50.00' },
+  ]);
+  ok(n.length === 1 && n[0].charge === 50,
+     '🔴 L5 A RING THAT CANNOT BE PRICED IS DROPPED, NOT PASSED ON AS NaN — Number("fifty") is NaN, which is a number, and would reach the invoice as one');
+}
+{
+  ok(normalizeRingRows(null).length === 0 && normalizeRingRows(undefined).length === 0,
+     'L6 a null read is no rings, and does not throw');
+  const n = normalizeRingRows([{ outer_radius_miles: 7, charge: 50, active: false }]);
+  ok(n.length === 1 && n[0].active === false, 'L7 a retired ring survives the conversion still retired — retire, never delete (R-133)');
+}
+{
+  // NEGATIVE CONTROL — the converter must convert, not merely pass objects through.
+  const before = RAW_ROWS[1].charge as unknown;
+  const after = normalizeRingRows(RAW_ROWS)[1].charge as unknown;
+  ok(before !== after && typeof before === 'string' && typeof after === 'number',
+     '🔴 L8 NEGATIVE CONTROL: the value that goes in is not the value that comes out. An identity function would pass L1 for rows that were already numbers');
 }
 
 console.log(`\ndeliveryRings — ${passed} passed, ${failures.length} failed`);

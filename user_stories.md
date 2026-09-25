@@ -667,15 +667,41 @@ NEEDS: David to settle the slot algorithm (working-days flag × geo-cluster × s
 A customer scheduling a delivery shouldn't see every calendar day — only the slots LAWNS can serve. Open slots = the business's working days (LAWNS delivers Tue/Thu) filtered by geo-clustering: "nothing Tuesday, but we'll be in your ZIP Thursday." A planting job consumes more of a day's capacity than a drop-off, so a day fills by WORK, not stop-count. This is the just-in-time delivery intelligence that turns the raw routing engine into an offer the customer picks from. → 3.4 (scheduling, net-new) + 3.5 (routing, live).
 
 ### See the opportunity along the route — service overlay on the map
-STATUS: needs-input
+STATUS: written
 SCOPE: vertical:cultivar
-BUILD: active
+BUILD: in-build
 ARC: delivery
 MAPS-TO: 3.5, 3.2
-PIECES: service_overlay, proximity_opportunity
-NEEDS: David to scope what the overlay surfaces — past customers near today's stops (warranty / upsell / inspection) vs due-services vs both — and whether it's a passive readout or a suggested add-stop.
+PIECES: service_overlay, proximity_opportunity, map_page, layer_control, corridor_query
+NEEDS: ✅ **SCOPED BY DAVID 2026-09-25 — the NEEDS below is ANSWERED and is kept for provenance.** His words: *"the map should be its own page, customer dots view, filtered by date who bought in the last 2 years, 12 months, 6 months, 3 months and from date/to date, over lay route delivery route (so we can see customers along the route or within x miles), the map is a base with overlays."* So: **past customers near today's stops**, as a **PASSIVE READOUT with a list** — not a suggested add-stop, which would put the map in charge of the day's plan (PLAN THE DAY owns that, and it is a different story). 🔴 **THIS REVERSES 2026-08-24**, where David said *"i only want the display on the map with the icons"* — no distance maths, no radius. Proximity is now wanted; the reversal is recorded so nobody reads the older ruling as still standing. ⚠️ **STILL OPEN AND NOT ANSWERED HERE:** warranties-coming-due and inspections-owed as their OWN overlays. The corridor answers *"who is near"*; *"who is near AND owes me something"* needs the warranty clock, which is `warranty_claims` / `cultivar_plants.warranty_months` and a separate build.
 While routing the day, TRACE overlays SERVICE context on the map: past customers near the route, warranties coming due, inspections owed — turning the route from pure logistics into the capacity/opportunity readout (MASTER_BRIEF "routing IS the capacity readout"). The map becomes the demo that SHOWS the owner she's driving past opportunity, not just logistics. _Grounded: MASTER_BRIEF routing-as-capacity (:375) + map-is-the-demo (:382); proximity-opportunities memory; board 3.5 route live / 3.2 suggestion._
 **TILE HOME:** `opportunities` (dashboard tile, PLANNED/unbuilt in `tileRegistry.ts` — no route/component yet) — this story is its intended function ("I'll be in your area, want your trees looked at?"; the registry note ties `opportunities` into the Delivery context). The outreach leg (reaching out to that nearby customer) lands on `follow-up` (`followup_engine`).
+
+### The map is its own page — a base with layers you switch on
+STATUS: written
+SCOPE: vertical:cultivar
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 3.5, 3.7
+PIECES: map_page, customer_dots, date_window_filter, purchase_status_filter, rings_overlay, route_overlay, corridor_query, marker_clustering
+NEEDS: ⚠️ **TWO THINGS ARE OPEN AND ARE DAVID'S, and both are written into `~/Desktop/MORNING-2026-09-26/CONTACTS-349.md` with a recommended default rather than picked silently in code:** (1) what **"planted"** means as a customer status — the platform has no single column that says a tree went in the ground; (2) whether the dot filters read the customer's **LAST** purchase or **ANY** purchase inside the window, which are different questions and give different maps.
+Lauren opens **Map** and sees her customers as dots on a real map of the county — not a list, a picture. She switches layers on and off: **customers** (filtered to who bought in the last 3 / 6 / 12 / 24 months, or a from–to range, and by whether they only bought, took delivery, or had it planted), **delivery rings** (drawn from Settings → Delivery, read-only here), and **a route** (pick a date and a crew and the saved route draws). With a route drawn she sets a corridor — **2 miles by default** — and gets **a list beside the map** of every customer along it, nearest first, with name, phone, town and last purchase. That list is the point: it is who to ring before the truck goes out.
+
+🔴 **THE MAP IS A LENS, NEVER A DEPENDENCY.** Delivery, routing and pricing must keep working with this page switched off or broken — the rings live in config and the map only draws them; locations are core data and the map only reads them (David, 2026-09-16). A map that something depends on is a map whose outage is an outage.
+
+🔴 **WHAT CANNOT BE PLACED IS COUNTED, NEVER PLOTTED.** A customer with no coordinate is named as a number on the page (*"N customers can't be placed yet"*), because a dot that is not there and a customer who does not exist look identical, and the difference is the whole value of the picture. Distances are **straight-line** and the page says so. _Grounded: the June 2026 "map as the lens on who to reach" line; David 2026-08-24 (dots + date/status filters, his three filters); David 2026-09-16 (own tile, base with layers, never a dependency); David 2026-09-25 (own page, corridor query). Board 3.5 route live / 3.7 customers live._
+
+### Plan the day — TRACE proposes the crew split, Lauren decides
+STATUS: written
+SCOPE: vertical:cultivar
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 3.5, 3.6
+PIECES: sweep_cluster, makespan_split, planting_minutes, crew_accept_override, unplaceable_surfaced
+NEEDS: ⚠️ **TIME WINDOWS ARE A HOOK, NOT A BUILD** — a customer who can only take a delivery before noon is a real constraint LAWNS has, and the planner is shaped to accept it later rather than pretending it does not exist. Not built tonight, and the morning file says so.
+Lauren has a day's stops and has to decide who goes out. TRACE **routes first and splits second**: it clusters the stops, orders each cluster into a route, adds the drive time to the planting time (**one minute per gallon**), and compares the total against a **seven-hour day**. **One crew until it goes over, then two** — and the split it proposes is the one that makes the LONGER of the two days as short as possible, not the one that balances the stop COUNT, because a day is measured in hours and not in stops. Lauren can accept it, move a stop from one crew to the other, or override the whole thing; what she decides is what is saved.
+
+🔴 **A STOP THAT CANNOT BE PLACED IS SHOWN, NEVER GUESSED AT.** It appears in its own list with the reason, and it is not silently dropped into whichever crew has room — an invented location produces a plan that is wrong in a way nobody can see. _Grounded: David's PLAN THE DAY prompt; `planTheDay.ts` (sweep clustering, makespan objective); crew-link's teams, per-crew routing, capacity and load list, reused rather than rebuilt (#362). Board 3.5/3.6._
 
 ### Clickable route pins — tap a stop for its detail (polish, not demo-critical)
 STATUS: needs-input

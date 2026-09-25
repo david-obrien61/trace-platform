@@ -27,7 +27,7 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { loadGoogleMaps } from '../../maps/loadGoogleMaps';
+import { loadGoogleMaps, onMapsAuthFailure } from '../../maps/loadGoogleMaps';
 import { distanceMiles, orderedRings, impliedMiles, type DeliveryRing, type Point } from '../../business-logic/deliveryRings';
 import { saveRings, type RingEdit } from '../../business-logic/ringWriter';
 
@@ -51,6 +51,7 @@ interface Props {
 const GREEN = '#27500A';
 const RING_COLOURS = ['#27500A', '#3d7a1a', '#6aa02f', '#9cc24f', '#c8dc8a'];
 const METRES_PER_MILE = 1609.344;
+const TRACE_RINGMAP = true;   // STD-003: on by default until owner-proven.
 
 export function RingMap({
   db, businessId, depot, rings, dots = [], unlocatedCount = 0,
@@ -59,6 +60,15 @@ export function RingMap({
   const [draft, setDraft] = useState<RingEdit[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState('');
+  // 🔴 THE MAP'S READINESS IS STATE, NOT A REF, AND THAT IS A BUG FIX NOT A STYLE CHOICE.
+  // The circles effect reads `mapRef.current` and returns early while it is null. The map is
+  // created ASYNCHRONOUSLY, and assigning a ref DOES NOT RE-RENDER — so once the two data reads
+  // had landed (they are far quicker than a script fetch), nothing ever re-ran the circles
+  // effect and NO RINGS WERE EVER DRAWN on a map that had loaded perfectly well. It survived
+  // review because the effect is correct in isolation; what was wrong was that nothing woke it.
+  const [mapReady, setMapReady] = useState(false);
+  // WHY there is no map, in words a person can act on. Null while all is well.
+  const [mapProblem, setMapProblem] = useState<string | null>(null);
   // The depot's two numbers, read once. The effects below depend on THESE rather than on the
   // object, so a caller that builds `depot` inline cannot re-fire them every render — the same
   // fix made to AddressInput on 2026-09-25, for the same reason.
@@ -79,6 +89,24 @@ export function RingMap({
   useEffect(() => {
     if (!mapsKey || depotLat === null || depotLng === null || !mapEl.current) return;
     let alive = true;
+    // ── ① GOOGLE REFUSING THE KEY. It does not throw; it calls a global. ───────────────────
+    const stopListening = onMapsAuthFailure(() => {
+      if (!alive) return;
+      const here = typeof window !== 'undefined' ? window.location.origin : 'this address';
+      setMapProblem(
+        `Google will not show a map on ${here}. The map key is locked to a different web address, `
+        + `so the key's website restriction has to include ${here}/* — that is a change in the `
+        + `Google Cloud console, not in TRACE. Your rings below are unaffected and deliveries are `
+        + `still priced from them.`,
+      );
+    });
+    // ── ② THE SCRIPT NEVER ARRIVING AT ALL — blocked, offline, a content blocker. ──────────
+    // 🔴 A PROMISE THAT NEVER SETTLES HAS NO CATCH. Without this, the pale box simply stays
+    // pale forever, which is precisely the "shows nothing" David reported.
+    const tooLong = setTimeout(() => {
+      if (alive) setMapProblem(prev => prev ?? 'The map has not loaded. It may be blocked by this '
+        + 'browser or the network. The rings below still work, and deliveries are still priced from them.');
+    }, 12000);
     void (async () => {
       try {
         const maps = await loadGoogleMaps(mapsKey);
@@ -90,12 +118,18 @@ export function RingMap({
         });
         mapRef.current = map;
         new maps.Marker({ position: { lat: depotLat, lng: depotLng }, map, title: 'your yard' });
+        clearTimeout(tooLong);
+        // 🔴 THE LINE THAT MAKES THE CIRCLES APPEAR. See `mapReady` above: without a state
+        // change here the ring-drawing effect below never runs again after this await.
+        setMapReady(true);
+        if (TRACE_RINGMAP) console.log('[TRACE:MAP] ring map created', { depotLat, depotLng });
       } catch (e) {
         // Rule 24, one surface over: no map is not no rings. The list below still works.
-        setNote(`The map could not load — the rings below still work. (${(e as Error).message})`);
+        clearTimeout(tooLong);
+        setMapProblem(`The map could not load — the rings below still work. (${(e as Error).message})`);
       }
     })();
-    return () => { alive = false; };
+    return () => { alive = false; clearTimeout(tooLong); stopListening(); };
   }, [mapsKey, depotLat, depotLng]);
 
   // ── the circles, redrawn whenever a ring moves ────────────────────────────────────────────
@@ -150,7 +184,7 @@ export function RingMap({
         },
       });
     }
-  }, [live, dots, canEdit, depotLat, depotLng]);
+  }, [live, dots, canEdit, depotLat, depotLng, mapReady]);
 
   async function save() {
     setSaving(true); setNote('');
@@ -186,7 +220,25 @@ export function RingMap({
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(260px, 380px)', gap: 16 }}>
       {/* ── the map ── */}
       <div>
-        <div ref={mapEl} style={{ width: '100%', height: 380, borderRadius: 8, background: '#eef2e6' }} />
+        {/* 🔴 THE BOX SAYS WHY IT IS EMPTY. David, live on production 2026-09-25: *"do not see the
+            map under delivery"* — and the screen offered him nothing to read, because the two
+            failures that actually happen (Google refusing the key; the script never arriving)
+            neither throw nor resolve. A pale rectangle is not a state; it is the absence of one. */}
+        {mapProblem && (
+          <div style={{
+            background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8,
+            padding: '0.9rem', marginBottom: 8, fontSize: '0.85rem', lineHeight: 1.5, color: '#92400e',
+          }}>
+            <strong>The map isn’t showing.</strong>
+            <div style={{ marginTop: 4 }}>{mapProblem}</div>
+          </div>
+        )}
+        {/* Hidden rather than unmounted while a problem is showing: the div is the map's
+            container and Google holds a reference to it. Removing it would break a later retry. */}
+        <div ref={mapEl} style={{
+          width: '100%', height: mapProblem ? 0 : 380, overflow: 'hidden',
+          borderRadius: 8, background: '#eef2e6',
+        }} />
         <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 8 }}>
           {/* The demo's own sentence, kept, because it is the honest one. */}
           Drawn to scale. Each ring is measured <strong>straight-line</strong> from the farm, the

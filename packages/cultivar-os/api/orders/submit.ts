@@ -1,6 +1,6 @@
 import { classifyGeocodeResponse } from '../../../shared/src/business-logic/geocodeResult';
 import {
-  tripChargeFor, DELIVERY_RING_COLUMNS, BUSINESS_DEPOT_COLUMNS,
+  tripChargeFor, DELIVERY_RING_COLUMNS, BUSINESS_DEPOT_COLUMNS, normalizeRingRows,
 } from '../../../shared/src/business-logic/deliveryRings';
 import { createClient } from '@supabase/supabase-js';
 import { customerDisplayName } from '../../../shared/src/utils/personName';
@@ -1021,7 +1021,9 @@ async function handleCreate(req: any, res: any) {
           depot,
           address: (typeof shipToPlacement.latitude === 'number' && typeof shipToPlacement.longitude === 'number')
             ? { latitude: shipToPlacement.latitude, longitude: shipToPlacement.longitude } : null,
-          rings: (ringRows ?? []) as any,
+          // numeric → number at the boundary: a STRING charge would reach the order total, where
+          // `+` concatenates. Measured against the live column types 2026-09-25.
+          rings: normalizeRingRows(ringRows),
           flatAmount: flat,
           located: typeof shipToPlacement.latitude === 'number',
         });

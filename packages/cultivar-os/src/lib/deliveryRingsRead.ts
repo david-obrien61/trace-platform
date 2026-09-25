@@ -16,7 +16,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabase';
 import {
-  DELIVERY_RING_COLUMNS, BUSINESS_DEPOT_COLUMNS, type DeliveryRing, type Point,
+  DELIVERY_RING_COLUMNS, BUSINESS_DEPOT_COLUMNS, normalizeRingRows,
+  type DeliveryRing, type Point,
 } from '@trace/shared/business-logic/deliveryRings';
 
 /** Not exported: `readRingInputs`'s return type is the only thing a caller needs, and an
@@ -47,7 +48,9 @@ export async function readRingInputs(businessId: string): Promise<RingInputs> {
     const depot = (b?.geocode_status === 'found'
       && typeof b.latitude === 'number' && typeof b.longitude === 'number')
       ? { latitude: b.latitude, longitude: b.longitude } : null;
-    return { depot, rings: ringRows.error ? null : ((ringRows.data ?? []) as DeliveryRing[]) };
+    // 🔴 numeric → number HERE, at the boundary. PostgREST hands back "250.00" as a STRING and
+    // a string amount concatenates in the checkout total instead of adding.
+    return { depot, rings: ringRows.error ? null : normalizeRingRows(ringRows.data) };
   } catch {
     return { depot: null, rings: null };
   }

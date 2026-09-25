@@ -12,8 +12,8 @@ import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
 import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
 import { RingMap, type LocatedDot } from '@trace/shared/components/settings/RingMap';
-import { DELIVERY_RING_COLUMNS, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
-import { CUSTOMER_ADDRESS_MAP_COLUMNS } from '@trace/shared/business-logic/customerAddressFields';
+import { DELIVERY_RING_COLUMNS, normalizeRingRows, type DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
+import { readLocatedAddresses } from '@trace/shared/business-logic/locatedCustomers';
 import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
@@ -321,7 +321,8 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
       // screen and mean opposite things, so they are never collapsed.
       if (error) { setRingsMissing(true); return; }
       setRingsMissing(false);
-      setRings((data ?? []) as unknown as DeliveryRing[]);
+      // numeric columns arrive as STRINGS from PostgREST — converted once, here (2026-09-25).
+      setRings(normalizeRingRows(data));
     })();
     return () => { alive = false; };
   }, [businessId, reloadAt]);
@@ -329,20 +330,17 @@ function DeliverySection({ businessId, canWrite }: { businessId: string; canWrit
   useEffect(() => {
     let alive = true;
     void (async () => {
-      // The located customers, as dots. ⚠️ Capped: a map with 1,500 markers on it is not a map.
-      const { data } = await supabase.from('customer_addresses')
-        .select(CUSTOMER_ADDRESS_MAP_COLUMNS)
-        .eq('business_id', businessId).eq('geocode_status', 'found')
-        .not('latitude', 'is', null).limit(500);
+      // 🔴 THROUGH THE SHARED READER, NOT AN INLINE QUERY (§6 r8). The Map page needs the same
+      // rows; a second business-wide located read is how two screens come to disagree about how
+      // many customers we can actually find.
+      const got = await readLocatedAddresses(supabase, businessId);
       if (!alive) return;
-      setDots((data ?? []).map(r => ({
-        id: r.id as string, name: (r.line1 as string) ?? '', 
-        latitude: Number(r.latitude), longitude: Number(r.longitude),
+      // ⚠️ Still capped for THIS map: a map with 1,500 markers on it is not a map. The cap is
+      // applied here, at the drawing, not in the reader — the Map page wants them all.
+      setDots(got.addresses.slice(0, 500).map(a => ({
+        id: a.id, name: a.line1 ?? '', latitude: a.latitude, longitude: a.longitude,
       })));
-      const { count } = await supabase.from('customer_addresses')
-        .select('*', { count: 'exact', head: true })
-        .eq('business_id', businessId).is('geocode_status', null);
-      if (alive) setUnlocated(count ?? 0);
+      setUnlocated(got.neverAttempted);
     })();
     return () => { alive = false; };
   }, [businessId, reloadAt]);

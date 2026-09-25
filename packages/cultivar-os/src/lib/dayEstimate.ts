@@ -63,6 +63,29 @@ export function inputsFromLoadModel(
   };
 }
 
+/**
+ * ONE STOP'S PLANTING VOLUME — the gallons, and the trees whose size could not be read.
+ *
+ * 🔴 IT EXISTS BECAUSE PLAN THE DAY NEEDS PER-STOP GALLONS AND THE DAY SHEET NEEDS THE DAY'S, AND
+ * TWO PLACES SUMMING THE SAME TREES IS HOW THEY COME TO DISAGREE (§6 r8). `inputsFromLoadModel`
+ * above does the whole day; this does one stop, by the same rule, from the same field.
+ *
+ * ⚠️ AND IT CARRIES THE UNREADABLE COUNT FOR THE SAME REASON THE DAY VERSION DOES. A tree whose
+ * rung has no volume contributes nothing to the minutes, so a stop of twelve trees with four
+ * unreadable would otherwise look like a light stop rather than an unknown one. The caller shows
+ * the count; the planner marks the day "at least".
+ */
+export function gallonsForStop(stop: { trees: readonly { gallons: number | null; quantity: number }[] }):
+  { gallons: number; treesSizeUnknown: number } {
+  let gallons = 0, treesSizeUnknown = 0;
+  for (const t of stop.trees) {
+    const q = Number.isFinite(t.quantity) ? t.quantity : 0;
+    if (t.gallons == null || !Number.isFinite(t.gallons)) treesSizeUnknown += q;
+    else gallons += t.gallons * q;
+  }
+  return { gallons, treesSizeUnknown };
+}
+
 /** The two per-business figures, out of the Operations config that already exists. */
 export function settingsFromConfig(config: Record<string, unknown> | null, defaults: {
   dayHoursBeforeSecondTeam: number; plantingMinutesPerTree: number; plantingMinutesPerGallon: number;

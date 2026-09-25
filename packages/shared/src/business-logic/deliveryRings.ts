@@ -59,6 +59,62 @@ export const DELIVERY_RING_COLUMNS = 'id, business_id, outer_radius_miles, charg
  */
 export const BUSINESS_DEPOT_COLUMNS = 'latitude, longitude, geocode_status';
 
+/**
+ * TURN A RING ROW FROM POSTGREST INTO NUMBERS. Every reader runs this; nothing else may.
+ *
+ * 🔴 MEASURED LIVE 2026-09-25, AND IT IS A MONEY DEFECT: `business_delivery_rings.charge` and
+ * `.outer_radius_miles` are **`numeric`**, and PostgREST serialises `numeric` as a **STRING** to
+ * keep the precision Postgres promised — LAWNS's five rings come back as `"7.10"`, `"50.00"`.
+ * `businesses.latitude` is `double precision` and comes back as a NUMBER, which is why the depot
+ * looked fine and the rings did not.
+ *
+ * ⚠️ IT HID BEHIND JAVASCRIPT'S COERCION, WHICH IS THE WORST PLACE FOR A MONEY BUG TO HIDE.
+ * `"7.10" * 1609` is 11426 and `22.3 <= "35.70"` is true, so the map drew and the right ring was
+ * CHOSEN — everything looked correct. But `tripChargeFor` then returned `amount: "250.00"`, and a
+ * string amount reaches the checkout total, where **`+` concatenates instead of adding**. The
+ * comparison operators lied by working.
+ *
+ * 🔴 AND IT IS A CONVERSION, NOT A CAST. `Number(x)` on a malformed value gives NaN, which is a
+ * number and would price a delivery at NaN. A row that cannot be read as a number is DROPPED and
+ * counted by the caller, because a ring nobody can price is not a ring.
+ */
+/**
+ * 🔴 `Number(null)` IS `0`, AND `Number('')` IS `0` — AND THE TEST CAUGHT ME USING IT.
+ * The first draft guarded with `Number.isFinite(Number(x))`, which accepts both: a ring row with
+ * a NULL radius would have become a **0-mile ring** — silently the innermost one, matching almost
+ * nothing, and the charge beside it would then never be applied. Absent must not become zero
+ * (A9), least of all in a distance. Only a real number or a non-empty numeric string converts.
+ */
+function num(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    if (v.trim() === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export function normalizeRingRows(rows: readonly unknown[] | null | undefined): DeliveryRing[] {
+  if (!rows) return [];
+  const out: DeliveryRing[] = [];
+  for (const raw of rows) {
+    const r = raw as Record<string, unknown>;
+    const miles = num(r.outer_radius_miles);
+    const charge = num(r.charge);
+    if (miles === null || charge === null) continue;
+    out.push({
+      id: typeof r.id === 'string' ? r.id : undefined,
+      outer_radius_miles: miles,
+      charge,
+      origin_note: typeof r.origin_note === 'string' ? r.origin_note : null,
+      active: r.active !== false,
+    });
+  }
+  return out;
+}
+
 const EARTH_MILES = 3958.7613;
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -327,4 +383,128 @@ export function tripChargeFor(x: {
   }
   return { amount: null, source: 'outside-rings', label: null,
     why: 'Outside your delivery rings — set a charge.' };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE RINGS AGAINST WHAT WAS ACTUALLY CHARGED — D's second half
+// ═════════════════════════════════════════════════════════════════════════════
+// 🔴 THIS IS THE CHECK ON THE SEED, AND IT RUNS IN THE OPPOSITE DIRECTION TO IT.
+// `proposeRingsFromCharges` DERIVES a radius from a charge, assuming the $3.50 rate held. That
+// assumption is exactly what nobody has verified. This function goes the other way: it takes
+// deliveries whose coordinates are KNOWN, measures how far each one actually went, and asks
+// whether the ring covering that distance charges what the invoice charged. Arithmetic dressed
+// as history is the lie the whole build exists to prevent — so one function derives and this one
+// disagrees with it.
+//
+// 🔴 A DELIVERY WITH NO COORDINATE IS COUNTED AND NAMED, NEVER DROPPED. It is the majority today
+// (the bulk geocode has not been run), and a comparison that quietly skipped them would report a
+// confident verdict drawn from a handful of rows — tech-debt #186's shape, where a short run is
+// indistinguishable from a full one. `unlocated` is in the result and the message says it.
+//
+// ⚠️ IT NEVER CHANGES A RING. It reports. Re-pricing history is not a thing this can do, and a
+// ring the owner set deliberately against her own history is a legitimate decision this must not
+// overrule — it can only show her the disagreement.
+
+export interface DeliveryObservation {
+  /** What the invoice actually billed for transport on this delivery. */
+  charge: number;
+  latitude: number | null;
+  longitude: number | null;
+  /** Invoice or order number, so a disagreement can be LOOKED AT rather than just counted. */
+  reference?: string | null;
+}
+
+export type RingVerdictAgainstHistory = 'agrees' | 'disagrees' | 'too-few';
+
+export interface RingComparison {
+  ordinal: number;
+  ring: DeliveryRing;
+  /** Located past deliveries that fall inside this ring. */
+  observed: number;
+  /** …of those, how many were billed exactly this ring's charge. */
+  agreed: number;
+  /** The middle of what was actually charged in this ring — null when nothing landed here. */
+  medianCharged: number | null;
+  /** The range actually charged here. Null when nothing landed here. */
+  spread: { min: number; max: number } | null;
+  /** Up to three references to look at, drawn from the disagreeing rows. */
+  examples: string[];
+  verdict: RingVerdictAgainstHistory;
+}
+
+export interface HistoryComparison {
+  rings: RingComparison[];
+  /** 🔴 Deliveries that could not be compared AT ALL because nobody knows where they went. */
+  unlocated: number;
+  /** Located deliveries beyond every ring — not a disagreement, an uncovered distance. */
+  beyondRings: number;
+  /** What the screen says. Always present, and it names the unlocated count when there is one. */
+  message: string;
+}
+
+/** The middle value. Even counts take the LOWER of the two middles — a median must be a number
+ *  that was actually charged, not an average of two that never was. */
+function median(sorted: readonly number[]): number | null {
+  if (sorted.length === 0) return null;
+  return sorted[Math.floor((sorted.length - 1) / 2)];
+}
+
+/**
+ * Compare the configured rings against what was actually billed.
+ *
+ * `minObservations` is the floor below which NO verdict is given: a ring with two deliveries in
+ * its history has not disagreed with anything, it has simply not been tested. Defaulting it to 3
+ * is a judgement, which is why it is an argument.
+ */
+export function compareRingsToHistory(x: {
+  depot: Point | null;
+  rings: readonly DeliveryRing[];
+  observations: readonly DeliveryObservation[];
+  minObservations?: number;
+}): HistoryComparison {
+  const min = x.minObservations ?? 3;
+  const active = orderedRings(x.rings);
+  const buckets = active.map(() => [] as DeliveryObservation[]);
+  let unlocated = 0;
+  let beyondRings = 0;
+
+  for (const o of x.observations) {
+    // 🔴 NO DEPOT IS NOT "EVERY DELIVERY IS UNCOMPARABLE FOR ITS OWN REASON" — but it produces
+    // the same honest answer, and the message below distinguishes them.
+    const v = ringFor(x.depot, (typeof o.latitude === 'number' && typeof o.longitude === 'number')
+      ? { latitude: o.latitude, longitude: o.longitude } : null, active);
+    if (v.miles === null) { unlocated++; continue; }
+    if (v.ordinal === null) { beyondRings++; continue; }
+    buckets[v.ordinal - 1].push(o);
+  }
+
+  const rings: RingComparison[] = active.map((ring, i) => {
+    const rows = buckets[i];
+    const charged = rows.map(r => r.charge).filter(c => Number.isFinite(c)).sort((a, b) => a - b);
+    const agreed = charged.filter(c => Math.abs(c - ring.charge) < 0.005).length;
+    const examples = rows
+      .filter(r => Math.abs(r.charge - ring.charge) >= 0.005)
+      .map(r => r.reference).filter((s): s is string => !!s).slice(0, 3);
+    // A verdict needs enough rows to BE a verdict. Below the floor it says so and stops.
+    const verdict: RingVerdictAgainstHistory = charged.length < min ? 'too-few'
+      : (agreed === charged.length ? 'agrees' : 'disagrees');
+    return {
+      ordinal: i + 1, ring, observed: charged.length, agreed,
+      medianCharged: median(charged),
+      spread: charged.length ? { min: charged[0], max: charged[charged.length - 1] } : null,
+      examples, verdict,
+    };
+  });
+
+  const disagreeing = rings.filter(r => r.verdict === 'disagrees').length;
+  const parts: string[] = [];
+  if (disagreeing > 0) parts.push(`${disagreeing} ring${disagreeing === 1 ? '' : 's'} charge something your invoices do not`);
+  else if (rings.some(r => r.verdict === 'agrees')) parts.push('your rings match what you charged');
+  // 🔴 THE UNCOMPARABLE COUNT IS IN THE SENTENCE, NOT A FOOTNOTE. Reading "your rings match"
+  // above 1,400 deliveries nobody has placed would be the most confident lie this file could tell.
+  if (unlocated > 0) parts.push(`${unlocated} deliver${unlocated === 1 ? 'y has' : 'ies have'} no location yet and could not be compared`);
+  if (beyondRings > 0) parts.push(`${beyondRings} went beyond your last ring`);
+  if (parts.length === 0) parts.push('nothing to compare yet');
+
+  return { rings, unlocated, beyondRings, message: parts.join(' · ') };
 }

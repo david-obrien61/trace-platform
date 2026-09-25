@@ -20,7 +20,7 @@ that **nothing is ever priced by guesswork.** Three of these cards exist only to
 does *not* appear: beyond the last ring, on an address we cannot place, and on a business that has
 set no rings at all. The last of those is the one protecting money that is already being taken.
 
-**Board: 0 of 12 covered** (0 `covered` · 12 `owed`) — every card is written and none has been run.
+**Board: 0 of 16 covered** (0 `covered` · 16 `owed`) — every card is written and none has been run.
 🔴 **Thunder never sets `covered` (OP-14).** These flip only on David's live run.
 
 🔴 **CARD 1 RUNS FIRST AND IT IS THE ONE THAT CAN COST MONEY TODAY.** Every other card describes a
@@ -83,6 +83,43 @@ the depot has quietly become a second copy of one fact.*
 
 ---
 
+### CARD 2b — 🔴 IF THE MAP DOESN'T SHOW, THE PAGE SAYS WHY — IT NEVER SHOWS NOTHING
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: David 2026-09-25 live ("do not see the map under delivery") · D-9 Surface Honesty
+
+Settings → **Delivery**, on production.
+
+**PASS — one of exactly two things is true.** Either **a map is there** (roads, town names, a pin
+on your yard), **or** an amber block sits where the map would be, headed **"The map isn't showing"**,
+naming this web address and what has to change. There is **no third outcome.**
+**FAIL:** a blank, pale green rectangle with no words in it. **That is the defect this card
+exists for and it was live on 2026-09-25.**
+
+*Why it could show nothing: Google refusing the map key does NOT throw an error — the script
+loads, the map object is created, and Google reports the refusal by calling a global that nothing
+was listening to. Every `try/catch` on the page was intact and none of them could fire.*
+
+---
+
+### CARD 2c — the same failure on the ROUTE map tells you it is the key, not this screen
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: diagnosis, 2026-09-25
+
+If CARD 2b showed the amber block: open **/deliveries** and pick a day with stops, so the route
+map loads.
+
+**PASS (as a diagnosis, not a defect):** that map is **also** blank or refused. Both maps use the
+same browser key on the same web address, so **one key setting fixes both** — this is the tell
+that the problem is the key's website restriction and not the Delivery screen.
+**If the route map DOES draw while Settings → Delivery does not**, the key is fine and the cause
+is on this screen — say so, because it means this diagnosis was wrong.
+
+---
+
 ### CARD 3 — dragging a ring's edge and typing in the list move together
 STATUS: owed
 LAST-PROVEN: never
@@ -94,6 +131,26 @@ With at least two rings on screen: **drag the outer edge of one ring** and watch
 **PASS:** the mileage in the list changes **as you drag**, in step. Then type a different mileage
 into the list and **the circle on the map resizes to match**, without a save or a reload.
 **FAIL:** either one lags, needs a save first, or the two disagree at any moment.
+
+---
+
+### CARD 3b — 🔴 FIVE CIRCLES, NOT NONE — the rings actually draw on the map
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: the ref-race fix, 2026-09-25
+
+Settings → **Delivery** on LAWNS, which has **five** active rings (7.1 · 14.3 · 21.4 · 35.7 · 42.9
+miles). Load the page fresh — a hard refresh, not a tab you already had open.
+
+**PASS:** **five concentric circles** around Leander, on the map, without touching anything.
+**FAIL:** a map with roads and a pin but **no circles**, or fewer than five.
+
+*Why this is its own card: the circles are drawn by a second effect that waited on the map, and
+the map is created asynchronously. Storing it in a ref does not re-render, so once the ring data
+had arrived — which it always does first, being far quicker than fetching Google's script —
+nothing ever woke that effect again. **A perfectly working map with no rings on it** is a
+different failure from no map, and only this card can tell them apart.*
 
 ---
 
@@ -250,3 +307,24 @@ to the confirmation.
 ⚠️ **ONE PLACE AN OVERRIDE IS REFUSED, AND IT IS DELIBERATE:** an address we could not place
 (CARD 9) cannot be given a charge this way. There the question is not *how much* but *to where*,
 and it is still unanswered.
+
+---
+
+### CARD 13 — 🔴 THE CHARGE IS A NUMBER, NOT TEXT — $250 + tax is $270.63, never "250.0020.63"
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: either
+COVERS: the numeric-as-string fix, 2026-09-25
+
+Run CARD 7 (Hutto, Trip Charge, ring 4) all the way to the **order total**, with tax applied.
+
+**PASS:** the order total is the goods, plus **$250.00**, plus tax — arithmetic that adds up when
+you check it on paper.
+**FAIL:** a total that is wildly too large, or a delivery line that reads like two numbers stuck
+together.
+
+*Why a card for something so basic: `charge` is a `numeric` column, and the database returns
+`numeric` as **text** — `"250.00"`, not `250`. Every comparison and multiplication in the ring
+code coerces text to a number silently and looked perfectly correct, including picking the right
+ring. But `+` does not coerce — it **joins** — and the order total is built with `+`. The bug
+would have been invisible everywhere except the one place that takes money.*

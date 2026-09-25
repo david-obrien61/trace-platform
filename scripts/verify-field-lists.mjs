@@ -222,10 +222,19 @@ const ALLOWED_DIVERGENCE = {
           + 'for the open-order notice, and transport_method because the load list must know which '
           + 'trees LAWNS INSTALLS (every installed tree gets a water monitor kit, David 2026-09-18). '
           + 'It was already a 2-column read of the same orders; the third column rides it rather '
-          + 'than a second query. Not the record shape.',
+          + 'than a second query. Not the record shape. '
+          + 'FOURTH (2026-09-25, the Map page): locatedCustomers reads 7 to answer "when did each '
+          + 'CUSTOMER buy, and did they buy an install" — the whole book, paged, keyed on '
+          + 'customer_id. sale_date AND created_at are both read because neither is always there '
+          + '(an imported invoice has the first, a counter sale only the second, and using '
+          + 'created_at alone would date two years of history to the afternoon of the import); '
+          + 'status and order_kind EXCLUDE cancelled and test orders from being purchases; '
+          + 'transport_method is the install intent. It deliberately does NOT read totals or '
+          + 'line items — a dot on a map needs a date and a flag, not an order.',
     paths: ['packages/cultivar-os/src/pages/Dashboard.tsx',
             'packages/shared/src/quickbooks/historyOrderWriter.ts',
-            'packages/cultivar-os/src/lib/stopRead.ts'],
+            'packages/cultivar-os/src/lib/stopRead.ts',
+            'packages/shared/src/business-logic/locatedCustomers.ts'],
   },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest) — ⚠️ PENDING DAVID'S RATIFICATION.
   // The SAME distinction as `customers` above: a 4-column projection answering one question, not a
@@ -252,14 +261,20 @@ const ALLOWED_DIVERGENCE = {
   // The residual is unchanged and still owed: `deliveries` has no field registry (tech-debt #120's
   // class, second entity), and minting one inside this build is the drift these caps catch.
   deliveries: {
-    reason: 'TWO projections answering TWO questions, neither a record shape. deliveryIngestWriter '
+    reason: 'THREE projections answering THREE questions, none a record shape. deliveryIngestWriter '
           + 'reads 4 columns to decide NOT to write a stop; historyOrderWriter reads 7 to decide '
           + 'whether a stop needs an order and what that order should say (status drives the '
           + 'order status, service_type drives transport_method, order_id is the skip decision). '
-          + 'Widening one to serve both would hand each read columns it has no use for. '
+          + 'THIRD (2026-09-25, the Map page): locatedCustomers reads 5 to answer "has this '
+          + 'CUSTOMER ever had a delivery completed, and was it planting work" — customer_id, '
+          + 'status, completed_at, service_type. It is keyed on the CUSTOMER, not the stop, and it '
+          + 'is the only read of this table that does not care which day or which order a stop '
+          + 'belongs to. Widening any one to serve the others would hand each read columns it has '
+          + 'no use for, on every row of a full-table paged scan. '
           + 'deliveries has no field registry (tech-debt #120 class).',
     paths: ['packages/shared/src/quickbooks/deliveryIngestWriter.ts',
-            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
+            'packages/shared/src/quickbooks/historyOrderWriter.ts',
+            'packages/shared/src/business-logic/locatedCustomers.ts'],
   },
   receipts: {
     reason: 'The narrow projection the OCR door needs to build a history order from the receipt row '

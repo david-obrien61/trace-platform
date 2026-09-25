@@ -51,6 +51,21 @@ export const CUSTOMER_ADDRESS_GEOCODE_COLUMNS = 'id, line1, city, state, zip';
  */
 export const CUSTOMER_ADDRESS_MAP_COLUMNS = 'id, line1, latitude, longitude';
 
+/**
+ * A MAP DOT THAT HAS TO KNOW WHOSE IT IS — the ring map's four, plus the customer and the town.
+ *
+ * 🔴 A FOURTH PROJECTION RATHER THAN A WIDER THIRD, and that is deliberate. The ring map draws
+ * dots it never has to identify: colour by ring, that is all. The Map page's dots are filtered by
+ * what the customer BOUGHT and listed beside the map with a name and a phone, so they need
+ * `customer_id` to join on and `city` to read. Widening the ring map's list would make every
+ * Settings → Delivery open pull two columns it has no use for, on up to 500 rows.
+ *
+ * ⚠️ THE PHONE AND THE NAME ARE NOT HERE. They live on `customers`, not on the address, and the
+ * Map page joins them — putting a customer's name in an ADDRESS projection is how one fact gets
+ * two homes.
+ */
+export const CUSTOMER_ADDRESS_DOT_COLUMNS = 'id, customer_id, line1, city, latitude, longitude';
+
 
 /**
  * Compare two address parts the way a person would: case and punctuation are not a difference.
