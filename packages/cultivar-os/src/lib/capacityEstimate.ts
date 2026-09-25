@@ -31,12 +31,26 @@ export interface CapacityInputs {
   /** How many trees across those stops. */
   trees: number;
   /**
-   * Container gallons across those trees. REPORTED, not multiplied into time.
-   * ⚠️ Deliberate: nothing has measured that a 45 gal takes proportionally longer to plant than a
-   * 15 gal. Inventing a coefficient would dress a guess as arithmetic. It is shown because Lauren
-   * reads it as a load signal, and it is the input a future per-size planting time would use.
+   * Container gallons summed over the trees whose size COULD be read. `null` = none could.
+   *
+   * 🔴 THIS IS NOW MULTIPLIED INTO TIME, REVERSING #375's RECORDED DECISION ON DAVID'S RULING
+   *    (2026-09-25): *"trees × container gallons × MINUTES PER GALLON (LAWNS: 1 min/gal)."* #375
+   *    wrote it down as reported-never-multiplied because nothing had measured that a 45 gal takes
+   *    proportionally longer than a 15 gal. **David has now measured it on his own crews**, so the
+   *    coefficient is the owner's figure rather than our invention — and it is a per-business
+   *    SETTING, so a nursery that plants at a different rate holds a different number.
+   * ⚠️ A PARTIAL SUM, DELIBERATELY — and this too reverses #375, which made the whole total `null`
+   *    if ANY tree's size was unreadable. David: *"a tree with no readable size shows 'size unknown
+   *    — not counted', never 0."* Discarding the eleven trees you CAN measure because the twelfth is
+   *    unreadable is not caution, it is throwing away the answer.
    */
   gallons: number | null;
+  /**
+   * How many of `trees` had NO readable container size.
+   * 🔴 NEVER FOLDED INTO THE TOTAL AS ZERO. It is reported on its own line as *"size unknown — not
+   *    counted"*, so the estimate is honestly a FLOOR rather than quietly short (D-9 / A9).
+   */
+  treesSizeUnknown: number;
   /** The OPTIMISER's own drive time for the day, in minutes. `null` = it did not report one. */
   driveMinutes: number | null;
   /** The OPTIMISER's own miles. `null` = it did not report them. Shown, never multiplied. */
@@ -47,7 +61,9 @@ export interface CapacityInputs {
 export interface CapacitySettings {
   /** X. Above this many estimated hours, suggest a second team. LAWNS = 7. */
   dayHoursBeforeSecondTeam: number;
-  /** Minutes to plant one tree. 30 until Start/Done taps measure it. */
+  /** Minutes to plant ONE GALLON of container. LAWNS = 1 (David, 2026-09-25). */
+  plantingMinutesPerGallon: number;
+  /** Minutes to plant one tree — kept ONLY as the figure a size-unknown tree would have used. */
   plantingMinutesPerTree: number;
   /** True when these came from this nursery's saved settings; false when they are the defaults. */
   fromSettings: boolean;
@@ -61,8 +77,10 @@ export interface CapacityLine {
 }
 
 export interface CapacityEstimate {
-  /** Planting minutes = trees × plantingMinutesPerTree. */
+  /** Planting minutes = readable container gallons × plantingMinutesPerGallon. */
   plantingMinutes: number;
+  /** How many trees could not be sized, and so are NOT in `plantingMinutes`. */
+  treesNotCounted: number;
   /** The optimiser's drive minutes, or 0 when it reported none — see `driveKnown`. */
   driveMinutes: number;
   /** 🔴 FALSE means the total is a FLOOR, not an estimate. Never quietly treated as zero drive. */
@@ -96,8 +114,12 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  *    days that most need it.
  */
 export function estimateDay(input: CapacityInputs, settings: CapacitySettings): CapacityEstimate {
-  const perTree = Math.max(0, settings.plantingMinutesPerTree);
-  const plantingMinutes = Math.max(0, input.trees) * perTree;
+  const perGallon = Math.max(0, settings.plantingMinutesPerGallon);
+  const countedGallons = input.gallons == null ? 0 : Math.max(0, input.gallons);
+  const treesNotCounted = Math.max(0, input.treesSizeUnknown);
+  // 🔴 GALLONS × MINUTES-PER-GALLON, and a tree with no readable size contributes NOTHING rather
+  //    than a zero or a guess. `treesNotCounted` carries it to the surface instead.
+  const plantingMinutes = Math.round(countedGallons * perGallon);
   const driveKnown = input.driveMinutes != null;
   const driveMinutes = driveKnown ? Math.max(0, input.driveMinutes as number) : 0;
   const totalHours = round1((plantingMinutes + driveMinutes) / 60);
@@ -108,27 +130,41 @@ export function estimateDay(input: CapacityInputs, settings: CapacitySettings): 
     { label: 'Stops', value: String(input.stops), because: 'the stops on this day' },
     { label: 'Trees', value: String(input.trees), because: 'counted from the orders on those stops' },
     { label: 'Container gallons',
-      value: input.gallons == null ? 'not known' : String(Math.round(input.gallons)),
-      because: input.gallons == null
-        ? 'some sizes could not be read — shown, never counted as zero'
-        : 'shown as a load signal; it is NOT multiplied into time, because nothing has measured that a bigger container takes proportionally longer' },
+      value: input.gallons == null ? 'none could be read' : String(Math.round(countedGallons)),
+      because: treesNotCounted > 0
+        ? `summed over the ${Math.max(0, input.trees) - treesNotCounted} tree${Math.max(0, input.trees) - treesNotCounted === 1 ? '' : 's'} whose size could be read`
+        : 'summed over every tree on the day' },
+    // 🔴 EVERY FIGURE SHOWS ITS WORKING, in David's own form: "3 × 15 gal × 1 min = 45 min".
     { label: 'Planting time', value: `${round1(plantingMinutes / 60)} h (${plantingMinutes} min)`,
-      because: `${input.trees} trees × ${perTree} min — ${src}` },
+      because: input.gallons == null
+        ? `no container size could be read, so no planting time is counted — ${src}`
+        : `${Math.round(countedGallons)} gal × ${perGallon} min = ${plantingMinutes} min — ${src}` },
+    ...(treesNotCounted > 0 ? [{
+      label: 'Trees not counted',
+      value: `${treesNotCounted} — size unknown`,
+      // 🔴 David's exact words: "a tree with no readable size shows 'size unknown — not counted',
+      //    never 0." A zero would read as "no work", which is the one thing it is not.
+      because: `no readable container size, so ${treesNotCounted === 1 ? 'it is' : 'they are'} NOT in the planting time above — this day is longer than it looks`,
+    }] : []),
     { label: 'Drive time',
       value: driveKnown ? `${round1(driveMinutes / 60)} h (${driveMinutes} min)` : 'not known',
       because: driveKnown ? 'the optimiser’s own answer for the saved route' : 'this day has not been routed, so the total below is a FLOOR' },
     { label: 'Miles', value: input.miles == null ? 'not known' : String(round1(input.miles)),
       because: input.miles == null ? 'the optimiser did not report them' : 'the optimiser’s own answer; shown, never multiplied' },
-    { label: 'Estimated day', value: `${totalHours} h${driveKnown ? '' : ' at least'}`,
-      because: driveKnown ? 'planting + drive' : 'planting only — drive time is not known yet' },
+    { label: 'Estimated day', value: `${totalHours} h${driveKnown && treesNotCounted === 0 ? '' : ' at least'}`,
+      because: !driveKnown && treesNotCounted > 0 ? `planting for the sized trees only — drive time is not known AND ${treesNotCounted} tree${treesNotCounted === 1 ? '' : 's'} could not be sized`
+        : !driveKnown ? 'planting only — drive time is not known yet'
+        : treesNotCounted > 0 ? `planting + drive, but ${treesNotCounted} tree${treesNotCounted === 1 ? '' : 's'} could not be sized, so the real day is longer`
+        : 'planting + drive' },
     { label: 'Second team above', value: `${settings.dayHoursBeforeSecondTeam} h`, because: src },
   ];
 
+  const atLeast = driveKnown && treesNotCounted === 0 ? '' : ' at least';
   const headline = suggestedTeams === 2
-    ? `This day looks like ${totalHours} h${driveKnown ? '' : ' at least'} — longer than ${settings.dayHoursBeforeSecondTeam} h, so two teams are suggested.`
-    : `This day looks like ${totalHours} h${driveKnown ? '' : ' at least'} — within ${settings.dayHoursBeforeSecondTeam} h, so one team is suggested.`;
+    ? `This day looks like ${totalHours} h${atLeast} — longer than ${settings.dayHoursBeforeSecondTeam} h, so two teams are suggested.`
+    : `This day looks like ${totalHours} h${atLeast} — within ${settings.dayHoursBeforeSecondTeam} h, so one team is suggested.`;
 
-  return { plantingMinutes, driveMinutes, driveKnown, totalHours, suggestedTeams,
+  return { plantingMinutes, treesNotCounted, driveMinutes, driveKnown, totalHours, suggestedTeams,
            thresholdHours: settings.dayHoursBeforeSecondTeam, working, headline };
 }
 
@@ -136,5 +172,6 @@ export const CAPACITY_COPY = {
   suggestionOnly: 'This is a suggestion. You decide how many teams go out — if you say one team, that stands.',
   floorNote: 'This day has not been routed yet, so drive time is not counted. The real day is longer than this.',
   overrideKept: 'Your choice is what gets recorded, beside the estimate it was made against.',
-  learnLater: 'Planting time is a standard 30 minutes a tree until Start and Done taps have measured it here.',
+  learnLater: 'Planting time is container gallons times the minutes-a-gallon rate in Settings → Operations. Change the rate there and every day re-reads it.',
+  sizeUnknown: 'A tree whose container size cannot be read is listed as "size unknown — not counted". It is never counted as zero, so a day carrying one is longer than the estimate says.',
 };

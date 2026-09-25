@@ -211,6 +211,20 @@ export interface OperationsConfig {
   dayHoursBeforeSecondTeam: number;
   /** Minutes to plant one tree; 30 until Start/Done taps measure it here (ledger #375). */
   plantingMinutesPerTree: number;
+  /**
+   * 🔴 MINUTES TO PLANT ONE GALLON OF CONTAINER — David's ruling, 2026-09-25, and it REPLACES
+   * `plantingMinutesPerTree` as the basis for the day's planting time: *"trees × container gallons ×
+   * MINUTES PER GALLON (LAWNS: 1 min/gal) — a PER-BUSINESS SETTING, editable, never hard-coded."*
+   *
+   * ⚠️ IT REVERSES A RECORDED DECISION AND THAT IS DELIBERATE. Ledger #375 wrote gallons down as
+   * *"REPORTED, not multiplied into time"*, on the reasoning that nothing had measured a 45 gal
+   * taking proportionally longer than a 15 gal. **David has now measured it on his own crews**, so
+   * the coefficient is no longer an invention — it is the owner's figure, and it lives here rather
+   * than in code precisely so a second nursery can hold a different one.
+   * ⚠️ `plantingMinutesPerTree` is KEPT, not deleted: a tree whose container size cannot be read
+   * has no gallons to multiply, and the day must still say something honest about it.
+   */
+  plantingMinutesPerGallon: number;
   caliperMeasuredAtInches: number;
   /**
    * Where that height came from, in the nursery's own words (David, 2026-09-18: the platform
@@ -270,6 +284,10 @@ export const OPERATIONS_DEFAULTS: OperationsConfig = {
   // Minutes to plant ONE tree. 30 until Start/Done taps have measured it here — and the surface
   // says so rather than presenting a default as a measurement (D-9).
   plantingMinutesPerTree: 30,
+  // 1 minute a gallon. ⚠️ This is LAWNS's own measured rate AND the platform default, which is
+  // unusual here and is stated so nobody reads it as a neutral standard: it is the only rate any
+  // nursery has given us. The estimate always says whether it used the nursery's setting or this.
+  plantingMinutesPerGallon: 1,
   caliperMeasuredAtInches: 6,
   caliperMeasuredAtBecause: '',
 };
@@ -307,7 +325,8 @@ export const OPERATIONS_BASIS: Record<keyof OperationsConfig, { basis: BasisKind
   bubblersPerTree:         { basis: 'fact',       because: 'LAWNS, David 2026-09-18 — per tree the order specifies, not every tree' },
   deerFenceTPostsPerTree:  { basis: 'fact',       because: 'LAWNS, David 2026-09-12' },
   dayHoursBeforeSecondTeam: { basis: 'suggestion', because: "the owner's judgement about her own day and her own crews — LAWNS is 7; this never learns" },
-  plantingMinutesPerTree:  { basis: 'suggestion', because: 'a standard 30 minutes until Start and Done taps have measured it here' },
+  plantingMinutesPerTree:  { basis: 'suggestion', because: 'a standard 30 minutes until Start and Done taps have measured it here — now only the FALLBACK for a tree whose container size cannot be read' },
+  plantingMinutesPerGallon: { basis: 'fact', because: 'LAWNS, David 2026-09-25 — one minute a gallon, measured on his own crews; this is what the day\'s planting time is built from' },
   caliperMeasuredAtInches: { basis: 'suggestion', because: CALIPER_STANDARD.sentence },
   caliperMeasuredAtBecause: { basis: 'fact', because: "the nursery's own words for why it measures where it does" },
 };
