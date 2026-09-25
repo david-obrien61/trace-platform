@@ -24,9 +24,19 @@
  * one surface over, and it is the class nobody notices — nothing errors, the app works, and the
  * key is simply public.
  *
- * ⚠️ WHAT IS DELIBERATELY ALLOWED: `VITE_GOOGLE_MAPS_API_KEY` in client code. That key is
- * REFERRER-LOCKED and public by design — it draws the map. The two keys are not
- * interchangeable and the difference is the restriction, not the value (see docs/inventory-env.md).
+ * ⚠️ WHAT IS DELIBERATELY ALLOWED: `VITE_GOOGLE_MAPS_API_KEY` in client code — it draws the map.
+ *
+ * ✏️ THIS EXEMPTION USED TO READ "that key is REFERRER-LOCKED and public by design", FULL STOP.
+ * I wrote that. Nobody measured it. MEASURED 2026-09-25 against the live bundle: the key answered
+ * a server-side Geocoding call from a laptop with no referrer — `status: OK`. David confirmed the
+ * cause: the browser key and the SERVER key were the same key, so an unrestricted billable key was
+ * readable by every visitor to the site. The exemption was load-bearing and resting on a sentence.
+ *
+ * 🔴 SO THE EXEMPTION IS NO LONGER FREE. `npm run verify:browser-key` calls Google and FAILS
+ * unless the key is refused off-referrer, and the measurement EXPIRES after 30 days because a
+ * console setting changes without touching this repo. This file still allows the name; the other
+ * check is what earns the allowance. A carve-out justified by its own header is [[R-26]] in the
+ * one place everybody trusts and nobody re-reads.
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';

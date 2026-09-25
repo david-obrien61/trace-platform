@@ -1,0 +1,9 @@
+{
+  "measured_at": "2026-09-25T17:39:44.250Z",
+  "bundle": "/assets/index-Cl1Uy_eX.js",
+  "key_present": true,
+  "key_fingerprint": "AIzaSyBa…3CzA",
+  "restricted": true,
+  "google_status": "REQUEST_DENIED",
+  "why": "refused off-referrer — the key is application-restricted"
+}
