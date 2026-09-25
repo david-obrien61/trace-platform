@@ -152,9 +152,18 @@ async function main(): Promise<void> {
 
   const adjustCalls = src.match(/await adjustLotQty\(([^,]+),\s*([^,]+),/g) ?? [];
   const eventCalls  = src.match(/await recordOrderEvent\(([^,]+),\s*([^,]+),/g) ?? [];
-  // 5 decrement/restore sites (P1–P5) and 6 event sites (created, committed, fulfilled, edited, deleted, status).
+  // 5 decrement/restore sites (P1–P5) and 7 event sites: created, committed, fulfilled, edited,
+  // deleted, status, and — added 2026-09-25 (ledger #418) — CANCELLED.
+  // ⚠️ WHY CANCEL EARNED ITS OWN SITE RATHER THAN RIDING THE GENERIC `order_${status}` ONE: the
+  // cancel transition now goes through `cancel_order_with_stops`, which retires the order's
+  // delivery stops in the SAME transaction, and it returns BEFORE the generic status path. Its
+  // event carries what the generic one cannot — how many stops went with the order.
+  // 🔴 THE RUNTIME COUNT DID NOT CHANGE: a cancel emits ONE event either way. This is a seventh
+  // call SITE, not a seventh event. The number is a tripwire so a new writer gets noticed — which
+  // is exactly what it just did — so it is raised deliberately and the new site is named, never
+  // loosened to `>= 6`.
   ok(adjustCalls.length === 5, `D6 five adjustLotQty call sites (P1–P5) — found ${adjustCalls.length}`);
-  ok(eventCalls.length === 6, `D7 six recordOrderEvent call sites — found ${eventCalls.length}`);
+  ok(eventCalls.length === 7, `D7 seven recordOrderEvent call sites (the 7th is the cancel branch, #418) — found ${eventCalls.length}`);
   ok(adjustCalls.every(c => /,\s*stockGate,$/.test(c)), 'D8 every adjustLotQty call passes stockGate');
   ok(eventCalls.every(c => /,\s*stockGate,$/.test(c)), 'D9 every recordOrderEvent call passes stockGate');
 
