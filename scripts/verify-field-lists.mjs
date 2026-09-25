@@ -51,6 +51,35 @@ const COLUMN_LIST = /^[a-z_][a-z0-9_]*(\s*,\s*[a-z_][a-z0-9_]*){2,}$/i;
 // An entity deliberately carrying more than one enumeration, WITH ITS REASON. Same discipline as the
 // other caps: a decision on the record, never a convenience the builder grants itself.
 const ALLOWED_DIVERGENCE = {
+  // DECLARED 2026-09-25 (ledger #406) — ⚠️ PENDING DAVID'S RATIFICATION, the same standing as the
+  // entries below.
+  //
+  // 🔴 A WRITE PAYLOAD AND A READ PROJECTION ARE NOT TWO STATEMENTS OF ONE SHAPE. `snapshotEstimate`
+  // names the seventeen columns it WRITES — every input and every derived figure, because the row is
+  // the permanent record of what was measured. `readLatestEstimates` names the SEVEN the schedule
+  // shows beside a crew's heading. Deriving the read from the write would pull the whole snapshot,
+  // including the inputs nobody renders, for every crew on every schedule open — and deriving the
+  // write from the read is impossible, since the read is a strict subset by design.
+  //
+  // ⚠️ THE SHORTER LIST IS THE POINT, NOT AN OVERSIGHT. `delivery_day_estimates` is append-only, so
+  // a day accumulates a row per route-save; the schedule reads the LATEST per crew and needs only
+  // what it prints. A registry-derived full shape would grow that read every time the snapshot gains
+  // a column, which is exactly backwards for a page that already declines to fetch order lines.
+  //
+  // 🔴 NOT RE-BASELINED, DELIBERATELY. `field-lists-baseline.json` says in its own words: *"Shrink
+  // it; never grow it casually."* Adding a new list to the baseline is how a ratchet stops being one
+  // — a declaration with a reason is a decision on the record, which is what this cap asks for.
+  delivery_day_estimates: {
+    reason: 'A WRITE PAYLOAD and a READ PROJECTION, not two statements of one shape. '
+          + '`snapshotEstimate` enumerates every column of the permanent record it writes (inputs '
+          + 'AND derived figures, because the row is the evidence of what was measured). '
+          + '`readLatestEstimates` enumerates the seven the schedule prints beside a crew heading. '
+          + 'The read is a strict SUBSET by design: the table is append-only, so a day accumulates '
+          + 'a row per route-save, and deriving the read from the record shape would pull every '
+          + 'input nobody renders for every crew on every schedule open — on a page that already '
+          + 'declines to fetch order lines (§6 r8). Deriving the write from the read is impossible.',
+    paths: ['packages/cultivar-os/src/lib/dayEstimate.ts'],
+  },
   // DECLARED 2026-09-02 (ledger #257) — ⚠️ PENDING DAVID'S RATIFICATION, the same standing as the
   // two entries below. `vendor_preferences` is a table this build CREATED, and this is its FIRST
   // and ONLY reader, so there is no restated field set yet — the ratchet is flagging a new list,
