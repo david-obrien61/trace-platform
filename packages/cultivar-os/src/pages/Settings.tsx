@@ -10,6 +10,9 @@ import { REVIEW_LINK_MODULE_KEY } from '@trace/shared/business-logic/reviewLink'
 import { readReviewAskConfig, reviewCopyProblems, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
 import OperationsSettings from '../components/settings/OperationsSettings';
+import { LocateAddressesPanel } from '@trace/shared/components/settings/LocateAddressesPanel';
+import { DeliveryRingMap } from '@trace/shared/components/settings/DeliveryRingMap';
+import type { DeliveryRing } from '@trace/shared/business-logic/deliveryRings';
 import TeamsSettings from '../components/settings/TeamsSettings';
 import ContainerSizesSettings from '../components/settings/ContainerSizesSettings';
 import {
@@ -284,6 +287,60 @@ function ReviewAskSection({ businessId }: { businessId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+// ── Delivery section — the rings and the address locator (ledger #386) ─────────────────────
+// PURPOSE:      Settings → Delivery. Where the owner sets what a delivery costs by distance, and
+//               where the customer book gets located.
+// DEPENDENCIES: shared LocateAddressesPanel · shared DeliveryRingMap · business_delivery_rings.
+// OUTPUTS:      <DeliverySection>
+//
+// 🔴 IT IS SAFE TO SHIP BEFORE THE MIGRATION. `business_delivery_rings` does not exist until
+// 20260924f is applied. A read against a missing table returns an error, and this treats that as
+// "not set up yet" and SAYS SO — it never renders an empty ring list, because an empty list and a
+// missing table look identical on screen and mean opposite things.
+function DeliverySection({ businessId, canWrite }: { businessId: string; canWrite: boolean }) {
+  const { business } = useBusinessContext();
+  const [rings, setRings] = useState<DeliveryRing[]>([]);
+  const [ringsMissing, setRingsMissing] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const { data, error } = await supabase.from('business_delivery_rings')
+        .select('id, outer_radius_miles, charge, origin_note, active')
+        .eq('business_id', businessId).order('outer_radius_miles', { ascending: true });
+      if (!alive) return;
+      if (error) { setRingsMissing(true); return; }
+      setRingsMissing(false);
+      setRings((data ?? []) as DeliveryRing[]);
+    })();
+    return () => { alive = false; };
+  }, [businessId]);
+
+  const depot = (business?.geocode_status === 'found'
+    && typeof business?.latitude === 'number' && typeof business?.longitude === 'number')
+    ? { latitude: business.latitude, longitude: business.longitude } : null;
+
+  return (
+    <>
+      <div className="section">
+        <h3 style={{ margin: '0 0 6px' }}>Your delivery area</h3>
+        {ringsMissing ? (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '0.9rem' }}>
+            <strong>Delivery rings are not set up yet.</strong>
+            <div style={{ fontSize: '0.85rem', marginTop: 4 }}>
+              Nothing is wrong with your data — this switches on when the rings migration is
+              applied. Delivery is charged your usual flat rate until then.
+            </div>
+          </div>
+        ) : (
+          <DeliveryRingMap depot={depot} rings={rings} customers={[]} canEdit={canWrite} />
+        )}
+      </div>
+      <LocateAddressesPanel db={supabase} businessId={businessId} canWrite={canWrite} />
+    </>
   );
 }
 
@@ -759,6 +816,9 @@ export function Settings() {
   // 🔴 It is NOT the `TeamSection` below, which is LOGINS. Two different things, and the copy on
   //    each says which it is: accounts and roles there, names on a truck here.
   const isTeams = sectionParam === 'teams';
+  // DELIVERY (ledger #386) — the rings and the address locator, a cultivar vertical section for
+  // the same reason as the three above: the shared page's own union does not grow a member for it.
+  const isDelivery = sectionParam === 'delivery';
 
   // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
   console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });
@@ -801,11 +861,15 @@ export function Settings() {
   ) : businessId && isTeams ? (
     // /settings/teams — the direct destination for the crew list (RULE 2a).
     <TeamsSettings businessId={businessId} canWrite={can('deliveries:update')} />
+  ) : businessId && isDelivery ? (
+    // /settings/delivery — the rings and the address locator (RULE 2a).
+    <DeliverySection businessId={businessId} canWrite={canManageSettings} />
   ) : (businessId && !section) ? (
     <>
       <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
       <ContainerSizesSettings businessId={businessId} canWrite={canManageSettings} />
       <TeamsSettings businessId={businessId} canWrite={can('deliveries:update')} />
+      <DeliverySection businessId={businessId} canWrite={canManageSettings} />
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
       <ReviewAskSection businessId={businessId} />

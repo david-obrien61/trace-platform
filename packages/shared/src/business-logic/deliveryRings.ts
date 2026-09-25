@@ -218,3 +218,66 @@ export function resolveServiceArea(x: {
     note: 'no delivery area set yet — suggestions are ranked near you, not limited',
   };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE TRIP CHARGE — what checkout bills for a delivery, once rings exist
+// ═════════════════════════════════════════════════════════════════════════════
+// David, 2026-09-23: *"the checkout Trip Charge reads the ring"*, and *"beyond the last ring →
+// shown, not priced"*.
+//
+// 🔴 THREE OUTCOMES, AND THEY ARE NOT THE SAME THING. Collapsing any two of them is how a screen
+// comes to state a number it cannot justify:
+//   · a located address inside a ring          → that ring's charge
+//   · a located address BEYOND the last ring   → NO charge, and a sentence. The owner has not
+//     priced that distance; inventing one would read as a quote.
+//   · NO RINGS CONFIGURED AT ALL               → this is NOT "beyond the last ring". The tenant
+//     has not set up rings, so the flat offering that has always been charged still applies and
+//     nothing changes. Treating an unconfigured tenant as "outside the area" would silently strip
+//     every delivery charge LAWNS bills today.
+
+export type TripChargeSource = 'ring' | 'flat-no-rings' | 'outside-rings' | 'unlocated';
+
+export interface TripCharge {
+  /** What to bill. Null means DO NOT BILL — and the reason is in `why`. */
+  amount: number | null;
+  source: TripChargeSource;
+  /** What the screen says. Always present; a null amount is never silent. */
+  why: string;
+}
+
+/**
+ * Decide the trip charge.
+ *
+ * ⚠️ `flatAmount` IS WHAT THE TENANT ALREADY CHARGES (the `service_offerings` row). It is passed
+ * in, never assumed, and it is what keeps this safe to ship BEFORE any ring exists.
+ */
+export function tripChargeFor(x: {
+  depot: Point | null;
+  address: Point | null;
+  rings: readonly DeliveryRing[];
+  /** The existing flat transport charge, used only when no rings are configured. */
+  flatAmount: number | null;
+  /** False when the address could not be placed — it is never priced (2026-09-18). */
+  located: boolean;
+}): TripCharge {
+  const active = orderedRings(x.rings);
+
+  if (active.length === 0) {
+    return { amount: x.flatAmount, source: 'flat-no-rings',
+      why: 'No delivery rings set up yet — your usual delivery charge applies.' };
+  }
+  // 🔴 UNPLACEABLE IS NEVER PRICED, and it is checked AFTER the no-rings case on purpose: a tenant
+  // with no rings bills their flat rate as they always have, whether or not we could place the
+  // pin. Ring pricing is what needs a location; a flat rate never did.
+  if (!x.located) {
+    return { amount: null, source: 'unlocated',
+      why: "We can't place this address, so the delivery can't be priced by distance. Saved and flagged." };
+  }
+  const v = ringFor(x.depot, x.address, active);
+  if (v.ring) {
+    return { amount: v.ring.charge, source: 'ring',
+      why: `${v.miles?.toFixed(1)} straight-line miles — inside your ${v.ring.outer_radius_miles}-mile ring.` };
+  }
+  return { amount: null, source: 'outside-rings',
+    why: 'Outside your delivery rings — set a charge.' };
+}

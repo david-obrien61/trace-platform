@@ -4,7 +4,7 @@
 // DEPENDENCIES: deliveryRings (pure).
 // OUTPUTS: assertions only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { distanceMiles, ringFor, orderedRings, impliedMiles, proposeRingsFromCharges, resolveServiceArea } from './deliveryRings';
+import { distanceMiles, ringFor, orderedRings, impliedMiles, proposeRingsFromCharges, resolveServiceArea, tripChargeFor } from './deliveryRings';
 
 let passed = 0; const failures: string[] = [];
 const ok = (c: boolean, m: string) => { if (c) passed++; else failures.push(m); };
@@ -149,6 +149,41 @@ ok(distanceMiles(DEPOT, { latitude: NaN, longitude: 0 }) === null, 'A4 a NaN coo
   const seed = resolveServiceArea({ rings: [], deliveredMiles: [99], marginMiles: 5 });
   ok(ring.source === 'ring' && seed.source === 'seeded' && ring.radiusMiles !== seed.radiusMiles,
      '🔴 G8 NEGATIVE CONTROL: the same history with and without rings resolves differently. An implementation that always seeded, or always used the ring, would pass half of these by accident');
+}
+
+// ── §H · THE TRIP CHARGE — three outcomes that must never collapse into two ─────────────────
+const NEAR = { latitude: 30.58, longitude: -97.92 };
+const FAR  = { latitude: 31.9,  longitude: -97.9  };
+{
+  const c = tripChargeFor({ depot: DEPOT, address: NEAR, rings: RINGS, flatAmount: 40, located: true });
+  ok(c.amount === 50 && c.source === 'ring', 'H1 inside a ring, the ring is charged — not the flat rate');
+}
+{
+  const c = tripChargeFor({ depot: DEPOT, address: FAR, rings: RINGS, flatAmount: 40, located: true });
+  ok(c.amount === null && c.source === 'outside-rings',
+     '🔴 H2 BEYOND THE LAST RING IS NOT PRICED — the owner has not priced that distance, and inventing a number would read as a quote');
+  ok(/set a charge/.test(c.why) && !/\$/.test(c.why), 'H3 …it asks for a charge and names no money');
+}
+{
+  const c = tripChargeFor({ depot: DEPOT, address: FAR, rings: [], flatAmount: 40, located: true });
+  ok(c.amount === 40 && c.source === 'flat-no-rings',
+     "🔴 H4 NO RINGS IS NOT 'OUTSIDE THE RINGS', AND THIS IS THE ONE THAT PROTECTS TODAY'S MONEY. To a tenant with no rings configured, EVERY address is outside them — collapsing these two would strip the delivery charge from every order the day this ships, before a single ring exists");
+}
+{
+  const c = tripChargeFor({ depot: DEPOT, address: null, rings: RINGS, flatAmount: 40, located: false });
+  ok(c.amount === null && c.source === 'unlocated', 'H5 an unplaceable address is never priced (2026-09-18)');
+  ok(/Saved and flagged/.test(c.why), 'H6 …but it is saved, and says so');
+}
+{
+  const c = tripChargeFor({ depot: DEPOT, address: null, rings: [], flatAmount: 40, located: false });
+  ok(c.amount === 40,
+     '🔴 H7 …UNLESS THERE ARE NO RINGS. A tenant billing a flat rate never needed a location to do it, so an unplaceable address must not strip a charge that has nothing to do with distance');
+}
+{
+  const a = tripChargeFor({ depot: DEPOT, address: NEAR, rings: RINGS, flatAmount: 40, located: true });
+  const b = tripChargeFor({ depot: DEPOT, address: FAR,  rings: RINGS, flatAmount: 40, located: true });
+  ok(a.amount === 50 && b.amount === null,
+     '🔴 H8 NEGATIVE CONTROL: the same rings and the same flat rate, differing only in WHERE the address is, produce different money. An implementation returning the flat amount regardless would pass H1 by accident');
 }
 
 console.log(`\ndeliveryRings — ${passed} passed, ${failures.length} failed`);
