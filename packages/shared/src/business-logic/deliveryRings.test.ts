@@ -186,5 +186,70 @@ const FAR  = { latitude: 31.9,  longitude: -97.9  };
      '🔴 H8 NEGATIVE CONTROL: the same rings and the same flat rate, differing only in WHERE the address is, produce different money. An implementation returning the flat amount regardless would pass H1 by accident');
 }
 
+// ── §J · WHICH RING, AND THE CHIP THE CHARGE LINE SHOWS ─────────────────────────────────────
+// David's card: a located Hutto address on Trip Charge reads "ring 4 — 30.x mi" beside $250.
+// LAWNS's seeded rings — radius = charge ÷ $3.50 ÷ 2 (round trip), `20260925d`.
+const FOUR = [
+  { outer_radius_miles: 7.1,  charge: 50,  active: true },
+  { outer_radius_miles: 14.3, charge: 100, active: true },
+  { outer_radius_miles: 21.4, charge: 150, active: true },
+  { outer_radius_miles: 35.7, charge: 250, active: true },
+];
+// Hutto TX from the Leander yard. ⚠️ **22.3 STRAIGHT-LINE MILES, MEASURED HERE, NOT 30.** This
+// fixture was first written asserting ring 3 on a guess of ~19 miles and the arithmetic refused
+// it; the guess was corrected to the measurement rather than the other way round.
+// 🔴 AND IT SETTLES SOMETHING ABOUT DAVID'S OWN CARD, which reads *"$250 (ring 4) with 'ring 4 —
+// 30.x mi'"*: the RING and the MONEY are exactly right, and the DISTANCE is not what this screen
+// can show. 30-odd miles is the ROAD — what a truck drives, round the lake and down the county
+// road. We measure the crow's flight, which is 22.3, and the file header forbids presenting one
+// as the other. So the chip will read "ring 4 — 22.3 mi" and the card's mileage needs amending,
+// or road distance needs to become a decision (a different API, and David's to take).
+const HUTTO = { latitude: 30.5427, longitude: -97.5464 };
+{
+  const v = ringFor(DEPOT, HUTTO, FOUR);
+  ok(v.ordinal === 4 && v.ring?.charge === 250,
+     `J1 the ordinal counts from the yard — Hutto lands in ring 4 of four, at $250 (got ring ${v.ordinal}, ${v.miles?.toFixed(1)} mi)`);
+}
+{
+  // 🔴 THE ORDINAL IS A POSITION, NOT AN IDENTITY. Retire the innermost ring and the SAME
+  // address is one ring lower — which is why nothing stores this number.
+  const withoutInner = FOUR.slice(1);
+  const v = ringFor(DEPOT, HUTTO, withoutInner);
+  ok(v.ordinal === 3 && v.ring?.charge === 250,
+     `🔴 J2 THE SAME ADDRESS AND THE SAME RING, ONE FEWER RING INSIDE IT: ring 4 becomes ring 3, and the CHARGE does not move. A stored ordinal would have survived the edit that invalidated it (got ${v.ordinal})`);
+}
+{
+  const v = ringFor(DEPOT, { latitude: 31.9, longitude: -97.9 }, FOUR);
+  ok(v.ordinal === null && v.ring === null,
+     'J3 beyond the last ring there is no ordinal — a number here would name a ring that does not exist');
+}
+{
+  const v = ringFor(DEPOT, null, FOUR);
+  ok(v.ordinal === null && v.miles === null, 'J4 no coordinate, no ordinal and no distance');
+}
+{
+  const c = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: FOUR, flatAmount: 50, located: true });
+  ok(c.label !== null && /^ring 4 — \d+\.\d mi$/.test(c.label!),
+     `🔴 J5 THE CHIP IS THE SHAPE DAVID ASKED FOR — "ring N — NN.N mi" (got ${JSON.stringify(c.label)})`);
+  ok(/straight-line/.test(c.why),
+     '🔴 J6 …AND THE SENTENCE UNDER IT SAYS STRAIGHT-LINE. The chip has no room for the word; dropping it from BOTH would be the promise this file forbids');
+}
+{
+  // Both renderings come from ONE verdict, so they cannot disagree about which ring it is.
+  const c = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: FOUR, flatAmount: 50, located: true });
+  const v = ringFor(DEPOT, HUTTO, FOUR);
+  ok(c.label === `ring ${v.ordinal} — ${v.miles?.toFixed(1)} mi` && c.amount === v.ring?.charge,
+     'J7 the chip, the distance and the money all come from the same verdict');
+}
+{
+  // NEGATIVE CONTROL — every non-ring outcome has NO chip. A label built unconditionally would
+  // put "ring null — NaN mi" under a suppressed charge.
+  const outside = tripChargeFor({ depot: DEPOT, address: { latitude: 31.9, longitude: -97.9 }, rings: FOUR, flatAmount: 50, located: true });
+  const nolocate = tripChargeFor({ depot: DEPOT, address: null, rings: FOUR, flatAmount: 50, located: false });
+  const norings = tripChargeFor({ depot: DEPOT, address: HUTTO, rings: [], flatAmount: 50, located: true });
+  ok(outside.label === null && nolocate.label === null && norings.label === null,
+     '🔴 J8 NEGATIVE CONTROL: outside-rings, unlocated and flat-no-rings carry NO chip — only a real ring names one');
+}
+
 console.log(`\ndeliveryRings — ${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) { console.error('FAILURES:\n' + failures.map(f => '  - ' + f).join('\n')); process.exit(1); }

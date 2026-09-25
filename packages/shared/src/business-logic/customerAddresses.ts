@@ -79,6 +79,14 @@ export type ShipToInput = {
    *  show the same suppressed delivery charge `api/orders/submit` will apply; a preview promising
    *  a charge the submit then drops is a price that changes between the screen and the receipt. */
   unplaceable?: boolean;
+  /** 🔴 DISPLAY ONLY, LIKE `unplaceable`, AND FOR THE SAME REASON. Set when the chosen address
+   *  already carries a `found` coordinate, so the checkout preview can show the SAME ring charge
+   *  `api/orders/submit` will compute. The server re-geocodes and re-reads the rings itself and
+   *  never trusts these numbers — they exist so the screen and the receipt agree, not so the
+   *  browser can decide money. Absent means "not placed yet", and the preview then shows the flat
+   *  charge the row has always made, which is what the server does too. */
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type CustomerAddress = {

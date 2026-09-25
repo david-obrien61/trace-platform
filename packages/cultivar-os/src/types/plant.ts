@@ -95,6 +95,19 @@ export interface ServiceOffering {
    * case is a service priced the way it was priced yesterday.
    */
   price_source?: 'fixed' | 'container_ladder' | string;
+  /**
+   * WHETHER THIS ROW IS PRICED FLAT OR OFF THE DELIVERY RINGS (`20260925c`).
+   *   'flat' — the `price` column, on every order. Every row written before 2026-09-25.
+   *   'ring' — the charge of the ring the destination lands in, measured straight-line from the
+   *            yard (Settings → Business profile). `price` is then the fallback for a tenant with
+   *            no rings, and it is what keeps this safe on a business that has never set one up.
+   * ⚠️ OPTIONAL ON PURPOSE, exactly as `price_source` is: a bundle served before `20260925c` is
+   * applied reads rows without the column, and absent is treated as 'flat' — the safe direction,
+   * where the worst case is a delivery priced the way it was priced yesterday.
+   * 🔴 THE BROWSER NEVER DECIDES THE MONEY FROM THIS. `api/orders/submit` re-reads the basis, the
+   * rings and the yard from the database; this field is what lets the PREVIEW agree with it.
+   */
+  pricing_basis?: 'flat' | 'ring' | string;
   transport_mode: 'self' | 'staff' | null;
   trigger_transport_mode: 'self' | 'staff' | null;
   recurrence_days: number | null;

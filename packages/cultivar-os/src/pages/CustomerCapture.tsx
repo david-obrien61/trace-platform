@@ -290,6 +290,13 @@ export function CustomerCapture() {
   const [addrAnswered, setAddrAnswered] = useState(false);
   // Remembered so the Review preview suppresses the charge the same way submit will.
   const [addrUnplaceable, setAddrUnplaceable] = useState(false);
+  // 🔴 WHERE THIS ADDRESS IS, ONCE THE CHECK HAS SETTLED — carried to Review so the preview can
+  // show the SAME ring charge the server will compute. It is set in ONE place (`rememberAnswer`,
+  // from `resolveAddressCheck`), so the coordinate the screen prices from and the coordinate
+  // written to the saved row are the same decision, not two that happen to agree today.
+  // ⚠️ `confirm` LEAVES IT NULL, deliberately: keeping what she typed means Google's pin belongs
+  // to Google's text, so there is no coordinate to price from and the flat charge stands.
+  const [addrPoint, setAddrPoint] = useState<{ latitude: number; longitude: number } | null>(null);
 
   /**
    * Write the geocode answer back onto the saved address it is about (ruling 1, 2026-09-24).
@@ -303,9 +310,15 @@ export function CustomerCapture() {
     // 🔴 THE ID IS PASSED, NEVER READ FROM STATE HERE. The 'Use Google's' handler clears
     // `pickedSite` as part of answering, and a write-back that read the id afterwards would
     // depend on React's update timing to find the row it is about.
+    // 🔴 THE PATCH IS COMPUTED BEFORE THE EARLY RETURN, because it decides TWO things and only
+    // one of them needs a saved row: what to write back (needs an id), and where this order is
+    // going (needs nothing). A typed-in address has no `customer_addresses` row to update and is
+    // still a perfectly locatable place to deliver to.
+    const patch = resolveAddressCheck(outcome, choice, new Date());
+    setAddrPoint(patch.latitude !== null && patch.longitude !== null
+      ? { latitude: patch.latitude, longitude: patch.longitude } : null);
     if (!addressId || !businessId) return;
     try {
-      const patch = resolveAddressCheck(outcome, choice, new Date());
       const { count, error } = await setAddressGeocode(supabase, { businessId, addressId, patch });
       // R-12: an update matching ZERO rows returns success with no error, so the count is the
       // only honest signal that anything landed.
@@ -464,6 +477,9 @@ export function CustomerCapture() {
     // asks it once; the answer re-enters through the same path.
     if (!(await addressStepPasses())) return;
 
+    const point = addrPoint ?? ((pickedSite?.geocode_status === 'found'
+      && typeof pickedSite.latitude === 'number' && typeof pickedSite.longitude === 'number')
+      ? { latitude: pickedSite.latitude, longitude: pickedSite.longitude } : null);
     setShipTo(deliveryRequired && address.trim()
       ? {
           line1: address.trim() || null,
@@ -472,6 +488,13 @@ export function CustomerCapture() {
           zip:   zip.trim()     || null,
           source: 'typed',
           unplaceable: addrUnplaceable || undefined,
+          // 🔴 DISPLAY ONLY — `api/orders/submit` geocodes and re-reads the rings itself and never
+          // trusts these. They travel so CartReview can show the ring charge the server will
+          // charge, instead of a flat price that changes between the screen and the receipt.
+          // The check's own answer wins; a saved site's stored coordinate is the fallback for the
+          // silent path, where a fresh address asks nothing and so never produces an outcome.
+          latitude:  point?.latitude  ?? null,
+          longitude: point?.longitude ?? null,
         }
       : null);
     navigate('/checkout/review');
@@ -662,6 +685,9 @@ export function CustomerCapture() {
                 ? { latitude: v.latitude, longitude: v.longitude, geocoded_at: v.geocoded_at ?? null, geocode_status: 'found' }
                 : null);
               setAddrAnswered(false); setAddrUnplaceable(false);
+              // Typing unlocates, so the preview stops pricing from a coordinate nobody checked.
+              setAddrPoint(v.latitude != null && v.longitude != null
+                ? { latitude: v.latitude, longitude: v.longitude } : null);
             }}
           />
         </Field>
