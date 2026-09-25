@@ -17,8 +17,21 @@
 // copy of the one rule that must never drift (§6 r8) — so this asks the endpoint, exactly as the
 // order screen's own status control does.
 //
-// ⚠️ THE CREW DOOR DOES NOT CALL THIS. David's ruling is explicit: the office door lifts now,
-// the crew's keeps holding until teams land. `crew_stop_act` is untouched.
+// ✏️ THE CREW-DOOR HOLD IS LIFTED — David, 2026-09-26 (ledger #416; the hold was recorded here on
+// 2026-09-21 as *"lift it for the office door now; the crew's keeps holding until teams land"*).
+// Teams have landed (#362; `delivery_teams` verified live), and David has now ruled explicitly:
+// **the crew's Done tap on an INSTALL stop issues its kit from stock through the same
+// test-mode-gated path, and Undo reverses it.** The Google review ask stays HELD (2026-09-15/17) —
+// that hold is untouched and is a separate question.
+//
+// 🔴 WHAT IS STILL TRUE OF THIS FILE: it changes no stock itself, and the crew door still does not
+// call it. `fulfilOrderForStop` moves the ORDER (and, through `/api/orders/submit`, the trees that
+// were SOLD). The KIT — mix, T-posts, rope, water monitors — is a different movement with a
+// different source (`install_kit_components`, ledger #411) and it is NOT wired yet.
+// ⚠️ UNTIL THE KIT IS SEEDED, DONE ISSUES NOTHING AND SAYS WHY (David's words). A kit whose
+// components carry no `qb_item_id` can issue nothing, and `evaluateKit` already reports exactly
+// that — `unlinked` names each one and `issuable` is false. Wiring the crew tap to a kit that
+// would silently issue nothing is the failure this sequencing avoids.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { updateStop } from './stopWrites';
