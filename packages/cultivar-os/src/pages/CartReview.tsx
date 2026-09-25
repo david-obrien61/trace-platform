@@ -15,9 +15,8 @@ import {
 import type { Ladder } from '@trace/shared/inventory';
 import { loadContainerLadder } from '../lib/containerLadderRead';
 import { supabase } from '../lib/supabase';
-import {
-  tripChargeFor, DELIVERY_RING_COLUMNS, type DeliveryRing, type TripCharge,
-} from '@trace/shared/business-logic/deliveryRings';
+import { tripChargeFor, type DeliveryRing, type TripCharge } from '@trace/shared/business-logic/deliveryRings';
+import { readRingInputs } from '../lib/deliveryRingsRead';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
   totalPlantCount, nettedQuantity, lineSubtotal, isNettingOffering,
@@ -67,26 +66,12 @@ export function CartReview() {
   useEffect(() => {
     if (!businessId || !ringBasis) { setRings(null); setDepot(null); return; }
     let cancelled = false;
-    // `void` because the effect is the caller and there is nobody to await it — the catch below
-    // is the rejection handler, which is what the rule is actually asking for.
+    // `void` because the effect is the caller and there is nobody to await it — `readRingInputs`
+    // never rejects, which is what the rule is actually asking for.
     void (async () => {
-      try {
-        const [biz, ringRows] = await Promise.all([
-          supabase.from('businesses').select('latitude, longitude, geocode_status').eq('id', businessId).maybeSingle(),
-          supabase.from('business_delivery_rings').select(DELIVERY_RING_COLUMNS).eq('business_id', businessId).eq('active', true),
-        ]);
-        if (cancelled) return;
-        const b = biz.data as { latitude?: number | null; longitude?: number | null; geocode_status?: string | null } | null;
-        setDepot(b?.geocode_status === 'found' && typeof b.latitude === 'number' && typeof b.longitude === 'number'
-          ? { latitude: b.latitude, longitude: b.longitude } : null);
-        // 🔴 A FAILED READ IS NOT "NO RINGS". `[]` would make the preview say *no rings set up*
-        // and quietly show the flat price, which is a claim about the owner's settings that a
-        // network error is not entitled to make. `null` means "we don't know yet", and the
-        // preview below shows nothing extra until it does.
-        setRings(ringRows.error ? null : ((ringRows.data ?? []) as DeliveryRing[]));
-      } catch {
-        if (!cancelled) { setRings(null); setDepot(null); }
-      }
+      const got = await readRingInputs(businessId);
+      if (cancelled) return;
+      setDepot(got.depot); setRings(got.rings);
     })();
     return () => { cancelled = true; };
   }, [businessId, ringBasis]);

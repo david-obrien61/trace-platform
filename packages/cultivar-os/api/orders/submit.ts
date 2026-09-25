@@ -1,5 +1,7 @@
 import { classifyGeocodeResponse } from '../../../shared/src/business-logic/geocodeResult';
-import { tripChargeFor } from '../../../shared/src/business-logic/deliveryRings';
+import {
+  tripChargeFor, DELIVERY_RING_COLUMNS, BUSINESS_DEPOT_COLUMNS,
+} from '../../../shared/src/business-logic/deliveryRings';
 import { createClient } from '@supabase/supabase-js';
 import { customerDisplayName } from '../../../shared/src/utils/personName';
 import { pushQboInvoice } from '../qbo/invoice/cultivar';
@@ -1005,13 +1007,13 @@ async function handleCreate(req: any, res: any) {
         if (offErr || off?.pricing_basis !== 'ring') return null;
 
         const { data: biz } = await db.from('businesses')
-          .select('latitude, longitude, geocode_status').eq('id', businessId).maybeSingle();
+          .select(BUSINESS_DEPOT_COLUMNS).eq('id', businessId).maybeSingle();
         const depot = (biz?.geocode_status === 'found'
           && typeof biz?.latitude === 'number' && typeof biz?.longitude === 'number')
           ? { latitude: biz.latitude as number, longitude: biz.longitude as number } : null;
 
         const { data: ringRows } = await db.from('business_delivery_rings')
-          .select('id, business_id, outer_radius_miles, charge, origin_note, active')
+          .select(DELIVERY_RING_COLUMNS)
           .eq('business_id', businessId).eq('active', true);
 
         const flat = lineSubtotal(selectedTransport, qtyFor(selectedTransport));

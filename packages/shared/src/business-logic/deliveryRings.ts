@@ -46,6 +46,19 @@ export interface Point { latitude: number; longitude: number }
  */
 export const DELIVERY_RING_COLUMNS = 'id, business_id, outer_radius_miles, charge, origin_note, active';
 
+/**
+ * THE YARD — the three columns every ring measurement starts from, on the `businesses` row.
+ *
+ * 🔴 THE DEPOT IS THE BUSINESS-PROFILE ADDRESS AND THERE IS NO SEPARATE SETTING (David,
+ * 2026-09-24: *"one fact, one place"*). So this names columns on `businesses`, not on a depot
+ * table that deliberately does not exist.
+ * ⚠️ `geocode_status` IS IN THE LIST BECAUSE THE COORDINATE ALONE CANNOT BE TRUSTED. A row can
+ * hold a stale or `confirm`-era latitude; only `found` means someone placed it. A read that took
+ * the two numbers and skipped the verdict would measure rings from a pin nobody agreed to.
+ * Same rule as DELIVERY_RING_COLUMNS above (#179): the list is the source, the select derives.
+ */
+export const BUSINESS_DEPOT_COLUMNS = 'latitude, longitude, geocode_status';
+
 const EARTH_MILES = 3958.7613;
 const rad = (d: number) => (d * Math.PI) / 180;
 
