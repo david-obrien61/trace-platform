@@ -1768,3 +1768,33 @@ SIGNAL: none — this card has no trace line, and that is the hazard. See below.
   **says** the right thing. **Only this card proves a browser did it**, and only for `/inventory`;
   `/assets`, `/customers`, the reconcile and import grids took the same change and are not covered
   here. Clicking one editable cell on any of them is the whole test.
+
+---
+
+## SURFACE: the configurable install kit (added 2026-09-25, ledger #411)
+
+### 🔴 The kit's rules hold in the database, and an unlinked component is legal — but nothing reads it yet
+STATUS: needs-test
+DEVICE: desktop
+COVERS: #411
+LAST-PROVEN: —
+SIGNAL: none — `loadList.ts` is untouched, so no screen behaves differently.
+
+- **Why `needs-test` and not `owed` (OP-14 clause 2):** `20260925c` creates `install_kit_components` and
+  `installKit.ts` evaluates it, but **the kit is deliberately NOT WIRED** — the load list still uses its
+  own hard-coded component set. Nothing on any screen changes, so there is nothing for you to click.
+- **What CAN be proven, and how:** paste the migration's **V1–V4**. Each builds its own fixture, RAISEs
+  its verdict and rolls back, so the message *is* the report. **V3 is the one worth reading**: it proves
+  the factor rule **both ways** — `per_rung` is accepted with no factor and **refused with one** (the
+  rung's own count is the only one), and `per_container_gallon` is accepted with a factor and **refused
+  without one**. **V4** proves an **unlinked** component is legal, and that tenant isolation holds.
+- **PASS:** four messages beginning `V1 PASS` … `V4 PASS`.
+- **🔴 FAIL if** V2 reports any rows — a migration would have seeded your kit, which the 2026-09-22 ruling
+  forbids — or if V3 accepts a `per_rung` row carrying a factor.
+- **⚠️ WHAT THE HARNESS PROVES THAT THIS CANNOT:** that the kit produces **the same numbers as the load
+  list**. `installKitEquivalence.test.ts` drives one stop through the real `buildLoadList` and compares
+  field by field, and its §E plants a wrong factor to prove the comparison can fail. **That is the probe
+  adoption turns on, and it is why nothing is wired yet.**
+- **🔴 AND IT FOUND SOMETHING THAT IS YOURS TO RULE — tech-debt #364:** the load list computes planting
+  mix, T-posts and rope for **delivery-only** stops, where LAWNS plants nothing. **26 of your 63 stops
+  are deliveries (LIVE 2026-09-25).** Not fixed here, because it changes the sheet a crew loads from.

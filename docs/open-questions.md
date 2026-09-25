@@ -97,6 +97,11 @@ every `costs:*`, `pricing_recipe:*`, `settings:*`. ⚠️ As proposed it collide
 
 > ⚠️ **#299's block is now one session PAST the §3 window** — it was archived verbatim by close-out #303, so these lines are the only thing still pointing at it. That is exactly what this register is for.
 
+**#411 — the install kit is configurable (yard production P3)**
+- 🔴 **OPEN AND IT IS A RULING, NOT A BUG REPORT — tech-debt #364: SHOULD A DELIVERY-ONLY STOP CARRY PLANTING MIX AND STAKING?** `loadList.ts` gates only `waterMonitors` on `installs`, so mix, T-posts and rope are computed for every stop. **LIVE 2026-09-25: 26 of LAWNS's 63 stops are deliveries — 41%.** Found by the equivalence probe, which expected the kit and the sheet to agree and found the kit abstaining. **Not fixed: it changes the printed sheet a crew loads from, and the load list was frozen for crew-link's merge.** If you rule "no mix on a delivery", `installs` gates the three sums and the probe goes green on the fix **without being edited.**
+- 🔴 **OPEN — WHICH PRODUCT IS EACH KIT COMPONENT?** T-post · rope · water monitor kit · bubbler · deer fence · trunk protection. The mix is qb 52 if you take #409's recommended default. **The seed file cannot be written until you say**, and the table ships EMPTY because seeding tenant rows from a migration was ruled wrong on 2026-09-22.
+- ⛔ **OPEN — APPLY `supabase/migrations/20260925c_install_kit_components.sql`.** SQL editor, never the table editor. Safe unapplied: nothing reads the table, and `loadList.ts` is untouched.
+
 **#404 — Plant Your Tree prices from the INSTALL ladder; the CHECK install_price never had**
 - 🔴 **OPEN — DO NOT RUN `docs/decisions/2026-09-24-lawns-pyt-prices-by-size.sql` AT SHA `624db4da…`.** Identical SQL, written when `price_source` routed Plant Your Tree to a SECOND, empty column — it would have priced NOTHING. **The one to run is SHA `1b7fce4a…`, and only AFTER `feat/pyt-from-install-ladder` is merged and deployed.**
 - ⛔ **OPEN — APPLY `supabase/migrations/20260924e_container_ladder_install_price_check.sql` FIRST.** SQL editor, never the table editor. **V3 is live SQL that must ERROR `23514` — that error IS the pass.** Measured live before it was written: 9 rungs, **0 at zero, 0 negative**, 3 not set, 6 priced ($204–$1,800), so it cannot reject a row.

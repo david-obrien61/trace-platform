@@ -31,3 +31,9 @@ export { RETIRED_COLUMN, onlyLiveInventory, RETIRED_HIDDEN_NOTE } from './retire
 export type { LiveFilterable } from './retiredFilter';
 export { shapeCollisionKey, findShapeCollisions, collisionReason, moneyAtStake } from './shapeCollision';
 export type { ShapeCandidate, ShapeCollision } from './shapeCollision';
+
+// What one install consumes, as configuration rather than code (ledger #411).
+// 🔴 It DECLARES and EVALUATES a mapping; `loadList.ts` remains the one place the install
+// arithmetic lives. An unlinked component is REPORTED, never skipped.
+export { evaluateKit, kitProblem, KIT_RULES, KIT_COLUMNS, KIT_SELECT } from './installKit';
+export type { KitRule, KitComponent, StopKitFacts, KitLine, KitEvaluation } from './installKit';

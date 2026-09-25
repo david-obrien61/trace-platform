@@ -4956,3 +4956,49 @@ that board is already amber with 14 cards owed.
 
 **Trigger for repair:** Lauren's first pass over the five rungs, OR a second tenant gaining a
 `container_ladder` — whichever comes first. The second is the one that turns it from untidy to wrong.
+
+---
+
+## #364 — 🟡 THE LOAD LIST COMPUTES PLANTING MIX, T-POSTS AND ROPE FOR **DELIVERY-ONLY** STOPS, AND 26 OF LAWNS'S 63 STOPS ARE DELIVERIES (NEW 2026-09-25, ledger #411 — FOUND BY AN EQUIVALENCE PROBE, FILED NOT FIXED)
+
+**`installs` gates exactly ONE quantity in `loadList.ts` — `waterMonitors` (`:605`).** Special mix,
+T-posts, rope, ring circumference and deer-fence posts are computed for **every** stop on the day,
+whether or not LAWNS is planting the trees.
+
+🔴 **MEASURED LIVE 2026-09-25, which is what makes this worth reading rather than a hypothesis:**
+
+| `orders.transport_method` | stops | orders |
+|---|---|---|
+| `install` | **37** | 37 |
+| `delivery` | **26** | 26 |
+
+**26 of 63 stops — 41% — are deliveries**, where the customer plants the trees themselves. On a day
+mixing the two, the consolidated headline at the top of the sheet (*"load 270 gallons of mix, 14
+T-posts"*) includes trees nobody at LAWNS is planting.
+
+**HOW IT WAS FOUND, and it is the reason the equivalence probe exists at all.** `installKitEquivalence.test.ts`
+§B drove a **delivery-only** stop through `buildLoadList` and through the new `evaluateKit`, expecting
+them to agree. **They disagreed, and the kit was the one that abstained** — the kit consumes nothing on
+a delivery (David, 2026-09-25: *"A Delivery-only stop issues nothing"*) while the load list printed
+mix for it. The probe was written to catch the kit drifting from the sheet; it caught the sheet
+instead.
+
+⚠️ **AND IT IS A QUESTION, NOT A CONFIRMED DEFECT — WHICH IS WHY IT IS FILED RATHER THAN FIXED.**
+Two readings are both plausible and only Lauren's practice decides:
+- **Over-count (likely):** the yard loads mix and posts that will not be used. The waste is real and
+  the sheet is the thing the yard trusts.
+- **Deliberate superset:** the sheet may be showing *what these trees would need* so nothing is
+  forgotten when a delivery turns into an install on the day — and LAWNS **does** sell mix by the
+  scoop and the bucket, so a delivery can legitimately carry mix. But that mix would be a **sold
+  line on the order**, not the install kit's 2-gal-per-container-gallon rule, so it would be
+  double-counted rather than correctly counted.
+
+🔴 **NOT FIXED IN #411 DELIBERATELY: it changes what the printed sheet says for the crew that loads a
+trailer tomorrow.** Gating mix on `installs` is a four-character change and a two-line probe — and it
+is exactly the kind of change that must be David's, not a side effect of a build about something else.
+**The load list was also under a freeze for crew-link's merge when this was found.**
+
+**EXIT CONDITION:** David says whether a delivery-only stop should carry planting mix and staking. If
+not, `installs` gates the mix/post/rope sums the way it already gates `waterMonitors`, and
+`installKitEquivalence.test.ts` §B flips from *"these two deliberately disagree"* to *"these two agree"* —
+the probe is already written and would go green on the fix without being edited.
