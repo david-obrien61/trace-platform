@@ -2360,8 +2360,19 @@ async function handleStatus(req: any, res: any) {
       return res.json({ ok: true, orderId, status, stopsRetired: out.stops_retired ?? 0 });
     }
 
-    const { error: stErr } = await db.from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId);
+    // ⚠️ `.select('id')` AND AN EMPTY RESULT TREATED AS FAILURE (A8 / Rule 24). Without it a write
+    // that matched NO ROW — a wrong `business_id`, an RLS refusal — returns no error and reads as
+    // success, and the caller is told the status changed when nothing moved. This site is
+    // pre-existing; it surfaced here because inserting the cancel branch above re-keyed it in
+    // `zero-row-writes-baseline.json` (the key carries the enclosing binding — tech-debt #78's
+    // shape). Fixed rather than re-baselined: the ratchet found real debt and re-stamping the
+    // baseline would have preserved it under a new name.
+    const { data: stRows, error: stErr } = await db
+      .from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId).select('id');
     if (stErr) throw new Error(`Order status: ${stErr.message}`);
+    if (!stRows || stRows.length === 0) {
+      throw new Error('Order status: the update matched no row — the order was not changed.');
+    }
 
     // The event is written AFTER the status write succeeds — an event asserts that something
     // happened, so it must not be recorded for a transition that then failed to land. The reverse
