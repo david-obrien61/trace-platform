@@ -22,7 +22,7 @@
     "hooks:install": "git config core.hooksPath .githooks && echo \"core.hooksPath = .githooks\"",
     "hooks:status": "git config core.hooksPath >/dev/null 2>&1 && echo \"hooks ON  -> $(git config core.hooksPath)  (pre-commit + pre-merge-commit: verify-handoff-retention)\" || echo 'hooks OFF -> not installed in this clone. Run: npm run hooks:install'",
     "verify:rls": "node scripts/run-rls-tests.mjs",
-    "verify": "npm run verify:conflict-markers && npm run verify:address-fields && node scripts/verify-api-parses.mjs && npm run verify:api-types && npm run verify:embed-ambiguity && npm run verify:customer-name-fields && npm run verify:snapshot-fresh && npm run verify:stable-paging && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:customer-address-columns && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm run verify:handoff-retention && npm run verify:register-blocks && npm run verify:ui-divergence && npm run verify:owner-boards && npm run verify:pricing-writers && npm run verify:owner-id-repoint && npm run verify:id-citations && npm run verify:id-sweep && npm run verify:main-ancestry && npm run verify:migration-apply-state && npm run verify:writer-registry && npm run verify:search-registry && npm run verify:zero-seeded-fees && npm run verify:notes-before-drop && npm run verify:undo-test-edits && npm test",
+    "verify": "npm run verify:conflict-markers && npm run verify:address-fields && node scripts/verify-api-parses.mjs && npm run verify:api-types && npm run verify:embed-ambiguity && npm run verify:customer-name-fields && npm run verify:snapshot-fresh && npm run verify:stable-paging && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:customer-address-columns && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm run verify:handoff-retention && npm run verify:register-blocks && npm run verify:ui-divergence && npm run verify:owner-boards && npm run verify:pricing-writers && npm run verify:owner-id-repoint && npm run verify:id-citations && npm run verify:id-sweep && npm run verify:main-ancestry && npm run verify:migration-apply-state && npm run verify:exec-output && npm run verify:writer-registry && npm run verify:search-registry && npm run verify:zero-seeded-fees && npm run verify:notes-before-drop && npm run verify:undo-test-edits && npm test",
     "verify:select-policies": "node scripts/verify-select-policies.mjs",
     "verify:write-paths": "node scripts/verify-write-paths.mjs",
     "write-paths:baseline": "node scripts/verify-write-paths.mjs --update",
@@ -62,7 +62,8 @@
     "verify:migration-apply-state": "node scripts/verify-migration-apply-state.mjs --self-test",
     "verify:main-ancestry": "node scripts/verify-main-ancestry.mjs && node scripts/verify-main-ancestry.mjs --self-test",
     "verify:stable-paging": "node scripts/verify-stable-paging.mjs && node scripts/verify-stable-paging.mjs --self-test",
-    "verify:snapshot-fresh": "node scripts/verify-snapshot-fresh.mjs && node scripts/verify-snapshot-fresh.mjs --self-test"
+    "verify:snapshot-fresh": "node scripts/verify-snapshot-fresh.mjs && node scripts/verify-snapshot-fresh.mjs --self-test",
+    "verify:exec-output": "node scripts/selftest/exec-output-regression.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

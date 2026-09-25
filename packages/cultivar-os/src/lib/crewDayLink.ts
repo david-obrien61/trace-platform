@@ -29,6 +29,8 @@ type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: st
 export interface CrewLinkRow {
   id: string;
   service_date: string;
+  /** Which team this link is for (ledger #374). NULL = the whole day, which every link was before. */
+  team_id: string | null;
   expires_at: string;
   created_at: string;
   revoked_at: string | null;
@@ -40,12 +42,57 @@ export function crewLinkUrl(origin: string, token: string): string {
   return `${origin.replace(/\/$/, '')}${CREW_PAGE_PATH}#${token}`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// IS 20260921d APPLIED? — asked of the ERROR, never of a written-down list of what is applied.
+// A declaration nobody re-derives is [[R-26]]; the database's own refusal cannot go stale.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+type PgErr = { code?: string; message?: string } | null;
+/** PostgREST cannot find a 4-argument `create_crew_day_link` (PGRST202), so the migration is not applied. */
+function missingPerCrewFn(e: PgErr): boolean {
+  if (!e) return false;
+  const m = (e.message ?? '').toLowerCase();
+  return e.code === 'PGRST202' || (m.includes('create_crew_day_link') && (m.includes('does not exist') || m.includes('could not find')));
+}
+/** `crew_day_links.team_id` does not exist (42703 undefined_column). */
+function missingTeamColumn(e: PgErr): boolean {
+  if (!e) return false;
+  const m = (e.message ?? '').toLowerCase();
+  return e.code === '42703' || (m.includes('team_id') && m.includes('does not exist'));
+}
+
+/**
+ * Make a link for one day — for ONE TEAM, or for the whole day when `teamId` is null.
+ *
+ * 🔴 A TEAM'S LINK SHOWS ONLY THAT TEAM'S STOPS, and the rule is the DATABASE's, not this file's
+ *    (`crew_day_stops` filters, `crew_stop_act` REFUSES a stop off the team — 20260921d). Saturday
+ *    2026-09-19 is the cost of not having it: one link showed all eight stops to whoever opened it.
+ * ⚠️ Reissuing replaces only THIS team's live link. Another team's link keeps working — a crew does
+ *    not lose its day because a second crew's link was remade.
+ */
 export async function createCrewDayLink(
-  db: SupabaseClient, businessId: string, serviceDate: string, timeZone: string,
+  db: SupabaseClient, businessId: string, serviceDate: string, timeZone: string, teamId: string | null = null,
 ): Promise<Result<{ linkId: string; token: string; expiresAt: string; replaced: number }>> {
-  const { data, error } = await db.rpc('create_crew_day_link', {
-    p_business_id: businessId, p_service_date: serviceDate, p_time_zone: timeZone,
+  let { data, error } = await db.rpc('create_crew_day_link', {
+    p_business_id: businessId, p_service_date: serviceDate, p_time_zone: timeZone, p_team_id: teamId,
   });
+  // ── RUNG 2: 20260921d IS NOT APPLIED YET ───────────────────────────────────────────────────
+  // 🔴 THE REFUSAL IS THE WHOLE POINT, AND IT MUST NEVER BECOME A FALLBACK. Before 20260921d the
+  //    only `create_crew_day_link` takes three arguments and makes a WHOLE-DAY link. Quietly
+  //    calling it when a per-crew link was asked for would hand CREW 1 every stop on the day —
+  //    Saturday 2026-09-19's defect, re-created by the safety net meant to prevent it. David:
+  //    "It must NEVER fall back to showing a crew the whole day or another crew's stops."
+  // ⚠️ So the ladder splits on what was ASKED FOR: a whole-day link (teamId null) is the same call
+  //    it always was and keeps working untouched; a per-crew link REFUSES in plain words.
+  if (missingPerCrewFn(error)) {
+    if (teamId !== null) {
+      if (TRACE_CREW) console.log('[TRACE:CREW] per-crew link REFUSED — 20260921d not applied', { serviceDate, teamId });
+      return { ok: false, code: 'per_crew_not_set_up',
+        message: 'Per-crew links are not set up on this nursery yet — ask Lauren. The whole-day link still works.' };
+    }
+    ({ data, error } = await db.rpc('create_crew_day_link', {
+      p_business_id: businessId, p_service_date: serviceDate, p_time_zone: timeZone,
+    }));
+  }
   if (error) return { ok: false, code: 'error', message: error.message };
   const d = data as { ok: boolean; code?: string; message?: string; link_id?: string; token?: string; expires_at?: string; replaced?: number };
   if (TRACE_CREW) console.log('[TRACE:CREW] link create', { serviceDate, ok: d?.ok, code: d?.code, replaced: d?.replaced });
@@ -65,15 +112,37 @@ export async function revokeCrewDayLink(db: SupabaseClient, linkId: string): Pro
 }
 
 /** The live (not revoked) link for a day, if any. The token is never readable — only its metadata. */
+/**
+ * Every LIVE link for one day — one per team, plus at most one whole-day link.
+ *
+ * 🔴 A LIST, NOT `maybeSingle()` (ledger #374). Before teams a day had at most one live link, and
+ *    this read used `.maybeSingle()`, which ERRORS (PGRST116) the moment a second row matches. Per-
+ *    team links make two rows the NORMAL case, so leaving it would have turned the ordinary
+ *    two-crew Saturday into a panel that refuses to load — the exact day this feature is for.
+ * ⚠️ Whole-day first, then teams, so the list reads the way the panel renders it.
+ */
 export async function readCrewDayLinks(
   db: SupabaseClient, businessId: string, serviceDate: string,
-): Promise<Result<CrewLinkRow | null>> {
+): Promise<Result<CrewLinkRow[]>> {
+  const COLS = 'id, service_date, expires_at, created_at, revoked_at, last_used_at';
   const { data, error } = await db.from('crew_day_links')
-    .select('id, service_date, expires_at, created_at, revoked_at, last_used_at')
+    .select(`${COLS}, team_id`)
     .eq('business_id', businessId).eq('service_date', serviceDate).is('revoked_at', null)
-    .maybeSingle();
+    .order('team_id', { ascending: true, nullsFirst: true });
+  // ── RUNG 2: the `team_id` COLUMN does not exist yet (20260921d not applied) ─────────────────
+  // Reading the same rows WITHOUT that column is exactly today's behaviour, and it is safe here in
+  // a way the create path is not: every link that exists before the migration IS a whole-day link,
+  // so reporting `team_id: null` for them is the truth, not a guess (D-9 / A9).
+  if (missingTeamColumn(error)) {
+    const pre = await db.from('crew_day_links').select(COLS)
+      .eq('business_id', businessId).eq('service_date', serviceDate).is('revoked_at', null);
+    if (!pre.error) {
+      if (TRACE_CREW) console.log('[TRACE:CREW] links read on the PRE-TEAM rung — 20260921d not applied');
+      return { ok: true, value: ((pre.data ?? []) as Omit<CrewLinkRow, 'team_id'>[]).map(r => ({ ...r, team_id: null })) };
+    }
+  }
   if (error) return { ok: false, code: (error as { code?: string }).code ?? 'error', message: error.message };
-  return { ok: true, value: (data as CrewLinkRow | null) ?? null };
+  return { ok: true, value: (data as CrewLinkRow[] | null) ?? [] };
 }
 
 export interface StopEvent {
@@ -164,6 +233,9 @@ export interface CrewStop {
 }
 export interface CrewDay {
   business_name: string | null; service_date: string; expires_at: string;
+  /** Whose day this link shows (ledger #374). `team_id` null = the whole day. A crew who
+   *  opened the wrong link can tell from the name, rather than from a short list of stops. */
+  team_id?: string | null; team_name?: string | null;
   /** When Lauren routed this day, or null if she has not. The page says which, in plain words. */
   routed_at?: string | null;
   stops: CrewStop[];

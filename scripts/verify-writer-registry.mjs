@@ -42,6 +42,22 @@
  *               `--no-run` skips F (the scan alone, for a quick look).
  */
 import { execSync } from 'node:child_process';
+import { openSync, closeSync } from 'node:fs';
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// §6 r28 — A HEAVY JOB HAS A TIME LIMIT, AND HITTING IT IS A FAILURE.
+// 🔴 WHY THIS EXISTS: on the night of 2026-09-24 this very `execSync` ran for TWELVE AND A HALF
+//    HOURS. It had no `timeout`, so a child that never exits is indistinguishable from one that is
+//    merely slow — and the whole overnight build queued behind it. Nothing was broken; nothing
+//    finished either. An unbounded wait is the same defect class as a check that cannot fail: the
+//    run reports nothing, forever, and silence reads as work in progress.
+// ⚠️ THE LIMIT IS GENEROUS ON PURPOSE. The crew-day file legitimately takes ~100s and builds two
+//    PGlite databases; contacts and teams are slower still. 15 minutes per FILE is far above any
+//    honest run and far below a night.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+const PATH_FILE_TIMEOUT_MS = Number(process.env.PATH_FILE_TIMEOUT_MS ?? 15 * 60 * 1000);
+const hardFailures = [];
+
+
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -176,9 +192,36 @@ async function runPathTests(registry) {
         } }],
       });
       let text = '';
+      let timedOut = false;
+      // 🔴 THE CHILD WRITES TO A FILE, NOT TO A PIPE — AND THIS IS THE FIX FOR A 12.5-HOUR HANG,
+      //    NOT A STYLE PREFERENCE (2026-09-25, ledger #406).
+      //    `execSync` returns when the child's stdout PIPE CLOSES, which is not the same event as
+      //    the child EXITING. A PGlite path file leaves a worker holding that pipe open, so the
+      //    test finishes, prints all its results, and the parent waits forever on a descriptor
+      //    nobody will close. MEASURED: the hung children sat at 0.0% CPU with their work done.
+      //    ⚠️ IT IS NOT AN OUTPUT-VOLUME PROBLEM — `crew-day` prints ~17KB, well inside any buffer;
+      //    that was my first guess and the measurement refuted it. Redirecting to a real file
+      //    removes the pipe entirely, so there is nothing left to hold open.
+      const logFile = join(ROOT, `.writer-registry-${d.id}.out`);
       try {
-        text = execSync(`node "${out}"`, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH_TEST_ROOT: ROOT }, maxBuffer: 64 * 1024 * 1024 });
-      } catch (e) { text = String(e.stdout ?? ''); }
+        const fd = openSync(logFile, 'w');
+        try {
+          execSync(`node "${out}"`, { cwd: ROOT, stdio: ['ignore', fd, fd], env: { ...process.env, PATH_TEST_ROOT: ROOT }, timeout: PATH_FILE_TIMEOUT_MS, killSignal: 'SIGKILL' });
+        } finally { closeSync(fd); }
+        text = readFileSync(logFile, 'utf8');
+      } catch (e) {
+        try { text = readFileSync(logFile, 'utf8'); } catch { text = ''; }
+        // 🔴 A TIMEOUT IS A FAILURE, NEVER A QUIET PARTIAL RESULT (§6 r28, [[R-33]]).
+        // Without this branch a killed child looks like a file that simply printed fewer lines, and
+        // the registry's "missing path test" message would blame the TEST rather than the hang.
+        if (e.code === 'ETIMEDOUT' || e.signal === 'SIGKILL') {
+          timedOut = true;
+          console.log(`  ❌ ${d.id}: PATH TESTS TIMED OUT after ${Math.round(PATH_FILE_TIMEOUT_MS / 1000)}s — killed, NOT passed. ` +
+                      `${[...text.matchAll(/^(PATH|GUARD) /gm)].length} result line(s) had been printed. ` +
+                      `Set PATH_FILE_TIMEOUT_MS to change the limit.`);
+        }
+      }
+      if (timedOut) hardFailures.push(`${d.id}: path tests timed out after ${Math.round(PATH_FILE_TIMEOUT_MS / 1000)}s`);
       for (const m of text.matchAll(/^(PATH|GUARD) (\S+) (PASS|FAIL)(.*)$/gm)) {
         got.set(m[1] === 'GUARD' ? `guard:${m[2]}` : m[2], m[3]);
         if (m[3] === 'FAIL') console.log(`  ❌ ${m[1].toLowerCase()} ${m[2]}${m[4]}`);
@@ -187,6 +230,7 @@ async function runPathTests(registry) {
       console.log(`  ❌ ${d.id}: the path tests did not build — ${String(e.message).split('\n')[0]}`);
     } finally {
       rmSync(out, { force: true });
+      rmSync(join(ROOT, `.writer-registry-${d.id}.out`), { force: true });
     }
     results.set(d.id, got);
   }
@@ -258,6 +302,14 @@ else {
   const { problems, lines } = evaluate(files, registry, results);
   for (const d of registry.domains) console.log(`\n── writer registry · ${d.id}: ${d.paths.length} capture paths, ${d.declared.length} declared non-paths`);
   for (const l of lines) console.log(l);
+  // §6 r28: a TIMED-OUT file is its own failure and must refuse the build on its own, even if every
+  // other check is clean. Reporting it and exiting 0 would be the whole defect over again.
+  if (hardFailures.length) {
+    console.log(`\n❌ verify-writer-registry — ${hardFailures.length} file(s) hit the TIME LIMIT (§6 r28):`);
+    for (const h of hardFailures) console.log(`  ${h}`);
+    console.log('   A hung path file is not a slow one. Find what never returns; do not raise the limit to hide it.');
+    process.exit(1);
+  }
   if (problems.length) {
     console.log(`\n❌ verify-writer-registry — ${problems.length} problem(s):`);
     for (const p of problems) console.log(`  ${p}`);

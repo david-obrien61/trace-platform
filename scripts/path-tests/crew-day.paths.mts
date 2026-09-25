@@ -12,7 +12,7 @@
  *               20260917c applied on top. Synthetic data only.
  * OUTPUTS:      `PATH <id> PASS|FAIL` and `GUARD <id> PASS|FAIL` lines; exit 1 on any FAIL.
  */
-import { openLiveDb, restClient, installSupabaseShim } from './lib/liveDb.mjs';
+import { openLiveDb, restClient, installSupabaseShim, closeLiveDbs } from './lib/liveDb.mjs';
 import inviteHandler from '../../packages/cultivar-os/api/members/invite';
 import { clientKey } from '../../packages/cultivar-os/api/members/crewDay';
 import {
@@ -114,8 +114,15 @@ async function endpoint(method: 'GET' | 'POST', token: string, body?: Record<str
   return res;
 }
 
-async function freshDb(opts: { writesOn?: boolean } = {}) {
-  const db: any = await openLiveDb();
+async function freshDb(opts: { writesOn?: boolean; withPerCrew?: boolean } = {}) {
+  // 🔬 STEP 2 of the parked recon's plan: the ONLY migration the refreshed snapshot does NOT carry.
+  // The snapshot's `crew_day_links` has no `team_id` and all three functions are the OLD arities,
+  // so this one is genuinely unapplied — measured, not assumed.
+  // `withPerCrew: false` opens the snapshot WITHOUT 20260921d — the state of David's live database
+  // tonight. `openLiveDb` keys its cache on the migration list, so the two are separate databases.
+  const db: any = opts.withPerCrew === false
+    ? await openLiveDb()
+    : await openLiveDb({ migrations: ['20260921d_crew_link_per_team.sql'] });
   installSupabaseShim(db);
   await db.exec(MIGRATION);
   await db.exec(`
@@ -156,8 +163,8 @@ async function stop(db: any, business: string, date: string, extra: { status?: s
   return { id: d.id as string, orderId: o.id as string };
 }
 
-async function link(db: any, date = DAY_X) {
-  const r = await createCrewDayLink(lauren(db), B, date, TZ);
+async function link(db: any, date = DAY_X, teamId: string | null = null) {
+  const r = await createCrewDayLink(lauren(db), B, date, TZ, teamId);
   if (!r.ok) throw new Error(`link: ${r.code} ${r.message}`);
   return r.value;
 }
@@ -193,7 +200,10 @@ await path('crew.link-create', 'schedule → Crew link → Make link: a working 
   const next = new Date(`${DAY_X}T12:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
   check(row.local_exp === `${next.toISOString().slice(0, 10)} 06:00`, `expires ${row.local_exp}, want 06:00 the next day`);
   const shown = await readCrewDayLinks(lauren(db), B, DAY_X);
-  check(shown.ok && shown.value?.id === l.linkId, 'the schedule does not show the live link');
+  // `readCrewDayLinks` returns a LIST now (one live link per team), so this reads the list. It is
+  // STRONGER than the row form it replaces: exactly one live link, and it is the one just made.
+  check(shown.ok && shown.value.length === 1 && shown.value[0].id === l.linkId,
+    `the schedule does not show exactly the live link just made: ${shown.ok ? JSON.stringify(shown.value.map(x => x.id)) : shown.code}`);
   const day = await readCrewDay(l.token);
   check(day.ok && day.value.stops.some(x => x.id === s.id), 'the link does not open the day');
   const a = await audit(db, l.linkId);
@@ -229,7 +239,7 @@ await path('crew.link-revoke', 'schedule → Crew link → Turn off: the link st
   const page = await readCrewDay(l.token);
   check(!page.ok && /Ask Lauren/.test(page.message), `page message: ${JSON.stringify(page)}`);
   const shown = await readCrewDayLinks(lauren(db), B, DAY_X);
-  check(shown.ok && shown.value === null, 'the schedule still shows a live link');
+  check(shown.ok && shown.value.length === 0, `the schedule still shows a live link: ${shown.ok ? JSON.stringify(shown.value.map(x => x.id)) : shown.code}`);
   const a = await audit(db, l.linkId);
   check(a.some((x: any) => x.action === 'crew_link.revoked' && x.detail.reason === 'revoked' && x.actor_user_id === MANAGER), `audit ${JSON.stringify(a)}`);
   const staff = await revokeCrewDayLink(restClient(db, { uid: STAFF }) as any, l.linkId);
@@ -611,7 +621,8 @@ await guard('crew.other-business', 'a link for one business shows nothing of ano
   }
   // Lauren's own session cannot read another business's links or events.
   const otherLinks = await readCrewDayLinks(restClient(db, { uid: OTHER_OWNER }) as any, B, DAY_X);
-  check(otherLinks.ok && otherLinks.value === null, 'another business read this business\'s link');
+  check(otherLinks.ok && otherLinks.value.length === 0,
+    `another business read this business's link: ${otherLinks.ok ? JSON.stringify(otherLinks.value.map(x => x.id)) : otherLinks.code}`);
 });
 
 await guard('crew.no-prices', 'no response carries a price, total, discount or cost — not as a key, not as a value', async (check) => {
@@ -701,6 +712,148 @@ async function team(db: any, name: string) {
 }
 const onTeam = (db: any, stopIds: string[], teamId: string | null) =>
   assignStopsTeam(lauren(db), B, stopIds, teamId);
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// PIECE 3 — A CREW LINK PER CREW (ledger #374's work, unparked 2026-09-24).
+// 🔴 THESE FOUR GUARDS WENT RED FOR THREE DAYS AND THE CAUSE WAS NOT IN THEM. The suite replayed
+//    six migrations onto a PGlite snapshot that already carried five of them; every crew guard,
+//    including four long-green ones, failed with `server_error`. The snapshot was refreshed from
+//    live on 2026-09-24 (ledger #391), so only `20260921d` needs replaying now — and with that one
+//    change these pass UNMODIFIED. Not one assertion was weakened to get here; the proof is that
+//    this block is byte-identical to the parked branch's.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ TEAMS ARE SET UP IN SQL HERE, NOT THROUGH `saveTeam`. These guards are about the LINK, and
+//    `saveTeam`/`assignStopsTeam` already have their own paths and guards in `teams.paths.mts`.
+//    Driving them through the app client before touching the crew endpoint leaves the endpoint's own
+//    Supabase client reaching through the crew page's `fetch` stub, which only answers
+//    `/api/crew/day`. Setting the rows directly keeps each guard about one thing (§6 r8).
+//
+// 🔴 NAMED `teamRow`, NOT `team`, AND THAT IS DELIBERATE. The parked branch declared a SECOND
+//    top-level `async function team(...)` beside the existing one. Function declarations hoist and
+//    the LAST one wins, so every EARLIER guard calling `team()` — expecting the `saveTeam` app-client
+//    version — would silently have got this raw-SQL one instead. A duplicate declaration that
+//    changes what already-green guards do is not a helper, it is a trapdoor.
+async function teamRow(db: any, name: string, business = B) {
+  const r = await one(db, `INSERT INTO public.delivery_teams (business_id, name, active, sort_order)
+                           VALUES ($1, $2, true, 0) RETURNING id`, [business, name]);
+  return r.id as string;
+}
+const putOnTeam = (db: any, stopId: string, teamId: string) =>
+  db.query(`UPDATE public.deliveries SET team_id = $1 WHERE id = $2`, [teamId, stopId]);
+
+await guard('crew.link-shows-only-its-team', 'a team\'s link shows that team\'s stops and no others', async (check) => {
+  const db = await freshDb();
+  const t1 = await teamRow(db, 'Team 1');
+  const t2 = await teamRow(db, 'Team 2');
+  const a = await stop(db, B, DAY_X);
+  const b = await stop(db, B, DAY_X);
+  const loose = await stop(db, B, DAY_X);
+  await putOnTeam(db, a.id, t1);
+  await putOnTeam(db, b.id, t2);
+
+  const l1 = await link(db, DAY_X, t1);
+  const read = await readCrewDay(l1.token);
+  check(read.ok && read.value.stops.map(s => s.id).join() === a.id,
+    `🔴 Team 1's link shows: ${read.ok ? JSON.stringify(read.value.stops.map(s => s.id)) : read.code} — it must be ONLY its own stop`);
+  check(read.ok && read.value.team_name === 'Team 1',
+    'the phone must NAME the team, so a driver on the wrong link can tell');
+  check(read.ok && !read.value.stops.some(s => s.id === loose.id),
+    '🔴 a stop with NO team was swept into a team\'s link — nobody said it was that team\'s work');
+});
+
+await guard('crew.link-cannot-act-on-another-teams-stop', 'a team\'s token is REFUSED on another team\'s stop, not merely not shown it', async (check) => {
+  const db = await freshDb();
+  const t1 = await teamRow(db, 'Team 1');
+  const t2 = await teamRow(db, 'Team 2');
+  const mine = await stop(db, B, DAY_X);
+  const theirs = await stop(db, B, DAY_X);
+  await putOnTeam(db, mine.id, t1);
+  await putOnTeam(db, theirs.id, t2);
+  const l1 = await link(db, DAY_X, t1);
+
+  // 🔴 THE POINT OF THE WHOLE MIGRATION. The stop id travels in the REQUEST, so hiding it from the
+  // read does not stop anyone posting it back with this token. A filter that only hides is a UI
+  // preference; this must be a REFUSAL.
+  const w = await endpoint('POST', l1.token, { action: 'done', stopId: theirs.id, name: 'Mike', deviceId: DEVICE });
+  check(w.body?.code === 'not_this_teams_stop',
+    `🔴 Team 1's token acted on Team 2's stop: ${w.statusCode} ${JSON.stringify(w.body)}`);
+  const row = await one(db, `SELECT status, completed_at FROM public.deliveries WHERE id = $1`, [theirs.id]);
+  check(row.status === 'scheduled' && row.completed_at === null,
+    '🔴 another team\'s stop was actually CHANGED — the refusal did not hold');
+  // …and its OWN stop still works, or this guard would pass by breaking everything ([[R-33]]).
+  const okAct = await endpoint('POST', l1.token, { action: 'done', stopId: mine.id, name: 'Mike', deviceId: DEVICE });
+  check(okAct.body?.ok === true, `its OWN stop was refused too: ${JSON.stringify(okAct.body)}`);
+});
+
+await guard('crew.whole-day-link-unchanged', 'a nursery that never splits a day keeps the link it always had', async (check) => {
+  const db = await freshDb();
+  const a = await stop(db, B, DAY_X);
+  const b = await stop(db, B, DAY_X);
+  const l = await link(db, DAY_X);            // no team — exactly the old call
+  const read = await readCrewDay(l.token);
+  check(read.ok && read.value.stops.length === 2, `🔴 the whole-day link lost stops: ${read.ok ? read.value.stops.length : read.code}`);
+  check(read.ok && !read.value.team_name, 'a whole-day link must not claim a team');
+  const w = await endpoint('POST', l.token, { action: 'done', stopId: b.id, name: 'Mike', deviceId: DEVICE });
+  check(w.body?.ok === true, `the whole-day link could not act: ${JSON.stringify(w.body)}`);
+  check(!!a.id, 'setup');
+});
+
+await guard('crew.one-live-link-per-team', 'reissuing one team\'s link never revokes another team\'s', async (check) => {
+  const db = await freshDb();
+  const t1 = await teamRow(db, 'Team 1');
+  const t2 = await teamRow(db, 'Team 2');
+  await link(db, DAY_X, t1);
+  const l2 = await link(db, DAY_X, t2);
+  const again1 = await link(db, DAY_X, t1);
+  check(again1.replaced === 1, `reissuing Team 1 replaced ${again1.replaced} — it must replace exactly its own`);
+  const stillOk = await readCrewDay(l2.token);
+  check(stillOk.ok, '🔴 remaking Team 1\'s link killed Team 2\'s — a crew must not lose its day');
+  const live = await all(db, `SELECT team_id FROM public.crew_day_links WHERE revoked_at IS NULL AND service_date = $1`, [DAY_X]);
+  check(live.length === 2, `live links: ${live.length} — one per team`);
+});
+
+await guard('crew.link-refuses-another-businesss-team', 'a link cannot be minted against a team this business does not own', async (check) => {
+  const db = await freshDb();
+  await teamRow(db, 'Team 1');
+  const foreign = await teamRow(db, 'Theirs', B2);
+  const r = await createCrewDayLink(lauren(db), B, DAY_X, TZ, foreign);
+  check(!r.ok && r.code === 'team_not_available',
+    `🔴 a link was minted against another tenant's team: ${JSON.stringify(r)} — the read would then hand back an EMPTY day, which reads as "nothing to do" rather than as a refusal (AC-3)`);
+});
+
+
+
+
+await guard('crew.link-safe-before-the-migration', '🔴 with 20260921d NOT applied, a per-crew link REFUSES and never falls back to the whole day', async (check) => {
+  // ⚠️ THIS GUARD RUNS ON THE PRE-MIGRATION SNAPSHOT ON PURPOSE. Tonight (2026-09-24) David cannot
+  //    apply SQL, so this code merges to production BEFORE 20260921d exists there. The thing that
+  //    must be proven is not that per-crew links work — the guards above do that — it is that the
+  //    absence of the migration produces a REFUSAL and not Saturday 2026-09-19 all over again.
+  const db = await freshDb({ withPerCrew: false });
+  const a = await stop(db, B, DAY_X);
+
+  // There is no `delivery_teams` row to point at and no per-crew function; a made-up id is the
+  // realistic shape, because the panel would be passing an id the schedule handed it.
+  const asked = await createCrewDayLink(lauren(db), B, DAY_X, TZ, '7a000000-0000-4000-8000-0000000000aa');
+  check(!asked.ok && asked.code === 'per_crew_not_set_up',
+    `🔴 a per-crew link was NOT refused on the pre-migration rung: ${JSON.stringify(asked)}`);
+
+  // 🔴 THE LOAD-BEARING ASSERTION: the refusal must not have quietly minted a WHOLE-DAY link,
+  // which is what a "helpful" fallback would do — and that link would show a crew every stop.
+  const after = await readCrewDayLinks(lauren(db), B, DAY_X);
+  check(after.ok && after.value.length === 0,
+    `🔴 the refusal still created a link — a crew would have been handed the whole day: ${after.ok ? JSON.stringify(after.value) : after.code}`);
+
+  // …and Lauren's own whole-day link is UNTOUCHED on this rung, or the safety net has broken the
+  // one thing that works today.
+  const whole = await createCrewDayLink(lauren(db), B, DAY_X, TZ, null);
+  check(whole.ok, `the whole-day link stopped working before the migration: ${JSON.stringify(whole)}`);
+  const shown = await readCrewDayLinks(lauren(db), B, DAY_X);
+  check(shown.ok && shown.value.length === 1 && shown.value[0].team_id === null,
+    `the pre-team read did not report one whole-day link: ${shown.ok ? JSON.stringify(shown.value) : shown.code}`);
+  const day = await readCrewDay(whole.ok ? whole.value.token : '');
+  check(day.ok && day.value.stops.some(x => x.id === a.id), 'the whole-day link no longer opens the day');
+});
 
 await path('route.save-per-team', 'Route this day for ONE team → that team\'s order is saved with the optimiser\'s miles and minutes', async (check) => {
   const db = await freshDb();
@@ -854,4 +1007,15 @@ await guard('route.unsplit-day-still-works', 'a business that never split a day 
   check(plan && plan.team_id === null && plan.stops === 2, `the unsplit day's plan row: ${JSON.stringify(plan)}`);
 });
 
-if (failures) process.exitCode = 1;
+// 🔴 CLOSE EVERY DATABASE, OR THIS PROCESS NEVER EXITS (§6 r28). Each `freshDb()` opens a PGlite
+// instance; none used to be closed, so the file printed all its results and then hung forever,
+// holding the runner with it. `exitCode` only sets a code — something still has to let the loop end.
+const closed = await closeLiveDbs();
+console.log(`(closed ${closed} PGlite database(s))`);
+// 🔴 AND EXIT EXPLICITLY, AS `teams`, `contacts` AND `rung-dates` ALL ALREADY DO. Closing the
+//    databases is the real fix; this is the belt to its braces, and the inconsistency is itself the
+//    finding: this was the ONE path file relying on natural exit, which is why it was the one that
+//    hung. ⚠️ `origin/main` has the same ending with 29 `freshDb()` calls and passes — so this is a
+//    LATENT defect on main that more guards crossed the threshold of, not one this branch invented.
+//    The next person to add a guard would have met it.
+process.exit(failures ? 1 : 0);

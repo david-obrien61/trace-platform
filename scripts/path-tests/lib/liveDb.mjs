@@ -69,6 +69,33 @@ const GRANTS = `
 
 const cachedDumps = new Map();
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// EVERY DATABASE THIS MODULE OPENS IS TRACKED SO IT CAN BE CLOSED — §6 r28's root cause.
+// 🔴 `openLiveDb` mints a NEW PGlite instance on every call, `freshDb()` calls it once per guard,
+//    and nothing ever closed one. A 33-guard file therefore ended with 33 live databases holding
+//    handles, so the process COULD NOT EXIT NATURALLY — and the path file's last line is
+//    `if (failures) process.exitCode = 1`, which only sets a code and waits for that exit.
+// 🔴 THAT is the 12h28m hang of 2026-09-24: not a pipe buffer (5MB through a pipe completes in
+//    ~150ms, measured in `scripts/selftest/exec-output-regression.mjs`), and not the runner's
+//    stdio at all. The child had printed every result and simply never exited.
+// ⚠️ The leftover processes found at 0.0% CPU and 3MB RSS, alive 12–13 hours, were these.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+const openInstances = new Set();
+
+/**
+ * Close every database this module opened, so the process can exit.
+ * Call it at the END of a path file, before the exit code is set.
+ * ⚠️ Best-effort per instance: one database refusing to close must not strand the rest.
+ */
+export async function closeLiveDbs() {
+  let closed = 0;
+  for (const db of openInstances) {
+    try { await db.close(); closed++; } catch { /* already gone — not a reason to strand the others */ }
+  }
+  openInstances.clear();
+  return closed;
+}
+
 /**
  * A fresh database holding the live schema. ~1–2 s the first time; later calls restore a dump.
  * `fixture` names another snapshot in the fixtures folder — the notes harness (ledger #346) uses
@@ -89,6 +116,7 @@ export async function openLiveDb({ fixture, migrations = [] } = {}) {
   if (cachedDump) {
     const db = new PGlite({ extensions: { uuid_ossp, pgcrypto }, parsers, loadDataDir: cachedDump });
     await db.waitReady;
+    openInstances.add(db);
     return db;
   }
   const db = new PGlite({ extensions: { uuid_ossp, pgcrypto }, parsers });
@@ -105,6 +133,7 @@ export async function openLiveDb({ fixture, migrations = [] } = {}) {
   await db.exec(GRANTS);
   await db.exec(`ALTER DATABASE postgres SET search_path = public, extensions;`);
   cachedDumps.set(key, await db.dumpDataDir('none'));
+  openInstances.add(db);
   return db;
 }
 
