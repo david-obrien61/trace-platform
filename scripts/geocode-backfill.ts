@@ -42,7 +42,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { classifyGeocodeResponse } from '../packages/shared/src/business-logic/geocodeResult';
+// 🔴 THE SAME DECISION AND THE SAME WRITER THE SCREEN USES. Not a parallel implementation:
+// `applyOneResult` is what Settings → Delivery calls, and `setAddressGeocode` is the ONE writer
+// for a customer's contact lists (§6 r21). verify:writer-registry caught this file writing
+// `customer_addresses` directly and it was right to — a second writer is how the terminal door
+// and the screen door come to disagree about what a geocode means.
+import { applyOneResult } from '../packages/shared/src/business-logic/geocodeRun';
+import { setAddressGeocode } from '../packages/shared/src/business-logic/contactWriter';
 
 const APPLY = process.argv.includes('--apply');
 const LIMIT = Number((process.argv.find(a => a.startsWith('--limit=')) ?? '').split('=')[1] || 0);
@@ -207,24 +213,27 @@ async function main() {
       failed++; await sleep(200); continue;
     }
 
-    const outcome = classifyGeocodeResponse(raw);
-    if (outcome.verdict === 'found') {
-      const { error: e } = await sb.from('customer_addresses').update({
-        latitude: outcome.latitude, longitude: outcome.longitude,
-        geocoded_at: new Date().toISOString(), geocode_status: 'found',
-      }).eq('id', r.id);
-      if (e) { failed++; } else { found++; }
-    } else if (outcome.verdict === 'not_found') {
-      const { error: e } = await sb.from('customer_addresses')
-        .update({ geocode_status: 'not_found' }).eq('id', r.id);
-      if (e) { failed++; } else { notFound++; }
-    } else {
-      // 🔴 'confirm' — LEFT ALONE ON PURPOSE. No status is written, so this row is offered again
+    const res = applyOneResult(raw, new Date());
+    if (res.patch) {
+      // ✏️ ROUTING THIS THROUGH THE WRITER FIXED A SECOND BUG FOR FREE. The direct `not_found`
+      // update here wrote NO `geocoded_at`, so an unplaceable address would have been re-checked
+      // on every run for ever — the 30-day clock never started. The writer's patch type requires
+      // the date, so the mistake is no longer expressible.
+      const { count, error: e } = await setAddressGeocode(sb as any, {
+        businessId: r.business_id, addressId: r.id, patch: res.patch,
+      });
+      // R-12: an update matching zero rows returns success with no error — count is the signal.
+      if (e || count === 0) { failed++; }
+      else if (res.patch.geocode_status === 'found') { found++; } else { notFound++; }
+    } else if (res.review) {
+      // 🔴 'confirm' — LEFT ALONE ON PURPOSE. Nothing is written, so this row is offered again
       // next run and, more importantly, to a PERSON. A bulk job must not answer a question that
       // was designed to be asked.
       review++;
-      reviewRows.push([r.id, typed, outcome.verdict, outcome.suggestion ?? '', outcome.reason ?? '']
+      reviewRows.push([r.id, typed, res.outcome?.verdict ?? '', res.outcome?.suggestion ?? '', res.outcome?.reason ?? '']
         .map(f => `"${String(f).replace(/"/g, '""')}"`).join(','));
+    } else {
+      failed++;
     }
 
     if ((i + 1) % 100 === 0) console.log(`  … ${i + 1} of ${todo.length}`);
