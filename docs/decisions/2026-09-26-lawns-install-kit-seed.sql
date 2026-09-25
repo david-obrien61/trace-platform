@@ -1,3 +1,13 @@
+-- 🛑 DO NOT RUN YET — HELD 2026-09-25 (ledger #419, David's instruction).
+-- `20260925h`'s factor CHECK cannot refuse a component with a MISSING factor: a NULL factor makes
+-- the CHECK evaluate to NULL, and a CHECK is SATISFIED by NULL — only FALSE rejects.
+-- 🔴 APPLY `20260925m_install_kit_factor_check_rejects_null.sql` FIRST, and check its V1 prints
+--    `mix_without_factor_refused=t`.
+-- Until then this seed would land against a constraint that cannot protect it, and a component
+-- whose factor went missing later would be accepted in silence.
+-- ⚠️ The seed itself is correct and was executed end to end (25 probes) — it is the ORDER that is
+--    being held, not the file.
+--
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- 2026-09-26 — LAWNS's INSTALL KIT, SEEDED FROM DAVID'S RULINGS · ledger #411 · YARD-PRODUCTION
 -- ════════════════════════════════════════════════════════════════════════════════════════════
