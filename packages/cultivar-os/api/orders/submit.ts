@@ -19,6 +19,9 @@ import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
 import { orderKindForMode, mayWriteStockRecord } from '../../../shared/src/business-logic/testMode';
 import { TEST_ORDER_KIND } from '../../../shared/src/business-logic/orderKind';
+// The captured-document marker, imported from the ONE place that defines it rather than
+// re-spelled as 'history' here — a second literal is the copy that drifts (STD-011).
+import { HISTORY_ORDER_KIND } from '../../../shared/src/business-logic/historyOrder';
 
 // ⚠️ THE LAST HARDCODED SIZE LIST, LEFT ON PURPOSE AND FILED — tech-debt #310 (ledger #343).
 // David ruled 2026-09-16: *"No second list of sizes, no size thresholds."* This list breaks that AND
@@ -2116,6 +2119,39 @@ async function handleDelete(req: any, res: any) {
     // select('*'), not a named list: `order_kind` is a GATED column and a named select of a missing
     // column errors, where '*' does not (the handleUpdate precedent).
 
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 DELETE REFUSES ON A LIVE CAPTURE — "cancel it instead". (David, 2026-09-16: captures are
+    // never removed. Re-scoped 2026-09-25 after Gillespie.)
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // WHAT A CAPTURE IS HERE: an order that came from a captured document — it carries a
+    // `receipt_id`, or it was born from history (`order_kind = 'history'`). Both are checked
+    // because either alone would miss the other: a history order whose receipt link was never set,
+    // and a live order later attached to a capture.
+    //
+    // WHAT STAYS DELETABLE, SAID PLAINLY BECAUSE "delete is gone" WOULD BE FALSE: a live checkout
+    // order with no captured document behind it. That is genuinely disposable — it exists only
+    // because somebody started building it here, and nothing outside TRACE records that it
+    // happened. A captured order is the opposite: it is TRACE's copy of a document that exists in
+    // QuickBooks, and deleting it destroys the only link between the two.
+    //
+    // ⚠️ WHAT THE GILLESPIE DELETE ACTUALLY COST, MEASURED RATHER THAN ASSUMED: the capture itself
+    // SURVIVED (receipt b271778c, #3648.563, $1,515.50, confirmed, 5 lines) — because the keeper
+    // order f638c955 points at the SAME receipt. Both orders were built from ONE capture; that is
+    // why they were duplicates. So this refusal is PREVENTION, not repair: on that day the second
+    // order happened to be the spare copy. The next one will not be.
+    const capturedReceiptId = (order as any).receipt_id ?? null;
+    const isCapturedKind    = (order as any).order_kind === HISTORY_ORDER_KIND;
+    if (capturedReceiptId || isCapturedKind) {
+      console.log('[TRACE:ROSTER] delete REFUSED — this order is a live capture', {
+        orderId, businessId, receiptId: capturedReceiptId, orderKind: (order as any).order_kind ?? null,
+      });
+      return res.status(409).json({
+        error: 'This order came from a captured document, and captures are never removed. Cancel it instead — that takes it off the schedule, the load list, the route and the crew link, and keeps the record of what was captured.',
+        code: 'CAPTURE_NOT_DELETABLE',
+        receiptId: capturedReceiptId,
+      });
+    }
+
     const { data: itemsRaw } = await db
       .from('order_items').select('id, quantity, business_inventory_id').eq('order_id', orderId);
     const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
@@ -2156,6 +2192,26 @@ async function handleDelete(req: any, res: any) {
     await db.from('order_items').delete().eq('order_id', orderId);
     const { error: delErr } = await db.from('orders').delete().eq('id', orderId).eq('business_id', businessId);
     if (delErr) throw new Error(`Order delete: ${delErr.message}`);
+
+    // 🔴 THE AUDIT ROW A DELETE NEVER WROTE. Measured 2026-09-24: `audit_log` is alive (206 rows,
+    // 11 in the preceding 24h) and records `inventory.delete` — but NO order delete has ever
+    // written one. David knew what had happened to Gillespie's order only because he was the one
+    // clicking. The row is written AFTER the delete succeeds, for the same reason recordOrderEvent
+    // is: an audit entry asserts something happened, and one written before a failing delete is a
+    // lie in a log nobody can retract.
+    // ⚠️ `detail` IS jsonb — passing text raises 42804, the error that killed a restore file handed
+    // over as "verified" by a read-only simulation (§6 r26).
+    const { error: auditErr } = await db.from('audit_log').insert({
+      business_id: businessId, actor_user_id: deleteActor,
+      action: 'order.deleted', target_type: 'order', target_id: orderId,
+      detail: { previous_status: (order as any).status ?? null, lines: items.length,
+                restored_lines: restored, was_fulfilled: deletingFulfilled },
+      outcome: 'ok',
+    });
+    // A failed audit write does NOT fail the request — the order is already gone, and throwing
+    // here would report failure for work that succeeded. It is LOUD instead, because a silent
+    // missing audit row is the state this build exists to end.
+    if (auditErr) console.error('[TRACE:ROSTER] order deleted but the AUDIT ROW FAILED', { orderId, err: auditErr.message });
 
     console.log('[TRACE:ROSTER] order deleted', { orderId, restoredLines: restored, wasFulfilled: deletingFulfilled, priorStatus: (order as any).status });
     res.json({ ok: true, orderId });
@@ -2256,6 +2312,52 @@ async function handleStatus(req: any, res: any) {
       console.log('[TRACE:INVENTORY] D-52 cancelled while open — commitment released, on-hand untouched (nothing was taken)', {
         orderId, from: prevStatus,
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // CANCEL GOES THROUGH THE RPC, BECAUSE THE STOPS MUST MOVE WITH THE ORDER OR NOT AT ALL.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 THE DEFECT (David, measured live 2026-09-24/25): he cancelled Gillespie's duplicate order
+    // and the Saturday stop stayed. He then deleted the order and it stayed again. Lauren could
+    // not route Saturday or split it across two teams. It is NOT a one-off — stop 889b0df1 (Tracy
+    // Fisher, 2026-09-06) is an order at `cancelled` whose stop is still `scheduled`. **Cancel has
+    // never once reached a delivery.**
+    //
+    // Two PostgREST updates are two transactions: setting the order and then failing before the
+    // stops leaves exactly the state being fixed, and reports success. `cancel_order_with_stops`
+    // is one plpgsql body, so both move together. It also clears `team_id`/`route_position`, which
+    // the cancelled/held filter does not cover, and writes the audit rows neither click ever wrote.
+    if (status === 'cancelled') {
+      const { data: rpcOut, error: rpcErr } = await db.rpc('cancel_order_with_stops', {
+        p_business_id: businessId, p_order_id: orderId,
+        p_reason: `order cancelled${prevStatus ? ` (was ${prevStatus})` : ''}`,
+      });
+
+      if (rpcErr) {
+        // 🔴 THE REFUSAL MUST NEVER DEGRADE INTO A FALLBACK (Overnight Protocol 2). Falling back to
+        // the plain `orders` update is the ORIGINAL DEFECT arriving through the safety net built to
+        // prevent it: the order would read cancelled and the stop would stay on Lauren's Saturday.
+        // A missing function means NOT SET UP YET, and it says so instead of half-doing the job.
+        const missing = /could not find the function|does not exist|PGRST202|42883/i.test(
+          `${rpcErr.message ?? ''} ${(rpcErr as any).code ?? ''}`);
+        console.log('[TRACE:ROSTER] cancel REFUSED — cancel_order_with_stops unavailable', {
+          orderId, businessId, missing, err: rpcErr.message,
+        });
+        return res.status(missing ? 503 : 500).json({
+          error: missing
+            ? 'Cancelling is not set up yet on this database — migration 20260925k_cancel_order_retires_stops.sql has not been applied. Nothing was changed. Until it is applied, cancel would leave the delivery on the schedule, so it refuses rather than half-doing it.'
+            : `Cancel failed: ${rpcErr.message}. Nothing was changed.`,
+          code: missing ? 'CANCEL_NOT_SET_UP' : 'CANCEL_FAILED',
+        });
+      }
+
+      const out = (rpcOut ?? {}) as { stops_retired?: number; unchanged?: boolean };
+      console.log('[TRACE:ROSTER] order cancelled — stops retired in the same transaction', {
+        orderId, from: prevStatus, stopsRetired: out.stops_retired ?? 0, unchanged: !!out.unchanged,
+      });
+      await recordOrderEvent(db, stockGate, businessId, orderId, 'order_cancelled', statusActor, changedAt,
+        `${prevStatus ? `from ${prevStatus}` : 'cancelled'} — ${out.stops_retired ?? 0} stop(s) retired`);
+      return res.json({ ok: true, orderId, status, stopsRetired: out.stops_retired ?? 0 });
     }
 
     const { error: stErr } = await db.from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId);
