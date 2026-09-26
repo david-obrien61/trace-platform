@@ -5232,3 +5232,63 @@ cultivar-os, and every surface it changes needs its owner-test card touched (OP-
 was not folded into a night-safe S item. ⚠️ **Do not read "the standard is built" as "the blanks are
 fixed".**
 
+
+---
+
+## #367 — 🔴 A `general` BUSINESS GETS THE NURSERY DASHBOARD, INCLUDING A READOUT LABELLED **PLANTS** — THE VERTICAL FILTER IS WIRED AND FILTERS ALMOST NOTHING (NEW 2026-09-26, ledger #422)
+
+**THE MECHANISM IS REAL AND CORRECT. THE REGISTRY IT READS IS NOT POPULATED.** `verticalsForBusinessType()`
+(`packages/cultivar-os/src/registry/tileRegistry.ts:639`) maps `general: ['general']`, and it **is genuinely wired** —
+`hooks/useModules.ts:88` and `pages/PositionBuilder.tsx:112` both call it, so this is **not** tech-debt #157's shape
+(a correct mechanism with zero importers). The defect is one layer in: **the registry has exactly ONE non-`general`
+tile.**
+
+🔴 **MEASURED 2026-09-26 (LIVE code read):** a whole-registry grep for `vertical: 'cultivar'|'ignition'|'conduit'|'kinna'`
+returns **1 hit** — `seasonal_module` (`:239`), which is `status: 'planned'` **and** `placement: 'settings'`, so it is
+**not even a dashboard tile.** Every one of the 20 `placement: 'dashboard'` tiles is `general`. **So a `general`
+business's dashboard is identical to a nursery's**, and it includes:
+
+- `qr_checkout` — the nursery counter flow
+- `inventory_intake` / `inventory_manual` — nursery stock intake
+- 🔴 **`metric_plants` — a readout whose label is literally *Plants*, on a consultancy's dashboard**
+
+⚠️ **THIS IS NOT A FALSE GREEN AND NOTHING IS BROKEN — which is exactly why it will be read as intentional.**
+The tiles work; they are simply the wrong vocabulary for the tenant. The **first person to see it is Andrew, on
+Monday**, on David's own `Built with CAI` tenant (ledger #422).
+
+**WHY IT IS FILED RATHER THAN FIXED:** the repair is **tagging tiles with their vertical in the registry** — a
+judgement call per tile about what a generalist business legitimately needs (receipts, customers, operating costs and
+assets plausibly YES; QR checkout and plant counts plausibly NO), and **every tile whose scope changes moves a
+surface, which flips its owner-test card `covered` → `owed` (OP-14)**. That is a build with a decision in the middle of
+it, not a side effect of standing a tenant up. **David rules on the per-tile list.**
+
+✏️ **AND IT CORRECTS A CLAIM MADE EARLIER IN ITS OWN SESSION.** This session first reported that `general` →
+`['general']` gives *"core tiles only, already built"* — **true about the mechanism, false about the effect**, and
+caught only by counting the registry's non-general tiles. **A mapping that is correctly written and correctly wired can
+still be a no-op**, and reading the map without counting its population is how that goes unnoticed. [[R-26]]'s shape,
+found in this session's own reasoning rather than in a document.
+
+---
+
+## #368 — 🟡 A BUSINESS'S ADDRESS CAN BE SET ONLY AT SIGNUP AND NEVER EDITED — THE COLUMN HAS NO EDIT SURFACE ANYWHERE (NEW 2026-09-26, ledger #422)
+
+**MEASURED, BOTH DIRECTIONS.** `businesses.address` is written in exactly two places, both at CREATE time:
+`OwnerSignup.tsx:282` (`if (collectAddress && address.trim())` — non-blank only) and the legacy
+`OnboardingWizard.tsx:534`. A whole-repo grep for `from('businesses')` + `update` returns **three** hits and **none of
+them touches `address`**: `DiscoveryGlimpse.tsx:183` (website), `quickbooks/refresh.ts:63` (tokens),
+`QboWriteSwitch.tsx:86` (`qbo_writes_enabled`). **`Settings.tsx` contains no `businesses` read or write at all.**
+
+⚠️ **TODAY THIS CUTS THE RIGHT WAY AND THAT IS WHY IT IS AMBER, NOT RED.** For `Built with CAI` it is a *guarantee*:
+the stand-up requires the address to stay empty (David's personal address must never appear in tenant data), and
+because nothing can write it, **blank stays blank permanently** — no vigilance required. It is filed because the same
+property means **an owner who mistypes their address at signup, or who moves, has no way to correct it**, and the
+next person to need that will look in Settings and find nothing.
+
+🔴 **AND IT INVALIDATES A CARD AS WRITTEN.** The 2026-09-26 stand-up's card 1 said *"confirm the address shows
+`not set`"* — **there is no surface on which to confirm that.** The nearest thing is the PUBLIC plant profile
+(`PlantProfile.tsx:196-199`), which joins `[name, address, phone].filter(Boolean)` and therefore **omits** an absent
+address rather than announcing it. That is honest (nothing wrong is shown) but it is **not** the D-9 *"announce the
+absence"* form, and it is a public page rather than an owner one. **The card was rewritten to check what is
+actually observable.** Tech-debt **#180**'s shape — a field deferred to a surface that cannot edit it.
+
+---

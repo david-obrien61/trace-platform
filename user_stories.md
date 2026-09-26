@@ -1011,6 +1011,45 @@ _Grounded: `packages/shared/src/modules/PMI.tsx`, `pmiInterval.ts`, `api/pmi/sug
 
 _Owed items that don't belong to one of the 8 build-arcs. They render under "Unfiled" but surface in the WHAT'S OWED view and the status/scope filters._
 
+### Built with CAI is a real tenant at builtwithcai.app — David's own general business, customer-zero
+STATUS: written
+SCOPE: platform, north-star
+BUILD: in-build
+MAPS-TO: —
+PIECES: general_tenant_create, builtwithcai_app_dns, supabase_auth_urls, member_invite_general
+NEEDS: **nothing to DECIDE about the TYPE — three things that are David's alone: the DNS record at GoDaddy, the Vercel domain addition, and the Supabase auth URLs.** All three are measured and written out in `~/Desktop/DAY-2026-09-26/BWC-SETUP.md` (ledger #422). No migration is owed.
+🔵 **SETTLED BY MEASUREMENT, DO NOT RE-DERIVE (LIVE 2026-09-26):** `businesses.business_type` is **`text NOT NULL DEFAULT 'nursery'` with NO CHECK constraint and no enum**, so **`'general'` is already DB-legal and needs no migration** — AC-1 is satisfied by the schema as it stands. The app **already creates a general business through its own UI**: `AddBusiness.tsx:15` mounts the shared `OwnerSignup` with `businessType: 'general'`, and `OwnerSignup.tsx:278` writes it. `tileRegistry.ts:627` maps `general: ['general']`, and its own comment already names **`TRACE='general'`**. The address is safe by construction: `OwnerSignup.tsx:282` inserts `address` **only when non-blank**, so leaving the field empty leaves the column NULL — and **nothing in the app can ever set it afterwards** (the only `businesses` UPDATEs are website, QBO tokens and `qbo_writes_enabled`), which is both the guarantee and the gap.
+🔴 **AND THE SKIN IS NOT WHAT THE NAME SUGGESTS — MEASURED, because this is the thing most likely to be re-derived wrongly.** `business_type` is a **CONTENT axis, not a theming one**: colours are hardcoded hex per package (`#27500A` × 47 across 31 files in `shared`), `design-system/tokens.ts` holds a correct per-vertical palette with **zero importers for the palettes** (tech-debt #157), and there is **no hostname→vertical mapping anywhere** — the single `location.hostname` read in the whole surface is a **WebAuthn Relying-Party id** (`OwnerSignup.tsx:570`). **Exactly ONE tile in the registry is non-`general`** (`seasonal_module`, `status:'planned'`, `placement:'settings'`), so a `general` business's dashboard is **the nursery dashboard minus nothing a person would notice** — it still shows `qr_checkout`, `inventory_intake` and a readout labelled **`metric_plants`**. "Core tiles only" is a registry change (tagging tiles with verticals), **not data, and not done**.
+Built with CAI is David's own general business — the home tenant the Presence Audit (#421) and the later lead-generator tile hang on, and the first real exercise of the `general` tier that `MASTER_BRIEF.md:1295` has named since June (*"David's general business (`business_type='general'`)"*). Andrew starts using it Monday. **It is a NEW tenant, not a re-level:** `user_stories.md:495`/`:2007` both say *"re-level TRACE Enterprises to BuiltWithCAI/general"*, but that tenant **no longer exists** — tech-debt **#250** recorded its deletion and a live read confirms **zero `business_type='general'` businesses and three live tenants, all `nursery`**. Served at **`builtwithcai.app`**, which per the 06-22 rulings is the general business CORE from which the verticals branch. _Grounded: ledger #422; [[D-27]] (the TLD principle — `.com` explains, `.app` is an entry point); tech-debt #250; live catalog reads 2026-09-26._
+
+### General-tier self-onboarding — a new outside user signs up as a general business, not a nursery
+STATUS: written
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: general_signup_path, business_type_choice, onboarding_wizard_general
+NEEDS: David to say whether a new general-tier user picks their type in the form, or arrives on a general-specific signup route. Nothing else is blocked.
+🔴 **THE GAP IS MEASURED AND IT IS SHARPER THAN "not built yet": JON CANNOT SELF-ONBOARD AS A GENERAL BUSINESS TODAY, AND THE PATH THAT CAN CREATE ONE REQUIRES AN EXISTING SESSION.** `/add-business` (`AddBusiness.tsx:15`, `businessType: 'general'`) is *"an add-a-business page for already-authenticated users"* — its own header says so. **The only NEW-user signup path is `SignUp.tsx:29`, which hardcodes `businessType: 'nursery'`**, and **there is no business-type input, select or radio anywhere in the signup form** (`OwnerSignup.tsx:252-259` validates business name, owner name, email and password only). So a brand-new outside user can become a nursery or nothing. ⚠️ **And a second-order defect rides with it:** `OnboardingWizard.tsx:516` recovers an existing business with `.eq('business_type','nursery')`, so a general business bounced through `/onboarding` **is not found** and the legacy branch at `:534` would mint a **second, nursery-typed** row.
+Jon is the intended first outside general-tier user (David, 2026-08-23). For him to sign himself up, the type has to become something the signup path can express rather than a literal baked into one of two mount sites. **The shared component is already right** — `OwnerSignup` takes `businessType` as a prop (`:28`, *"stored in businesses.business_type"*), so this is a call-site and form question, not a rewrite. _Grounded: live code read 2026-09-26 (ledger #422); ITEM 1b of the 2026-09-26 stand-up._
+
+### builtwithcai.com becomes the public site — the splash page is replaced
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: bwc_com_public_site, marketing_copy, who_we_are_block
+NEEDS: David — the content and the shape. Per the 06-22 rulings `.com` is the **explanatory / acquisition** surface and today carries **a splash page**; what replaces it is a writing and positioning decision, not a build question. ⚠️ Touching `builtwithcai.com` was explicitly OUT OF SCOPE for the 2026-09-26 stand-up (its DNS is separate: `ns33/34.domaincontrol.com`, distinct from the `.app`).
+The `.com` explains and acquires; the `.app` is where the work happens. Once `builtwithcai.app` is live as the general core, the splash page is the weakest surface in the story — it is what a referred prospect lands on. **Held as a story rather than started**, because the [[D-9]]-adjacent risk here is writing claims the platform cannot yet back. _Grounded: 06-22 domain rulings; [[D-27]]._
+
+### home.builtwithcai.app and discovery.builtwithcai.com — the deferred pointers
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: home_subdomain_pointer, discovery_subdomain_pointer
+NEEDS: **nothing until the core `.app` is live — that is the gate, and it is [[D-27]]'s own wording**, not a preference: *"Wiring is DEFERRED — `home.` is gated on `builtwithcai.app` (the core `.app` home) standing up first; build capability now, pointer last."*
+Two entry-point pointers wait on the core: **`home.builtwithcai.app`** (the residence product — `business_type = residence`, skinned at runtime, sibling to CoolRunnings) and **`discovery.builtwithcai.com`** (an explanatory/acquisition surface under the `.com` half of the 06-22 rulings). Both are POINTERS into the one app, never separate apps. **Filed so the sequencing survives**: the core standing up is what unblocks them, and neither was touched on 2026-09-26. _Grounded: [[D-27]]; 06-22 domain rulings; ledger #422._
+
 ### No form ever fails silently — validate required fields, say why, everywhere
 STATUS: written
 SCOPE: platform
