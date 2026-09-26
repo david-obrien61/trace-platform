@@ -389,6 +389,40 @@ export function StopCard({ stop: d, read, actions, leading, selected = true, cre
                   )}
                 </div>
               )}
+              {/* ══════════════════════════════════════════════════════════════════════════════
+                  CANCEL THE ORDER — where Lauren stands (David, 2026-09-24).
+                  ══════════════════════════════════════════════════════════════════════════════
+                  🔴 THE REASON THIS IS ON THE STOP CARD AT ALL: Gillespie's duplicate broke
+                  Lauren's Saturday, and the only control that could remove it lived on the order
+                  page — a screen she had no reason to open. A fix she cannot reach is not a fix.
+
+                  ⚠️ OFFERED ONLY WHERE IT CAN SUCCEED (§1.6 item 5 — no dead affordance). Hidden
+                  on a stop that is already done, and on a stop with NO order behind it: the second
+                  is Gillespie's own duplicate today, and a Cancel that always refuses would teach
+                  Lauren the button is broken. Those orphans are retired by a held data file.
+
+                  It is styled as the quiet destructive action it is — a text button, not a primary
+                  one — and it confirms first, naming the customer and the day, because cancelling
+                  the wrong stop in front of a customer is the failure this whole build is about. */}
+              {!isDeliveryFulfilled(d.status) && canEditStop && d.order_id && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    onClick={() => {
+                      const who = name;   // the SAME resolved name the card header shows — never a second resolution (#403)
+                      if (!window.confirm(
+                        `Cancel the order for ${who}${d.delivery_date ? ` on ${d.delivery_date}` : ''}?\n\n`
+                        + 'This takes the stop off the schedule, the load list, the route and the crew link. '
+                        + 'Nothing is deleted — the stop and its history are kept, and you can see it was cancelled.',
+                      )) return;
+                      void actions.cancelStopOrder(d);
+                    }}
+                    disabled={busy}
+                    style={{ background: 'none', border: 'none', padding: '12px 4px', margin: '-12px 0', color: RED, fontWeight: 700, fontSize: '0.75rem', cursor: busy ? 'default' : 'pointer', minHeight: 44 }}
+                  >
+                    {busy ? 'Saving…' : 'Cancel this order'}
+                  </button>
+                </div>
+              )}
               {/* 🔴 THE STOP IS DONE AND THE STOCK HAS NOT MOVED — SAY SO (R-35; deliveryFulfilment §2b). */}
               {notice && (
                 <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#FEF3C7', border: '1px solid #FDE68A', fontSize: '0.75rem', color: '#92600A', lineHeight: 1.45 }}>

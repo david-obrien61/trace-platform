@@ -356,10 +356,56 @@ export function useStopActions(
     await onChanged();
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // CANCEL THE ORDER BEHIND THIS STOP — reachable where Lauren actually works (David, 2026-09-24).
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 WHY IT IS HERE AND NOT ONLY ON THE ORDER PAGE: Lauren works on the delivery page. The
+  // Gillespie duplicate broke her Saturday, and the only control that could have removed it lived
+  // on a screen she had no reason to open. A fix she cannot reach is not a fix.
+  //
+  // It posts the SAME `action: 'status'` the order page posts, so there is ONE cancel path and the
+  // transaction lives in `cancel_order_with_stops` behind it — not a second implementation that
+  // would drift from the first (§6 r8).
+  //
+  // ⚠️ A STOP WITH NO ORDER CANNOT BE CANCELLED THIS WAY, AND IT SAYS SO. Gillespie's own duplicate
+  // is exactly that shape today — `order_id` NULL, because the delete removed the order and left
+  // the stop. There is nothing to cancel, so it refuses and names the reason rather than appearing
+  // to work. Those orphans are retired by a held data file, and the morning file lists them.
+  async function cancelStopOrder(d: StopRow): Promise<void> {
+    if (!can('orders:update')) { setActionError(requirementText('orders:update')); return; }
+    if (!d.order_id) {
+      setActionError('This stop has no order behind it, so there is nothing to cancel. It was most likely left behind when its order was deleted — ask David to retire it.');
+      return;
+    }
+    setSavingId(d.id); setActionError(null); setActionNote(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      const res = await fetch('/api/orders/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'status', status: 'cancelled', orderId: d.order_id, businessId }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      // Rule 24: a failed request and an empty result must never look the same. The SERVER's words
+      // are what the person reads — including "not set up yet", which is a real answer.
+      if (!res.ok) { setActionError(body.error || `Cancel failed (${res.status})`); setSavingId(null); return; }
+      const n = Number(body.stopsRetired ?? 0);
+      setActionNote(n > 0
+        ? `Order cancelled. ${n === 1 ? 'This stop is' : `${n} stops are`} off the schedule, the load list, the route and the crew link.`
+        : 'Order cancelled. It had no stop left on the schedule.');
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] order cancelled from the stop card', { stop: d.id, order: d.order_id, stopsRetired: n });
+    } catch (e: any) {
+      setActionError(e?.message || 'Cancel failed');
+    }
+    setSavingId(null);
+    await onChanged();
+  }
+
   return {
     savingId, actionError, actionNote,
     clearActionError: () => { setActionError(null); setActionNote(null); },
-    markStop, editDate, saveShipTo, saveSite, openEditor, overlays,
+    markStop, editDate, saveShipTo, saveSite, openEditor, overlays, cancelStopOrder,
     // TEAMS (ledger #362) — the list every picker on the page reads, and the one call that sets one.
     teams, teamsAbsent, setStopTeam,
     // §8 V1/V3 — <StopCard> no longer renders the offer, so it no longer needs to read it. What it
