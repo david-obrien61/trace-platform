@@ -31,7 +31,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@trace/shared/supabase/client';
 import { planTheDay, type DayPlan } from '@trace/shared/business-logic/planTheDay';
 import { readPlanDay, type PlanDayInputs } from '../../lib/planDayRead';
-import { assignStopsTeam, type Team } from '../../lib/teams';
+import type { Team } from '../../lib/teams';
+import { acceptPlan } from '../../lib/planAccept';
 
 const TRACE_PLAN = true;   // STD-003: on by default until owner-proven.
 
@@ -116,28 +117,20 @@ export function PlanTheDayPanel({ businessId, date, teams, canWrite, onAccepted 
   async function accept() {
     if (!inputs || !draft) return;
     setSaving(true); setNote('');
-    const results: string[] = [];
-    for (const c of crews) {
-      const teamId = crewTeam[c.index];
-      if (!teamId) { setSaving(false); setNote(`Pick a crew for column ${c.index + 1} first — a plan has to say WHO goes out.`); return; }
-      const ids = inputs.stops.filter(s => draft.get(s.id) === c.index).map(s => s.id);
-      if (ids.length === 0) continue;
-      const out = await assignStopsTeam(supabase, businessId, ids, teamId);
-      if (!out.ok) {
-        // 🔴 PARTIAL IS REPORTED AS PARTIAL. Each call is atomic; the SEQUENCE is not, so a
-        // failure on the second crew leaves the first assigned — saying "not saved" would be
-        // false and saying "saved" would be worse.
-        setSaving(false);
-        setNote(`Stopped at column ${c.index + 1}: ${out.message}. ${results.length ? `${results.join('; ')} — those are already assigned.` : 'Nothing was assigned.'}`);
-        return;
-      }
-      results.push(`${out.value.assigned} stop${out.value.assigned === 1 ? '' : 's'} → ${out.value.teamName}`);
-      if (TRACE_PLAN) console.log('[TRACE:PLAN] crew accepted', { crew: c.index + 1, teamId, assigned: out.value.assigned });
-    }
+    // 🔴 THE WRITE LIVES IN `acceptPlan`, NOT HERE — `verify:writer-registry` refuses a capture
+    // path whose logic a test cannot reach, and it was right: the partial-failure behaviour is
+    // only provable once it is out of a click handler.
+    const out = await acceptPlan(supabase, businessId, crews.map(c => ({
+      crew: c.index + 1,
+      teamId: crewTeam[c.index] || null,
+      stopIds: inputs.stops.filter(s => draft.get(s.id) === c.index).map(s => s.id),
+    })));
     setSaving(false);
-    setNote(`Saved. ${results.join('; ')}. Route each crew from the schedule when you are ready.`);
-    onAccepted?.();
+    setNote(out.message);
+    if (TRACE_PLAN) console.log('[TRACE:PLAN] accept', { ok: out.ok, assigned: out.assigned });
+    if (out.ok && out.assigned.length > 0) onAccepted?.();
   }
+
 
   if (loading) return <p style={hint}>Working out the day…</p>;
   if (!inputs) return null;

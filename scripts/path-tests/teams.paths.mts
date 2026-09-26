@@ -12,6 +12,7 @@
  */
 import { openLiveDb, restClient, installSupabaseShim } from './lib/liveDb.mjs';
 import { readTeams, saveTeam, retireTeam, assignStopsTeam, teamLabel } from '../../packages/cultivar-os/src/lib/teams';
+import { acceptPlan } from '../../packages/cultivar-os/src/lib/planAccept';
 import { readStops } from '../../packages/cultivar-os/src/lib/stopRead';
 import { readFileSync } from 'node:fs';
 
@@ -181,6 +182,72 @@ await path('stop.assign-team', 'schedule/route → set a team on stops: the stop
     'the screen label is wrong for one of the two states');
   const rowsA = await audit(db, t.value.teamId);
   check(rowsA.filter((x: any) => x.action === 'stop.team_assigned').length === 1, `audit ${JSON.stringify(rowsA.map((x: any) => x.action))}`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// PLAN THE DAY → ACCEPT (PlanTheDayPanel → acceptPlan → assignStopsTeam)
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+await path('plan-day.accept', 'Plan the day → Accept: each crew\'s stops land on that crew, and the message names what landed', async (check) => {
+  const db = await freshDb();
+  const t1 = await saveTeam(lauren(db), B, { name: 'Crew A', memberNames: ['Ana'] });
+  const t2 = await saveTeam(lauren(db), B, { name: 'Crew B', memberNames: ['Ben'] });
+  if (!t1.ok || !t2.ok) { check(false, 'setup save refused'); return; }
+  const a1 = await stop(db, B), a2 = await stop(db, B), b1 = await stop(db, B);
+
+  const out = await acceptPlan(lauren(db), B, [
+    { crew: 1, teamId: t1.value.teamId, stopIds: [a1, a2] },
+    { crew: 2, teamId: t2.value.teamId, stopIds: [b1] },
+  ]);
+  check(out.ok, `accept refused: ${out.message}`);
+  check(out.assigned.length === 2 && out.assigned[0].stops === 2 && out.assigned[1].stops === 1,
+    `what landed: ${JSON.stringify(out.assigned)}`);
+
+  // Read it back from the database, not from the result — asserting the writer was called does
+  // not count (§6 r21).
+  const rows = await all(db, `SELECT id, team_id FROM public.deliveries WHERE id = ANY($1::uuid[])`, [[a1, a2, b1]]);
+  const byId = new Map(rows.map((r: any) => [r.id, r.team_id]));
+  check(byId.get(a1) === t1.value.teamId && byId.get(a2) === t1.value.teamId,
+    `crew 1's stops: ${JSON.stringify(rows)}`);
+  check(byId.get(b1) === t2.value.teamId,
+    `🔴 crew 2's stop went to the WRONG crew — the columns a person accepted must be the columns that land: ${JSON.stringify(rows)}`);
+  // …and what the schedule shows.
+  const onScreen = await scheduled(db, b1);
+  check(onScreen?.team_id === t2.value.teamId, `the schedule reads team_id ${String(onScreen?.team_id)} for crew 2's stop`);
+});
+
+await path('plan-day.no-crew-chosen', 'Plan the day → Accept with a column that has no crew: refused by name, and NOTHING is assigned', async (check) => {
+  const db = await freshDb();
+  const t1 = await saveTeam(lauren(db), B, { name: 'Crew A', memberNames: [] });
+  if (!t1.ok) { check(false, 'setup save refused'); return; }
+  const a1 = await stop(db, B), b1 = await stop(db, B);
+
+  const out = await acceptPlan(lauren(db), B, [
+    { crew: 1, teamId: t1.value.teamId, stopIds: [a1] },
+    { crew: 2, teamId: null, stopIds: [b1] },
+  ]);
+  check(!out.ok && /Pick a crew for column 2/.test(out.message), `refusal: ${out.message}`);
+
+  // 🔴 THE POINT OF THE PRE-FLIGHT. Column 1 was perfectly valid and must STILL not have been
+  // written — refusing halfway would leave half a plan the person never completed and cannot see.
+  const rows = await all(db, `SELECT id, team_id FROM public.deliveries WHERE id = ANY($1::uuid[])`, [[a1, b1]]);
+  check(rows.every((r: any) => r.team_id === null),
+    `🔴 A REFUSED PLAN WROTE SOMETHING. Column 1 was valid, but a plan is accepted whole or not at all — a half-written plan is one nobody can see: ${JSON.stringify(rows)}`);
+  check(/Nothing was assigned/.test(out.message), `the message must say nothing was assigned: ${out.message}`);
+});
+
+await path('plan-day.empty-column', 'Plan the day → Accept with an empty column: it is skipped, not refused', async (check) => {
+  const db = await freshDb();
+  const t1 = await saveTeam(lauren(db), B, { name: 'Crew A', memberNames: [] });
+  if (!t1.ok) { check(false, 'setup save refused'); return; }
+  const a1 = await stop(db, B);
+  const out = await acceptPlan(lauren(db), B, [
+    { crew: 1, teamId: t1.value.teamId, stopIds: [a1] },
+    { crew: 2, teamId: null, stopIds: [] },
+  ]);
+  check(out.ok, `an empty second column must not block a one-crew day: ${out.message}`);
+  const rows = await all(db, `SELECT team_id FROM public.deliveries WHERE id = $1`, [a1]);
+  check(rows[0]?.team_id === t1.value.teamId, `crew 1 still landed: ${JSON.stringify(rows)}`);
 });
 
 await path('stop.unassign-team', 'schedule/route → No team: the stop goes back to unassigned, which is a real state', async (check) => {

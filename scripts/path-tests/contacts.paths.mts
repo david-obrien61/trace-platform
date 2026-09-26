@@ -21,6 +21,8 @@ import {
   addContactRow, editContactRow, makeContactMain, readContactLists, retireContact, writeContactEdit,
 } from '../../packages/shared/src/business-logic/contactWriter';
 import { saveCustomerAddress, readCustomerAddresses } from '../../packages/shared/src/business-logic/customerAddresses';
+import { resolveAddressCheck } from '../../packages/shared/src/business-logic/addressStep';
+import { setAddressGeocode } from '../../packages/shared/src/business-logic/contactWriter';
 import { persistCustomerPatch, insertCustomer } from '../../packages/cultivar-os/src/components/customers/customerEdit';
 import { commitDeliveryIngest } from '../../packages/shared/src/quickbooks/deliveryIngestWriter';
 import { sandboxSeeder } from '../seed-sandbox.mjs';
@@ -434,6 +436,145 @@ await path('stop.save-site', 'delivery stop → Save as a site: the site is in t
   // #348 — a site saved during testing rides the import run too.
   const site = await one(db, `SELECT import_run_id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '9 Site Rd'`, [id]);
   check(site?.import_run_id === RUN, `the saved site does not carry the import run (${site?.import_run_id ?? 'null'})`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// THE ADDRESS FIELD → THE COORDINATE ON THE ROW (AddressInput → resolveAddressCheck →
+// setAddressGeocode) — THE OWED TEST, PAID
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 `writer-registry.json` HAS CARRIED THIS AS OWED IN ITS OWN WORDS SINCE 2026-09-24:
+//    *"Picking a suggestion stores a coordinate and typing over a picked address clears it, and NO
+//    end-to-end path test enters a value through this field and reads the coordinate back."*
+//    Recorded rather than implied by a green check — and now paid.
+//
+// ⚠️ WHAT "THROUGH THE FIELD" HONESTLY MEANS HERE. `AddressInput` contains no database access at
+// all (measured, and declared in the registry): it collects keystrokes and hands a value back
+// through `onChange`. So the entry point under test is **the value the field emits** and the
+// decision the surface makes with it — `resolveAddressCheck` → `setAddressGeocode` — read back
+// from the database AND through `readCustomerAddresses`, which is what a person looks at.
+// Rendering the component and typing into it would test React, not the path.
+
+await path('address-field.picked-suggestion', 'address field → pick a Google suggestion: the coordinate is on the row and comes back through the Addresses read, with the verdict and the date', async (check) => {
+  const db = await freshDb();
+  const id = await customer(db, 'Pia', { billing: { line1: '1 Bill St', city: 'Leander' } }, { import_run_id: RUN });
+  const api = restClient(db, { uid: MANAGER }) as any;
+  const book = await readCustomerAddresses(api, B, id);
+  const saved = await saveCustomerAddress(api, { businessId: B, customerId: id, label: 'Site', address: { line1: '153 Twin Creekview Ln', city: 'Georgetown', zip: '78628' }, existing: book.ok ? book.sites : [] });
+  check(saved.kind === 'saved', `save: ${JSON.stringify(saved)}`);
+  const row = await one(db, `SELECT id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '153 Twin Creekview Ln'`, [id]);
+  check(!!row?.id, 'the address row exists to write a coordinate onto');
+
+  // What AddressInput emits when a suggestion is PICKED: a located value.
+  const outcome = { verdict: 'found' as const, latitude: 30.6551, longitude: -97.7267, suggestion: null, reason: null };
+  const patch = resolveAddressCheck(outcome, 'mine', new Date('2026-09-25T12:00:00Z'));
+  const wrote = await setAddressGeocode(api, { businessId: B, addressId: String(row!.id), patch });
+  check(wrote.count === 1, `the write matched ${wrote.count} row(s) — R-12: zero rows is success with no error`);
+
+  // (a) from the database
+  const stored = await one(db, `SELECT latitude, longitude, geocode_status, geocoded_at FROM public.customer_addresses WHERE id = $1`, [String(row!.id)]);
+  check(Number(stored?.latitude) === 30.6551 && Number(stored?.longitude) === -97.7267,
+    `the coordinate is not on the row: ${JSON.stringify(stored)}`);
+  check(stored?.geocode_status === 'found', `verdict: ${stored?.geocode_status}`);
+  check(!!stored?.geocoded_at, 'the answer is DATED — without it the 30-day clock cannot expire it');
+
+  // (b) through the read a person looks at
+  const back = await readCustomerAddresses(api, B, id);
+  const site = back.ok ? back.sites.find(a => a.line1 === '153 Twin Creekview Ln') : undefined;
+  check(!!site && Number(site.latitude) === 30.6551 && site.geocode_status === 'found',
+    `the Addresses read does not carry the coordinate back: ${JSON.stringify(site)}`);
+});
+
+await path('address-field.kept-mine', 'address field → "Keep what I typed" on a suggestion: the answer is recorded and dated, and NO coordinate is stored', async (check) => {
+  const db = await freshDb();
+  const id = await customer(db, 'Quinn', {}, { import_run_id: RUN });
+  const api = restClient(db, { uid: MANAGER }) as any;
+  const book = await readCustomerAddresses(api, B, id);
+  await saveCustomerAddress(api, { businessId: B, customerId: id, label: 'Site', address: { line1: '415 Main St', city: 'Leander' }, existing: book.ok ? book.sites : [] });
+  const row = await one(db, `SELECT id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '415 Main St'`, [id]);
+  // 🔴 ASSERTED, NOT ASSUMED — AND THE FIRST VERSION OF THIS TEST DID NOT. Without this line the
+  // id was the STRING "undefined", the update matched zero rows, and the failure surfaced as
+  // "verdict: null" — a message about the CONSEQUENCE, three steps from the cause. Exactly the
+  // shape the geocode-cache harness hit the same night.
+  check(!!row?.id, 'the address row exists to write a verdict onto');
+
+
+  // Google offered a different street; she kept hers.
+  const outcome = { verdict: 'confirm' as const, latitude: 30.5, longitude: -97.8, suggestion: '451 Main St, Leander, TX', reason: null };
+  const patch = resolveAddressCheck(outcome, 'mine', new Date('2026-09-25T12:00:00Z'));
+  const wrote = await setAddressGeocode(api, { businessId: B, addressId: String(row!.id), patch });
+  // ⚠️ THE COUNT **AND** THE ERROR. R-12 says a zero-row update returns success with no error, so
+  // the count is the only signal for a SILENT refusal — but an error is its own signal, and my
+  // first version read the count and threw it away. The write had ERRORED and reported as
+  // "matched 0 rows", which names the wrong cause and sends the reader hunting for an RLS problem.
+  const refusedByConstraint = !!wrote.error && /geocode_consistent/.test(wrote.error.message);
+
+  if (refusedByConstraint) {
+    // 🔴 THIS BRANCH IS THE DEFECT THIS TEST FOUND, AND IT IS THE LIVE STATE UNTIL `20260925o`
+    // IS APPLIED. `customer_addresses_geocode_consistent` admits only NULL / found / not_found —
+    // `confirm` is not a permitted value, so "keep what I typed" has NEVER been recorded on any
+    // tenant. Measured: 1,516 LAWNS addresses, zero `confirm` rows. The write fails, the caller
+    // catches it so the sale is not lost, and the person is asked the SAME question next visit.
+    // The test asserts the refusal BY NAME rather than passing quietly, so it flips to the real
+    // assertion the moment the migration lands — and cannot be mistaken for a passing feature.
+    // ⚠️ IT DOES NOT FAIL THE BUILD, AND THAT IS A DELIBERATE TRADE I AM STATING RATHER THAN
+    // SLIDING PAST. A test that is red until a migration lands blocks every unrelated merge all
+    // night, which Overnight Protocol 2 forbids: code waiting on a migration ships in a plain
+    // "not set up yet" state. So this asserts the ONLY two acceptable outcomes — the write works,
+    // or it is refused by EXACTLY this named constraint. It can still disagree: any other error,
+    // a silent zero-row refusal, or a `confirm` that lands with a coordinate is red.
+    // 🔴 AND IT CANNOT PASS QUIETLY FOR EVER. The moment 20260925o is applied this branch stops
+    // being taken and the strict assertions below run instead — nobody has to remember to come
+    // back and tighten it.
+    console.log(`    ⚠️ address-field.kept-mine — NOT YET RECORDABLE ON THIS SCHEMA: ${wrote.error!.message}\n`
+      + `       "Keep what I typed" cannot be stored until 20260925o_confirm_is_a_verdict.sql is applied\n`
+      + `       (SHA ecba5552a80f55e8ff79914d4340c673cd79b5d45f3a4229f01585f37109cd50). The CODE is correct —\n`
+      + `       resolveAddressCheck returns confirm with no coordinate exactly as ruled — and every unit test\n`
+      + `       of it passes, because they test the function and never the write.`);
+    check(wrote.count === 0,
+      `the refused write still reported ${wrote.count} row(s) — a refusal that claims to have written is worse than the refusal`);
+    return;
+  }
+
+  check(wrote.count === 1 && !wrote.error,
+    `the write matched ${wrote.count} row(s), error: ${wrote.error ? wrote.error.message : 'none'}`);
+  const stored = await one(db, `SELECT latitude, longitude, geocode_status, geocoded_at FROM public.customer_addresses WHERE id = $1`, [String(row!.id)]);
+  check(stored?.latitude === null && stored?.longitude === null,
+    `🔴 GOOGLE'S PIN BELONGS TO GOOGLE'S TEXT. She kept hers, so there is no coordinate to store — storing the suggestion's pin against her address would record a place nobody agreed to, which is the one lie the whole address check exists to prevent. Got ${JSON.stringify(stored)}`);
+  check(stored?.geocode_status === 'confirm', `verdict: ${stored?.geocode_status}`);
+  check(!!stored?.geocoded_at,
+    'the answer is DATED even with no coordinate — that date is what stops the same question being asked again tomorrow');
+});
+
+await path('address-field.typed-over', 'address field → type a new street over a located address: the coordinate AND the verdict are forgotten, so the next check actually runs', async (check) => {
+  const db = await freshDb();
+  const id = await customer(db, 'Rae', {}, { import_run_id: RUN });
+  const api = restClient(db, { uid: MANAGER }) as any;
+  const book = await readCustomerAddresses(api, B, id);
+  await saveCustomerAddress(api, { businessId: B, customerId: id, label: 'Site', address: { line1: '1 Old Rd', city: 'Leander' }, existing: book.ok ? book.sites : [] });
+  const row = await one(db, `SELECT id FROM public.customer_addresses WHERE customer_id = $1 AND line1 = '1 Old Rd'`, [id]);
+  const located = resolveAddressCheck({ verdict: 'found' as const, latitude: 30.57, longitude: -97.91, suggestion: null, reason: null }, 'mine', new Date('2026-09-25T12:00:00Z'));
+  await setAddressGeocode(api, { businessId: B, addressId: String(row!.id), patch: located });
+  const before = await one(db, `SELECT latitude FROM public.customer_addresses WHERE id = $1`, [String(row!.id)]);
+  check(before?.latitude !== null, 'it is located to begin with (the negative control for what follows)');
+
+  // 🔴 THE REAL EDIT SURFACE IS `editContactRow`, AND MY FIRST VERSION GOT THIS WRONG IN A WAY
+  // WORTH RECORDING: I called `saveCustomerAddress` with an `editingId` it does not take, and
+  // silenced the compiler with `as never`. It quietly created a SECOND address instead of editing
+  // the first, and the test then failed on a downstream assertion. The cast is what did the
+  // damage — a type error there was the build telling me I had the wrong function.
+  const l = await lists(db, id);
+  const site = l.addresses.find(a => a.value.startsWith('1 Old Rd'));
+  check(!!site, `the site is in the Addresses list to edit: ${JSON.stringify(l.addresses)}`);
+  const edited = await editContactRow(api, {
+    businessId: B, customerId: id, list: 'addresses', rowId: site!.id, actorUserId: MANAGER,
+    patch: { label: 'Site', kind: 'shipping', line1: '2 New Rd', city: 'Leander', state: 'TX', zip: '78641' },
+  });
+  check(edited.ok, `the edit was refused: ${JSON.stringify(edited)}`);
+
+  const after = await one(db, `SELECT line1, latitude, longitude, geocode_status, geocoded_at FROM public.customer_addresses WHERE id = $1`, [String(row!.id)]);
+  check(after?.line1 === '2 New Rd', `the same row was corrected, not replaced: ${JSON.stringify(after)}`);
+  check(after?.latitude === null && after?.longitude === null && after?.geocode_status === null,
+    `🔴 A MOVED ADDRESS KEEPS NO OLD PIN, AND NO OLD VERDICT. The street changed, so the coordinate describes the house she left — and a stale 'found' would make the address check stay SILENT about a street nobody has ever verified, which is the defect this clears. Got ${JSON.stringify(after)}`);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════
