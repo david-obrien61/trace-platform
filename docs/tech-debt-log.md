@@ -5191,3 +5191,44 @@ HARNESS-only cap would MISS the real instance. 🔴 **Both populations are wrong
 that is the finding: the cap needs to read HARNESS lines AND run-me instructions, and exclude a file's own
 account of a known absence.** Written down because it is the difference between a cap that works and one
 that gets disabled on its first run (#73).
+
+---
+
+## #339 — 🟡 NO SIZE-DISPLAY STANDARD: SEVEN DIFFERENT FALLBACKS FOR A MISSING SIZE, AND NINE SURFACES PRINT BLANK (TRANSCRIBED AND MEASURED 2026-09-26, ledger #420 — ✅ the STANDARD is built, the NINE SURFACES are NOT converted)
+
+✏️ **THIS ID WAS CITED IN `~/Desktop/BACKLOG-NIGHT-PLAN.md` (item Y12) AND HAD NO ENTRY IN THIS LOG** —
+#195's class, filed on transcription rather than left as a dangling reference.
+
+**`normalizeSize` exists to COMPARE two spellings; `foldLabel` and `resolveRung` place a size on the
+ladder. Nothing decided what a SCREEN prints** — so each screen decided for itself. Measured 2026-09-26
+across `packages/cultivar-os/src/**/*.tsx`:
+
+| fallback | surfaces |
+|---|---|
+| `size ?? ''` | **9** |
+| `size ?? null` | 2 |
+| `size ?? container` *(borrows a different field)* | 2 |
+| `size ?? '—'` | 2 |
+| `size ?? 'this size'` | 1 |
+| `size ?? 'no size recorded'` | 1 |
+| `size ?? '(no size…'` | 1 |
+
+🔴 **NINE SURFACES PRINT BLANK, AND BLANK IS THE ONE ANSWER THAT LIES.** David, 2026-09-12, about the
+load list: *"Blank is indistinguishable from zero, and a yard person cannot tell the difference between
+'no T-posts needed' and 'we could not work it out.'"* A blank size cell reads as *"this lot has no
+size"* when it means *"nobody recorded one"* — **and both states genuinely exist**, because two of
+LAWNS's nine rungs (`slip`, `4 in`) have no volume. D-9 / A9 in one cell.
+
+✅ **THE STANDARD IS BUILT (ledger #420):** `packages/shared/src/utils/sizeLabel.ts` — `formatSize`,
+`sizeIsRecorded`, `SIZE_ABSENT`. **It never returns an empty string**, and the absence type offers only
+`dash` or `sentence`, **so a screen cannot choose blank.** It does **not** normalise a spelling (D-23 —
+`normalizeSize` compares, it does not rewrite what a person typed). 35 probes, both directions,
+including the whitespace trap (`!!' '` is TRUE, which is how a spaces-only value passes every check and
+then renders blank) and `'0 gal'`, which must not fall through to the absence text.
+
+🔴 **THE NINE SURFACES ARE NOT CONVERTED, AND THIS ROW STAYS OPEN FOR THAT REASON.** The standard
+existing changes nothing a person sees. **Converting them is a separate pass of ~15 call sites across
+cultivar-os, and every surface it changes needs its owner-test card touched (OP-14)** — which is why it
+was not folded into a night-safe S item. ⚠️ **Do not read "the standard is built" as "the blanks are
+fixed".**
+
